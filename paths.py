@@ -8,14 +8,18 @@ import subprocess
 ### All basic paths
 #####################################
 
+home_dir = "/home/hpc/pr63so/ga45met2"
+data_dir = "/naslx/projects/pr63so/ga45met2/Repositories"
+
 current_dir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parent_dir = os.path.dirname(current_dir)
-working_dir = os.path.abspath(os.path.join(current_dir,"model_runs"))
+#working_dir = os.path.abspath(os.path.join(current_dir,"model_runs"))
+working_dir = os.path.abspath(os.path.join(data_dir,"model_runs"))
 if not os.path.isdir(working_dir):
-    subprocess.run(["mkdir", working_dir]) #TODO Move this away
+    subprocess.run(["mkdir", working_dir])
 
-
-larsim_data_path = os.path.abspath(os.path.join(parent_dir, 'Larsim-data'))
+#larsim_data_path = os.path.abspath(os.path.join(parent_dir, 'Larsim-data'))
+larsim_data_path = os.path.abspath(os.path.join(data_dir, 'Larsim-data'))
 larsim_exe_dir = os.path.abspath(os.path.join(larsim_data_path, 'Larsim-exe'))
 regen_data_path = os.path.abspath(os.path.join(larsim_data_path,'WHM Regen')) # Regen_data_root = data_working_dir
 master_dir = os.path.abspath(os.path.join(larsim_data_path,'WHM Regen','master_configuration'))

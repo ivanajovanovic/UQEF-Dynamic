@@ -44,7 +44,7 @@ class LarsimModel(Model):
 
             working_folder_name = "WHM Regen" + str(i)
             curr_working_dir = os.path.abspath(os.path.join(self.working_dir,working_folder_name))
-            print(curr_working_dir)
+ 
             if not os.path.isdir(curr_working_dir):
                 subprocess.run(["mkdir", curr_working_dir])
 
@@ -52,32 +52,22 @@ class LarsimModel(Model):
             #    os.mkdir(curr_working_dir)
             #except FileExistsError:
             #    pass
-            master_dir = paths.master_dir + "/."
-            print(master_dir)
-            print(curr_working_dir)
-            subprocess.run(['cp','-a',master_dir,curr_working_dir])
-
+            temp_master_dir = self.master_dir + "/."
+            subprocess.run(['cp','-a', temp_master_dir, curr_working_dir])
             print("Done cp -a command")
 
-            #TODO IVANA Check if copy succeed
-            print("Successfully copied all the files")
             #Change values
-            #time.sleep(5)
             config.tape35_configurations(parameters=parameter, curr_working_dir=curr_working_dir)
-
             print("Process {} successfully changed its tape35".format(i))
 
 
-            #time.sleep(5)
             # Change working directory and execute LARSIM
-
             #subprocess.run(['cd', curr_working_dir], stdin=None, input=None, stdout=None,
             #               stderr=None, capture_output=False, shell=True,
             #               cwd=None, timeout=None, check=True, encoding=None, errors=None, text=None, env=None,
             #               universal_newlines=None)
             #subprocess.run(['cd', curr_working_dir], capture_output=False, shell=True)
             os.chdir(curr_working_dir)
-
 
 
             larsim_exe = os.path.abspath(os.path.join(self.larsim_exe_dir, 'larsim-linux-intel-1000.exe'))
