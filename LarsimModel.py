@@ -52,9 +52,6 @@ class LarsimModel(Model):
             #    os.mkdir(curr_working_dir)
             #except FileExistsError:
             #    pass
-
-
-
             master_dir = paths.master_dir + "/."
             print(master_dir)
             print(curr_working_dir)

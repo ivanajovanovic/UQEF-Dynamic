@@ -208,7 +208,14 @@ if mpi == False or (mpi == True and rank == 0):
 
     for one_lila_file in paths.lila_configured_paths:
         if not osp.exists(one_lila_file):
-            sys.exit(1)
+            raise IOError('File does not exist: %s. %s' % (one_lila_file, IOError.strerror))
+            #OSError
+            #try:
+            #    with open(path) as f:
+            #        pass
+            #except IOError as exc:
+            #    raise IOError("%s: %s" % (path, exc.strerror))
+            #sys.exit(1)
 
     #TODO run unaltered simulation
     #####################################
@@ -218,6 +225,23 @@ if mpi == False or (mpi == True and rank == 0):
     print("INFO: All the files have been copied to master folder! ")
     start_time = time.time()
 
+# start new simulation
+# generate nodes for the first time and save them
+#for loop
+# inside for loop - change tape10
+# inside for loop - call solver.init()
+# inside for loop - call simulation.prepareSolver()
+# inside for loop - inside of the model.run mkdir, copy all the files - tape10 just once
+# inside for loop - inside of the model.run delete larsim.ok, tape11, ergebnis.lila and karte
+# inside for loop - inside of the model.run copy tape10
+# inside for loop - inside of the model.run copy new ergebnis to safe place
+
+#or
+
+#inside model.run - constanlty change tape10
+#inside model.run - constanlty delete larsim.ok, tape11, ergebnis.lila and karte
+#inside model.run - constanlty run larsim.exe
+#inside model.run - constanlty concatinate ergebnis and save to some final ergebnis file
 
 #####################################
 ### initialise simulation
@@ -236,6 +260,11 @@ if mpi == False or (mpi == True and rank == 0):
     simulation.generateSimulationNodes(simulationNodes) #simulation.parameters are set from now on
     print(simulationNodes.printNodes()) #this is after nodes = self.nodes.T
     # do smt. like print(simulation.parameters) print(simulationNodes.nodes)
+    simulationNodes_save_file = outputResultDir + "/nodes.txt"
+    with open(simulationNodes_save_file, "w") as f:
+        f.write(simulationNodes.printNodes())
+    #simulationNodes_save_file = outputResultDir + "/nodes"
+    #simulationNodes.saveToFile(simulationNodes_save_file)
 
     #####################################
     ### start the simulation
@@ -260,7 +289,7 @@ if mpi == False or (mpi == True and rank == 0):
     #TODO make sure that simulation class indeed has getterResults
     final_results = simulation.getterResults()
     #final_results = solver.getterResults
-    print("final_results...")
+    print("final_results type...")
     print(type(final_results))
     #print(final_results)
     print("final_results list...")
@@ -303,5 +332,3 @@ if mpi == True:
     print("rank: {} exit".format(rank))
 
 print("I'm successfully done")
-
-
