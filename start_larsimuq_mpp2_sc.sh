@@ -1,10 +1,10 @@
 #!/bin/bash
 
-module load python/3.5_intel
+module load python/3.6_intel
 
-export PYTHONPATH=$HOME/software/python/mpi4py.mpp2.git/build/lib.linux-x86_64-3.5:$PYTHONPATH
+#export PYTHONPATH=$HOME/software/python/mpi4py.mpp2.git/build/lib.linux-x86_64-3.5:$PYTHONPATH
 
-start_uq_sim(){
+start_larsim_uq_sim(){
     local strategy="$1"
     local algorithm="$2"
     local q_order="$3"
@@ -30,7 +30,7 @@ start_uq_sim(){
     counter="${counter: -4}"
 
     #print to the command line!
-    echo "$counter:mpp2: $@"
+    #echo "$counter:mpp2: $@"
     echo "$counter:mpp2: $@" >> started_jobs.txt
 
     #create env
@@ -38,21 +38,23 @@ start_uq_sim(){
     basePath=`pwd`
     baseSourcePath=$basePath
     baseExecutionPath=$basePath
-    baseResultsPath=$basePath
+    #baseResultsPath=$basePath
+    baseResultsPath=$WORK
     modelMasterPath=$basePath
 
     executionPath=$baseExecutionPath
-    resultsPath=$baseResultsPath/saves/
+    resultsPath=$baseResultsPath/Repositories/model_runs
 
     # init the stuff
     if [ "$strategy" == "FIXED_LINEAR" ] ; then
-        cpus=20
+        cpus=28
         threads=$cpus
         tasks=1
     else
         cpus=1
         threads=$cpus
-        tasks=20
+        tasks=28
+        total_num_cores=56
     fi
 
 #create batch file
@@ -60,7 +62,7 @@ echo "#!/bin/bash
 
 # config
 
-#SBATCH -o $baseSourcePath/larsim_uq.$counter.job.%j.%N.out
+#SBATCH -o $baseSourcePath/uq_simulation.$counter.job.%j.%N.out
 #SBATCH -D $baseSourcePath
 #SBATCH -J larsim.$counter
 #SBATCH --get-user-env
@@ -68,49 +70,45 @@ echo "#!/bin/bash
 #SBATCH --nodes=$cluster_nodes
 #SBATCH --cpus-per-task=$cpus
 #SBATCH --ntasks-per-node=$tasks
+#SBATCH --ntasks=56
 #SBATCH --mem=55G
 #SBATCH --exclusive
 #SBATCH --mail-type=end
-#SBATCH --mail-user=frank.schraufstetter@gmail.com
+#SBATCH --mail-user=ivana.jovanovic@tum.de
 #SBATCH --export=NONE
 #SBATCH --time=$time_limit
 
 source /etc/profile.d/modules.sh
-#module unload python
-#module unload mpi4py
 
-#module load java/1.8
-#module load python/2.7_intel
-module load python/3.5_intel
+module load python/3.6_intel
 
-export OMP_NUM_THREADS=$threads
+#export OMP_NUM_THREADS=$threads
 
 
 # start simulation
-echo "---- start sim: \`date\`"
+echo "---- start sim:"
 
-    python3 $executionPath/simulation.py \
-                            -or $resultsPath \
-                            --uq_method sc --sc_q_order $q_order --sc_p_order $p_order \
+    mpiexec -genv I_MPI_DEBUG=+5 -print-rank-map python3 $executionPath/uq_simulation.py \
+                            --outputResultDir $executionPath \
+                            --uq_method "sc" --sc_q_order $q_order --sc_p_order $p_order \
                             --model "$model" --uncertain "all" \
                             --chunksize 1 \
-                            --num_cores=$threads --parallel
+                            --num_cores=$total_num_cores --mpi --mpi_method "$mpi_method"
 
-echo "---- end \$i: \`date\`"
+echo "---- end \$i:"
 
-" > uq_sc_mpp2_gen.cmd
+" > uq_larsim_sc_mpp2.cmd
 
     #execute batch file
-    sbatch uq_sc_mpp2_gen.cmd
+    sbatch uq_larsim_sc_mpp2.cmd
 }
 
 model="larsim"
 opt_add=""
-
 #runtimesim -> no wait!
-nodes=1
-low_time="2:50:00"
+nodes=2
+low_time="0:30:00"
 mid_time="5:45:00"
-max_time="70:00:00"
+max_time="30:00:00"
 
-start_uq_sim "FIXED_LINEAR"   " "  10  6 "$model" "$opt_add" 1 "new" "$nodes" "$max_time"
+start_larsim_uq_sim "DYNAMIC" "NOALGO"  10  5 "$model" "$opt_add" 1 "new" "$nodes" "$low_time"
