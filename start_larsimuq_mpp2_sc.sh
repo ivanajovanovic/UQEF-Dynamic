@@ -1,6 +1,6 @@
 #!/bin/bash
 
-module load python/3.6_intel
+#module load python/3.6_intel
 
 #export PYTHONPATH=$HOME/software/python/mpi4py.mpp2.git/build/lib.linux-x86_64-3.5:$PYTHONPATH
 
@@ -66,11 +66,10 @@ echo "#!/bin/bash
 #SBATCH -D $baseSourcePath
 #SBATCH -J larsim.$counter
 #SBATCH --get-user-env
-#SBATCH --cluster=mpp2
+#SBATCH --clusters=mpp2
 #SBATCH --nodes=$cluster_nodes
 #SBATCH --cpus-per-task=$cpus
 #SBATCH --ntasks-per-node=$tasks
-#SBATCH --ntasks=56
 #SBATCH --mem=55G
 #SBATCH --exclusive
 #SBATCH --mail-type=end
@@ -79,10 +78,10 @@ echo "#!/bin/bash
 #SBATCH --time=$time_limit
 
 source /etc/profile.d/modules.sh
-
 module load python/3.6_intel
+source /home/hpc/pr63so/ga45met2/.conda/envs/larsimuq/bin/activate larsimuq
 
-#export OMP_NUM_THREADS=$threads
+export OMP_NUM_THREADS=$threads
 
 
 # start simulation
@@ -93,7 +92,7 @@ echo "---- start sim:"
                             --uq_method "sc" --sc_q_order $q_order --sc_p_order $p_order \
                             --model "$model" --uncertain "all" \
                             --chunksize 1 \
-                            --num_cores=$total_num_cores --mpi --mpi_method "$mpi_method"
+                            --num_cores=$threads --mpi --mpi_method "$mpi_method"
 
 echo "---- end \$i:"
 
@@ -107,8 +106,8 @@ model="larsim"
 opt_add=""
 #runtimesim -> no wait!
 nodes=2
-low_time="0:30:00"
+low_time="2:30:00"
 mid_time="5:45:00"
 max_time="30:00:00"
 
-start_larsim_uq_sim "DYNAMIC" "NOALGO"  10  5 "$model" "$opt_add" 1 "new" "$nodes" "$low_time"
+start_larsim_uq_sim "DYNAMIC" "NOALGO"  20  6 "$model" "$opt_add" 1 "new" "$nodes" "$max_time"
