@@ -1,21 +1,52 @@
-import os
-import numpy as np
 import chaospy as cp
+import numpy as np
+import os
+import pandas as pd
+#import pickle
+import matplotlib.pyplot as plotter
+#from itertools import product
+import itertools
 
 from uqef.stat import Statistics
 
+import paths
+import LARSIM_configs as config
+
 class Samples(object):
+    """
+     Samples is a collection of the sampled results of a whole UQ simulation
+
+     """
 
     #collects values from every simulation for each time steps as array, saves in dictionary
-    def __init__(self, rawSamples):
-        self.Abfluss = {}
-        for identification in rawSamples[0]:
-            self.Abfluss[identification] = []
-            for i in range(0, len(rawSamples[0][identification]["Abfluss Simulation"])):
-                temp = []
-                for j in range(0, len(rawSamples)):
-                    temp.append(rawSamples[j][identification]["Abfluss Simulation"][i])
-                self.Abfluss[identification].append(temp)
+    def __init__(self, rawSamples, station=None, type_of_output='Abfluss Simulation', pathsDataFormat=True):
+        """
+
+        :param rawSamples: results returned by solver. Either list of paths to diff. ergebnis files or pandas.DataFrame object containing output of all the runs
+        :param pathsDataFormat: wheather or not results are in form of the path to result file or concrete data arrays
+        :param station: Name of the station in which output we are interested in
+        """
+
+        #self.df_simulation_result = pd.DataFrame(columns=['Index_run', 'Stationskennung', 'Type', 'TimeStamp', 'Value'])
+
+        if pathsDataFormat: #in case rawSamples is list of path to reasults
+            list_of_single_df = []
+            for index_run, value in enumerate(rawSamples,): #Important that the results inside rawSamples (resulted paths) are in sorted order
+                if value is not None:
+                    df_single_ergebnis = config.result_parser_toPandas(value,index_run)
+                    if station is not None:
+                        df_single_ergebnis = df_single_ergebnis.loc[(df_single_ergebnis['Stationskennung'] == station) & (df_single_ergebnis['Type'] == type_of_output)]
+                    list_of_single_df.append(df_single_ergebnis)
+            self.df_simulation_result = pd.concat(list_of_single_df, ignore_index=True, sort=False, axis=0)
+
+                    #self.df_simulation_result = pd.concat([self.df_simulation_result, df_single_ergebnis], ignore_index=True, sort=False)
+
+        else: #in case rawSamples is already pandas.DataFrame object
+            self.df_simulation_result = rawSamples
+            if station is not None:
+                self.df_simulation_result = self.df_simulation_result.loc[(self.df_simulation_result['Stationskennung'] == station) & (self.df_simulation_result['Type'] == type_of_output)]
+
+
 
 class LarsimStatistics(Statistics):
 
@@ -24,97 +55,200 @@ class LarsimStatistics(Statistics):
         Statistics.__init__(self)
 
 
+    #timesteps = self.solver.timesteps which are LarsimModel.timesteps() - duration of each simulation in discrete timesteps
+    #rawSamples = self.solver.results
     def calcStatisticsForMc(self, rawSamples, timesteps,
                             simulationNodes, numEvaluations, solverTimes,
                             work_package_indexes, original_runtime_estimator):
-        self.timesteps = timesteps
-        samples = Samples(rawSamples)
-        self.station_names = []
+        """
+
+        :param rawSamples: simulation.solver.results
+        :param timesteps: simulation.solver.timesteps
+        :param simulationNodes: simulationNodes
+        :param numEvaluations: simulation.numEvaluations
+        :param solverTimes: simulation.solver.solverTimes
+        :param work_package_indexes: simulation.solver.work_package_indexes
+        :param original_runtime_estimator: simulation.original_runtime_estimator
+        :return:
+        """
+
+        samples = Samples(rawSamples, station='MARI', type_of_output='Abfluss Simulation', pathsDataFormat=True)
+
+        #self.timesteps = timesteps #this is just a scalar representing total number of timesteps
+        self.timesteps = samples.df_simulation_result.TimeStamp.unique()
+        self.numbTimesteps = len(self.timesteps)
+
+        # percentiles
+        numPercSamples = 10 ** 5
+
+        self.station_names = samples.df_simulation_result.Stationskennung.unique()
+
         self.Abfluss = {}
-        # calculate relevant statistical values
-        for identification in samples.Abfluss:
-            self.Abfluss[identification] = {}
 
-        for identification in self.Abfluss:
-            self.station_names.append(identification)
-            self.Abfluss[identification]["E"] = []
-            self.Abfluss[identification]["Var"] = []
-            self.Abfluss[identification]["StdDev"] = []
-            self.Abfluss[identification]["P10"] = []
-            self.Abfluss[identification]["P90"] = []
-            for i  in range(0, len( samples.Abfluss[identification])):
-                self.Abfluss[identification]["E"].append(float(np.sum(samples.Abfluss[identification][i])/ numEvaluations))
-                self.Abfluss[identification]["Var"].append(float(np.sum(power(samples.Abfluss[identification][i])) / numEvaluations - power(self.Abfluss[identification]["E"])[i]))
-                self.Abfluss[identification]["StdDev"].append(float(np.sqrt(self.Abfluss[identification]["Var"][i])))
-                self.Abfluss[identification]["P10"].append(float(np.percentile(samples.Abfluss[identification][i], 10, axis=0)))
-                self.Abfluss[identification]["P90"].append(float(np.percentile(samples.Abfluss[identification][i], 90, axis=0)))
+        grouped = samples.df_simulation_result.groupby(['Stationskennung','TimeStamp'])
+        groups = grouped.groups
+        for key,val in groups.items():
+            discharge_values = samples.df_simulation_result.iloc[val.values].Value.values
+            #self.Abfluss[key(0)][key(1)] ...
+            self.Abfluss[key] = {}
+            self.Abfluss[key]["Q"] = discharge_values
+            self.Abfluss[key]["E"] = float(np.sum(discharge_values)/ numEvaluations)
+            self.Abfluss[key]["Var"] = float(np.sum(power(discharge_values)) / numEvaluations - self.Abfluss[key]["E"]**2)
+            self.Abfluss[key]["StdDev"] = float(np.sqrt(self.Abfluss[key]["Var"]))
+            self.Abfluss[key]["P10"] = float(np.percentile(discharge_values, 10, axis=0))
+            self.Abfluss[key]["P90"] = float(np.percentile(discharge_values, 90, axis=0))
 
-        # save dicts for later use
-        if os.stat("./LARSIM_configs/master_files/dicts.npy").st_size == 0:
-            np.save("./LARSIM_configs/master_files/dicts.npy", self.Abfluss)
-        else:
-            dict = np.load("./LARSIM_configs/master_files/dicts.npy").item()
-            for identification in self.Abfluss:
-                for keys in self.Abfluss[identification]:
-                    for i in range(0, len(self.Abfluss[identification][keys])):
-                        dict[identification][keys].append(self.Abfluss[identification][keys][i])
-            np.save("./LARSIM_configs/master_files/dicts.npy", dict)
+            if isinstance(self.Abfluss[key]["P10"], (list)) and len(self.Abfluss[key]["P10"]) == 1:
+                self.Abfluss[key]["P10"]= self.Abfluss[key]["P10"][0]
+                self.Abfluss[key]["P90"] = self.Abfluss[key]["P90"][0]
+
+        np.save(paths.statistics_dict_path_np, self.Abfluss)
+        #pickle_out = open(paths.statistics_dict_path_pkl,"wb")
+        #pickle.dump(self.Abfluss, pickle_out)
+        #pickle_out.close()
 
 
     def calcStatisticsForSc(self, rawSamples, timesteps,
                             simulationNodes, order, solverTimes,
                             work_package_indexes, original_runtime_estimator):
+        """
+        in ScSimulation.calculateStatistics
+        statistics.calcStatisticsForSc(self.solver.results, self.solver.timesteps, simulationNodes, self.p_order, self.solver.solverTimes,
+                                       self.solver.work_package_indexes, self.original_runtime_estimator=None)
+        :param rawSamples:
+        :param timesteps:
+        :param simulationNodes:
+        :param order:
+        :param solverTimes:
+        :param work_package_indexes:
+        :param original_runtime_estimator:
+        :return:
+        """
 
         nodes = simulationNodes.distNodes
         weights = simulationNodes.weights
         dist = simulationNodes.joinedDists
-        self.timesteps = timesteps
+
+        samples = Samples(rawSamples, station='MARI', type_of_output='Abfluss Simulation', pathsDataFormat=True)
+
+        #self.timesteps = timesteps #this is just a scalar representing total number of timesteps
+        self.timesteps = samples.df_simulation_result.TimeStamp.unique()
+        self.numbTimesteps = len(self.timesteps)
+
         P = cp.orth_ttr(order, dist)
-        numPercSamples = 10 ** 4
-        samples = Samples(rawSamples)
+
+        # percentiles
+        numPercSamples = 10 ** 5
+
+        self.station_names = samples.df_simulation_result.Stationskennung.unique()
+
         self.Abfluss = {}
-        #fit_quadrature for each time step
-        for identification in samples.Abfluss:
-            self.Abfluss[identification] = {}
-            for i in range(0, len(samples.Abfluss[identification])):
-                samples.Abfluss[identification][i] = cp.fit_quadrature(P, nodes, weights, samples.Abfluss[identification][i])
-        self.station_names = []
-        #calculate relevant statistical values
-        for identification in self.Abfluss:
-            self.station_names.append(identification)
-            self.Abfluss[identification]["E"] = []
-            self.Abfluss[identification]["Var"] = []
-            self.Abfluss[identification]["StdDev"] = []
-            self.Abfluss[identification]["Sobol_m"] = []
-            self.Abfluss[identification]["Sobol_m2"] = []
-            self.Abfluss[identification]["Sobol_t"] = []
-            self.Abfluss[identification]["P10"] = []
-            self.Abfluss[identification]["P90"] = []
 
-            for items in samples.Abfluss[identification]:
-                self.Abfluss[identification]["E"].append(float((cp.E(items, dist))))
-                self.Abfluss[identification]["Var"].append(float(cp.Var(items, dist)))
-                self.Abfluss[identification]["StdDev"].append(float(cp.Var(items, dist)))
-                self.Abfluss[identification]["Sobol_m"].append(cp.Sens_m(items, dist))
-                self.Abfluss[identification]["Sobol_t"].append(cp.Sens_t(items, dist))
-                self.Abfluss[identification]["P10"].append(float(cp.Perc(items,  10, dist, numPercSamples)))
-                self.Abfluss[identification]["P90"].append(float(cp.Perc(items, 90, dist, numPercSamples)))
+        grouped = samples.df_simulation_result.groupby(['Stationskennung','TimeStamp'])
+        groups = grouped.groups
+        for key,val in groups.items():
+            discharge_values = samples.df_simulation_result.iloc[val.values].Value.values
+            qoi_gPCE = cp.fit_quadrature(P, nodes, weights, discharge_values) #fit_quadrature for each time step for this station over multiple runs
+            #self.Abfluss[key(0)][key(1)] ...
+            self.Abfluss[key] = {}
+            self.Abfluss[key]["Q"] = discharge_values
+            self.Abfluss[key]["E"] = float((cp.E(qoi_gPCE, dist)))
+            self.Abfluss[key]["Var"] = float((cp.Var(qoi_gPCE, dist)))
+            self.Abfluss[key]["StdDev"] = float((cp.Std(qoi_gPCE, dist)))
+            self.Abfluss[key]["Sobol_m"] = cp.Sens_m(qoi_gPCE, dist)
+            self.Abfluss[key]["Sobol_m2"] = cp.Sens_m2(qoi_gPCE, dist)
+            self.Abfluss[key]["Sobol_t"] = cp.Sens_t(qoi_gPCE, dist)
+            self.Abfluss[key]["P10"] = float(cp.Perc(qoi_gPCE, 10, dist, numPercSamples))
+            self.Abfluss[key]["P90"] = float(cp.Perc(qoi_gPCE, 90, dist, numPercSamples))
+
+            if isinstance(self.Abfluss[key]["P10"], (list)) and len(self.Abfluss[key]["P10"]) == 1:
+                self.Abfluss[key]["P10"]= self.Abfluss[key]["P10"][0]
+                self.Abfluss[key]["P90"] = self.Abfluss[key]["P90"][0]
 
 
-            if "Niederschlag" in rawSamples[0][identification]:
-                self.Abfluss[identification]["Niederschlag"] = rawSamples[0][identification]["Niederschlag"]
+        np.save(paths.statistics_dict_path_np, self.Abfluss)
+        #pickle_out = open(paths.statistics_dict_path_pkl,"wb")
+        #pickle.dump(self.Abfluss, pickle_out)
+        #pickle_out.close()
+
+    def plotResults(self, display=False, station='MARI',
+                    fileName="", fileNameIdent="", directory="./",
+                    fileNameIdentIsFullName=False, safe=True):
+
+        #####################################
+        ### plot: mean + percentiles
+        #####################################
+
+        figure = plotter.figure(1, figsize=(13, 10))
+        window_title = 'LarsimModel statistics - ' + station
+        figure.canvas.set_window_title(window_title)
+
+        pdTimesteps = [pd.Timestamp(timestep) for timestep in self.timesteps]
+
+        plotter.subplot(411)
+        # plotter.title('mean')
+
+        keyIter = list(itertools.product([station,],pdTimesteps))
+        #self.Abfluss[((station,oneTimetep) for oneTimetep in pdTimesteps)]
+        #listE = [self.Abfluss[key]["E"] for key in itertools.product([station,],pdTimesteps)]
+
+        plotter.plot(pdTimesteps, [self.Abfluss[key]["E"] for key in keyIter], 'o', label='mean')
+        plotter.fill_between(pdTimesteps, [self.Abfluss[key]["P10"] for key in keyIter], [self.Abfluss[key]["P90"] for key in keyIter], facecolor='#5dcec6')
+        plotter.plot(pdTimesteps, [self.Abfluss[key]["P10"] for key in keyIter], 'o', label='10th percentile')
+        plotter.plot(pdTimesteps,[self.Abfluss[key]["P90"] for key in keyIter], 'o', label='90th percentile')
+        plotter.xlabel('time', fontsize=13)
+        plotter.ylabel('Larsim Stat. Values', fontsize=13)
+        #plotter.xlim(0, 200)
+        #ymin, ymax = plotter.ylim()
+        #plotter.ylim(0, 20)
+        plotter.xticks(rotation=45)
+        plotter.legend()  # enable the legend
+        plotter.grid(True)
+
+        plotter.subplot(412)
+        # plotter.title('standard deviation')
+        plotter.plot(pdTimesteps, [self.Abfluss[key]["StdDev"] for key in keyIter], 'o', label='std. dev.')
+        plotter.xlabel('time', fontsize=13)
+        plotter.ylabel('Standard Deviation ', fontsize=13)
+        #plotter.xlim(0, 200)
+        #plotter.ylim(0, 20)
+        plotter.xticks(rotation=45)
+        plotter.legend()  # enable the legend
+        plotter.grid(True)
+
+        plotter.subplot(413)
+        plotter.plot(pdTimesteps, [self.Abfluss[key]["Q"] for key in keyIter])
+        plotter.xlabel('time', fontsize=13)
+        plotter.ylabel('Q value', fontsize=13)
+        plotter.xticks(rotation=45)
+        plotter.legend()  # enable the legend
+        plotter.grid(True)
+
+        #check if it is sc or mc simulation
+        plotter.subplot(414)
+        sobol_labels = ["uncertain_param_1", "uncertain_param_2"]
+        for i in range(len(sobol_labels)):
+            plotter.plot(pdTimesteps, [self.Abfluss[key]["Sobol_m"][i] for key in keyIter], 'o', label=sobol_labels[i])
+        plotter.xlabel('time', fontsize=13)
+        plotter.ylabel('sobol indices', fontsize=13)
+        ##plotter.xlim(0, 200)
+        ##plotter.ylim(-0.1, 1.1)
+        plotter.xticks(rotation=45)
+        plotter.legend()  # enable the legend
+        plotter.grid(True)
+
+        # save figure mean + variance
+        pdfFileName = paths.figureFileName + "_uq" + '.pdf'
+        pngFileName = paths.figureFileName + "_uq" + '.png'
+        plotter.savefig(pdfFileName, format='pdf')
+        plotter.savefig(pngFileName, format='png')
+
+        if display:
+            plotter.show()
+
+        plotter.close()
 
 
-            #save dicts for later use
-        if os.stat("./LARSIM_configs/master_files/dicts.npy").st_size == 0:
-            np.save("./LARSIM_configs/master_files/dicts.npy", self.Abfluss)
-        else:
-            dict = np.load("./LARSIM_configs/master_files/dicts.npy").item()
-            for identification in self.Abfluss:
-                for keys in self.Abfluss[identification]:
-                    for i in range(0, len(self.Abfluss[identification][keys])):
-                        dict[identification][keys].append(self.Abfluss[identification][keys][i])
-            np.save("./LARSIM_configs/master_files/dicts.npy", dict)
 
 #helper function
 def power(my_list):

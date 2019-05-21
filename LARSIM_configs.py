@@ -209,12 +209,14 @@ def result_parser_toPandas(file_path, index_run):
             if line[0] == "Stationskennung":
                 curr_ident = line[1]
 
+            #TODO Change this
             if line[0] == "Kommentar":
                 if "Abfluss Messung" in line[1]:
                     curr_rtype = "Abfluss Messung"
                     curr_rtype2 = "Abfluss Simulation"
                 else:
-                    if line[1] == "Abfluss Simulation + Vorhersage ohne ARIMA":
+                    #if line[1] == "Abfluss Simulation + Vorhersage ohne ARIMA":
+                    if "Abfluss Simulation" in line[1]:
                         curr_rtype = "Abfluss Simulation"
                     else:
                         curr_rtype = line[1]

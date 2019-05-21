@@ -17,6 +17,7 @@ import uqef
 import paths
 import LARSIM_configs as config
 import LarsimModel
+import LarsimStatistics
 
 #####################################
 ### MPI infos:
@@ -231,6 +232,7 @@ if mpi == False or (mpi == True and rank == 0):
 # inside for loop - change tape10
 # inside for loop - call solver.init()
 # inside for loop - call simulation.prepareSolver()
+# solver.solve()
 # inside for loop - inside of the model.run mkdir, copy all the files - tape10 just once
 # inside for loop - inside of the model.run delete larsim.ok, tape11, ergebnis.lila and karte
 # inside for loop - inside of the model.run copy tape10
@@ -286,47 +288,40 @@ if mpi == False or (mpi == True and rank == 0):
 
     solver.tearDown() # stop the solver
 
-    #TODO make sure that simulation class indeed has getterResults
-    final_results = simulation.getterResults()
-    #final_results = solver.getterResults
-    print("final_results type...")
-    print(type(final_results))
-    #print(final_results)
-    print("final_results list...")
-    print(list(final_results))
-    # be sure that final_results is 1D list
-
-    results = []
-    df_simulation_result = pd.DataFrame(columns=['Index_run', 'Stationskennung', 'Type', 'TimeStamp', 'Value'])
-    for index_run, value in enumerate(final_results):
-        if value is not None:
-            df_single_ergebnis = config.result_parser_toPandas(value,index_run)
-            df_single_mariental_ergebnis = df_single_ergebnis.loc[
-                (df_single_ergebnis['Stationskennung'] == 'MARI') & (df_single_ergebnis['Type'] == 'Abfluss Simulation')]
-            df_simulation_result.append(df_single_mariental_ergebnis, ignore_index=True)
-            #df_simulation_result = pd.concat([df_simulation_result, df_single_mariental_ergebnis], ignore_index=True, sort=False)
-    #pd.display(df_simulation_result)
-    # TODO transform df_simulation_result to results
-    # TODO make sure that simulation class indeed has setterResults
+    #final_results = simulation.getterResults()
+    #df_simulation_result = pd.DataFrame(columns=['Index_run', 'Stationskennung', 'Type', 'TimeStamp', 'Value'])
+    #for index_run, value in enumerate(final_results):
+    #    if value is not None:
+    #        df_single_ergebnis = config.result_parser_toPandas(value, index_run)
+    #        df_single_mariental_ergebnis = df_single_ergebnis.loc[
+    #            (df_single_ergebnis['Stationskennung'] == 'MARI') & (
+    #                        df_single_ergebnis['Type'] == 'Abfluss Simulation')]
+    #        df_simulation_result.append(df_single_mariental_ergebnis, ignore_index=True)
     #simulation.setterResults(results)
 
-
-    # TODO calculate statistics
     #####################################
     ### calculate statistics:
     #####################################
-    #print("calculate statistics...")
-    #statistics_ = {
-    #    "larsim": (
-    #    lambda: uqef.simulation.calculateStatistics(LarsimStatistics.LarsimStatistics(), simulationNodes))
-    #}
-    #statistics = statistics_[model]()
-    #print("--- %s seconds ---" % (time.time() - start_time))
+    print("calculate statistics...")
+    statistics_ = {
+        "larsim": ( lambda: simulation.calculateStatistics(LarsimStatistics.LarsimStatistics(), simulationNodes))
+    }
+    statistics = statistics_[model]()
+    print("--- %s seconds ---" % (time.time() - start_time))
+
+    #####################################
+    ### print statistics:
+    #####################################
+    #print("print statistics...")
+    #print(statistics.printResults())
 
     #####################################
     ### generate plots
     #####################################
-
+    print("generate plots...")
+    #fileName = simulation.name
+    #statistics.plotResults(fileName=fileName, directory=outputResultDir, display=False)
+    statistics.plotResults()
 
 if mpi == True:
     print("rank: {} exit".format(rank))
