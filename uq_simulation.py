@@ -304,8 +304,7 @@ if mpi == False or (mpi == True and rank == 0):
     #####################################
     print("calculate statistics...")
     statistics_ = {
-        "larsim": (
-        lambda: uqef.simulation.calculateStatistics(LarsimStatistics.LarsimStatistics(), simulationNodes))
+        "larsim": ( lambda: simulation.calculateStatistics(LarsimStatistics.LarsimStatistics(), simulationNodes))
     }
     statistics = statistics_[model]()
     print("--- %s seconds ---" % (time.time() - start_time))
@@ -319,9 +318,10 @@ if mpi == False or (mpi == True and rank == 0):
     #####################################
     ### generate plots
     #####################################
-    #print("generate plots...")
+    print("generate plots...")
     #fileName = simulation.name
     #statistics.plotResults(fileName=fileName, directory=outputResultDir, display=False)
+    statistics.plotResults()
 
 if mpi == True:
     print("rank: {} exit".format(rank))

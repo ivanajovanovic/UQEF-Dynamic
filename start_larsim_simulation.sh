@@ -2,7 +2,7 @@
 
 #export PYTHONPATH=$PYTHONPATH:.
 
-python_cmd = python3
+#python_cmd = python3
 #python_cmd=python2
 #python_cmd=python3
 #module unload python
@@ -27,6 +27,6 @@ python_cmd = python3
 # MpiPoolSolver - SC
 mpiexec -n 4 python3 uq_simulation.py \
                                      --model "larsim" \
-                                     --uq_method "sc" --sc_q_order 3 --sc_p_order 2 \
+                                     --uq_method "sc" --sc_q_order 2 --sc_p_order 1 \
                                      --uncertain "all" \
                                      --mpi

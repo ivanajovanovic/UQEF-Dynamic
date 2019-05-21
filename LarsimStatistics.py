@@ -4,7 +4,8 @@ import os
 import pandas as pd
 #import pickle
 import matplotlib.pyplot as plotter
-from itertools import product
+#from itertools import product
+import itertools
 
 from uqef.stat import Statistics
 
@@ -92,6 +93,7 @@ class LarsimStatistics(Statistics):
             discharge_values = samples.df_simulation_result.iloc[val.values].Value.values
             #self.Abfluss[key(0)][key(1)] ...
             self.Abfluss[key] = {}
+            self.Abfluss[key]["Q"] = discharge_values
             self.Abfluss[key]["E"] = float(np.sum(discharge_values)/ numEvaluations)
             self.Abfluss[key]["Var"] = float(np.sum(power(discharge_values)) / numEvaluations - self.Abfluss[key]["E"]**2)
             self.Abfluss[key]["StdDev"] = float(np.sqrt(self.Abfluss[key]["Var"]))
@@ -150,6 +152,8 @@ class LarsimStatistics(Statistics):
             discharge_values = samples.df_simulation_result.iloc[val.values].Value.values
             qoi_gPCE = cp.fit_quadrature(P, nodes, weights, discharge_values) #fit_quadrature for each time step for this station over multiple runs
             #self.Abfluss[key(0)][key(1)] ...
+            self.Abfluss[key] = {}
+            self.Abfluss[key]["Q"] = discharge_values
             self.Abfluss[key]["E"] = float((cp.E(qoi_gPCE, dist)))
             self.Abfluss[key]["Var"] = float((cp.Var(qoi_gPCE, dist)))
             self.Abfluss[key]["StdDev"] = float((cp.Std(qoi_gPCE, dist)))
@@ -183,7 +187,7 @@ class LarsimStatistics(Statistics):
 
         pdTimesteps = [pd.Timestamp(timestep) for timestep in self.timesteps]
 
-        plotter.subplot(311)
+        plotter.subplot(411)
         # plotter.title('mean')
 
         keyIter = list(itertools.product([station,],pdTimesteps))
@@ -195,7 +199,7 @@ class LarsimStatistics(Statistics):
         plotter.plot(pdTimesteps, [self.Abfluss[key]["P10"] for key in keyIter], 'o', label='10th percentile')
         plotter.plot(pdTimesteps,[self.Abfluss[key]["P90"] for key in keyIter], 'o', label='90th percentile')
         plotter.xlabel('time', fontsize=13)
-        plotter.ylabel('LarsimModel Stat. value', fontsize=13)
+        plotter.ylabel('Larsim Stat. Values', fontsize=13)
         #plotter.xlim(0, 200)
         #ymin, ymax = plotter.ylim()
         #plotter.ylim(0, 20)
@@ -203,31 +207,37 @@ class LarsimStatistics(Statistics):
         plotter.legend()  # enable the legend
         plotter.grid(True)
 
-        plotter.subplot(312)
+        plotter.subplot(412)
         # plotter.title('standard deviation')
         plotter.plot(pdTimesteps, [self.Abfluss[key]["StdDev"] for key in keyIter], 'o', label='std. dev.')
         plotter.xlabel('time', fontsize=13)
-        plotter.ylabel('standard deviation (pedestrians)', fontsize=13)
+        plotter.ylabel('Standard Deviation ', fontsize=13)
         #plotter.xlim(0, 200)
         #plotter.ylim(0, 20)
         plotter.xticks(rotation=45)
         plotter.legend()  # enable the legend
         plotter.grid(True)
 
+        plotter.subplot(413)
+        plotter.plot(pdTimesteps, [self.Abfluss[key]["Q"] for key in keyIter])
+        plotter.xlabel('time', fontsize=13)
+        plotter.ylabel('Q value', fontsize=13)
+        plotter.xticks(rotation=45)
+        plotter.legend()  # enable the legend
+        plotter.grid(True)
 
         #check if it is sc or mc simulation
-        #plotter.subplot(313)
-        #TODO Change this
-        #sobol_labels = ["uncertain_param_1", "uncertain_param_2"]
-        #for i in range(np.size(self.Sobol_m_qoi, 0)):
-        #    plotter.plot(pdTimesteps, [self.Abfluss[key]["Sobol_m[i]"] for key in keyIter], 'o', label=sobol_labels[i])
-        #plotter.xlabel('time', fontsize=13)
-        #plotter.ylabel('sobol indices', fontsize=13)
+        plotter.subplot(414)
+        sobol_labels = ["uncertain_param_1", "uncertain_param_2"]
+        for i in range(len(sobol_labels)):
+            plotter.plot(pdTimesteps, [self.Abfluss[key]["Sobol_m"][i] for key in keyIter], 'o', label=sobol_labels[i])
+        plotter.xlabel('time', fontsize=13)
+        plotter.ylabel('sobol indices', fontsize=13)
         ##plotter.xlim(0, 200)
         ##plotter.ylim(-0.1, 1.1)
-        #plotter.xticks(rotation=45)
-        #plotter.legend()  # enable the legend
-        #plotter.grid(True)
+        plotter.xticks(rotation=45)
+        plotter.legend()  # enable the legend
+        plotter.grid(True)
 
         # save figure mean + variance
         pdfFileName = paths.figureFileName + "_uq" + '.pdf'

@@ -14,8 +14,8 @@ working_dir = os.path.abspath(os.path.join(current_dir,"model_runs"))
 if not os.path.isdir(working_dir):
     subprocess.run(["mkdir", working_dir]) #TODO Move this away
 
-statistics_dict_path_pkl = os.path.abspath(os.path.join(working_dir,"statistics_dict.pkl"))
-statistics_dict_path_np = os.path.abspath(os.path.join(working_dir,"statistics_dict.pkl"))
+statistics_dict_path_pkl = os.path.abspath(os.path.join(working_dir,"statistics_dict"))
+statistics_dict_path_np = os.path.abspath(os.path.join(working_dir,"statistics_dict"))
 figureFileName = "statisticsFigure"
 
 larsim_data_path = os.path.abspath(os.path.join(parent_dir, 'Larsim-data'))
