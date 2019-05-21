@@ -78,8 +78,6 @@ class LarsimStatistics(Statistics):
         self.timesteps = samples.df_simulation_result.TimeStamp.unique()
         self.numbTimesteps = len(self.timesteps)
 
-        P = cp.orth_ttr(order, dist)
-
         # percentiles
         numPercSamples = 10 ** 5
 
