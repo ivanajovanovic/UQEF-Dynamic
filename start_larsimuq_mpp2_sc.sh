@@ -110,4 +110,4 @@ low_time="2:30:00"
 mid_time="5:45:00"
 max_time="30:00:00"
 
-start_larsim_uq_sim "DYNAMIC" "NOALGO"  20  6 "$model" "$opt_add" 1 "new" "$nodes" "$max_time"
+start_larsim_uq_sim "DYNAMIC" "NOALGO"  12  6 "$model" "$opt_add" 1 "new" "$nodes" "$max_time"

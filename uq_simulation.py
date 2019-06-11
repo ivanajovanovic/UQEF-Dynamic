@@ -3,6 +3,10 @@ import datetime
 import json
 from mpi4py import MPI
 import multiprocessing
+
+import matplotlib
+matplotlib.use('Agg') 
+
 import os
 import os.path as osp
 import pandas as pd

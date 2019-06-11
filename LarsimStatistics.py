@@ -226,11 +226,11 @@ class LarsimStatistics(Statistics):
 
         #check if it is sc or mc simulation
         plotter.subplot(414)
-        sobol_labels = ["uncertain_param_1", "uncertain_param_2"]
+        sobol_labels = ["EQB", "BSF", "TGr"]
         for i in range(len(sobol_labels)):
-            plotter.plot(pdTimesteps, [self.Abfluss[key]["Sobol_m"][i] for key in keyIter], 'o', label=sobol_labels[i])
+            plotter.plot(pdTimesteps, [self.Abfluss[key]["Sobol_t"][i] for key in keyIter], 'o', label=sobol_labels[i])
         plotter.xlabel('time', fontsize=13)
-        plotter.ylabel('sobol indices', fontsize=13)
+        plotter.ylabel('total sobol indices', fontsize=13)
         ##plotter.xlim(0, 200)
         ##plotter.ylim(-0.1, 1.1)
         plotter.xticks(rotation=45)
