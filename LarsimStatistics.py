@@ -59,7 +59,7 @@ class LarsimStatistics(Statistics):
     #rawSamples = self.solver.results
     def calcStatisticsForMc(self, rawSamples, timesteps,
                             simulationNodes, numEvaluations, solverTimes,
-                            work_package_indexes, original_runtime_estimator):
+                            work_package_indexes, original_runtime_estimator, regression, order):
         """
 
         :param rawSamples: simulation.solver.results
@@ -73,6 +73,11 @@ class LarsimStatistics(Statistics):
         """
 
         samples = Samples(rawSamples, station='MARI', type_of_output='Abfluss Simulation', pathsDataFormat=True)
+
+        if regression:
+            nodes = simulationNodes.distNodes
+            dist = simulationNodes.joinedDists
+            P = cp.orth_ttr(order, dist)
 
         #self.timesteps = timesteps #this is just a scalar representing total number of timesteps
         self.timesteps = samples.df_simulation_result.TimeStamp.unique()
@@ -89,14 +94,28 @@ class LarsimStatistics(Statistics):
         groups = grouped.groups
         for key,val in groups.items():
             discharge_values = samples.df_simulation_result.iloc[val.values].Value.values
-            #self.Abfluss[key(0)][key(1)] ...
-            self.Abfluss[key] = {}
-            self.Abfluss[key]["Q"] = discharge_values
-            self.Abfluss[key]["E"] = float(np.sum(discharge_values)/ numEvaluations)
-            self.Abfluss[key]["Var"] = float(np.sum(power(discharge_values)) / numEvaluations - self.Abfluss[key]["E"]**2)
-            self.Abfluss[key]["StdDev"] = float(np.sqrt(self.Abfluss[key]["Var"]))
-            self.Abfluss[key]["P10"] = float(np.percentile(discharge_values, 10, axis=0))
-            self.Abfluss[key]["P90"] = float(np.percentile(discharge_values, 90, axis=0))
+
+            if regression:
+                qoi_gPCE = cp.fit_regression(P, nodes, discharge_values)
+                self.Abfluss[key] = {}
+                self.Abfluss[key]["Q"] = discharge_values
+                self.Abfluss[key]["E"] = float((cp.E(qoi_gPCE, dist)))
+                self.Abfluss[key]["Var"] = float((cp.Var(qoi_gPCE, dist)))
+                self.Abfluss[key]["StdDev"] = float((cp.Std(qoi_gPCE, dist)))
+                self.Abfluss[key]["Sobol_m"] = cp.Sens_m(qoi_gPCE, dist)
+                self.Abfluss[key]["Sobol_m2"] = cp.Sens_m2(qoi_gPCE, dist)
+                self.Abfluss[key]["Sobol_t"] = cp.Sens_t(qoi_gPCE, dist)
+                self.Abfluss[key]["P10"] = float(cp.Perc(qoi_gPCE, 10, dist, numPercSamples))
+                self.Abfluss[key]["P90"] = float(cp.Perc(qoi_gPCE, 90, dist, numPercSamples))
+            else:
+                self.Abfluss[key] = {}
+                self.Abfluss[key]["Q"] = discharge_values
+                self.Abfluss[key]["E"] = float(np.sum(discharge_values)/ numEvaluations)
+                self.Abfluss[key]["Var"] = float(np.sum(power(discharge_values)) / numEvaluations - self.Abfluss[key]["E"]**2)
+                self.Abfluss[key]["StdDev"] = float(np.sqrt(self.Abfluss[key]["Var"]))
+                self.Abfluss[key]["P10"] = float(np.percentile(discharge_values, 10, axis=0))
+                self.Abfluss[key]["P90"] = float(np.percentile(discharge_values, 90, axis=0))
+                #TODO Calculate Sobol Ind based on Elizabeth's paper!
 
             if isinstance(self.Abfluss[key]["P10"], (list)) and len(self.Abfluss[key]["P10"]) == 1:
                 self.Abfluss[key]["P10"]= self.Abfluss[key]["P10"][0]
@@ -110,7 +129,7 @@ class LarsimStatistics(Statistics):
 
     def calcStatisticsForSc(self, rawSamples, timesteps,
                             simulationNodes, order, solverTimes,
-                            work_package_indexes, original_runtime_estimator):
+                            work_package_indexes, original_runtime_estimator, regression):
         """
         in ScSimulation.calculateStatistics
         statistics.calcStatisticsForSc(self.solver.results, self.solver.timesteps, simulationNodes, self.p_order, self.solver.solverTimes,
@@ -149,10 +168,11 @@ class LarsimStatistics(Statistics):
         for key,val in groups.items():
             discharge_values = samples.df_simulation_result.iloc[val.values].Value.values
 
-            #qoi_gPCE = cp.fit_quadrature(P, nodes, weights, discharge_values) #fit_quadrature for each time step for this station over multiple runs
-            #self.Abfluss[key(0)][key(1)] ...
 
-            qoi_gPCE = cp.fit_regression(P, nodes, discharge_values)
+            if regression:
+                qoi_gPCE = cp.fit_regression(P, nodes, discharge_values)
+            else:
+                qoi_gPCE = cp.fit_quadrature(P, nodes, weights, discharge_values) #fit_quadrature for each time step for this station over multiple runs
 
             self.Abfluss[key] = {}
             self.Abfluss[key]["Q"] = discharge_values
@@ -175,7 +195,7 @@ class LarsimStatistics(Statistics):
         #pickle.dump(self.Abfluss, pickle_out)
         #pickle_out.close()
 
-    def plotResults(self, display=False, station='MARI',
+    def plotResults(self, simulationNodes, display=False, station='MARI',
                     fileName="", fileNameIdent="", directory="./",
                     fileNameIdentIsFullName=False, safe=True):
 
@@ -228,20 +248,21 @@ class LarsimStatistics(Statistics):
         plotter.legend()  # enable the legend
         plotter.grid(True)
 
-        #check if it is sc or mc simulation
+        #TODO - This might differ depending on the mc vs sc run
         plotter.subplot(414)
-        sobol_labels = ["uncertain_param_1", "uncertain_param_2"]
+        #sobol_labels = ["EQB", "BSF", "TGr"]
+        sobol_labels = simulationNodes.nodeNames
         for i in range(len(sobol_labels)):
-            plotter.plot(pdTimesteps, [self.Abfluss[key]["Sobol_m"][i] for key in keyIter], 'o', label=sobol_labels[i])
+            plotter.plot(pdTimesteps, [self.Abfluss[key]["Sobol_t"][i] for key in keyIter], 'o', label=sobol_labels[i])
         plotter.xlabel('time', fontsize=13)
-        plotter.ylabel('sobol indices', fontsize=13)
+        plotter.ylabel('total sobol indices', fontsize=13)
         ##plotter.xlim(0, 200)
         ##plotter.ylim(-0.1, 1.1)
         plotter.xticks(rotation=45)
         plotter.legend()  # enable the legend
         plotter.grid(True)
 
-        # save figure mean + variance
+        # save figure
         pdfFileName = paths.figureFileName + "_uq" + '.pdf'
         pngFileName = paths.figureFileName + "_uq" + '.png'
         plotter.savefig(pdfFileName, format='pdf')

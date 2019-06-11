@@ -170,9 +170,11 @@ def tape35_configurations(parameters, curr_working_dir):
         variable_names.append(i["name"])
         limits.append((i["lower_limit"], i["upper_limit"]))
 
-    #TODO Ivana - you do not need this
-    while not os.path.exists(curr_working_dir+"/tape35"):
-        time.sleep(1)
+    # Check if local tape35 file exists
+    #while not os.path.exists(curr_working_dir+"/tape35"):
+    #    time.sleep(1)
+    if not os.path.exists(curr_working_dir+"/tape35"):
+        raise IOError('File does not exist: %s. %s' % (curr_working_dir+"/tape35", IOError.strerror))
 
     tape = pd.read_csv(curr_working_dir+"/tape35", index_col=False, delimiter=";")
     tape.loc[:, "Unnamed: 32"] = ""
