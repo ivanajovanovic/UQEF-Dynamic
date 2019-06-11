@@ -148,8 +148,12 @@ class LarsimStatistics(Statistics):
         groups = grouped.groups
         for key,val in groups.items():
             discharge_values = samples.df_simulation_result.iloc[val.values].Value.values
-            qoi_gPCE = cp.fit_quadrature(P, nodes, weights, discharge_values) #fit_quadrature for each time step for this station over multiple runs
+
+            #qoi_gPCE = cp.fit_quadrature(P, nodes, weights, discharge_values) #fit_quadrature for each time step for this station over multiple runs
             #self.Abfluss[key(0)][key(1)] ...
+
+            qoi_gPCE = cp.fit_regression(P, nodes, discharge_values)
+
             self.Abfluss[key] = {}
             self.Abfluss[key]["Q"] = discharge_values
             self.Abfluss[key]["E"] = float((cp.E(qoi_gPCE, dist)))
