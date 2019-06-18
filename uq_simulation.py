@@ -55,6 +55,8 @@ parser.add_argument('--uncertain_2_dist', default='normal')  # normal or uniform
 
 parser.add_argument('--uq_method', default="sc")  # sc, mc
 parser.add_argument('--regression',action='store_true', default=False)
+parser.add_argument('--sparse_quadrature',action='store_true', default=False)
+parser.add_argument('--saltelli',action='store_true', default=False) # compute Sobol's Indices using MC and Saltelli method, if saltelli = True then uq_method should be mc and regression = False
 parser.add_argument('--mc_numevaluations', type=int, default=27)
 parser.add_argument('--sc_q_order', type=int, default=3)  # number of collocation points in each direction (Q)
 parser.add_argument('--sc_p_order', type=int, default=2)  # number of terms in PCE (N)
@@ -251,7 +253,7 @@ if mpi == False or (mpi == True and rank == 0):
 #####################################
 if mpi == False or (mpi == True and rank == 0):
     simulations = {
-        "mc": (lambda: uqef.simulation.McSimulation(solver, args.mc_numevaluations, args.regression, args.sc_p_order))
+        "mc": (lambda: uqef.simulation.McSimulation(solver, args.mc_numevaluations, args.regression, args.saltelli, args.sc_p_order))
        ,"sc": (lambda: uqef.simulation.ScSimulation(solver, args.sc_q_order, args.sc_p_order, "G", args.sparse_quadrature, args.regression))
     }
     simulation = simulations[args.uq_method]()

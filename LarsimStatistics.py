@@ -24,18 +24,24 @@ class Samples(object):
 
         :param rawSamples: results returned by solver. Either list of paths to diff. ergebnis files or pandas.DataFrame object containing output of all the runs
         :param pathsDataFormat: wheather or not results are in form of the path to result file or concrete data arrays
-        :param station: Name of the station in which output we are interested in
+        :param station: Name of the station in which output we are interested in, if None - filter out all the stations
+        :param type_of_output: can be Abfluss Simulation or ....
         """
 
         #self.df_simulation_result = pd.DataFrame(columns=['Index_run', 'Stationskennung', 'Type', 'TimeStamp', 'Value'])
 
         if pathsDataFormat: #in case rawSamples is list of path to reasults
             list_of_single_df = []
-            for index_run, value in enumerate(rawSamples,): #Important that the results inside rawSamples (resulted paths) are in sorted order
-                if value is not None:
+            for index_run, value in enumerate(rawSamples,): #Important that the results inside rawSamples (resulted paths) are in sorted order and correspond to parameters order
+                if value is not None: #TODO IVANA What happens it it is?
                     df_single_ergebnis = config.result_parser_toPandas(value,index_run)
                     if station is not None:
-                        df_single_ergebnis = df_single_ergebnis.loc[(df_single_ergebnis['Stationskennung'] == station) & (df_single_ergebnis['Type'] == type_of_output)]
+                        df_single_ergebnis = df_single_ergebnis.loc[
+                            (df_single_ergebnis['Stationskennung'] == station) &
+                            (df_single_ergebnis['Type'] == type_of_output)]
+                    else:
+                        df_single_ergebnis = df_single_ergebnis.loc[
+                                        df_single_ergebnis['Type'] == type_of_output]
                     list_of_single_df.append(df_single_ergebnis)
             self.df_simulation_result = pd.concat(list_of_single_df, ignore_index=True, sort=False, axis=0)
 
@@ -45,6 +51,9 @@ class Samples(object):
             self.df_simulation_result = rawSamples
             if station is not None:
                 self.df_simulation_result = self.df_simulation_result.loc[(self.df_simulation_result['Stationskennung'] == station) & (self.df_simulation_result['Type'] == type_of_output)]
+            else:
+                self.df_simulation_result = self.df_simulation_result.loc[
+                                self.df_simulation_result['Type'] == type_of_output]
 
 
 
@@ -59,7 +68,7 @@ class LarsimStatistics(Statistics):
     #rawSamples = self.solver.results
     def calcStatisticsForMc(self, rawSamples, timesteps,
                             simulationNodes, numEvaluations, solverTimes,
-                            work_package_indexes, original_runtime_estimator, regression, order):
+                            work_package_indexes, original_runtime_estimator, regression, saltelli, order):
         """
 
         :param rawSamples: simulation.solver.results
@@ -93,7 +102,9 @@ class LarsimStatistics(Statistics):
         grouped = samples.df_simulation_result.groupby(['Stationskennung','TimeStamp'])
         groups = grouped.groups
         for key,val in groups.items():
-            discharge_values = samples.df_simulation_result.iloc[val.values].Value.values
+            discharge_values = samples.df_simulation_result.iloc[val.values].Value.values #numpy array 1xn, for sartelli it should be 1xn(2+d)
+            print("Size of a single discharge array (single station  -single timestep) is: ")
+            print(discharge_values.shape)
 
             if regression:
                 qoi_gPCE = cp.fit_regression(P, nodes, discharge_values)
@@ -107,6 +118,35 @@ class LarsimStatistics(Statistics):
                 self.Abfluss[key]["Sobol_t"] = cp.Sens_t(qoi_gPCE, dist)
                 self.Abfluss[key]["P10"] = float(cp.Perc(qoi_gPCE, 10, dist, numPercSamples))
                 self.Abfluss[key]["P90"] = float(cp.Perc(qoi_gPCE, 90, dist, numPercSamples))
+            elif saltelli:
+                self.Abfluss[key] = {}
+                standard_discharge_values = discharge_values[:numEvaluations]
+                self.Abfluss[key]["Q"] = standard_discharge_values
+                self.Abfluss[key]["E"] = float(np.sum(standard_discharge_values) / numEvaluations)
+                self.Abfluss[key]["Var"] = float(
+                    np.sum(power(standard_discharge_values)) / numEvaluations - self.Abfluss[key]["E"] ** 2)
+                self.Abfluss[key]["StdDev"] = float(np.sqrt(self.Abfluss[key]["Var"]))
+                self.Abfluss[key]["P10"] = float(np.percentile(standard_discharge_values, 10, axis=0))
+                self.Abfluss[key]["P90"] = float(np.percentile(standard_discharge_values, 90, axis=0))
+                # Calculate Sobol's Indices based on Saltelli 2010 paper!
+                # Transform Discharge Values 1xn(1+d)
+                dim = len(simulationNodes.nodeNames)
+                A, B, AB = separate_output_values(discharge_values, dim, numEvaluations)
+                print("A Matrix shape: ")
+                print(A.shape)
+                print("\n")
+                print("B Matrix shape: ")
+                print(B.shape)
+                print("\n")
+                print("AB Matrix shape: ")
+                print(AB.shape)
+                print("\n")
+                si_first_orded_array = first_order(A, AB, B)
+                si_total_orded_array = total_order(A, AB, B)
+                for j in range(dim):
+                    self.Abfluss[key]["Sobol_m"][j] = si_first_orded_array[j]
+                    self.Abfluss[key]["Sobol_t"][j] = si_total_orded_array[j]
+                #TODO Do this in parallel for each dimension!
             else:
                 self.Abfluss[key] = {}
                 self.Abfluss[key]["Q"] = discharge_values
@@ -115,7 +155,7 @@ class LarsimStatistics(Statistics):
                 self.Abfluss[key]["StdDev"] = float(np.sqrt(self.Abfluss[key]["Var"]))
                 self.Abfluss[key]["P10"] = float(np.percentile(discharge_values, 10, axis=0))
                 self.Abfluss[key]["P90"] = float(np.percentile(discharge_values, 90, axis=0))
-                #TODO Calculate Sobol Ind based on Elizabeth's paper!
+
 
             if isinstance(self.Abfluss[key]["P10"], (list)) and len(self.Abfluss[key]["P10"]) == 1:
                 self.Abfluss[key]["P10"]= self.Abfluss[key]["P10"][0]
@@ -278,3 +318,38 @@ class LarsimStatistics(Statistics):
 #helper function
 def power(my_list):
     return [ x**2 for x in my_list ]
+
+
+# Functions needed for calculating Sobol's indices using MC samples and Saltelli's method
+
+def separate_output_values(Y, D, N):
+
+    # A - function evaluations based on m2 NxD
+    # B - function evaluations based on m1 NxD
+    # AB - - function evaluations based on m2 with spme rows from m1 NxD
+
+    AB = np.zeros((N, D))
+    B = np.tile(Y[0:N], (D,1)) #Y[0:N]
+    B = B.T
+    #B = Y[0:N].T
+    A = np.tile(Y[N:2*N], (D,1))
+    A = A.T
+    #A = Y[N:2*N].T
+    for j in range(D):
+        start = (j + 2)*N
+        end = start + N
+        AB[:, j] = (Y[start:end]).T
+
+    return A, B, AB
+
+def first_order(A, AB, B):
+    # First order estimator following Saltelli et al. 2010 CPC, normalized by
+    # sample variance
+    #return np.mean(B * (AB - A), axis=0) / np.var(np.r_[A, B], axis=0)
+    return np.mean(B * (AB - A), axis=0) / np.var(np.concatenate((A, B), axis=0), axis=0)
+
+def total_order(A, AB, B):
+    # Total order estimator following Saltelli et al. 2010 CPC, normalized by
+    # sample variance
+    #return 0.5 * np.mean((A - AB) ** 2, axis=0) / np.var(np.r_[A, B], axis=0)
+    return np.mean(B * (AB - A), axis=0) / np.var(np.concatenate((A, B), axis=0), axis=0)
