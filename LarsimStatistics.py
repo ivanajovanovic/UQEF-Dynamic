@@ -19,7 +19,7 @@ class Samples(object):
      """
 
     #collects values from every simulation for each time steps as array, saves in dictionary
-    def __init__(self, rawSamples, station=None, type_of_output='Abfluss Simulation', pathsDataFormat=True):
+    def __init__(self, rawSamples, station=None, type_of_output='Abfluss Simulation', pathsDataFormat=True, dailyOutput = False):
         """
 
         :param rawSamples: results returned by solver. Either list of paths to diff. ergebnis files or pandas.DataFrame object containing output of all the runs
@@ -33,8 +33,11 @@ class Samples(object):
         if pathsDataFormat: #in case rawSamples is list of path to reasults
             list_of_single_df = []
             for index_run, value in enumerate(rawSamples,): #Important that the results inside rawSamples (resulted paths) are in sorted order and correspond to parameters order
-                if value is not None: #TODO IVANA What happens it it is?
+                if value is not None: #TODO IVANA What happens if it is?
                     df_single_ergebnis = config.result_parser_toPandas(value,index_run)
+                    if dailyOutput:
+                        #TODO Averga over time - change colume TimeStamp and Value!!!
+                        pass
                     if station is not None:
                         df_single_ergebnis = df_single_ergebnis.loc[
                             (df_single_ergebnis['Stationskennung'] == station) &
@@ -103,7 +106,7 @@ class LarsimStatistics(Statistics):
         groups = grouped.groups
         for key,val in groups.items():
             discharge_values = samples.df_simulation_result.iloc[val.values].Value.values #numpy array 1xn, for sartelli it should be 1xn(2+d)
-            print("Size of a single discharge array (single station  -single timestep) is: ")
+            print("Size of a single discharge array (single station  - single timestep) is: ")
             print(discharge_values.shape)
 
             if regression:
@@ -143,9 +146,12 @@ class LarsimStatistics(Statistics):
                 print("\n")
                 si_first_orded_array = first_order(A, AB, B)
                 si_total_orded_array = total_order(A, AB, B)
-                for j in range(dim):
-                    self.Abfluss[key]["Sobol_m"][j] = si_first_orded_array[j]
-                    self.Abfluss[key]["Sobol_t"][j] = si_total_orded_array[j]
+                print("si_first_orded_array shape: ")
+                print(si_first_orded_array.shape)
+                print("si_total_orded_array shape: ")
+                print(si_total_orded_array.shape)
+                self.Abfluss[key]["Sobol_m"] = si_first_orded_array
+                self.Abfluss[key]["Sobol_t"] = si_total_orded_array
                 #TODO Do this in parallel for each dimension!
             else:
                 self.Abfluss[key] = {}

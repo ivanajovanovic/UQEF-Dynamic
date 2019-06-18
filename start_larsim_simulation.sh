@@ -36,16 +36,16 @@
 
 
 # MpiPoolSolver - SC
-mpiexec -n 4 python3 uq_simulation.py \
-                                     --model "larsim" \
-                                     --uq_method "sc" --sc_q_order 3 --sc_p_order 1 \
-                                     --uncertain "all" \
-                                     --mpi \
-                                     --regression
+#mpiexec -n 4 python3 uq_simulation.py \
+#                                     --model "larsim" \
+#                                     --uq_method "sc" --sc_q_order 3 --sc_p_order 1 \
+#                                     --uncertain "all" \
+#                                     --mpi \
+#                                     --regression
 
 mpiexec -n 4 python3 uq_simulation.py \
                                      --model "larsim" \
-                                     --uq_method "mc" --mc_numevaluations 10 \
+                                     --uq_method "mc" --mc_numevaluations 100 --sc_p_order 8 \
                                      --uncertain "all" \
                                      --mpi \
-                                     --saltelli
+                                     --regression
