@@ -5,7 +5,6 @@ from mpi4py import MPI
 import multiprocessing
 import os
 import os.path as osp
-import pandas as pd
 import sys
 import subprocess
 import time
@@ -14,10 +13,17 @@ import chaospy as cp
 
 import uqef
 
-import paths
-import LARSIM_configs as config
 import LarsimModel
 import LarsimStatistics
+
+import LinearDampedOscillatorModel
+import LinearDampedOscillatorStatistics
+
+import IshigamiModel
+import IshigamiStatistics
+
+import ProductFunctionModel
+import ProductFunctionStatistics
 
 #####################################
 ### MPI infos:
@@ -35,7 +41,9 @@ if rank == 0: print("parsing args...")
 parser = argparse.ArgumentParser(description='Uncertainty Quantification simulation.')
 parser.add_argument('--smoketest', action='store_true', default=False)
 
-parser.add_argument('-or','--outputResultDir' , default="./saves/")
+parser.add_argument('-or','--outputResultDir', default="./saves/") #./oscilator/ or ./ishigami/
+
+parser.add_argument('--configurationsFile', default="configurations.json") #configuration_oscillator.json or configuration_ishigami.json or configuration_product_function
 
 parser.add_argument('--parallel', action='store_true', default=False)
 parser.add_argument('--num_cores', type=int, default=multiprocessing.cpu_count())
@@ -43,15 +51,11 @@ parser.add_argument('--mpi', action='store_true')
 parser.add_argument('--mpi_method', default="new")  # new (MpiPoolSolver), old (MpiPoolSolverOld)
 parser.add_argument('--mpi_combined_parallel', action='store_true', default=False)
 
-parser.add_argument('--model', default="larsim")
+parser.add_argument('--model', default="larsim") #oscillator ishigami productFunction
 
 parser.add_argument('--chunksize', type=int, default=1)
 parser.add_argument('--mpi_chunksize', type=int, default=1)
 
-parser.add_argument('--uncertain', default='all')  # all, uncertain_param_1, uncertain_param_2
-
-parser.add_argument('--uncertain_1_dist', default='normal')  # normal or uniform
-parser.add_argument('--uncertain_2_dist', default='normal')  # normal or uniform
 
 parser.add_argument('--uq_method', default="sc")  # sc, mc
 parser.add_argument('--regression',action='store_true', default=False)
@@ -60,6 +64,8 @@ parser.add_argument('--saltelli',action='store_true', default=False) # compute S
 parser.add_argument('--mc_numevaluations', type=int, default=27)
 parser.add_argument('--sc_q_order', type=int, default=3)  # number of collocation points in each direction (Q)
 parser.add_argument('--sc_p_order', type=int, default=2)  # number of terms in PCE (N)
+
+parser.add_argument('--run_statistics', action='store_true', default=False)
 
 args = parser.parse_args()
 
@@ -91,73 +97,105 @@ else:
     rootDir = os.getcwd()
 
 outputResultDir = os.path.abspath(os.path.join(rootDir,datetime.datetime.now().strftime("%Y-%m-%d:%H:%M")))
-args.outputResultDir = outputResultDir
+#args.outputResultDir = outputResultDir
 
 if mpi == False or (mpi == True and rank == 0):
-    # call(["mkdir " + args.outputResultDir], shell=True)
     if not os.path.isdir(outputResultDir): subprocess.run(["mkdir", outputResultDir])
     print("outputResultDir: {}".format(outputResultDir))
+
+
+#####################################
+### read configuration setting and additional path settings:
+#####################################
+
+configuration_object = None
+
+if mpi == False or (mpi == True and rank == 0):
+    with open(args.configurationsFile) as f:
+        configuration_object = json.load(f)
+        print(configuration_object)
+
+    #Set the working folder where all the model runs related output and files will be written
+    try:
+        configuration_object["Directories"]["working_dir"] = os.path.abspath(os.path.join(outputResultDir,
+                                                                                          configuration_object["Directories"]["working_dir"]))
+    except KeyError:
+        try:
+            configuration_object["Directories"]["working_dir"] = os.path.abspath(os.path.join(outputResultDir, "model_runs"))
+        except KeyError:
+            configuration_object["Directories"] = {}
+            configuration_object["Directories"]["working_dir"] = os.path.abspath(
+                os.path.join(outputResultDir, "model_runs"))
+
+    if not os.path.isdir(configuration_object["Directories"]["working_dir"]):
+        subprocess.run(["mkdir", configuration_object["Directories"]["working_dir"]])
 
 #####################################
 ### initialise uncertain parameters - simulationNodes:
 #####################################
-# each mpi processor has it's own model
-model = args.model
 
-configuration_object = None
-#TODO - Ivana think if you should regarde distributions as values or error distributions
-if args.mpi == False or (args.mpi == True and rank == 0):
-    with open("configurations.json") as f:
-        configuration_object = json.load(f)
-        print(configuration_object)
+model = args.model
 
 if mpi == True:
     configuration_object = comm.bcast(configuration_object, root=0)
-    print("broadcasting configuration object...")
+    #print("broadcasting configuration object...")
 
 if mpi == False or (mpi == True and rank == 0):
     distributions = []
+    nodeNames = []
     for i in configuration_object["Variables"]:
         if i["distribution"] == "normal":
             distributions.append((i["name"], cp.Normal(i["mean"], i["std"])))
         elif i["distribution"] == "uniform":
             distributions.append((i["name"], cp.Uniform(i["uniform_low"], i["uniform_high"])))
-    nodeNames = []
-    for items in distributions:
-        nodeNames.append(items[0])
+        nodeNames.append(i["name"])
 
     simulationNodes = uqef.simulation.Nodes(nodeNames)
 
-    #if args.uncertain == "all":
     for items in distributions:
         simulationNodes.setDist(items[0], items[1])
 
     print("model: {}".format(args.model))
     print("chunksize: {}".format(args.chunksize))
-    print("nodes config: {}".format(args.uncertain))
-    print(simulationNodes.printNodesSetup()) # just a setup, before really sampling the nodes
-
-    # generates output folder for plots
+    # Print just a node setup (before really sampling the nodes)
+    print(simulationNodes.printNodesSetup())
     node_setup_name = outputResultDir + "/node_setup.txt"
     with open(node_setup_name, "w") as f:
         f.write(simulationNodes.printNodesSetup())
 
 #####################################
+### one time initial model setup
+#####################################
+# put here is there is something specifically related to the model that should be done only once
+if mpi == False or (mpi == True and rank == 0):
+    def initialModelSetUp():
+        models = {
+            "larsim": (lambda: LarsimModel.LarsimModelSetUp(configuration_object))
+            ,"oscillator": (lambda: LinearDampedOscillatorModel.LinearDampedOscillatorModelSetUp(configuration_object))
+            ,"ishigami": (lambda: IshigamiModel.IshigamiModelSetUp(configuration_object))
+            ,"productFunction": (lambda: ProductFunctionModel.ProductFunctionModelSetUp(configuration_object))
+        }
+        models[model]()
+    initialModelSetUp()
+
+#####################################
 ### initialise model
 #####################################
-# each mpi processor has it's own modelGenerator
+# each mpi processor has it's own model
+
 def modelGenerator():
     models = {
-        "larsim": (lambda: LarsimModel.LarsimModel())
-        #"larsim": (lambda: uqef.model.TestModel())
+        "larsim": (lambda: LarsimModel.LarsimModel(configuration_object))
+        ,"oscillator": (lambda: LinearDampedOscillatorModel.LinearDampedOscillatorModel(configuration_object))
+        ,"ishigami": (lambda: IshigamiModel.IshigamiModel(configuration_object))
+        ,"productFunction": (lambda: ProductFunctionModel.ProductFunctionModel(configuration_object))
     }
     return models[model]()
-    #return models["larsim"]()
 
 #####################################
 ### initialise solver
 #####################################
-# each mpi processor has it's own solver
+
 if mpi == True:
     if args.mpi_method == "new":
         solver = uqef.solver.MpiPoolSolver(modelGenerator, mpi_chunksize=args.mpi_chunksize,
@@ -174,80 +212,9 @@ if mpi == False or (mpi == True and rank == 0):
     print("solver-setup: {}".format(solver.getSetup()))
 
 #####################################
-### additional paths, time and configuration settings
+###
 #####################################
-
-if mpi == False or (mpi == True and rank == 0):
-    timeframe = config.datetime_parse(configuration_object) #tuple with EREIGNISBEGINN EREIGNISENDE
-    timestep = configuration_object["Timeframe"]["timestep"] #how long one consecutive run should take
-    #start_date_sim = timeframe[0]
-    #end_date_sim = timeframe[1]
-    if timestep == 0:
-        pass
-    else:
-        timeframe[1] = timeframe[0] + datetime.timedelta(days=timestep)
-    #EREIGNISBEGINN = timeframe[0]
-    #EREIGNISBEGINN_MIN_3 = EREIGNISBEGINN - datetime.timedelta(days=3)
-    #EREIGNISENDE = timeframe[1]
-    #VORHERSAGEBEGINN = 53
-    #VORHERSAGEDAUER = (EREIGNISENDE - EREIGNISBEGINN) * 24 - VORHERSAGEBEGINN
-
-    #####################################
-    ### copy configuration files
-    #####################################
-    # Get all the inputs
-
-    # All the configurations needed for proper execution
-
-    # Base on time settings change tape10_master file
-    config.tape10_configurations(timeframe=timeframe, master_tape10_file=paths.master_tape10_file, new_path=paths.master_dir)
-
-    # Filter out whm files
-    config.copy_whm_files(timeframe=timeframe, all_whms_path=paths.all_whms_path, new_path=paths.master_dir)
-
-    # Parse big lila files and create small ones
-    #config.master_lila_parser_on_time_crete_new(timeframe=timeframe, master_lila_paths=paths.master_lila_paths, configured_lila_paths=paths.lila_configured_paths)
-    config.master_lila_parser_on_time_crete_new(timeframe=timeframe, master_lila_paths=paths.master_lila_paths,
-                                                new_lila_files = paths.lila_files, new_path = paths.master_dir)
-
-    for one_lila_file in paths.lila_configured_paths:
-        if not osp.exists(one_lila_file):
-            raise IOError('File does not exist: %s. %s' % (one_lila_file, IOError.strerror))
-            #OSError
-            #try:
-            #    with open(path) as f:
-            #        pass
-            #except IOError as exc:
-            #    raise IOError("%s: %s" % (path, exc.strerror))
-            #sys.exit(1)
-
-    #TODO run unaltered simulation
-    #####################################
-    ### run unaltered simulation
-    #####################################
-
-    print("INFO: All the files have been copied to master folder! ")
-    start_time = time.time()
-
-# start new simulation
-# generate nodes for the first time and save them
-#for loop
-# inside for loop - change tape10
-# inside for loop - call solver.init()
-# inside for loop - call simulation.prepareSolver()
-# solver.solve()
-# inside for loop - inside of the model.run mkdir, copy all the files - tape10 just once
-# inside for loop - inside of the model.run delete larsim.ok, tape11, ergebnis.lila and karte
-# inside for loop - inside of the model.run copy tape10
-# inside for loop - inside of the model.run copy new ergebnis to safe place
-
-#or
-
-#inside model.run - constanlty change tape10
-#inside model.run - constanlty delete larsim.ok, tape11, ergebnis.lila and karte
-#inside model.run - constanlty run larsim.exe
-#inside model.run - constanlty concatinate ergebnis and save to some final ergebnis file
-
+start_time = time.time()
 #####################################
 ### initialise simulation
 #####################################
@@ -262,6 +229,7 @@ if mpi == False or (mpi == True and rank == 0):
 
     print("initialise simulation...")
 
+    #generate simulation nodes
     simulation.generateSimulationNodes(simulationNodes) #simulation.parameters are set from now on
     print(simulationNodes.printNodes()) #this is after nodes = self.nodes.T
     # do smt. like print(simulation.parameters) print(simulationNodes.nodes)
@@ -291,40 +259,33 @@ if mpi == False or (mpi == True and rank == 0):
 
     solver.tearDown() # stop the solver
 
-    #final_results = simulation.getterResults()
-    #df_simulation_result = pd.DataFrame(columns=['Index_run', 'Stationskennung', 'Type', 'TimeStamp', 'Value'])
-    #for index_run, value in enumerate(final_results):
-    #    if value is not None:
-    #        df_single_ergebnis = config.result_parser_toPandas(value, index_run)
-    #        df_single_mariental_ergebnis = df_single_ergebnis.loc[
-    #            (df_single_ergebnis['Stationskennung'] == 'MARI') & (
-    #                        df_single_ergebnis['Type'] == 'Abfluss Simulation')]
-    #        df_simulation_result.append(df_single_mariental_ergebnis, ignore_index=True)
-    #simulation.setterResults(results)
-
     #####################################
     ### calculate statistics:
     #####################################
-    print("calculate statistics...")
-    statistics_ = {
-        "larsim": ( lambda: simulation.calculateStatistics(LarsimStatistics.LarsimStatistics(), simulationNodes))
-    }
-    statistics = statistics_[model]()
-    print("--- %s seconds ---" % (time.time() - start_time))
+    if args.run_statistics:
+        print("calculate statistics...")
+        statistics_ = {
+            "larsim": ( lambda: simulation.calculateStatistics(LarsimStatistics.LarsimStatistics(configuration_object), simulationNodes))
+            ,"oscillator": (lambda: simulation.calculateStatistics(LinearDampedOscillatorStatistics.LinearDampedOscillatorStatistics(), simulationNodes))
+            ,"ishigami": (lambda: simulation.calculateStatistics(IshigamiStatistics.IshigamiStatistics(configuration_object), simulationNodes))
+            ,"productFunction": (lambda: simulation.calculateStatistics(ProductFunctionStatistics.ProductFunctionStatistics(configuration_object), simulationNodes))
+        }
+        statistics = statistics_[model]()
+        print("--- %s seconds ---" % (time.time() - start_time))
 
-    #####################################
-    ### print statistics:
-    #####################################
-    #print("print statistics...")
-    #print(statistics.printResults())
+        #####################################
+        ### print statistics:
+        #####################################
+        #print("print statistics...")
+        #print(statistics.printResults())
 
-    #####################################
-    ### generate plots
-    #####################################
-    print("generate plots...")
-    #fileName = simulation.name
-    #statistics.plotResults(fileName=fileName, directory=outputResultDir, display=False)
-    statistics.plotResults(simulationNodes)
+        #####################################
+        ### generate plots
+        #####################################
+        print("generate plots...")
+        #fileName = simulation.name
+        #statistics.plotResults(fileName=fileName, directory=outputResultDir, display=False)
+        statistics.plotResults(simulationNodes, display=True)
 
 if mpi == True:
     print("rank: {} exit".format(rank))

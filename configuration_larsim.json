@@ -27,7 +27,7 @@
       "std": 10000,
       "uniform_low": -10000,
       "uniform_high": 10000,
-      "lower_limit": 5000 ,
+      "lower_limit": 5000,
       "upper_limit": 100000
     },
     {
@@ -37,7 +37,7 @@
       "std": 0.05,
       "uniform_low": -0.05,
       "uniform_high": 0.05,
-      "lower_limit": 0.01 ,
+      "lower_limit": 0.01,
       "upper_limit": 0.5
     },
     {
@@ -52,10 +52,13 @@
     }
 
   ],
-
-
-
-
+  "Output":
+  {
+    "type_of_output":"Abfluss Simulation",
+    "station":"MARI",
+    "pathsDataFormat":"False",
+    "dailyOutput": "True"
+  },
   "Unused_Variables": [
 
     {
@@ -166,8 +169,6 @@
     }
   ]
 
-
-
-    }
+}
 
 

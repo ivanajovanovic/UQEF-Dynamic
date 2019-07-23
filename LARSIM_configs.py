@@ -23,7 +23,7 @@ def datetime_parse(configuration):
 
 def tape10_configurations(timeframe, master_tape10_file, new_path):
 
-    new_path = new_path + '/tape10'
+    #new_path = new_path + '/tape10'
     parameter = ["EREIGNISBEGINN       ", "EREIGNISENDE       ", "VORHERSAGEBEGINN     ", "VORHERSAGEDAUER      "]
 
     ereignisbeginn = "EREIGNISBEGINN       " + str(timeframe[0].day).zfill(2) + " " + str(timeframe[0].month).zfill(
@@ -151,7 +151,11 @@ def tape10_timesteps(tape10_path):
                 a = float(line[5])
             if line[0] == "VORHERSAGEDAUER":
                 b = float(line[6])
-    return (a+b)*interval
+
+    grid_size = int((a+b)/ interval) + 1
+    t = [i * interval for i in range(grid_size)]
+
+    return t
 
 
 def var_limits(var, limits):
@@ -161,12 +165,13 @@ def var_limits(var, limits):
 
 
 # tape 35 changes
-def tape35_configurations(parameters, curr_working_dir):
-    with open("configurations.json") as f:
-        data = json.load(f)
+def tape35_configurations(parameters, curr_working_dir, configurationObject):
+    #with open("configurations.json") as f:
+    #    data = json.load(f)
+
     variable_names = []
     limits = []
-    for i in data["Variables"]:
+    for i in configurationObject["Variables"]:
         variable_names.append(i["name"])
         limits.append((i["lower_limit"], i["upper_limit"]))
 
@@ -190,7 +195,7 @@ def tape35_configurations(parameters, curr_working_dir):
     tape.to_csv(curr_working_dir+"/tape35", index=False, sep=";")
 
 
-def result_parser_toPandas(file_path, index_run):
+def result_parser_toPandas(file_path, index_run = 0):
     """
     Function parses all data entries within ergebnis.lila and adds them
     to their respective stations in dictionaries
@@ -231,13 +236,13 @@ def result_parser_toPandas(file_path, index_run):
                 if line[1] != "-":
                     result_list.append((int(index_run), curr_ident, curr_rtype, timestemp, float(line[1])))
                 else:
-                    result_list.append((int(index_run), curr_ident, curr_rtype, timestemp, "-"))
+                    result_list.append((int(index_run), curr_ident, curr_rtype, timestemp, None))
 
                 if curr_rtype2 != "":
                     if line[1] != "-":
                         result_list.append((int(index_run), curr_ident, curr_rtype2, timestemp, float(line[2])))
                     else:
-                        result_list.append((int(index_run), curr_ident, curr_rtype2, timestemp, "-"))
+                        result_list.append((int(index_run), curr_ident, curr_rtype2, timestemp, None))
 
     labels = ['Index_run','Stationskennung', 'Type', 'TimeStamp', 'Value']
     result = pd.DataFrame.from_records(result_list, columns=labels)
@@ -247,3 +252,44 @@ def result_parser_toPandas(file_path, index_run):
 
 
 
+def lila_parser_toPandas(file_path, index_run=0):
+    """
+    Function parses all data entries within some lila file
+
+    Returns pandas DataFrame.
+    """
+    result_list = []
+    # TODO Change this so that any lila file (not just wq) can be read to pandas DataFrame
+    type_of_data = "Ground Truth"
+    stations_array = []
+
+    if not os.path.isfile(file_path):
+        raise OSError('No such file or directory', file_path)
+
+    with open(file_path, "r", encoding="ISO-8859-15") as file:
+        while 1:
+            for lines in file:
+                line = lines.split(";")
+                if line[0] == "Stationskennung":
+                    # make an array of all the stations
+                    for idx, val in enumerate(line[1:]):
+                        stations_array.append(val.rstrip('\n'))
+                    #print(stations_array)
+                    #print(len(stations_array))
+                if line[0] == "Kommentar":
+                    break
+            break
+        for lines in file:
+            line = lines.split(";")
+            if re.match("\d\d\.\d\d\.\d*", line[0]):
+                timestemp = pd.datetime.strptime(line[0], '%d.%m.%Y %H:%M')
+            # iterate through the rest of line array
+            for idx, val in enumerate(line[1:]):
+                if val != "-":
+                    result_list.append((int(index_run), stations_array[idx], type_of_data, timestemp, float(val)))
+                else:
+                    result_list.append((int(index_run), stations_array[idx], type_of_data, timestemp, None))
+
+    labels = ['Index_run', 'Stationskennung', 'Type', 'TimeStamp', 'Value']
+    result = pd.DataFrame.from_records(result_list, columns=labels)
+    return result

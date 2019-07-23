@@ -1,11 +1,11 @@
 import chaospy as cp
 import numpy as np
-import os
 import pandas as pd
-#import pickle
 import matplotlib.pyplot as plotter
-#from itertools import product
 import itertools
+import os
+from distutils.util import strtobool
+
 
 from uqef.stat import Statistics
 
@@ -19,7 +19,7 @@ class Samples(object):
      """
 
     #collects values from every simulation for each time steps as array, saves in dictionary
-    def __init__(self, rawSamples, station=None, type_of_output='Abfluss Simulation', pathsDataFormat=True, dailyOutput = False):
+    def __init__(self, rawSamples, station=None, type_of_output='Abfluss Simulation', pathsDataFormat="False", dailyOutput=False):
         """
 
         :param rawSamples: results returned by solver. Either list of paths to diff. ergebnis files or pandas.DataFrame object containing output of all the runs
@@ -30,52 +30,64 @@ class Samples(object):
 
         #self.df_simulation_result = pd.DataFrame(columns=['Index_run', 'Stationskennung', 'Type', 'TimeStamp', 'Value'])
 
-        if pathsDataFormat: #in case rawSamples is list of path to reasults
-            list_of_single_df = []
-            for index_run, value in enumerate(rawSamples,): #Important that the results inside rawSamples (resulted paths) are in sorted order and correspond to parameters order
-                if value is not None: #TODO IVANA What happens if it is?
-                    df_single_ergebnis = config.result_parser_toPandas(value,index_run)
-                    if dailyOutput:
-                        #TODO Averga over time - change colume TimeStamp and Value!!!
-                        pass
-                    if station is not None:
-                        df_single_ergebnis = df_single_ergebnis.loc[
-                            (df_single_ergebnis['Stationskennung'] == station) &
-                            (df_single_ergebnis['Type'] == type_of_output)]
-                    else:
-                        df_single_ergebnis = df_single_ergebnis.loc[
-                                        df_single_ergebnis['Type'] == type_of_output]
-                    list_of_single_df.append(df_single_ergebnis)
-            self.df_simulation_result = pd.concat(list_of_single_df, ignore_index=True, sort=False, axis=0)
-
-                    #self.df_simulation_result = pd.concat([self.df_simulation_result, df_single_ergebnis], ignore_index=True, sort=False)
-
-        else: #in case rawSamples is already pandas.DataFrame object
-            self.df_simulation_result = rawSamples
-            if station is not None:
-                self.df_simulation_result = self.df_simulation_result.loc[(self.df_simulation_result['Stationskennung'] == station) & (self.df_simulation_result['Type'] == type_of_output)]
+        list_of_single_df = []
+        for index_run, value in enumerate(rawSamples,): #Important that the results inside rawSamples (resulted paths) are in sorted order and correspond to parameters order
+        #TODO What happens if value is None - ergebnis file was not read inside of the model properly
+            if strtobool(pathsDataFormat):
+                df_single_ergebnis = config.result_parser_toPandas(value, index_run)
             else:
-                self.df_simulation_result = self.df_simulation_result.loc[
-                                self.df_simulation_result['Type'] == type_of_output]
+                df_single_ergebnis = value
+
+            if station is not None:
+                df_single_ergebnis = df_single_ergebnis.loc[
+                    (df_single_ergebnis['Stationskennung'] == station) &
+                    (df_single_ergebnis['Type'] == type_of_output)]
+            else:
+                df_single_ergebnis = df_single_ergebnis.loc[
+                    df_single_ergebnis['Type'] == type_of_output]
+            list_of_single_df.append(df_single_ergebnis)
+
+        df_simulation_result = pd.concat(list_of_single_df, ignore_index=True, sort=False, axis=0)
+
+        df_simulation_result['Value'] = df_simulation_result['Value'].astype(float)
+        print("Data Frame with All the simulation results : {}".format(df_simulation_result.dtypes))
+
+        if strtobool(dailyOutput):
+            # Average over time - change colume TimeStamp and Value!!!
+            df_simulation_result['TimeStamp_Date'] = [entry.date() for entry in df_simulation_result['TimeStamp']]
+            df_simulation_result['TimeStamp_Time'] = [entry.time() for entry in df_simulation_result['TimeStamp']]
+            df_simulation_result = df_simulation_result.groupby(['Stationskennung', 'Type', 'TimeStamp_Date', 'Index_run'])['Value'].mean().reset_index()
+            df_simulation_result = df_simulation_result.rename({'TimeStamp_Date' : 'TimeStamp'}, axis = 'columns')
+            df_simulation_result['TimeStamp'] = df_simulation_result['TimeStamp'].apply(lambda x: pd.Timestamp(x))
+            print(df_simulation_result.dtypes)
+
+        self.df_simulation_result = df_simulation_result
+
+        self.df_time_discharges = df_simulation_result.groupby(["Stationskennung","TimeStamp"])["Value"].apply(lambda df: df.reset_index(drop=True)).unstack()
 
 
 
 class LarsimStatistics(Statistics):
 
 
-    def __init__(self):
+    def __init__(self, configurationObject):
         Statistics.__init__(self)
 
+        self.configurationObject = configurationObject
 
-    #timesteps = self.solver.timesteps which are LarsimModel.timesteps() - duration of each simulation in discrete timesteps
-    #rawSamples = self.solver.results
+        try:
+            self.working_dir = self.configurationObject["Directories"]["working_dir"]
+        except KeyError:
+            self.working_dir = paths.working_dir  # directoy for all the larsim runs
+
+
     def calcStatisticsForMc(self, rawSamples, timesteps,
                             simulationNodes, numEvaluations, solverTimes,
                             work_package_indexes, original_runtime_estimator, regression, saltelli, order):
         """
 
         :param rawSamples: simulation.solver.results
-        :param timesteps: simulation.solver.timesteps
+        :param timesteps: simulation.solver.timesteps (which are LarsimModel.timesteps() - duration of each simulation in discrete timesteps)
         :param simulationNodes: simulationNodes
         :param numEvaluations: simulation.numEvaluations
         :param solverTimes: simulation.solver.solverTimes
@@ -84,28 +96,46 @@ class LarsimStatistics(Statistics):
         :return:
         """
 
-        samples = Samples(rawSamples, station='MARI', type_of_output='Abfluss Simulation', pathsDataFormat=True)
+        #samples = Samples(rawSamples, station='MARI', type_of_output='Abfluss Simulation', pathsDataFormat=True)
+        samples = Samples(rawSamples, station=self.configurationObject["Output"]["station"],
+                          type_of_output=self.configurationObject["Output"]["type_of_output"],
+                          pathsDataFormat=self.configurationObject["Output"]["pathsDataFormat"],
+                          dailyOutput=self.configurationObject["Output"]["dailyOutput"])
+
+        # Save the DataFrame containing all the simulation results
+        samples.df_time_discharges.to_csv(path_or_buf=os.path.abspath(os.path.join(self.working_dir, "df_all_simulations.csv")),
+                                index=True)
+
+        #self.df_simulation_result = samples.df_simulation_result
+
 
         if regression:
             nodes = simulationNodes.distNodes
             dist = simulationNodes.joinedDists
             P = cp.orth_ttr(order, dist)
 
-        #self.timesteps = timesteps #this is just a scalar representing total number of timesteps
+        #self.timesteps = timesteps #atm this is just a scalar representing total number of timesteps
         self.timesteps = samples.df_simulation_result.TimeStamp.unique()
         self.numbTimesteps = len(self.timesteps)
+
+        print("timesteps Info")
+        print(type(self.timesteps))
+        print("numbTimesteps is: {}".format(self.numbTimesteps))
 
         # percentiles
         numPercSamples = 10 ** 5
 
         self.station_names = samples.df_simulation_result.Stationskennung.unique()
 
+        dim = len(simulationNodes.nodeNames)
+
         self.Abfluss = {}
 
         grouped = samples.df_simulation_result.groupby(['Stationskennung','TimeStamp'])
         groups = grouped.groups
+        # Do statistics calulcations for each station for each time step
         for key,val in groups.items():
-            discharge_values = samples.df_simulation_result.iloc[val.values].Value.values #numpy array 1xn, for sartelli it should be 1xn(2+d)
+            discharge_values = samples.df_simulation_result.iloc[val.values].Value.values #numpy array nx1, for sartelli it should be n(2+d)x1
             print("Size of a single discharge array (single station  - single timestep) is: ")
             print(discharge_values.shape)
 
@@ -123,49 +153,39 @@ class LarsimStatistics(Statistics):
                 self.Abfluss[key]["P90"] = float(cp.Perc(qoi_gPCE, 90, dist, numPercSamples))
             elif saltelli:
                 self.Abfluss[key] = {}
-                standard_discharge_values = discharge_values[:numEvaluations]
+                discharge_values_saltelli = discharge_values[:, np.newaxis]
+                standard_discharge_values = discharge_values_saltelli[:numEvaluations,:] #values based on which we calculate standard statistics
+
                 self.Abfluss[key]["Q"] = standard_discharge_values
-                self.Abfluss[key]["E"] = float(np.sum(standard_discharge_values) / numEvaluations)
-                self.Abfluss[key]["Var"] = float(
-                    np.sum(power(standard_discharge_values)) / numEvaluations - self.Abfluss[key]["E"] ** 2)
-                self.Abfluss[key]["StdDev"] = float(np.sqrt(self.Abfluss[key]["Var"]))
-                self.Abfluss[key]["P10"] = float(np.percentile(standard_discharge_values, 10, axis=0))
-                self.Abfluss[key]["P90"] = float(np.percentile(standard_discharge_values, 90, axis=0))
-                # Calculate Sobol's Indices based on Saltelli 2010 paper!
-                # Transform Discharge Values 1xn(1+d)
-                dim = len(simulationNodes.nodeNames)
-                A, B, AB = separate_output_values(discharge_values, dim, numEvaluations)
-                print("A Matrix shape: ")
-                print(A.shape)
-                print("\n")
-                print("B Matrix shape: ")
-                print(B.shape)
-                print("\n")
-                print("AB Matrix shape: ")
-                print(AB.shape)
-                print("\n")
-                si_first_orded_array = first_order(A, AB, B)
-                si_total_orded_array = total_order(A, AB, B)
-                print("si_first_orded_array shape: ")
-                print(si_first_orded_array.shape)
-                print("si_total_orded_array shape: ")
-                print(si_total_orded_array.shape)
-                self.Abfluss[key]["Sobol_m"] = si_first_orded_array
-                self.Abfluss[key]["Sobol_t"] = si_total_orded_array
-                #TODO Do this in parallel for each dimension!
+                self.Abfluss[key]["E"] = np.sum(standard_discharge_values, axis=0, dtype=np.float64) / numEvaluations
+                #self.Abfluss[key]["Var"] = float(np.sum(power(standard_discharge_values)) / numEvaluations - self.Abfluss[key]["E"] ** 2)
+                self.Abfluss[key]["Var"] = np.sum((standard_discharge_values - self.Abfluss[key]["E"]) ** 2, axis=0, dtype=np.float64) / (numEvaluations - 1)
+                self.Abfluss[key]["StdDev"] = np.sqrt(self.Abfluss[key]["Var"], dtype=np.float64)
+
+                self.Abfluss[key]["P10"] = np.percentile(discharge_values[:numEvaluations], 10, axis=0)
+                self.Abfluss[key]["P90"] = np.percentile(discharge_values[:numEvaluations], 90, axis=0)
+
+                self.Abfluss[key]["Sobol_m"] = _Sens_m_sample_4(discharge_values_saltelli, dim, numEvaluations)
+                self.Abfluss[key]["Sobol_t"] = _Sens_t_sample_4(discharge_values_saltelli, dim, numEvaluations)
+                #print("self.Abfluss[key]["Sobol_m"].shape")
+                #print(self.Abfluss[key]["Sobol_m"].shape)
+                #print("self.Abfluss[key]["Sobol_t"].shape")
+                #print(self.Abfluss[key]["Sobol_t"].shape)
+
             else:
                 self.Abfluss[key] = {}
                 self.Abfluss[key]["Q"] = discharge_values
-                self.Abfluss[key]["E"] = float(np.sum(discharge_values)/ numEvaluations)
-                self.Abfluss[key]["Var"] = float(np.sum(power(discharge_values)) / numEvaluations - self.Abfluss[key]["E"]**2)
-                self.Abfluss[key]["StdDev"] = float(np.sqrt(self.Abfluss[key]["Var"]))
-                self.Abfluss[key]["P10"] = float(np.percentile(discharge_values, 10, axis=0))
-                self.Abfluss[key]["P90"] = float(np.percentile(discharge_values, 90, axis=0))
+                self.Abfluss[key]["E"] = np.sum(discharge_values, axis=0, dtype=np.float64)/ numEvaluations
+                #self.Abfluss[key]["Var"] = float(np.sum(power(discharge_values)) / numEvaluations - self.Abfluss[key]["E"]**2)
+                self.Abfluss[key]["Var"] = np.sum((discharge_values - self.Abfluss[key]["E"]) ** 2, axis=0, dtype=np.float64) / (numEvaluations - 1)
+                self.Abfluss[key]["StdDev"] = np.sqrt(self.Abfluss[key]["Var"], dtype=np.float64)
+                self.Abfluss[key]["P10"] = np.percentile(discharge_values, 10, axis=0)
+                self.Abfluss[key]["P90"] = np.percentile(discharge_values, 90, axis=0)
 
 
             if isinstance(self.Abfluss[key]["P10"], (list)) and len(self.Abfluss[key]["P10"]) == 1:
-                self.Abfluss[key]["P10"]= self.Abfluss[key]["P10"][0]
-                self.Abfluss[key]["P90"] = self.Abfluss[key]["P90"][0]
+                self.Abfluss[key]["P10"]=self.Abfluss[key]["P10"][0]
+                self.Abfluss[key]["P90"]=self.Abfluss[key]["P90"][0]
 
         np.save(paths.statistics_dict_path_np, self.Abfluss)
         #pickle_out = open(paths.statistics_dict_path_pkl,"wb")
@@ -194,11 +214,25 @@ class LarsimStatistics(Statistics):
         weights = simulationNodes.weights
         dist = simulationNodes.joinedDists
 
-        samples = Samples(rawSamples, station='MARI', type_of_output='Abfluss Simulation', pathsDataFormat=True)
+        #samples = Samples(rawSamples, station='MARI', type_of_output='Abfluss Simulation', pathsDataFormat=True)
+        samples = Samples(rawSamples, station=self.configurationObject["Output"]["station"],
+                          type_of_output=self.configurationObject["Output"]["type_of_output"],
+                          pathsDataFormat=self.configurationObject["Output"]["pathsDataFormat"],
+                          dailyOutput=self.configurationObject["Output"]["dailyOutput"])
+
+        # Save the DataFrame containing all the simulation results
+        samples.df_time_discharges.to_csv(
+            path_or_buf=os.path.abspath(os.path.join(self.working_dir, "df_all_simulations.csv")),
+            index=True)
 
         #self.timesteps = timesteps #this is just a scalar representing total number of timesteps
         self.timesteps = samples.df_simulation_result.TimeStamp.unique()
         self.numbTimesteps = len(self.timesteps)
+
+        print("timesteps Info")
+        print(type(self.timesteps))
+        print("numbTimesteps is: {}".format(self.numbTimesteps))
+
 
         P = cp.orth_ttr(order, dist)
 
@@ -220,16 +254,21 @@ class LarsimStatistics(Statistics):
             else:
                 qoi_gPCE = cp.fit_quadrature(P, nodes, weights, discharge_values) #fit_quadrature for each time step for this station over multiple runs
 
+            print("Shape of the qoi gPCE cofficients:")
+            print(type(qoi_gPCE.shape))
+            print(qoi_gPCE.shape)
+
+
             self.Abfluss[key] = {}
             self.Abfluss[key]["Q"] = discharge_values
-            self.Abfluss[key]["E"] = float((cp.E(qoi_gPCE, dist)))
-            self.Abfluss[key]["Var"] = float((cp.Var(qoi_gPCE, dist)))
-            self.Abfluss[key]["StdDev"] = float((cp.Std(qoi_gPCE, dist)))
+            self.Abfluss[key]["E"] = (cp.E(qoi_gPCE, dist))
+            self.Abfluss[key]["Var"] = (cp.Var(qoi_gPCE, dist))
+            self.Abfluss[key]["StdDev"] = (cp.Std(qoi_gPCE, dist))
             self.Abfluss[key]["Sobol_m"] = cp.Sens_m(qoi_gPCE, dist)
             self.Abfluss[key]["Sobol_m2"] = cp.Sens_m2(qoi_gPCE, dist)
             self.Abfluss[key]["Sobol_t"] = cp.Sens_t(qoi_gPCE, dist)
-            self.Abfluss[key]["P10"] = float(cp.Perc(qoi_gPCE, 10, dist, numPercSamples))
-            self.Abfluss[key]["P90"] = float(cp.Perc(qoi_gPCE, 90, dist, numPercSamples))
+            self.Abfluss[key]["P10"] = cp.Perc(qoi_gPCE, 10, dist, numPercSamples)
+            self.Abfluss[key]["P90"] = cp.Perc(qoi_gPCE, 90, dist, numPercSamples)
 
             if isinstance(self.Abfluss[key]["P10"], (list)) and len(self.Abfluss[key]["P10"]) == 1:
                 self.Abfluss[key]["P10"]= self.Abfluss[key]["P10"][0]
@@ -255,13 +294,12 @@ class LarsimStatistics(Statistics):
 
         pdTimesteps = [pd.Timestamp(timestep) for timestep in self.timesteps]
 
-        plotter.subplot(411)
-        # plotter.title('mean')
-
         keyIter = list(itertools.product([station,],pdTimesteps))
         #self.Abfluss[((station,oneTimetep) for oneTimetep in pdTimesteps)]
         #listE = [self.Abfluss[key]["E"] for key in itertools.product([station,],pdTimesteps)]
 
+        plotter.subplot(411)
+        # plotter.title('mean')
         plotter.plot(pdTimesteps, [self.Abfluss[key]["E"] for key in keyIter], 'o', label='mean')
         plotter.fill_between(pdTimesteps, [self.Abfluss[key]["P10"] for key in keyIter], [self.Abfluss[key]["P90"] for key in keyIter], facecolor='#5dcec6')
         plotter.plot(pdTimesteps, [self.Abfluss[key]["P10"] for key in keyIter], 'o', label='10th percentile')
@@ -286,31 +324,63 @@ class LarsimStatistics(Statistics):
         plotter.legend()  # enable the legend
         plotter.grid(True)
 
-        plotter.subplot(413)
-        plotter.plot(pdTimesteps, [self.Abfluss[key]["Q"] for key in keyIter])
-        plotter.xlabel('time', fontsize=13)
-        plotter.ylabel('Q value', fontsize=13)
-        plotter.xticks(rotation=45)
-        plotter.legend()  # enable the legend
-        plotter.grid(True)
+        #plotter.subplot(513)
+        ## plotter.title('discharge')
+        #plotter.plot(pdTimesteps, [self.Abfluss[key]["Q"] for key in keyIter])
+        #plotter.xlabel('time', fontsize=13)
+        #plotter.ylabel('Q value', fontsize=13)
+        #plotter.xticks(rotation=45)
+        #plotter.legend()  # enable the legend
+        #plotter.grid(True)
 
-        #TODO - This might differ depending on the mc vs sc run
-        plotter.subplot(414)
-        #sobol_labels = ["EQB", "BSF", "TGr"]
-        sobol_labels = simulationNodes.nodeNames
-        for i in range(len(sobol_labels)):
-            plotter.plot(pdTimesteps, [self.Abfluss[key]["Sobol_t"][i] for key in keyIter], 'o', label=sobol_labels[i])
-        plotter.xlabel('time', fontsize=13)
-        plotter.ylabel('total sobol indices', fontsize=13)
-        ##plotter.xlim(0, 200)
-        ##plotter.ylim(-0.1, 1.1)
-        plotter.xticks(rotation=45)
-        plotter.legend()  # enable the legend
-        plotter.grid(True)
+
+        if "Sobol_t" in self.Abfluss[keyIter[0]]:
+            plotter.subplot(413)
+            sobol_labels = simulationNodes.nodeNames
+            for i in range(len(sobol_labels)):
+                if self.Abfluss[keyIter[0]]["Sobol_t"].shape[0] == len(self.timesteps):
+                    plotter.plot(pdTimesteps, [(self.Abfluss[key]["Sobol_t"].T)[i] for key in keyIter], 'o',
+                                 label=sobol_labels[i])
+                else:
+                    plotter.plot(pdTimesteps, [self.Abfluss[key]["Sobol_t"][i] for key in keyIter], 'o',
+                                 label=sobol_labels[i])
+            plotter.xlabel('time', fontsize=13)
+            plotter.ylabel('total sobol indices', fontsize=13)
+            ##plotter.xlim(0, 200)
+            # ##plotter.ylim(-0.1, 1.1)
+            plotter.xticks(rotation=45)
+            plotter.legend()  # enable the legend
+            # plotter.grid(True)
+
+        if "Sobol_m" in self.Abfluss[keyIter[0]]:
+            plotter.subplot(414)
+            sobol_labels = simulationNodes.nodeNames
+            for i in range(len(sobol_labels)):
+                if self.Abfluss[keyIter[0]]["Sobol_m"].shape[0] == len(self.timesteps):
+                    plotter.plot(pdTimesteps, [(self.Abfluss[key]["Sobol_m"].T)[i] for key in keyIter], 'o',
+                                 label=sobol_labels[i])
+                else:
+                    plotter.plot(pdTimesteps, [self.Abfluss[key]["Sobol_m"][i] for key in keyIter], 'o',
+                                 label=sobol_labels[i])
+            plotter.xlabel('time', fontsize=13)
+            plotter.ylabel('first order sobol indices', fontsize=13)
+            ##plotter.xlim(0, 200)
+            # ##plotter.ylim(-0.1, 1.1)
+            plotter.xticks(rotation=45)
+            plotter.legend()  # enable the legend
+            # plotter.grid(True)
+
+        if "Sobol_t" in self.Abfluss[keyIter[0]]:
+            sobol_t_qoi_file = os.path.abspath(os.path.join(self.working_dir, "sobol_t_qoi_file.npy"))
+            np.save(sobol_t_qoi_file, np.array([self.Abfluss[key]["Sobol_t"][i] for key in keyIter]))
+        if "Sobol_m" in self.Abfluss[keyIter[0]]:
+            sobol_m_qoi_file = os.path.abspath(os.path.join(self.working_dir, "sobol_m_qoi_file.npy"))
+            np.save(sobol_m_qoi_file, np.array([self.Abfluss[key]["Sobol_m"][i] for key in keyIter]))
+
 
         # save figure
-        pdfFileName = paths.figureFileName + "_uq" + '.pdf'
-        pngFileName = paths.figureFileName + "_uq" + '.png'
+        pdfFileName = os.path.abspath(os.path.join(self.working_dir, paths.figureFileName + "_uq.pdf"))
+        pngFileName = os.path.abspath(os.path.join(self.working_dir, paths.figureFileName + "_uq.png"))
         plotter.savefig(pdfFileName, format='pdf')
         plotter.savefig(pngFileName, format='png')
 
@@ -322,40 +392,257 @@ class LarsimStatistics(Statistics):
 
 
 #helper function
-def power(my_list):
+def _power(my_list):
     return [ x**2 for x in my_list ]
 
 
 # Functions needed for calculating Sobol's indices using MC samples and Saltelli's method
 
-def separate_output_values(Y, D, N):
+def _separate_output_values_2(Y, D, N):
+    """
+    Input:
+    dim(Y) = (N*(2+D) x t)
+    D - Stochastic dimension
+    N - Numer of samples
+    Return:
+    A - function evaluations based on m1 Nxt
+    B - function evaluations based on m2 Nxt
+    A_B - array of function evaluations based on m1 with some rows from m2,
+    len(A_B) = D;
+    """
+    A = Y[0:N,:]
+    B = Y[N:2*N,:]
 
-    # A - function evaluations based on m2 NxD
-    # B - function evaluations based on m1 NxD
-    # AB - - function evaluations based on m2 with spme rows from m1 NxD
-
-    AB = np.zeros((N, D))
-    B = np.tile(Y[0:N], (D,1)) #Y[0:N]
-    B = B.T
-    #B = Y[0:N].T
-    A = np.tile(Y[N:2*N], (D,1))
-    A = A.T
-    #A = Y[N:2*N].T
+    A_B = []
     for j in range(D):
         start = (j + 2)*N
         end = start + N
-        AB[:, j] = (Y[start:end]).T
+        A_B.append(Y[start:end,:])
 
-    return A, B, AB
+    #return A.T, B.T, A_B
+    return A, B, A_B
 
-def first_order(A, AB, B):
+def _separate_output_values_j(Y, D, N, j):
+    """
+    Input:
+    dim(Y) = (N*(2+D) x t)
+    D - Stochastic dimension
+    N - Numer of samples
+    j - in range(0,D)
+    Return:
+    A - function evaluations based on m1 Nxt
+    B - function evaluations based on m2 Nxt
+    A_B - function evaluations based on m1 with jth row from m2
+    """
+
+    A = Y[0:N,:]
+    B = Y[N:2*N, :]
+    start = (j + 2)*N
+    end = start + N
+    A_B = Y[start:end,:]
+
+    return A, B, A_B
+
+
+def _Sens_m_sample_1(Y, D, N):
+    """
+    First order sensitivity indices - Chaospy
+    """
+    A, B, A_B = _separate_output_values_2(Y, D, N)
+
+    #variance = np.var(A, -1)
+    variance = np.var(A, axis=0)
+
+    mean = .5*(np.mean(A) + np.mean(B))
+    #mean = .5*(np.mean(A, axis=0) + np.mean(B, axis=0))
+    A -= mean
+    B -= mean
+
+    out = [
+        #np.mean(B*((A_B[j].T-mean)-A), -1) /
+        np.mean(B*((A_B[j]-mean)-A),axis=0) /
+        np.where(variance, variance, 1)
+        for j in range(D)
+        ]
+
+    return np.array(out)
+
+def _Sens_m_sample_2(Y, D, N):
+    """
+    First order sensitivity indices - Homma(1996) & Sobolo (2007)
+    """
+    A, B, A_B = _separate_output_values_2(Y, D, N)
+
+    #variance = np.var(A, -1)
+    variance = np.var(A, axis=0)
+
+    #mean = .5*(np.mean(A) + np.mean(B))
+    mean = .5*(np.mean(A, axis=0) + np.mean(B, axis=0))
+
+    out = [
+        #(np.mean(B*A_B[j].T, -1) - mean**2) /
+        (np.mean(B*A_B[j], axis=0) - mean**2) /
+        np.where(variance, variance, 1)
+        for j in range(D)
+        ]
+
+    return np.array(out)
+
+def _Sens_m_sample_3(Y, D, N):
+    """
+    First order sensitivity indices - Saltelli 2010.
+    """
+    A, B, A_B = _separate_output_values_2(Y, D, N)
+
+    #variance = np.var(A, -1)
+    variance = np.var(A, axis=0)
+
+    out = [
+        #np.mean(B*(A_B[j].T-A), -1) /
+        np.mean(B*(A_B[j]-A), axis=0) /
+        np.where(variance, variance, 1)
+        for j in range(D)
+        ]
+
+    return np.array(out)
+
+def _Sens_m_sample_4(Y, D, N):
+    """
+    First order sensitivity indices - Jensen.
+    """
+    A, B, A_B = _separate_output_values_2(Y, D, N)
+
+    #variance = np.var(A, -1)
+    variance = np.var(A, axis=0)
+
+    out = [
+        #1 - np.mean((A_B[j].T-B)**2, -1) /
+        1 - np.mean((A_B[j]-B)**2, axis=0) /
+        (2*np.where(variance, variance, 1))
+        for j in range(D)
+        ]
+
+    return np.array(out)
+
+
+
+
+def _Sens_t_sample_1(Y, D, N):
+    """
+    Total order sensitivity indices - Chaospy
+    """
+    A, B, A_B = _separate_output_values_2(Y, D, N)
+
+    #variance = np.var(A, -1)
+    variance = np.var(A, axis=0)
+
+    out = [
+        #1-np.mean((A_B[j].T-B)**2, -1) /
+        1-np.mean((A_B[j]-B)**2, axis=0) /
+        (2*np.where(variance, variance, 1))
+        for j in range(D)
+        ]
+
+    return np.array(out)
+
+def _Sens_t_sample_2(Y, D, N):
+    """
+    Total order sensitivity indices - Homma 96
+    """
+    A, B, A_B = _separate_output_values_2(Y, D, N)
+
+    #mean = .5*(np.mean(A) + np.mean(B))
+    mean = .5*(np.mean(A, axis=0) + np.mean(B, axis=0))
+
+    #variance = np.var(A, -1)
+    variance = np.var(A, axis=0)
+
+    out = [
+        #1-(np.mean(A*A_B[j].T, -1) - mean**2)/
+        1-(np.mean(A*A_B[j], axis=0) - mean**2)/
+        np.where(variance, variance, 1)
+        for j in range(D)
+    ]
+
+    return np.array(out)
+
+def _Sens_t_sample_3(Y, D, N):
+    """
+    Total order sensitivity indices - Sobel 2007
+    """
+    A, B, A_B = _separate_output_values_2(Y, D, N)
+
+    #variance = np.var(A, -1)
+    variance = np.var(A, axis=0)
+
+    out = [
+        #np.mean(A*(A-A_B[j].T), -1) /
+        np.mean(A*(A-A_B[j]),  axis=0) /
+        np.where(variance, variance, 1)
+        for j in range(D)
+        ]
+
+    return np.array(out)
+
+
+def _Sens_t_sample_4(Y, D, N):
+    """
+    Total order sensitivity indices - Saltelli 2010 & Jensen
+    """
+    A, B, A_B = _separate_output_values_2(Y, D, N)
+
+    #variance = np.var(A, -1)
+    variance = np.var(A, axis=0)
+
+    out = [
+        #np.mean((A-A_B[j].T)**2, -1) /
+        np.mean((A-A_B[j])**2, axis=0) /
+        (2*np.where(variance, variance, 1))
+        for j in range(D)
+        ]
+
+    return np.array(out)
+
+
+
+
+
+
+# Old code
+
+def _separate_output_values(Y, D, N):
+    """
+    Return:
+    A - function evaluations based on m1 Nxt
+    B - function evaluations based on m2 Nxt
+    A_B - function evaluations based on m1 with some rows from m2 Nxt
+    """
+
+    A_B = np.zeros((N, D))
+
+    A = np.tile(Y[0:N], (D,1))
+    A = A.T
+
+    B = np.tile(Y[N:2*N], (D,1))
+    B = B.T
+
+    for j in range(D):
+        start = (j + 2)*N
+        end = start + N
+        A_B[:, j] = (Y[start:end]).T
+
+    return A, B, A_B
+
+def _first_order(A, AB, B):
     # First order estimator following Saltelli et al. 2010 CPC, normalized by
     # sample variance
     #return np.mean(B * (AB - A), axis=0) / np.var(np.r_[A, B], axis=0)
-    return np.mean(B * (AB - A), axis=0) / np.var(np.concatenate((A, B), axis=0), axis=0)
+    #return np.mean(B * (AB - A), axis=0, dtype=np.float64) / np.var(np.concatenate((A, B), axis=0), axis=0, ddof=1, dtype=np.float64)
+    return np.mean(B * (AB - A), axis=0, dtype=np.float64) / np.var(np.r_[A, B], axis=0, ddof=1, dtype=np.float64)
 
-def total_order(A, AB, B):
+def _total_order(A, AB, B):
     # Total order estimator following Saltelli et al. 2010 CPC, normalized by
     # sample variance
     #return 0.5 * np.mean((A - AB) ** 2, axis=0) / np.var(np.r_[A, B], axis=0)
-    return np.mean(B * (AB - A), axis=0) / np.var(np.concatenate((A, B), axis=0), axis=0)
+    #return np.mean(B * (AB - A), axis=0, dtype=np.float64) / np.var(np.concatenate((A, B), axis=0), axis=0, ddof=1, dtype=np.float64)
+    return np.mean(B * (AB - A), axis=0, dtype=np.float64) / np.var(np.r_[A, B], axis=0, ddof=1, dtype=np.float64)

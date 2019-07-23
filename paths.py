@@ -10,13 +10,20 @@ import subprocess
 
 current_dir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parent_dir = os.path.dirname(current_dir)
-working_dir = os.path.abspath(os.path.join(current_dir,"model_runs"))
-if not os.path.isdir(working_dir):
-    subprocess.run(["mkdir", working_dir]) #TODO Move this away
+
+working_dir = os.path.abspath(os.path.join(current_dir,"model_runs")) #TODO Change this, move it to uq_simulation
+
+#if not os.path.isdir(working_dir):
+#    subprocess.run(["mkdir", working_dir]) #TODO Move this away
 
 statistics_dict_path_pkl = os.path.abspath(os.path.join(working_dir,"statistics_dict"))
 statistics_dict_path_np = os.path.abspath(os.path.join(working_dir,"statistics_dict"))
 figureFileName = "statisticsFigure"
+
+
+#####################################
+### Larsim related paths
+#####################################
 
 larsim_data_path = os.path.abspath(os.path.join(parent_dir, 'Larsim-data'))
 larsim_exe_dir = os.path.abspath(os.path.join(larsim_data_path, 'Larsim-exe'))

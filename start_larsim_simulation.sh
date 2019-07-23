@@ -49,3 +49,13 @@ mpiexec -n 4 python3 uq_simulation.py \
                                      --uncertain "all" \
                                      --mpi \
                                      --regression
+
+
+mpiexec -n 4 python3 uq_simulation.py \
+                                     --model "larsim" \
+                                     --uq_method "mc" --mc_numevaluations 10 --sc_p_order 8 \
+                                     --outputResultDir "./larsim_runs/" \
+                                     --mpi \
+                                     --configurationsFile "configuration_larsim.json" \
+                                     --saltelli \
+                                     --run_statistics

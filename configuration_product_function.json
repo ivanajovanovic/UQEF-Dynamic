@@ -1,0 +1,57 @@
+{
+  "Parameters":
+    {
+      "tau1": 1.0,
+      "tau2": 1.0,
+      "tau3": 0.5,
+      "tau4": 0.5,
+      "tau5": 0.25,
+      "tau6": 0.25,
+      "mu1": 1.0,
+      "mu2": 1.0,
+      "mu3": 1.0,
+      "mu4": 1.0,
+      "mu5": 1.0,
+      "mu6": 1.0
+    },
+  "Variables": [
+     {
+      "name": "x1",
+      "distribution": "uniform",
+      "uniform_low": 0.0,
+      "uniform_high": 1.0
+    },
+    {
+      "name": "x2",
+      "distribution": "uniform",
+      "uniform_low": 0.0,
+      "uniform_high": 1.0
+    },
+    {
+      "name": "x3",
+      "distribution": "uniform",
+      "uniform_low": 0.0,
+      "uniform_high": 1.0
+    },
+    {
+      "name": "x4",
+      "distribution": "uniform",
+      "uniform_low": 0.0,
+      "uniform_high": 1.0
+    },
+    {
+      "name": "x5",
+      "distribution": "uniform",
+      "uniform_low": 0.0,
+      "uniform_high": 1.0
+    },
+    {
+      "name": "x6",
+      "distribution": "uniform",
+      "uniform_low": 0.0,
+      "uniform_high": 1.0
+    }
+  ]
+}
+
+
