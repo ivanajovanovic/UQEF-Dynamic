@@ -21,7 +21,7 @@
   "Variables": [
 
     {
-      "name": "       EQB",
+      "name": "      EQB",
       "distribution": "uniform",
       "mean": 40000,
       "std": 10000,
