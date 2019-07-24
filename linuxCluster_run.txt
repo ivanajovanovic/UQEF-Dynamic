@@ -1,0 +1,14 @@
+module show python
+module avail
+module list
+module load python/3.6_intel
+module load git/latest
+conda create --name larsimuq python=3.6
+##for installing chaospy on linux cluster##
+conda install --file requirements.txt
+python ./setup.py install
+##for installing UQEF on linux cluster##
+pip install -r ./requirements.txt 
+##I've had some extra conda remove, cond instal commands...
+
+
