@@ -1,5 +1,6 @@
 # Don't track content of these folders
 model_runs/
+larsim_runs/
 saves/
 __pycache__/
 
