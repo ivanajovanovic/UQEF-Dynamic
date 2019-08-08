@@ -88,11 +88,13 @@ export OMP_NUM_THREADS=$threads
 echo "---- start sim:"
 
     mpiexec -genv I_MPI_DEBUG=+5 -print-rank-map python3 $executionPath/uq_simulation.py \
-                            --outputResultDir $executionPath \
+                            --outputResultDir "/naslx/projects/pr63so/ga45met2/Repositories/model_runs" \
                             --uq_method "sc" --sc_q_order $q_order --sc_p_order $p_order \
                             --model "$model" --uncertain "all" \
                             --chunksize 1 \
-                            --num_cores=$threads --mpi --mpi_method "$mpi_method"
+                            --num_cores=$threads --mpi --mpi_method "$mpi_method" \
+                            --saltelli \
+                            --run_statistics
 
 echo "---- end \$i:"
 
