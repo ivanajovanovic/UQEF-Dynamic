@@ -32,7 +32,7 @@ def tape10_configurations(timeframe, master_tape10_file, new_path):
     ereignisende = "EREIGNISENDE         " + str(timeframe[1].day).zfill(2) + " " + str(timeframe[1].month).zfill(
         2) + " " + str(timeframe[1].year) + " " + str(timeframe[1].hour).zfill(2) + " " + str(timeframe[1].minute).zfill(2) + "\n"
 
-    vorhersagebeginn = "VORHERSAGEBEGINN     53\n"
+    vorhersagebeginn = "VORHERSAGEBEGINN     53\n" # this is set by default, might be changed as well...
     changes = [ereignisbeginn, ereignisende, vorhersagebeginn]
     print(changes)
 

@@ -14,7 +14,8 @@
       "end_hour": 0,
       "end_minute": 0,
 
-      "timestep": 0
+      "timestep": 10,
+      "cut_runs": "True"
     }
 
   ,
