@@ -8,6 +8,7 @@ import subprocess
 ### All basic paths
 #####################################
 
+<<<<<<< HEAD
 home_dir = "/home/hpc/pr63so/ga45met2" # uncomment for linux cluster execution
 data_dir = "/naslx/projects/pr63so/ga45met2/Repositories" # uncomment for linux cluster execution
 
@@ -16,6 +17,16 @@ parent_dir = os.path.dirname(current_dir)
 
 #working_dir = os.path.abspath(os.path.join(current_dir,"model_runs")) # comment for linux cluster execution
 working_dir = os.path.abspath(os.path.join(data_dir,"model_runs")) # uncomment for linux cluster execution
+=======
+#home_dir = "/home/hpc/pr63so/ga45met2" # uncomment for linux cluster execution
+#data_dir = "/naslx/projects/pr63so/ga45met2/Repositories" # uncomment for linux cluster execution
+
+current_dir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+parent_dir = os.path.dirname(current_dir)
+
+working_dir = os.path.abspath(os.path.join(current_dir,"model_runs")) # comment for linux cluster execution
+#working_dir = os.path.abspath(os.path.join(data_dir,"model_runs")) # uncomment for linux cluster execution
+>>>>>>> master
 
 #if not os.path.isdir(working_dir):
 #    subprocess.run(["mkdir", working_dir])
@@ -31,6 +42,7 @@ figureFileName = "statisticsFigure"
 
 #larsim_data_path = os.path.abspath(os.path.join(parent_dir, 'Larsim-data')) # comment for linux cluster execution
 larsim_data_path = os.path.abspath(os.path.join(data_dir, 'Larsim-data')) # uncomment for linux cluster execution
+
 
 larsim_exe_dir = os.path.abspath(os.path.join(larsim_data_path, 'Larsim-exe'))
 regen_data_path = os.path.abspath(os.path.join(larsim_data_path,'WHM Regen')) # Regen_data_root = data_working_dir
