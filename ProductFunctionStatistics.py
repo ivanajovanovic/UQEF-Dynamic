@@ -32,11 +32,11 @@ class ProductFunctionStatistics(Statistics):
         except KeyError:
             self.working_dir = paths.working_dir  # directoy for all the larsim runs
 
-
-
     def calcStatisticsForMc(self, rawSamples, timesteps,
-                            simulationNodes, numEvaluations, solverTimes,
-                            work_package_indexes, original_runtime_estimator, regression, saltelli, order):
+                            simulationNodes, numEvaluations, order,
+                            regression,
+                            solverTimes,
+                            work_package_indexes, original_runtime_estimator):
         """
 
         :param rawSamples: simulation.solver.results
@@ -48,6 +48,8 @@ class ProductFunctionStatistics(Statistics):
         :param original_runtime_estimator: simulation.original_runtime_estimator
         :return:
         """
+
+        self.simulationNodes = simulationNodes
 
         samples = Samples(rawSamples) #rawSamples = self.solver.results what model.run() return
         self.qoi = samples.voi
@@ -85,24 +87,6 @@ class ProductFunctionStatistics(Statistics):
             self.Sobol_t_qoi = cp.Sens_t(qoi_gPCE, dist)
             self.P10_qoi = cp.Perc(qoi_gPCE, 10, dist, numPercSamples)
             self.P90_qoi = cp.Perc(qoi_gPCE, 90, dist, numPercSamples)
-        elif saltelli:
-            standard_voi = self.qoi[:numEvaluations, :]
-            #self.E_qoi = np.sum(self.qoi, axis=0, dtype=np.float64) / (2*numEvaluations)
-            #self.Var_qoi = np.sum( (self.qoi - self.E_qoi) ** 2, axis=0, dtype=np.float64) / (2*numEvaluations-1)
-            self.E_qoi = np.sum(standard_voi, axis=0, dtype=np.float64) / numEvaluations
-            self.Var_qoi = np.sum((standard_voi - self.E_qoi) ** 2, axis=0, dtype=np.float64) / (numEvaluations - 1)
-            self.StdDev_qoi = np.sqrt(self.Var_qoi, dtype=np.float64)
-            self.P10_qoi = np.percentile(standard_voi, 10, axis=0)
-            self.P90_qoi = np.percentile(standard_voi, 90, axis=0)
-
-            dim = len(simulationNodes.nodeNames)
-            self.Sobol_m_qoi = Sens_m_sample_3(self.qoi, dim, numEvaluations)
-            self.Sobol_t_qoi = Sens_t_sample_4(self.qoi, dim, numEvaluations)
-            print("self.Sobol_m_qoi.shape")
-            print(self.Sobol_m_qoi.shape)
-            print("self.Sobol_t_qoi.shape")
-            print(self.Sobol_t_qoi.shape)
-
         else:
             self.E_qoi = np.sum(self.qoi, axis=0, dtype=np.float64) / numEvaluations
             #self.Var_qoi = np.sum(self.qoi ** 2, 0) / numEvaluations - self.E_qoi ** 2
@@ -115,11 +99,9 @@ class ProductFunctionStatistics(Statistics):
             self.P10_qoi = self.P10_qoi[0]
             self.P90_qoi = self.P90_qoi[0]
 
-
-
     def calcStatisticsForSc(self, rawSamples, timesteps,
-                            simulationNodes, order, solverTimes,
-                            work_package_indexes, original_runtime_estimator, regression):
+                            simulationNodes, order, regression, solverTimes,
+                            work_package_indexes, original_runtime_estimator):
         """
         in ScSimulation.calculateStatistics
         statistics.calcStatisticsForSc(self.solver.results, self.solver.timesteps, simulationNodes, self.p_order, self.solver.solverTimes,
@@ -133,6 +115,8 @@ class ProductFunctionStatistics(Statistics):
         :param original_runtime_estimator:
         :return:
         """
+
+        self.simulationNodes = simulationNodes
 
         nodes = simulationNodes.distNodes
         weights = simulationNodes.weights
@@ -179,12 +163,53 @@ class ProductFunctionStatistics(Statistics):
             self.P10_qoi = self.P10_qoi[0]
             self.P90_qoi = self.P90_qoi[0]
 
+    def calcStatisticsForSaltelli(self, rawSamples, timesteps,
+                                  simulationNodes, numEvaluations, order, regression, solverTimes,
+                                  work_package_indexes, original_runtime_estimator=None):
+        self.simulationNodes = simulationNodes
 
-    def plotResults(self, simulationNodes, display=False,
+        samples = Samples(rawSamples)  # rawSamples = self.solver.results what model.run() return
+        self.qoi = samples.voi
+
+        print("STATISTICS INFO: Self.qoi:")
+        print(self.qoi.shape)
+        print(type(self.qoi))
+        print(self.qoi)  # numpy array nxt, for sartelli it should be n(2+d)xt
+
+        self.timesteps = timesteps  # this is self.solver.timesteps which are model.timesteps()
+        self.numbTimesteps = len(self.timesteps)
+        assert self.numbTimesteps == (self.qoi).shape[1]
+
+        print("timesteps Info")
+        print(type(self.timesteps))
+        print("numbTimesteps is: {}".format(self.numbTimesteps))
+
+        standard_voi = self.qoi[:numEvaluations, :]
+        # self.E_qoi = np.sum(self.qoi, axis=0, dtype=np.float64) / (2*numEvaluations)
+        # self.Var_qoi = np.sum( (self.qoi - self.E_qoi) ** 2, axis=0, dtype=np.float64) / (2*numEvaluations-1)
+        self.E_qoi = np.sum(standard_voi, axis=0, dtype=np.float64) / numEvaluations
+        self.Var_qoi = np.sum((standard_voi - self.E_qoi) ** 2, axis=0, dtype=np.float64) / (numEvaluations - 1)
+        self.StdDev_qoi = np.sqrt(self.Var_qoi, dtype=np.float64)
+        self.P10_qoi = np.percentile(standard_voi, 10, axis=0)
+        self.P90_qoi = np.percentile(standard_voi, 90, axis=0)
+
+        dim = len(simulationNodes.nodeNames)
+        self.Sobol_m_qoi = Sens_m_sample_3(self.qoi, dim, numEvaluations)
+        self.Sobol_t_qoi = Sens_t_sample_4(self.qoi, dim, numEvaluations)
+        print("self.Sobol_m_qoi.shape")
+        print(self.Sobol_m_qoi.shape)
+        print("self.Sobol_t_qoi.shape")
+        print(self.Sobol_t_qoi.shape)
+
+        if isinstance(self.P10_qoi, (list)) and len(self.P10_qoi) == 1:
+            self.P10_qoi = self.P10_qoi[0]
+            self.P90_qoi = self.P90_qoi[0]
+
+    def plotResults(self, display=False,
                     fileName="", fileNameIdent="", directory="./",
                     fileNameIdentIsFullName=False, safe=True):
 
-        sobol_labels = simulationNodes.nodeNames
+        sobol_labels = self.simulationNodes.nodeNames
 
         Sobol_m_analytical = np.array([0.165, 0.165, 0.041, 0.041, 0.0103, 0.0103], dtype=np.float32)
 

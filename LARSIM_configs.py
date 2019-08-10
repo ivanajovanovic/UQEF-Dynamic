@@ -171,7 +171,7 @@ def tape35_configurations(parameters, curr_working_dir, configurationObject):
 
     variable_names = []
     limits = []
-    for i in configurationObject["Variables"]:
+    for i in configurationObject["parameters"]:
         variable_names.append(i["name"])
         limits.append((i["lower_limit"], i["upper_limit"]))
 

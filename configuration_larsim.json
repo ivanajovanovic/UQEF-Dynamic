@@ -18,35 +18,35 @@
     }
 
   ,
-  "Variables": [
+  "parameters": [
 
     {
       "name": "      EQB",
-      "distribution": "uniform",
+      "distribution": "Uniform",
       "mean": 40000,
       "std": 10000,
-      "uniform_low": -10000,
-      "uniform_high": 10000,
+      "lower": -10000,
+      "upper": 10000,
       "lower_limit": 5000,
       "upper_limit": 100000
     },
     {
       "name": "      BSF",
-      "distribution": "uniform",
+      "distribution": "Uniform",
       "mean": 0.15,
       "std": 0.05,
-      "uniform_low": -0.05,
-      "uniform_high": 0.05,
+      "lower": -0.05,
+      "upper": 0.05,
       "lower_limit": 0.01,
       "upper_limit": 0.5
     },
     {
       "name": "      TGr",
-      "distribution": "uniform",
+      "distribution": "Uniform",
       "mean": -1,
       "std": 0.5,
-      "uniform_low": -1,
-      "uniform_high": 1,
+      "lower": -1,
+      "upper": 1,
       "lower_limit": -3,
       "upper_limit": 2
     }
@@ -63,54 +63,54 @@
 
     {
       "name": "       A2",
-      "distribution": "uniform",
+      "distribution": "Uniform",
       "mean": 2.0,
       "std": 0.75,
-      "uniform_low": -0.75,
-      "uniform_high": 0.75,
+      "lower": -0.75,
+      "upper": 0.75,
       "lower_limit": 0.5 ,
       "upper_limit": 4.0
     },
     {
       "name": "      BSF",
-      "distribution": "uniform",
+      "distribution": "Uniform",
       "mean": 0.15,
       "std": 0.05,
-      "uniform_low": -0.05,
-      "uniform_high": 0.05,
+      "lower": -0.05,
+      "upper": 0.05,
       "lower_limit": 0.01 ,
       "upper_limit": 0.5
     },
 
     {
       "name": "      TGr",
-      "distribution": "uniform",
+      "distribution": "Uniform",
       "mean": -1,
       "std": 0.5,
-      "uniform_low": -1,
-      "uniform_high": 1,
+      "lower": -1,
+      "upper": 1,
       "lower_limit": -3,
       "upper_limit": 2
     },
 
     {
       "name": "     Tmit_Sr",
-      "distribution": "uniform",
+      "distribution": "Uniform",
       "mean": -1,
       "std": 0.5,
-      "uniform_low": -2,
-      "uniform_high": 3,
+      "lower": -2,
+      "upper": 3,
       "lower_limit": -3,
       "upper_limit": 3
     },
 
     {
       "name": "     Tspann_Sr",
-      "distribution": "uniform",
+      "distribution": "Uniform",
       "mean": 4,
       "std": 1,
-      "uniform_low": -2,
-      "uniform_high": 4,
+      "lower": -2,
+      "upper": 4,
       "lower_limit": 2,
       "upper_limit": 8
     },
@@ -126,44 +126,44 @@
 
     {
       "name": "       A0",
-      "distribution": "uniform",
+      "distribution": "Uniform",
       "mean": 2.0,
       "std": 0.5,
-      "uniform_low": -0.05,
-      "uniform_high": 0.15,
+      "lower": -0.05,
+      "upper": 0.15,
       "lower_limit": 0.5 ,
       "upper_limit": 3.5
     },
 
     {
       "name": "       A1",
-      "distribution": "uniform",
+      "distribution": "Uniform",
       "mean": 1.6,
       "std": 0.3,
-      "uniform_low": -0.1,
-      "uniform_high": 0.1,
+      "lower": -0.1,
+      "upper": 0.1,
       "lower_limit": 0.8,
       "upper_limit": 2.5
     },
 
     {
       "name": "     Abso",
-      "distribution": "uniform",
+      "distribution": "Uniform",
       "mean": 0.1,
       "std": 0.05,
-      "uniform_low": -0.08,
-      "uniform_high": 0.1,
+      "lower": -0.08,
+      "upper": 0.1,
       "lower_limit": 0.02 ,
       "upper_limit": 0.25
     },
 
     {
       "name": "     SRet",
-      "distribution": "uniform",
+      "distribution": "Uniform",
       "mean": 30,
       "std": 10,
-      "uniform_low": -25,
-      "uniform_high": 17,
+      "lower": -25,
+      "upper": 17,
       "lower_limit": 5 ,
       "upper_limit": 47
     }

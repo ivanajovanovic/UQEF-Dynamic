@@ -21,33 +21,33 @@
       "y1": 0.0,
       "w": 1.0
     },
-  "Variables": [
+  "parameters": [
      
      {
       "name": "w",
-      "distribution": "uniform",
-      "uniform_low": 0.95,
-      "uniform_high": 1.05
+      "distribution": "Uniform",
+      "lower": 0.95,
+      "upper": 1.05
     },
     {
       "name": "y1",
-      "distribution": "uniform",
-      "uniform_low": -0.05,
-      "uniform_high": 0.05
+      "distribution": "Uniform",
+      "lower": -0.05,
+      "upper": 0.05
     }
   ],
   "NotusedVariables": [
     {
       "name": "c",
-      "distribution": "uniform",
-      "uniform_low": 0.08,
-      "uniform_high": 0.12
+      "distribution": "Uniform",
+      "lower": 0.08,
+      "upper": 0.12
     },
     {
       "name": "k",
-      "distribution": "uniform",
-      "uniform_low": 0,
-      "uniform_high": 2
+      "distribution": "Uniform",
+      "lower": 0,
+      "upper": 2
     }
   ]
 }

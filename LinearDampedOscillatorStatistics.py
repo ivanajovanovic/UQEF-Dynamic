@@ -32,10 +32,11 @@ class LinearDampedOscillatorStatistics(Statistics):
         Statistics.__init__(self)
         #self.type_of_saltetlli = type_of_saltetlli
 
-
     def calcStatisticsForMc(self, rawSamples, timesteps,
-                            simulationNodes, numEvaluations, solverTimes,
-                            work_package_indexes, original_runtime_estimator, regression, saltelli, order):
+                            simulationNodes, numEvaluations, order,
+                            regression,
+                            solverTimes,
+                            work_package_indexes, original_runtime_estimator):
         """
 
         :param rawSamples: simulation.solver.results
@@ -47,6 +48,8 @@ class LinearDampedOscillatorStatistics(Statistics):
         :param original_runtime_estimator: simulation.original_runtime_estimator
         :return:
         """
+
+        self.simulationNodes = simulationNodes
 
         samples = Samples(rawSamples) #rawSamples = self.solver.results what model.run() return
         self.qoi = samples.voi
@@ -84,36 +87,6 @@ class LinearDampedOscillatorStatistics(Statistics):
             self.Sobol_t_qoi = cp.Sens_t(qoi_gPCE, dist)
             self.P10_qoi = cp.Perc(qoi_gPCE, 10, dist, numPercSamples)
             self.P90_qoi = cp.Perc(qoi_gPCE, 90, dist, numPercSamples)
-        elif saltelli:
-            standard_voi = self.qoi[:numEvaluations, :]
-            #self.E_qoi = np.sum(self.qoi, axis=0, dtype=np.float64) / (2*numEvaluations)
-            #self.Var_qoi = np.sum( (self.qoi - self.E_qoi) ** 2, axis=0, dtype=np.float64) / (2*numEvaluations-1)
-            self.E_qoi = np.sum(standard_voi, axis=0, dtype=np.float64) / numEvaluations
-            self.Var_qoi = np.sum((standard_voi - self.E_qoi) ** 2, axis=0, dtype=np.float64) / (numEvaluations - 1)
-            self.StdDev_qoi = np.sqrt(self.Var_qoi, dtype=np.float64)
-            self.P10_qoi = np.percentile(standard_voi, 10, axis=0)
-            self.P90_qoi = np.percentile(standard_voi, 90, axis=0)
-
-            dim = len(simulationNodes.nodeNames)
-            self.Sobol_m_qoi = Sens_m_sample_2(self.qoi, dim, numEvaluations)
-            self.Sobol_t_qoi = Sens_t_sample_4(self.qoi, dim, numEvaluations)
-            print("self.Sobol_m_qoi.shape")
-            print(self.Sobol_m_qoi.shape)
-            print("self.Sobol_t_qoi.shape")
-            print(self.Sobol_t_qoi.shape)
-
-            #for samplesOneTimestep in self.qoi.T:
-            #    A, B, AB = separate_output_values(samplesOneTimestep, dim, numEvaluations)
-            #    si_first_orded_array = first_order(A, AB, B)
-            #    si_total_orded_array = total_order(A, AB, B)
-
-            #    Sobol_m_qoi.append(si_first_orded_array)
-            #    Sobol_t_qoi.append(si_total_orded_array)
-
-            #self.Sobol_m_qoi = np.array([sample for sample in Sobol_m_qoi])
-            #self.Sobol_t_qoi = np.array([sample for sample in Sobol_t_qoi])
-
-
         else:
             self.E_qoi = np.sum(self.qoi, axis=0, dtype=np.float64) / numEvaluations
             #self.Var_qoi = np.sum(self.qoi ** 2, 0) / numEvaluations - self.E_qoi ** 2
@@ -126,11 +99,9 @@ class LinearDampedOscillatorStatistics(Statistics):
             self.P10_qoi = self.P10_qoi[0]
             self.P90_qoi = self.P90_qoi[0]
 
-
-
     def calcStatisticsForSc(self, rawSamples, timesteps,
-                            simulationNodes, order, solverTimes,
-                            work_package_indexes, original_runtime_estimator, regression):
+                            simulationNodes, order, regression, solverTimes,
+                            work_package_indexes, original_runtime_estimator):
         """
         in ScSimulation.calculateStatistics
         statistics.calcStatisticsForSc(self.solver.results, self.solver.timesteps, simulationNodes, self.p_order, self.solver.solverTimes,
@@ -144,6 +115,8 @@ class LinearDampedOscillatorStatistics(Statistics):
         :param original_runtime_estimator:
         :return:
         """
+
+        self.simulationNodes = simulationNodes
 
         nodes = simulationNodes.distNodes
         weights = simulationNodes.weights
@@ -231,10 +204,60 @@ class LinearDampedOscillatorStatistics(Statistics):
         #    self.P10_qoi.append(P10_qoi_temp)
         #    self.P90_qoi.append(P90_qoi_temp)
 
+    def calcStatisticsForSaltelli(self, rawSamples, timesteps,
+                                  simulationNodes, numEvaluations, order, regression, solverTimes,
+                                  work_package_indexes, original_runtime_estimator=None):
+        self.simulationNodes = simulationNodes
 
+        samples = Samples(rawSamples)  # rawSamples = self.solver.results what model.run() return
+        self.qoi = samples.voi
 
+        print("STATISTICS INFO: Self.qoi:")
+        print(self.qoi.shape)
+        print(type(self.qoi))
+        print(self.qoi)  # numpy array nxt, for sartelli it should be n(2+d)xt
 
-    def plotResults(self, simulationNodes, display=False,
+        self.timesteps = timesteps  # this is self.solver.timesteps which are model.timesteps()
+        self.numbTimesteps = len(self.timesteps)
+        assert self.numbTimesteps == (self.qoi).shape[1]
+
+        print("timesteps Info")
+        print(type(self.timesteps))
+        print("numbTimesteps is: {}".format(self.numbTimesteps))
+
+        standard_voi = self.qoi[:numEvaluations, :]
+        # self.E_qoi = np.sum(self.qoi, axis=0, dtype=np.float64) / (2*numEvaluations)
+        # self.Var_qoi = np.sum( (self.qoi - self.E_qoi) ** 2, axis=0, dtype=np.float64) / (2*numEvaluations-1)
+        self.E_qoi = np.sum(standard_voi, axis=0, dtype=np.float64) / numEvaluations
+        self.Var_qoi = np.sum((standard_voi - self.E_qoi) ** 2, axis=0, dtype=np.float64) / (numEvaluations - 1)
+        self.StdDev_qoi = np.sqrt(self.Var_qoi, dtype=np.float64)
+        self.P10_qoi = np.percentile(standard_voi, 10, axis=0)
+        self.P90_qoi = np.percentile(standard_voi, 90, axis=0)
+
+        dim = len(self.simulationNodes.nodeNames)
+        self.Sobol_m_qoi = Sens_m_sample_2(self.qoi, dim, numEvaluations)
+        self.Sobol_t_qoi = Sens_t_sample_4(self.qoi, dim, numEvaluations)
+        print("self.Sobol_m_qoi.shape")
+        print(self.Sobol_m_qoi.shape)
+        print("self.Sobol_t_qoi.shape")
+        print(self.Sobol_t_qoi.shape)
+
+        # for samplesOneTimestep in self.qoi.T:
+        #    A, B, AB = separate_output_values(samplesOneTimestep, dim, numEvaluations)
+        #    si_first_orded_array = first_order(A, AB, B)
+        #    si_total_orded_array = total_order(A, AB, B)
+
+        #    Sobol_m_qoi.append(si_first_orded_array)
+        #    Sobol_t_qoi.append(si_total_orded_array)
+
+        # self.Sobol_m_qoi = np.array([sample for sample in Sobol_m_qoi])
+        # self.Sobol_t_qoi = np.array([sample for sample in Sobol_t_qoi])
+
+        if isinstance(self.P10_qoi, (list)) and len(self.P10_qoi) == 1:
+            self.P10_qoi = self.P10_qoi[0]
+            self.P90_qoi = self.P90_qoi[0]
+
+    def plotResults(self, display=False,
                     fileName="", fileNameIdent="", directory="./",
                     fileNameIdentIsFullName=False, safe=True):
 
@@ -277,7 +300,7 @@ class LinearDampedOscillatorStatistics(Statistics):
         if hasattr(self, "Sobol_t_qoi"):
             plotter.subplot(413)
             #sobol_labels = ["EQB", "BSF", "TGr"]
-            sobol_labels = simulationNodes.nodeNames
+            sobol_labels = self.simulationNodes.nodeNames
             for i in range(len(sobol_labels)):
                 if self.Sobol_m_qoi.shape[0] == len(self.timesteps):
                     plotter.plot(self.timesteps, (self.Sobol_t_qoi.T)[i], 'o', label=sobol_labels[i])
@@ -294,7 +317,7 @@ class LinearDampedOscillatorStatistics(Statistics):
         if hasattr(self, "Sobol_m_qoi"):
             plotter.subplot(414)
             #sobol_labels = ["EQB", "BSF", "TGr"]
-            sobol_labels = simulationNodes.nodeNames
+            sobol_labels = self.simulationNodes.nodeNames
             for i in range(len(sobol_labels)):
                 if self.Sobol_m_qoi.shape[0] == len(self.timesteps):
                     plotter.plot(self.timesteps, (self.Sobol_m_qoi.T)[i], 'o', label=sobol_labels[i])

@@ -80,10 +80,11 @@ class LarsimStatistics(Statistics):
         except KeyError:
             self.working_dir = paths.working_dir  # directoy for all the larsim runs
 
-
     def calcStatisticsForMc(self, rawSamples, timesteps,
-                            simulationNodes, numEvaluations, solverTimes,
-                            work_package_indexes, original_runtime_estimator, regression, saltelli, order):
+                            simulationNodes, numEvaluations, order,
+                            regression,
+                            solverTimes,
+                            work_package_indexes, original_runtime_estimator):
         """
 
         :param rawSamples: simulation.solver.results
@@ -95,6 +96,8 @@ class LarsimStatistics(Statistics):
         :param original_runtime_estimator: simulation.original_runtime_estimator
         :return:
         """
+
+        self.simulationNodes = simulationNodes
 
         #samples = Samples(rawSamples, station='MARI', type_of_output='Abfluss Simulation', pathsDataFormat=True)
         samples = Samples(rawSamples, station=self.configurationObject["Output"]["station"],
@@ -151,27 +154,6 @@ class LarsimStatistics(Statistics):
                 self.Abfluss[key]["Sobol_t"] = cp.Sens_t(qoi_gPCE, dist)
                 self.Abfluss[key]["P10"] = float(cp.Perc(qoi_gPCE, 10, dist, numPercSamples))
                 self.Abfluss[key]["P90"] = float(cp.Perc(qoi_gPCE, 90, dist, numPercSamples))
-            elif saltelli:
-                self.Abfluss[key] = {}
-                discharge_values_saltelli = discharge_values[:, np.newaxis]
-                standard_discharge_values = discharge_values_saltelli[:numEvaluations,:] #values based on which we calculate standard statistics
-
-                self.Abfluss[key]["Q"] = standard_discharge_values
-                self.Abfluss[key]["E"] = np.sum(standard_discharge_values, axis=0, dtype=np.float64) / numEvaluations
-                #self.Abfluss[key]["Var"] = float(np.sum(power(standard_discharge_values)) / numEvaluations - self.Abfluss[key]["E"] ** 2)
-                self.Abfluss[key]["Var"] = np.sum((standard_discharge_values - self.Abfluss[key]["E"]) ** 2, axis=0, dtype=np.float64) / (numEvaluations - 1)
-                self.Abfluss[key]["StdDev"] = np.sqrt(self.Abfluss[key]["Var"], dtype=np.float64)
-
-                self.Abfluss[key]["P10"] = np.percentile(discharge_values[:numEvaluations], 10, axis=0)
-                self.Abfluss[key]["P90"] = np.percentile(discharge_values[:numEvaluations], 90, axis=0)
-
-                self.Abfluss[key]["Sobol_m"] = _Sens_m_sample_4(discharge_values_saltelli, dim, numEvaluations)
-                self.Abfluss[key]["Sobol_t"] = _Sens_t_sample_4(discharge_values_saltelli, dim, numEvaluations)
-                #print("self.Abfluss[key]["Sobol_m"].shape")
-                #print(self.Abfluss[key]["Sobol_m"].shape)
-                #print("self.Abfluss[key]["Sobol_t"].shape")
-                #print(self.Abfluss[key]["Sobol_t"].shape)
-
             else:
                 self.Abfluss[key] = {}
                 self.Abfluss[key]["Q"] = discharge_values
@@ -192,10 +174,9 @@ class LarsimStatistics(Statistics):
         #pickle.dump(self.Abfluss, pickle_out)
         #pickle_out.close()
 
-
     def calcStatisticsForSc(self, rawSamples, timesteps,
-                            simulationNodes, order, solverTimes,
-                            work_package_indexes, original_runtime_estimator, regression):
+                            simulationNodes, order, regression, solverTimes,
+                            work_package_indexes, original_runtime_estimator):
         """
         in ScSimulation.calculateStatistics
         statistics.calcStatisticsForSc(self.solver.results, self.solver.timesteps, simulationNodes, self.p_order, self.solver.solverTimes,
@@ -209,6 +190,8 @@ class LarsimStatistics(Statistics):
         :param original_runtime_estimator:
         :return:
         """
+
+        self.simulationNodes = simulationNodes
 
         nodes = simulationNodes.distNodes
         weights = simulationNodes.weights
@@ -280,7 +263,72 @@ class LarsimStatistics(Statistics):
         #pickle.dump(self.Abfluss, pickle_out)
         #pickle_out.close()
 
-    def plotResults(self, simulationNodes, display=False, station='MARI',
+    def calcStatisticsForSaltelli(self, rawSamples, timesteps,
+                                  simulationNodes, numEvaluations, order, regression, solverTimes,
+                                  work_package_indexes, original_runtime_estimator=None):
+        self.simulationNodes = simulationNodes
+
+        # samples = Samples(rawSamples, station='MARI', type_of_output='Abfluss Simulation', pathsDataFormat=True)
+        samples = Samples(rawSamples, station=self.configurationObject["Output"]["station"],
+                          type_of_output=self.configurationObject["Output"]["type_of_output"],
+                          pathsDataFormat=self.configurationObject["Output"]["pathsDataFormat"],
+                          dailyOutput=self.configurationObject["Output"]["dailyOutput"])
+
+        # Save the DataFrame containing all the simulation results
+        samples.df_time_discharges.to_csv(path_or_buf=os.path.abspath(os.path.join(self.working_dir, "df_all_simulations.csv")),
+                                          index=True)
+
+        # self.df_simulation_result = samples.df_simulation_result
+
+        # self.timesteps = timesteps #atm this is just a scalar representing total number of timesteps
+        self.timesteps = samples.df_simulation_result.TimeStamp.unique()
+        self.numbTimesteps = len(self.timesteps)
+
+        print("timesteps Info")
+        print(type(self.timesteps))
+        print("numbTimesteps is: {}".format(self.numbTimesteps))
+
+        self.station_names = samples.df_simulation_result.Stationskennung.unique()
+
+        dim = len(simulationNodes.nodeNames)
+
+        self.Abfluss = {}
+
+        grouped = samples.df_simulation_result.groupby(['Stationskennung', 'TimeStamp'])
+        groups = grouped.groups
+        # Do statistics calculations for each station for each time step
+        for key, val in groups.items():
+            discharge_values = samples.df_simulation_result.iloc[val.values].Value.values  # numpy array nx1, for saltelli it should be n(2+d)x1
+            print("Size of a single discharge array (single station  - single timestep) is: ")
+            print(discharge_values.shape)
+
+            self.Abfluss[key] = {}
+            discharge_values_saltelli = discharge_values[:, np.newaxis]
+            standard_discharge_values = discharge_values_saltelli[:numEvaluations,:] #values based on which we calculate standard statistics
+            self.Abfluss[key]["Q"] = standard_discharge_values
+            self.Abfluss[key]["E"] = np.sum(standard_discharge_values, axis=0, dtype=np.float64) / numEvaluations
+            #self.Abfluss[key]["Var"] = float(np.sum(power(standard_discharge_values)) / numEvaluations - self.Abfluss[key]["E"] ** 2)
+            self.Abfluss[key]["Var"] = np.sum((standard_discharge_values - self.Abfluss[key]["E"]) ** 2, axis=0, dtype=np.float64) / (numEvaluations - 1)
+            self.Abfluss[key]["StdDev"] = np.sqrt(self.Abfluss[key]["Var"], dtype=np.float64)
+            self.Abfluss[key]["P10"] = np.percentile(discharge_values[:numEvaluations], 10, axis=0)
+            self.Abfluss[key]["P90"] = np.percentile(discharge_values[:numEvaluations], 90, axis=0)
+            self.Abfluss[key]["Sobol_m"] = _Sens_m_sample_4(discharge_values_saltelli, dim, numEvaluations)
+            self.Abfluss[key]["Sobol_t"] = _Sens_t_sample_4(discharge_values_saltelli, dim, numEvaluations)
+            #print("self.Abfluss[key]["Sobol_m"].shape")
+            #print(self.Abfluss[key]["Sobol_m"].shape)
+            #print("self.Abfluss[key]["Sobol_t"].shape")
+            #print(self.Abfluss[key]["Sobol_t"].shape)
+
+            if isinstance(self.Abfluss[key]["P10"], (list)) and len(self.Abfluss[key]["P10"]) == 1:
+                self.Abfluss[key]["P10"] = self.Abfluss[key]["P10"][0]
+                self.Abfluss[key]["P90"] = self.Abfluss[key]["P90"][0]
+
+        np.save(paths.statistics_dict_path_np, self.Abfluss)
+        # pickle_out = open(paths.statistics_dict_path_pkl,"wb")
+        # pickle.dump(self.Abfluss, pickle_out)
+        # pickle_out.close()
+
+    def plotResults(self, display=False, station='MARI',
                     fileName="", fileNameIdent="", directory="./",
                     fileNameIdentIsFullName=False, safe=True):
 
@@ -336,7 +384,7 @@ class LarsimStatistics(Statistics):
 
         if "Sobol_t" in self.Abfluss[keyIter[0]]:
             plotter.subplot(413)
-            sobol_labels = simulationNodes.nodeNames
+            sobol_labels = self.simulationNodes.nodeNames
             for i in range(len(sobol_labels)):
                 if self.Abfluss[keyIter[0]]["Sobol_t"].shape[0] == len(self.timesteps):
                     plotter.plot(pdTimesteps, [(self.Abfluss[key]["Sobol_t"].T)[i] for key in keyIter], 'o',
@@ -354,7 +402,7 @@ class LarsimStatistics(Statistics):
 
         if "Sobol_m" in self.Abfluss[keyIter[0]]:
             plotter.subplot(414)
-            sobol_labels = simulationNodes.nodeNames
+            sobol_labels = self.simulationNodes.nodeNames
             for i in range(len(sobol_labels)):
                 if self.Abfluss[keyIter[0]]["Sobol_m"].shape[0] == len(self.timesteps):
                     plotter.plot(pdTimesteps, [(self.Abfluss[key]["Sobol_m"].T)[i] for key in keyIter], 'o',

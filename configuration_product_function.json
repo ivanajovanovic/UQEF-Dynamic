@@ -14,42 +14,42 @@
       "mu5": 1.0,
       "mu6": 1.0
     },
-  "Variables": [
+  "parameters": [
      {
       "name": "x1",
-      "distribution": "uniform",
-      "uniform_low": 0.0,
-      "uniform_high": 1.0
+      "distribution": "Uniform",
+      "lower": 0.0,
+      "upper": 1.0
     },
     {
       "name": "x2",
-      "distribution": "uniform",
-      "uniform_low": 0.0,
-      "uniform_high": 1.0
+      "distribution": "Uniform",
+      "lower": 0.0,
+      "upper": 1.0
     },
     {
       "name": "x3",
-      "distribution": "uniform",
-      "uniform_low": 0.0,
-      "uniform_high": 1.0
+      "distribution": "Uniform",
+      "lower": 0.0,
+      "upper": 1.0
     },
     {
       "name": "x4",
-      "distribution": "uniform",
-      "uniform_low": 0.0,
-      "uniform_high": 1.0
+      "distribution": "Uniform",
+      "lower": 0.0,
+      "upper": 1.0
     },
     {
       "name": "x5",
-      "distribution": "uniform",
-      "uniform_low": 0.0,
-      "uniform_high": 1.0
+      "distribution": "Uniform",
+      "lower": 0.0,
+      "upper": 1.0
     },
     {
       "name": "x6",
-      "distribution": "uniform",
-      "uniform_low": 0.0,
-      "uniform_high": 1.0
+      "distribution": "Uniform",
+      "lower": 0.0,
+      "upper": 1.0
     }
   ]
 }

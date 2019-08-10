@@ -43,8 +43,6 @@ parser.add_argument('--smoketest', action='store_true', default=False)
 
 parser.add_argument('-or','--outputResultDir', default="./saves/") #./oscilator/ or ./ishigami/
 
-parser.add_argument('--configurationsFile', default="configurations.json") #configuration_oscillator.json or configuration_ishigami.json or configuration_product_function
-
 parser.add_argument('--parallel', action='store_true', default=False)
 parser.add_argument('--num_cores', type=int, default=multiprocessing.cpu_count())
 parser.add_argument('--mpi', action='store_true')
@@ -56,16 +54,17 @@ parser.add_argument('--model', default="larsim") #oscillator ishigami productFun
 parser.add_argument('--chunksize', type=int, default=1)
 parser.add_argument('--mpi_chunksize', type=int, default=1)
 
-
-parser.add_argument('--uq_method', default="sc")  # sc, mc
-parser.add_argument('--regression',action='store_true', default=False)
-parser.add_argument('--sparse_quadrature',action='store_true', default=False)
-parser.add_argument('--saltelli',action='store_true', default=False) # compute Sobol's Indices using MC and Saltelli method, if saltelli = True then uq_method should be mc and regression = False
+parser.add_argument('--uncertain', default='all')
+parser.add_argument('--uq_method', default="sc")  # sc, mc, saltelli
+parser.add_argument('--regression', action='store_true', default=False)
 parser.add_argument('--mc_numevaluations', type=int, default=27)
-parser.add_argument('--sc_q_order', type=int, default=3)  # number of collocation points in each direction (Q)
-parser.add_argument('--sc_p_order', type=int, default=2)  # number of terms in PCE (N)
+parser.add_argument('--sc_q_order', type=int, default=2)  # number of collocation points in each direction (Q)
+parser.add_argument('--sc_p_order', type=int, default=1)  # number of terms in PCE (N)
+parser.add_argument('--sc_sparse_quadrature', action='store_true', default=False)
+parser.add_argument('--sc_quadrature_rule', default='g')
+parser.add_argument('--config_file')
 
-parser.add_argument('--run_statistics', action='store_true', default=False)
+parser.add_argument('--disable_statistics'        , action='store_true', default=False)
 
 args = parser.parse_args()
 
@@ -111,7 +110,7 @@ if mpi == False or (mpi == True and rank == 0):
 configuration_object = None
 
 if mpi == False or (mpi == True and rank == 0):
-    with open(args.configurationsFile) as f:
+    with open(args.config_file) as f:
         configuration_object = json.load(f)
         print(configuration_object)
 
@@ -143,14 +142,14 @@ if mpi == True:
 if mpi == False or (mpi == True and rank == 0):
     distributions = []
     nodeNames = []
-    for i in configuration_object["Variables"]:
-        if i["distribution"] == "normal":
+    for i in configuration_object["parameters"]:
+        if i["distribution"] == "Normal":
             distributions.append((i["name"], cp.Normal(i["mean"], i["std"])))
-        elif i["distribution"] == "uniform":
-            distributions.append((i["name"], cp.Uniform(i["uniform_low"], i["uniform_high"])))
+        elif i["distribution"] == "Uniform":
+            distributions.append((i["name"], cp.Uniform(i["lower"], i["upper"])))
         nodeNames.append(i["name"])
 
-    simulationNodes = uqef.simulation.Nodes(nodeNames)
+    simulationNodes = uqef.nodes.Nodes(nodeNames)
 
     for items in distributions:
         simulationNodes.setDist(items[0], items[1])
@@ -220,8 +219,9 @@ start_time = time.time()
 #####################################
 if mpi == False or (mpi == True and rank == 0):
     simulations = {
-        "mc": (lambda: uqef.simulation.McSimulation(solver, args.mc_numevaluations, args.regression, args.saltelli, args.sc_p_order))
-       ,"sc": (lambda: uqef.simulation.ScSimulation(solver, args.sc_q_order, args.sc_p_order, "G", args.sparse_quadrature, args.regression))
+        "mc"      : (lambda: uqef.simulation.McSimulation(solver, args.mc_numevaluations, args.sc_p_order, args.regression))
+       ,"sc"      : (lambda: uqef.simulation.ScSimulation(solver, args.sc_q_order, args.sc_p_order, args.sc_quadrature_rule, args.sc_sparse_quadrature, args.regression))
+       ,"saltelli": (lambda: uqef.simulation.SaltelliSimulation(solver, args.mc_numevaluations, args.sc_p_order, args.regression))
     }
     simulation = simulations[args.uq_method]()
 
@@ -262,7 +262,7 @@ if mpi == False or (mpi == True and rank == 0):
     #####################################
     ### calculate statistics:
     #####################################
-    if args.run_statistics:
+    if args.disable_statistics is False:
         print("calculate statistics...")
         statistics_ = {
             "larsim": ( lambda: simulation.calculateStatistics(LarsimStatistics.LarsimStatistics(configuration_object), simulationNodes))
@@ -285,7 +285,7 @@ if mpi == False or (mpi == True and rank == 0):
         print("generate plots...")
         #fileName = simulation.name
         #statistics.plotResults(fileName=fileName, directory=outputResultDir, display=False)
-        statistics.plotResults(simulationNodes, display=True)
+        statistics.plotResults(display=True)
 
 if mpi == True:
     print("rank: {} exit".format(rank))
