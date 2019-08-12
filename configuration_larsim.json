@@ -2,7 +2,7 @@
   "Timeframe":
     {
       "start_day": 20,
-      "start_month": 5,
+      "start_month": 4,
       "start_year": 2013,
       "start_hour": 0,
       "start_minute": 0,
@@ -171,5 +171,3 @@
   ]
 
 }
-
-

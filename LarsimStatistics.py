@@ -187,7 +187,8 @@ class LarsimStatistics(Statistics):
                 self.Abfluss[key]["P10"]=self.Abfluss[key]["P10"][0]
                 self.Abfluss[key]["P90"]=self.Abfluss[key]["P90"][0]
 
-        np.save(paths.statistics_dict_path_np, self.Abfluss)
+        statistics_dict_path_np=os.path.abspath(os.path.join(self.working_dir, "statistics_dict.npy"))
+        np.save(statistics_dict_path_np, self.Abfluss)
         #pickle_out = open(paths.statistics_dict_path_pkl,"wb")
         #pickle.dump(self.Abfluss, pickle_out)
         #pickle_out.close()
@@ -274,8 +275,8 @@ class LarsimStatistics(Statistics):
                 self.Abfluss[key]["P10"]= self.Abfluss[key]["P10"][0]
                 self.Abfluss[key]["P90"] = self.Abfluss[key]["P90"][0]
 
-
-        np.save(paths.statistics_dict_path_np, self.Abfluss)
+        statistics_dict_path_np=os.path.abspath(os.path.join(self.working_dir, "statistics_dict.npy"))
+        np.save(statistics_dict_path_np, self.Abfluss)
         #pickle_out = open(paths.statistics_dict_path_pkl,"wb")
         #pickle.dump(self.Abfluss, pickle_out)
         #pickle_out.close()
