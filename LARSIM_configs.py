@@ -141,7 +141,7 @@ def master_lila_parser_on_time_crete_new(timeframe, master_lila_paths, new_lila_
 def tape10_timesteps(tape10_path):
     a = 0
     b = 0
-    interval = 0
+    #interval = 0
     with open(tape10_path, "r", encoding="ISO-8859-1") as tape:
         for lines in tape:
             line = lines.split(" ")
@@ -152,7 +152,7 @@ def tape10_timesteps(tape10_path):
             if line[0] == "VORHERSAGEDAUER":
                 b = float(line[6])
 
-    grid_size = int((a+b)/ interval) + 1
+    grid_size = int((a+b) / interval) + 1
     t = [i * interval for i in range(grid_size)]
 
     return t

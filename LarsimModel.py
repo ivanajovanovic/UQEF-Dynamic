@@ -41,7 +41,6 @@ class LarsimModelSetUp():
     def __init__(self, configurationObject):
         self.configurationObject = configurationObject
 
-        self.master_dir = paths.master_dir  # directoy containing all the base files for Larsim execution
         self.current_dir = paths.current_dir  # base dircetory of the code
         self.larsim_exe_dir = paths.larsim_exe_dir
         self.larsim_exe = os.path.abspath(os.path.join(self.larsim_exe_dir, 'larsim-linux-intel-1000.exe'))
@@ -50,6 +49,11 @@ class LarsimModelSetUp():
             self.working_dir = configurationObject["Directories"]["working_dir"]
         except KeyError:
             self.working_dir = paths.working_dir  # directoy for all the larsim runs
+
+        #self.master_dir = paths.master_dir  # directoy containing all the base files for Larsim execution
+        self.master_dir = os.path.abspath(os.path.join(self.working_dir, 'master_configuration'))
+        if not os.path.isdir(self.master_dir): subprocess.run(["mkdir", self.master_dir])
+        subprocess.run(['cp', '-a', paths.master_dir, self.master_dir])  # TODO IVANA Check if copy succeed
 
         timeframe = config.datetime_parse(self.configurationObject)  # tuple with EREIGNISBEGINN EREIGNISENDE
         #timestep = self.configurationObject["Timeframe"]["timestep"]  # how long one consecutive run should take - used later on in each Larsim run
@@ -96,8 +100,8 @@ class LarsimModelSetUp():
         dir_unaltered_run = os.path.abspath(os.path.join(self.working_dir,"WHM Regen 00"))
         if not os.path.isdir(dir_unaltered_run):
             subprocess.run(["mkdir", dir_unaltered_run])
-        master_dir = self.master_dir + "/."
-        subprocess.run(['cp', '-a', master_dir, dir_unaltered_run])
+        master_dir_for_copying = self.master_dir + "/."
+        subprocess.run(['cp', '-a', master_dir_for_copying, dir_unaltered_run])
         os.chdir(dir_unaltered_run)
         delete_larsim_output_files(curr_directory=dir_unaltered_run)
         local_log_file = os.path.abspath(os.path.join(dir_unaltered_run, "run.log"))
@@ -121,7 +125,8 @@ class LarsimModel(Model):
 
         self.configurationObject = configurationObject
 
-        self.master_dir = paths.master_dir #directoy containing all the base files for Larsim execution
+        #self.master_dir = paths.master_dir #directoy containing all the base files for Larsim execution
+        self.master_dir = os.path.abspath(os.path.join(self.working_dir, 'master_configuration'))
         self.current_dir = paths.current_dir #base dircetory of the code
         self.larsim_exe_dir = paths.larsim_exe_dir
         self.larsim_exe = os.path.abspath(os.path.join(self.larsim_exe_dir, 'larsim-linux-intel-1000.exe'))
@@ -172,8 +177,8 @@ class LarsimModel(Model):
             #    pass
 
             # copy all the necessary files to the newly created directoy
-            master_dir = self.master_dir + "/."
-            subprocess.run(['cp', '-a', master_dir, curr_working_dir])  # TODO IVANA Check if copy succeed
+            master_dir_for_copying = self.master_dir + "/."
+            subprocess.run(['cp', '-a', master_dir_for_copying, curr_working_dir])  # TODO IVANA Check if copy succeed
             print("LARSIM INFO: Successfully copied all the files")
 
             # change values inside tape35
