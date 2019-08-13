@@ -88,13 +88,14 @@ export OMP_NUM_THREADS=$threads
 echo "---- start sim:"
 
     mpiexec -genv I_MPI_DEBUG=+5 -print-rank-map python3 $executionPath/uq_simulation.py \
-                            --outputResultDir "/naslx/projects/pr63so/ga45met2/Repositories/model_runs" \
-                            --uq_method "sc" --sc_q_order $q_order --sc_p_order $p_order \
-                            --model "$model" --uncertain "all" \
+                            --outputResultDir "/naslx/projects/pr63so/ga45met2/Repositories/larsim_runs" \
+                            --uq_method "mc" --mc_numevaluations 10000 --sc_q_order 12 --sc_p_order 6 \
+                            --model "larsim" \
                             --chunksize 1 \
-                            --num_cores=$threads --mpi --mpi_method "$mpi_method" \
+                            --num_cores=$threads --mpi --mpi_method "new" \
                             --saltelli \
-                            --run_statistics
+                            --run_statistics \
+                            --configurationsFile "configuration_larsim.json"
 
 echo "---- end \$i:"
 
