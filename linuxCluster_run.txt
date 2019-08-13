@@ -1,9 +1,13 @@
-module show python
+ssh -i ~/.ssh/linuxclaster -Y -X ga45met2@xlogin5.lrz.de
+odule show python
 module avail
 module list
 module load python/3.6_intel
+module load mpi.intel/2018 (or something similar)
 module load git/latest
 conda create --name larsimuq python=3.6
+#or
+source activate larsimuq
 ##for installing chaospy on linux cluster##
 conda install --file requirements.txt
 python ./setup.py install
@@ -11,4 +15,8 @@ python ./setup.py install
 pip install -r ./requirements.txt 
 ##I've had some extra conda remove, cond instal commands...
 
-
+##Before each run##
+rm uq_larsim_sc_mpp2.cmd
+rm -r WHM* #not necessarly anymore
+rm *.cmd
+rm *.whm *.lila #from master_configuration
