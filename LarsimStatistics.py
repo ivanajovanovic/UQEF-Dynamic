@@ -56,6 +56,8 @@ class Samples(object):
         df_simulation_result['Value'] = df_simulation_result['Value'].astype(float)
         print("Data Frame with All the simulation results : {}".format(df_simulation_result.dtypes))
 
+        print("Number of Unique TimeStamps (Hourly): {}".format(len(df_simulation_result.TimeStamp.unique())))
+
         if strtobool(dailyOutput):
             # Average over time - change colume TimeStamp and Value!!!
             #df_simulation_result = config.transformToDailyResolution(df_simulation_result)
@@ -66,6 +68,8 @@ class Samples(object):
             df_simulation_result = df_simulation_result.rename({'TimeStamp_Date' : 'TimeStamp'}, axis = 'columns')
             df_simulation_result['TimeStamp'] = df_simulation_result['TimeStamp'].apply(lambda x: pd.Timestamp(x))
             #print(df_simulation_result.dtypes)
+
+        print("Number of Unique TimeStamps (Daily): {}".format(len(df_simulation_result.TimeStamp.unique())))
 
         # TODO write get/set methods for this attributes
         self.df_simulation_result = df_simulation_result

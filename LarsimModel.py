@@ -214,13 +214,14 @@ class LarsimModel(Model):
                 result = self._single_larsim_run(timeframe=self.timeframe, curr_working_dir=curr_working_dir,
                                             parameters=parameter, index_run=i)
 
-            assert len(result['TimeStamp'].unique()) == len(self.t), "Assesrtion Failed: Something went wrong with time resolution of the result"
+            #assert len(result['TimeStamp'].unique()) == len(self.t), "Assesrtion Failed: Something went wrong with time resolution of the result"
 
             end = time.time()
             runtime = end - start
 
             results.append((result, runtime))
 
+            #Debugging TODO Delete afterwards
             print("LARSIM INFO: Process {} returned / appended it's results".format(i))
 
             #assert isinstance(self.variable_names, list), "Assertion Failed - variable names not a list"
@@ -237,7 +238,6 @@ class LarsimModel(Model):
                 path_or_buf= os.path.abspath(os.path.join(curr_working_dir, "parameter_values.csv")),
                 index=True)
 
-            #print("LARSIM INFO - Debugging - parameter csv file was created")
 
             # at the end you might delete everything except ergebnis files and saved dataFrame
             # If you want you can delete some of the local run data / or the whole folder
@@ -246,6 +246,11 @@ class LarsimModel(Model):
 
             #all_in_curr_working_dir = curr_working_dir + "/*"
             #subprocess.run(["rm", all_in_curr_working_dir])
+
+            #Debugging TODO Delete afterwards
+            #print("LARSIM INFO DEBUGGING: process {} - Number of Unique TimeStamps in result (Hourly): {}".format(i, len(result.TimeStamp.unique())))
+            #result_temp = result.loc[(result['Stationskennung'] == "MARI") & (result['Type'] == "Abfluss Messung")]
+            #print("LARSIM INFO DEBUGGING: process {} - Number of Unique TimeStamps in result MARI and Messung (Hourly): {}".format(i, len(result_temp.TimeStamp.unique())))
 
             result.to_csv(
                 path_or_buf=os.path.abspath(os.path.join(curr_working_dir, "ergebnis_df_" + str(i) + ".csv")),
@@ -358,21 +363,13 @@ class LarsimModel(Model):
             # run larsim for this shorter period and returned already parsed 'small' ergebnis
             local_resultDF = self._single_larsim_run(timeframe=single_run_timeframe, curr_working_dir=curr_working_dir, parameters=parameters, index_run=index_run, sub_index_run=i)
 
-            # disregarde first 53 from each ergebnis
-            #local_start_date_p_53_pd = pd.to_datetime(local_start_date_p_53)
-            #local_start_date_pd = pd.to_datetime(local_start_date)
-            #local_end_date_pd = pd.to_datetime(local_end_date)
-            # local_resultDF['TimeStamp'] = local_resultDF['TimeStamp'].apply(lambda x: pd.Timestamp(x))
-            #local_resultDF = local_resultDF.between_time(local_start_date_p_53, local_end_date)
-
             #TODO Handle this more elegantly
             if local_resultDF is None:
                 raise ValueError("Process {}: The following Ergebnis file was not found - {}".format(index_run, result_file_path))
 
-            local_resultDF = local_resultDF.drop(local_resultDF[local_resultDF['TimeStamp'] < local_start_date_p_53].index)
+            local_resultDF_drop = local_resultDF.drop(local_resultDF[local_resultDF['TimeStamp'] < local_start_date_p_53].index)
 
-            #
-            local_resultDF_list.append(local_resultDF)
+            local_resultDF_list.append(local_resultDF_drop)
 
             # rename ergebnis.lila
             local_result_file_path = os.path.abspath(os.path.join(curr_working_dir, 'ergebnis' + '_' + str(i) + '.lila'))
@@ -382,11 +379,17 @@ class LarsimModel(Model):
 
         # concatinate it
         df_simulation_result = pd.concat(local_resultDF_list, ignore_index=True, sort=True, axis=0)
+
         # sorting by time
         df_simulation_result.sort_values("TimeStamp", inplace=True)
-        # clean concatanated file - dropping time duplicate values
-        df_simulation_result.drop_duplicates(subset="TimeStamp", keep='first', inplace=True)
 
+        # clean concatanated file - dropping time duplicate values
+        df_simulation_result.drop_duplicates(subset=['TimeStamp', 'Stationskennung', 'Type'], keep='first', inplace=True)
+
+        #print("DEBUGGING LARSIM INFO: process {} - After Droping -  MARI and Messung (Hourly):\n".format(i))
+        #print(len(df_simulation_result.TimeStamp.unique()))
+        #print("\n")
+        #print(len((df_simulation_result.loc[(df_simulation_result['Stationskennung'] == "MARI") & (df_simulation_result['Type'] == "Abfluss Messung")]).TimeStamp.unique()))
 
         return df_simulation_result
 
