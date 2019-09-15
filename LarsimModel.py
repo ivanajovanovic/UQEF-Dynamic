@@ -28,9 +28,11 @@ class LarsimModelSetUp():
             self.working_dir = paths.working_dir  # directoy for all the larsim runs
 
         #self.master_dir = paths.master_dir  # directoy containing all the base files for Larsim execution
+        # for safty reasons make a copy of the master_dir in the working_dir and continue working with that one
         self.master_dir = os.path.abspath(os.path.join(self.working_dir, 'master_configuration'))
         if not os.path.isdir(self.master_dir): subprocess.run(["mkdir", self.master_dir])
-        subprocess.run(['cp', '-a', paths.master_dir, self.master_dir])  # TODO IVANA Check if copy succeed
+        master_dir_for_copying = paths.master_dir + "/."
+        subprocess.run(['cp', '-a', master_dir_for_copying, self.master_dir])  # TODO IVANA Check if copy succeed
 
         timeframe = config.datetime_parse(self.configurationObject)  # tuple with EREIGNISBEGINN EREIGNISENDE
         #timestep = self.configurationObject["Timeframe"]["timestep"]  # how long one consecutive run should take - used later on in each Larsim run
@@ -44,17 +46,20 @@ class LarsimModelSetUp():
         #####################################
 
         # Based on (big) time settings change tape10_master file - needed for unaltered run - this will be repeted once again by each process in LarsimModel.run()
-        tape10_adjusted_path = self.master_dir + '/tape10'
-        config.tape10_configurations(timeframe=timeframe, master_tape10_file=paths.master_tape10_file, new_path=tape10_adjusted_path)
+        tape10_adjusted_path = self.master_dir + '/tape10' #os.path.abspath(os.path.join(self.master_dir, 'tape10'))
+        master_tape10_file = os.path.abspath(os.path.join(self.master_dir, 'tape10_master'))
+        #config.tape10_configurations(timeframe=timeframe, master_tape10_file=paths.master_tape10_file, new_path=tape10_adjusted_path)
+        config.tape10_configurations(timeframe=timeframe, master_tape10_file=master_tape10_file, new_path=tape10_adjusted_path)
 
         # Filter out whm files
         config.copy_whm_files(timeframe=timeframe, all_whms_path=paths.all_whms_path, new_path=self.master_dir)
 
         # Parse big lila files and create small ones
+        lila_configured_paths = [os.path.abspath(os.path.join(self.master_dir, i)) for i in paths.lila_files]
         config.master_lila_parser_on_time_crete_new(timeframe=timeframe, master_lila_paths=paths.master_lila_paths,
-                                                    new_lila_files=paths.lila_files, new_path=self.master_dir)
+                                                    new_lila_paths=lila_configured_paths)
 
-        for one_lila_file in paths.lila_configured_paths:
+        for one_lila_file in lila_configured_paths:
             if not osp.exists(one_lila_file):
                 raise IOError('LARSIM Error: File does not exist: %s. %s' % (one_lila_file, IOError.strerror))
 
@@ -64,7 +69,7 @@ class LarsimModelSetUp():
         ### extract ground truth discharge values
         #####################################
         # station_wq.lila file containing ground truth (measured) discharges to lila file
-        local_wq_file = os.path.abspath(os.path.join(self.master_dir, paths.lila_files[0]))
+        local_wq_file = lila_configured_paths[0] #os.path.abspath(os.path.join(self.master_dir, paths.lila_files[0]))
         # print("File containing measured discharges - {}".format(local_wq_file))
         self.df_measured = config.lila_parser_toPandas(local_wq_file, index_run=0)
         self.df_measured['Value'] = self.df_measured['Value'].astype(float)
@@ -124,6 +129,9 @@ class LarsimModel(Model):
         Model.__init__(self)
 
         self.configurationObject = configurationObject
+        self.current_dir = paths.current_dir #base dircetory of the code
+        self.larsim_exe_dir = paths.larsim_exe_dir
+        self.larsim_exe = os.path.abspath(os.path.join(self.larsim_exe_dir, 'larsim-linux-intel-1000.exe'))
 
         try:
             self.working_dir = self.configurationObject["Directories"]["working_dir"]
@@ -132,9 +140,6 @@ class LarsimModel(Model):
 
         #self.master_dir = paths.master_dir #directoy containing all the base files for Larsim execution
         self.master_dir = os.path.abspath(os.path.join(self.working_dir, 'master_configuration'))
-        self.current_dir = paths.current_dir #base dircetory of the code
-        self.larsim_exe_dir = paths.larsim_exe_dir
-        self.larsim_exe = os.path.abspath(os.path.join(self.larsim_exe_dir, 'larsim-linux-intel-1000.exe'))
 
         self.timeframe = config.datetime_parse(self.configurationObject)
         self.timestep = self.configurationObject["Timeframe"]["timestep"]  # how long one consecutive run should take - used later on in each Larsim run

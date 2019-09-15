@@ -30,7 +30,6 @@ def datetime_parse(configuration):
 
 def tape10_configurations(timeframe, master_tape10_file, new_path):
 
-    #new_path = new_path + '/tape10'
     parameter = ["EREIGNISBEGINN       ", "EREIGNISENDE       ", "VORHERSAGEBEGINN     ", "VORHERSAGEDAUER      "]
 
     ereignisbeginn = "EREIGNISBEGINN       " + str(timeframe[0].day).zfill(2) + " " + str(timeframe[0].month).zfill(
@@ -142,7 +141,7 @@ def copy_whm_files(timeframe, all_whms_path, new_path):
 
 # Parse big lila files and create small ones
 # TODO Do this in more elegant way - using pandas
-def master_lila_parser_on_time_crete_new(timeframe, master_lila_paths, new_lila_files, new_path):
+def master_lila_parser_on_time_crete_new(timeframe, master_lila_paths, new_lila_paths):
     """
     This function samples out ALL big lila files based on the time interval
 
@@ -151,7 +150,7 @@ def master_lila_parser_on_time_crete_new(timeframe, master_lila_paths, new_lila_
     form of the date+time = dd.mm.yyyy hh:mm;
 
     """
-    configured_lila_paths = [os.path.abspath(os.path.join(new_path, i)) for i in new_lila_files]
+    #configured_lila_paths = [os.path.abspath(os.path.join(new_path, i)) for i in new_lila_files]
     start_date_min_3 = timeframe[0] - datetime.timedelta(days=3)
     interval_of_interest = (str(start_date_min_3.day).zfill(2) + "." + str(start_date_min_3.month).zfill(2) + "." +
                             str(start_date_min_3.year) + " " + str(start_date_min_3.hour).zfill(2) + ":" + str(start_date_min_3.minute).zfill(2),
@@ -162,7 +161,7 @@ def master_lila_parser_on_time_crete_new(timeframe, master_lila_paths, new_lila_
     i = 0
     for idx, file_path in enumerate(master_lila_paths):
         with open(master_lila_paths[idx], "r", encoding="ISO-8859-1") as f:
-            with open(configured_lila_paths[idx], "w", encoding="ISO-8859-1") as out:
+            with open(new_lila_paths[idx], "w", encoding="ISO-8859-1") as out:
                 while 1:
                     for lines in f:
                         line = lines.split(";")
