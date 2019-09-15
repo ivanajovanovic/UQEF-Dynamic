@@ -51,7 +51,7 @@
       "upper_limit": 5000
     },
     {
-      "name": "      EQD2",
+      "name": "     EQD2",
       "distribution": "uniform",
       "mean": 250,
       "std": 150,

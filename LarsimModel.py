@@ -85,7 +85,7 @@ class LarsimModelSetUp():
         master_dir_for_copying = self.master_dir + "/."
         subprocess.run(['cp', '-a', master_dir_for_copying, dir_unaltered_run])
         os.chdir(dir_unaltered_run)
-        config.delete_larsim_output_files(curr_directory=dir_unaltered_run)
+        #config.delete_larsim_output_files(curr_directory=dir_unaltered_run) #TODO This will provide error - make it so that files are deleted if they exist
         local_log_file = os.path.abspath(os.path.join(dir_unaltered_run, "run.log"))
         subprocess.run([self.larsim_exe], stdout=open(local_log_file, 'w'))
         os.chdir(self.current_dir)
@@ -112,12 +112,15 @@ class LarsimModelSetUp():
         (rmse_DailyBasis, bias_DailyBasis, nse_DailyBasis, logNSE_DailyBasis) = goodnessofFit_DailyBasis_tuple[station_of_Interest]
 
         # write in a file GOF values of the unaltered model prediction
-        column_labels = ["RMSE", "BIAS", "NSE", "LogNSE"]
-        gof_file_path = os.path.abspath(os.path.join(self.master_dir, "GOF_Measured_vs_Unaltered.txt"))
+        column_labels = ("RMSE", "BIAS", "NSE", "LogNSE")
+        gof_file_path = os.path.abspath(os.path.join(self.working_dir, "GOF_Measured_vs_Unaltered.txt"))
         with open(gof_file_path, 'w') as f:
-            f.write('%s %s %s %s\n' % column_labels)
-            f.write('{:.4f} {:.4f} {:.4f} {:.4f}\n'.format((rmse, bias, nse, logNse)))
-            f.write('%f %f %f %f\n' % (rmse_DailyBasis, bias_DailyBasis, nse_DailyBasis, logNSE_DailyBasis))
+            line = ' '.join(str(x) for x in column_labels)
+            f.write(line + "\n")
+            #f.write('{} {} {} {} \n'.format(column_labels))
+            f.write('{:.4f} {:.4f} {:.4f} {:.4f} \n'.format(rmse, bias, nse, logNse))
+            f.write('{:.4f} {:.4f} {:.4f} {:.4f} \n'.format(rmse_DailyBasis, bias_DailyBasis, nse_DailyBasis, logNSE_DailyBasis))
+            #f.write('%f %f %f %f \n' % (rmse_DailyBasis, bias_DailyBasis, nse_DailyBasis, logNSE_DailyBasis))
         f.close()
 
         print("LARSIM INFO: Model Initial setup is done! ")
@@ -188,16 +191,6 @@ class LarsimModel(Model):
 
             # write in a file parameter values of this particular simulation (TODO add GOF)
             #TODO Some assertion - delete eventually
-            assert len(self.variable_names) == len(parameter)
-            assert isinstance(self.variable_names, list)
-            header_array = ["Index_run"]
-            header_array.append(variable_name for variable_name in self.variable_names)
-            index_parameter_array = [int(i)]
-            index_parameter_array.append(float(single_param) for single_param in parameter)
-            index_parameter_DF = pd.DataFrame(index_parameter_array, columns=header_array)
-            index_parameter_DF.to_csv(
-                path_or_buf= os.path.abspath(os.path.join(curr_working_dir, "parameter_values.csv")),
-                index=True)
 
             # copy all the necessary files to the newly created directoy
             master_dir_for_copying = self.master_dir + "/."
@@ -228,6 +221,24 @@ class LarsimModel(Model):
 
             results.append((result, runtime))
 
+            print("LARSIM INFO: Process {} returned / appended it's results".format(i))
+
+            #assert isinstance(self.variable_names, list), "Assertion Failed - variable names not a list"
+            #assert len(self.variable_names) == len(parameter), "Assertion Failed parametr not of the same length as variable names"
+
+            header_array = ["Index_run",]
+            for variable_name in self.variable_names:
+                header_array.append(variable_name)
+            index_parameter_array = [int(i),]
+            for single_param in parameter:
+                index_parameter_array.append(float(single_param))
+            index_parameter_DF = pd.DataFrame([index_parameter_array], columns=header_array)
+            index_parameter_DF.to_csv(
+                path_or_buf= os.path.abspath(os.path.join(curr_working_dir, "parameter_values.csv")),
+                index=True)
+
+            #print("LARSIM INFO - Debugging - parameter csv file was created")
+
             # at the end you might delete everything except ergebnis files and saved dataFrame
             # If you want you can delete some of the local run data / or the whole folder
             #subprocess.run(["rm", result_file_path])
@@ -255,7 +266,7 @@ class LarsimModel(Model):
     def _single_larsim_run(self, timeframe, curr_working_dir, parameters=None, index_run=0, sub_index_run=0):
 
         # start clean
-        config.delete_larsim_output_files(curr_directory=curr_working_dir)
+        config.delete_larsim_output_files(curr_directory=curr_working_dir) #TODO This will provide error - make it so that files are deleted if they exist
 
         # change tape 10 accordingly
         local_master_tape10_file = os.path.abspath(os.path.join(curr_working_dir, 'tape10_master'))

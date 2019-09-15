@@ -19,7 +19,7 @@ class Samples(object):
      """
 
     #collects values from every simulation for each time steps as array, saves in dictionary
-    def __init__(self, rawSamples, station=None, type_of_output='Abfluss Simulation', pathsDataFormat="False", dailyOutput="False"):
+    def __init__(self, rawSamples, station=None, type_of_output='Abfluss Messung', pathsDataFormat="False", dailyOutput="False"):
         """
 
         :param rawSamples: results returned by solver. Either list of paths to diff. ergebnis files or pandas.DataFrame object containing output of all the runs
@@ -67,8 +67,10 @@ class Samples(object):
             df_simulation_result['TimeStamp'] = df_simulation_result['TimeStamp'].apply(lambda x: pd.Timestamp(x))
             #print(df_simulation_result.dtypes)
 
+        # TODO write get/set methods for this attributes
         self.df_simulation_result = df_simulation_result
 
+        # TODO write get/set methods for this attributes
         self.df_time_discharges = df_simulation_result.groupby(["Stationskennung","TimeStamp"])["Value"].apply(lambda df: df.reset_index(drop=True)).unstack()
 
 

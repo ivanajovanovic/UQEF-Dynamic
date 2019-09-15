@@ -1,5 +1,6 @@
 import csv
 import datetime
+from decimal import Decimal
 from distutils.util import strtobool
 from glob import glob
 import json
@@ -223,20 +224,19 @@ def tape35_configurations(parameters, curr_working_dir, configurationObject, TGB
     if TGB is not None:
         if addSampledValue:
             for j in range(0, len(variable_names)):
-                tape.loc[tape['   TGB'] == TGB, variable_names[j]] = float64(var_limits((tape.loc[tape['   TGB'] == TGB, variable_names[j]] + parameters[j]), limits[j]))
+                tape.loc[tape['   TGB'] == TGB, variable_names[j]] = round(Decimal(var_limits((tape.loc[tape['   TGB'] == TGB, variable_names[j]] + parameters[j]), limits[j])), 2)
         else:
             for j in range(0, len(variable_names)):
-                tape.loc[tape['   TGB'] == TGB, variable_names[j]] = float64(var_limits(parameters[j], limits[j]))
-
+                tape.loc[tape['   TGB'] == TGB, variable_names[j]] = round(Decimal(var_limits(parameters[j], limits[j])), 2)
     else:
         if addSampledValue:
             for j in range(0, len(variable_names)):
                 for i in range(0, len(tape[variable_names[0]])):
-                    tape.loc[i, variable_names[j]] = float64(var_limits((tape.loc[i, variable_names[j]] + parameters[j]), limits[j]))
+                    tape.loc[i, variable_names[j]] = round(Decimal(var_limits((tape.loc[i, variable_names[j]] + parameters[j]), limits[j])), 2)
         else:
             for j in range(0, len(variable_names)):
                 for i in range(0, len(tape[variable_names[0]])):
-                    tape.loc[i, variable_names[j]] = float64(var_limits(parameters[j], limits[j]))
+                    tape.loc[i, variable_names[j]] = round(Decimal(var_limits(parameters[j], limits[j])), 2)
 
 
 
