@@ -2,7 +2,7 @@
   "Timeframe":
     {
       "start_day": 20,
-      "start_month": 5,
+      "start_month": 4,
       "start_year": 2013,
       "start_hour": 0,
       "start_minute": 0,
@@ -20,61 +20,7 @@
 
   ,
   "Variables": [
-    {
-      "name": "      BSF",
-      "distribution": "uniform",
-      "mean": 0.3,
-      "std": 0.2,
-      "uniform_low": 0.05,
-      "uniform_high": 0.5,
-      "lower_limit": 0.01,
-      "upper_limit": 0.5
-    },
-    {
-      "name": "       A2",
-      "distribution": "uniform",
-      "mean": 1.5,
-      "std": 0.75,
-      "uniform_low": 0.5,
-      "uniform_high": 3.0,
-      "lower_limit": 0.5 ,
-      "upper_limit": 4.0
-    },
-    {
-      "name": "      EQD",
-      "distribution": "uniform",
-      "mean": 450,
-      "std": 200,
-      "uniform_low": 200,
-      "uniform_high": 1000,
-      "lower_limit": 50,
-      "upper_limit": 5000
-    },
-    {
-      "name": "      EQD2",
-      "distribution": "uniform",
-      "mean": 250,
-      "std": 150,
-      "uniform_low": 50,
-      "uniform_high": 500,
-      "lower_limit": 10,
-      "upper_limit": 1000
-    }
 
-  ],
-  "Output":
-  {
-    "type_of_output":"Abfluss Messung",
-    "station":"MARI",
-    "pathsDataFormat":"False",
-    "dailyOutput": "True"
-  },
-  "GaugeControlRegion":
-  {
-    "TGB":3085,
-    "addSampledValue":"False"
-  },
-  "Unused_Variables": [
     {
       "name": "      EQB",
       "distribution": "uniform",
@@ -104,7 +50,17 @@
       "uniform_high": 1,
       "lower_limit": -3,
       "upper_limit": 2
-    },
+    }
+
+  ],
+  "Output":
+  {
+    "type_of_output":"Abfluss Simulation",
+    "station":"MARI",
+    "pathsDataFormat":"False",
+    "dailyOutput": "True"
+  },
+  "Unused_Variables": [
 
     {
       "name": "       A2",

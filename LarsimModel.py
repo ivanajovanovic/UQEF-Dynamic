@@ -3,6 +3,7 @@ from distutils.util import strtobool
 import os
 import os.path as osp
 import pandas as pd
+import numpy as np
 import subprocess
 import time
 import linecache
@@ -11,30 +12,6 @@ from uqef.model import Model
 
 import paths
 import LARSIM_configs as config
-
-
-def delete_larsim_output_files(curr_directory):
-
-    result_file_path = os.path.abspath(os.path.join(curr_directory, 'ergebnis.lila'))
-    larsim_ok_file_path = os.path.abspath(os.path.join(curr_directory, 'larsim.ok'))
-    tape11_file_path = os.path.abspath(os.path.join(curr_directory, 'tape11'))
-    karte_path = os.path.abspath(os.path.join(curr_directory, 'karten'))  # curr_working_dir + 'karten/*'
-    tape10_path = os.path.abspath(os.path.join(curr_directory, 'tape10'))
-
-    subprocess.run(["rm", result_file_path])
-    subprocess.run(["rm", larsim_ok_file_path])
-    subprocess.run(["rm", tape11_file_path])
-
-    # subprocess.run(["rm", "-R", karte_path])
-    # if not os.path.isdir(karte_path):
-    #    subprocess.run(["mkdir", karte_path])
-
-
-def delete_larsim_lila_whm_files():
-
-    subprocess.run(["rm", "*.whm"])
-    subprocess.run(["rm", "*.lila"])
-
 
 
 class LarsimModelSetUp():
@@ -103,7 +80,7 @@ class LarsimModelSetUp():
         master_dir_for_copying = self.master_dir + "/."
         subprocess.run(['cp', '-a', master_dir_for_copying, dir_unaltered_run])
         os.chdir(dir_unaltered_run)
-        delete_larsim_output_files(curr_directory=dir_unaltered_run)
+        config.delete_larsim_output_files(curr_directory=dir_unaltered_run)
         local_log_file = os.path.abspath(os.path.join(dir_unaltered_run, "run.log"))
         subprocess.run([self.larsim_exe], stdout=open(local_log_file, 'w'))
         os.chdir(self.current_dir)
@@ -116,7 +93,30 @@ class LarsimModelSetUp():
         #subprocess.run(["rm", os.path.abspath(os.path.join(dir_unaltered_run, 'larsim.ok'))])
         self.df_unaltered_ergebnis.to_csv(path_or_buf=os.path.abspath(os.path.join(self.working_dir, "df_unaltered_ergebnis.csv")), index=True)
 
+
+        #####################################
+        ### compare ground truth measurements and unaltered run for this simulation (compute RMSE | BIAS | NSE | logNSE)
+        #####################################
+        station_of_Interest = self.configurationObject["Output"]["station"]
+        allStations = self.df_measured["Stationskennung"].unique()
+        type_of_output_of_Interest = self.configurationObject["Output"]["type_of_output"]
+
+        goodnessofFit_tuple = config.calculateGoodnessofFit(measuredDF=self.df_measured, predictedDF=self.df_unaltered_ergebnis, station=station_of_Interest, type_of_output_of_Interest=type_of_output_of_Interest, dailyStatisict=False)
+        (rmse, bias, nse, logNse) = goodnessofFit_tuple[station_of_Interest]
+        goodnessofFit_DailyBasis_tuple = config.calculateGoodnessofFit(measuredDF=self.df_measured, predictedDF=self.df_unaltered_ergebnis, station=station_of_Interest, type_of_output_of_Interest=type_of_output_of_Interest, dailyStatisict=True)
+        (rmse_DailyBasis, bias_DailyBasis, nse_DailyBasis, logNSE_DailyBasis) = goodnessofFit_DailyBasis_tuple[station_of_Interest]
+
+        # write in a file GOF values of the unaltered model prediction
+        column_labels = ["RMSE", "BIAS", "NSE", "LogNSE"]
+        gof_file_path = os.path.abspath(os.path.join(self.master_dir, "GOF_Measured_vs_Unaltered.txt"))
+        with open(gof_file_path, 'w') as f:
+            f.write('%s %s %s %s\n' % column_labels)
+            f.write('{:.4f} {:.4f} {:.4f} {:.4f}\n'.format((rmse, bias, nse, logNse)))
+            f.write('%f %f %f %f\n' % (rmse_DailyBasis, bias_DailyBasis, nse_DailyBasis, logNSE_DailyBasis))
+        f.close()
+
         print("LARSIM INFO: Model Initial setup is done! ")
+
 
 class LarsimModel(Model):
 
@@ -125,22 +125,30 @@ class LarsimModel(Model):
 
         self.configurationObject = configurationObject
 
+        try:
+            self.working_dir = self.configurationObject["Directories"]["working_dir"]
+        except KeyError:
+            self.working_dir = paths.working_dir  # directoy for all the larsim runs
+
         #self.master_dir = paths.master_dir #directoy containing all the base files for Larsim execution
         self.master_dir = os.path.abspath(os.path.join(self.working_dir, 'master_configuration'))
         self.current_dir = paths.current_dir #base dircetory of the code
         self.larsim_exe_dir = paths.larsim_exe_dir
         self.larsim_exe = os.path.abspath(os.path.join(self.larsim_exe_dir, 'larsim-linux-intel-1000.exe'))
 
-        try:
-            self.working_dir = self.configurationObject["Directories"]["working_dir"]
-        except KeyError:
-            self.working_dir = paths.working_dir  # directoy for all the larsim runs
+        self.timeframe = config.datetime_parse(self.configurationObject)
+        self.timestep = self.configurationObject["Timeframe"]["timestep"]  # how long one consecutive run should take - used later on in each Larsim run
 
         # generate timesteps for plotting based on tape10 settings which are set in LarsimModelSetUp
         tape10_adjusted_path = self.master_dir + '/tape10'
-        self.t = config.tape10_timesteps(tape10_adjusted_path)
+        #self.t = config.tape10_timesteps(tape10_adjusted_path)
+        self.t = config.tape10_array_of_tape10_timesteps(self.timeframe)
 
         self.cut_runs = strtobool(self.configurationObject["Timeframe"]["cut_runs"])
+
+        self.variable_names = []
+        for i in self.configurationObject["Variables"]:
+            self.variable_names.append(i["name"])
 
 
     def prepare(self):
@@ -162,9 +170,6 @@ class LarsimModel(Model):
             parameter = parameters[ip]
             start = time.time()
 
-            self.timeframe = config.datetime_parse(self.configurationObject)
-            self.timestep = self.configurationObject["Timeframe"]["timestep"]  # how long one consecutive run should take - used later on in each Larsim run
-
             # create local directory for this particular run
             working_folder_name = "WHM Regen" + str(i)
             curr_working_dir = os.path.abspath(os.path.join(self.working_dir,working_folder_name))
@@ -175,6 +180,19 @@ class LarsimModel(Model):
             #    os.mkdir(curr_working_dir)
             # except FileExistsError:
             #    pass
+
+            # write in a file parameter values of this particular simulation (TODO add GOF)
+            #TODO Some assertion - delete eventually
+            assert len(self.variable_names) == len(parameter)
+            assert isinstance(self.variable_names, list)
+            header_array = ["Index_run"]
+            header_array.append(variable_name for variable_name in self.variable_names)
+            index_parameter_array = [int(i)]
+            index_parameter_array.append(float(single_param) for single_param in parameter)
+            index_parameter_DF = pd.DataFrame(index_parameter_array, columns=header_array)
+            index_parameter_DF.to_csv(
+                path_or_buf= os.path.abspath(os.path.join(curr_working_dir, "parameter_values.csv")),
+                index=True)
 
             # copy all the necessary files to the newly created directoy
             master_dir_for_copying = self.master_dir + "/."
@@ -197,6 +215,8 @@ class LarsimModel(Model):
             else:
                 result = self._single_larsim_run(timeframe=self.timeframe, curr_working_dir=curr_working_dir,
                                             parameters=parameter, index_run=i)
+
+            assert len(result['TimeStamp'].unique()) == len(self.t), "Assesrtion Failed: Something went wrong with time resolution of the result"
 
             end = time.time()
             runtime = end - start
@@ -230,7 +250,7 @@ class LarsimModel(Model):
     def _single_larsim_run(self, timeframe, curr_working_dir, parameters=None, index_run=0, sub_index_run=0):
 
         # start clean
-        delete_larsim_output_files(curr_directory=curr_working_dir)
+        config.delete_larsim_output_files(curr_directory=curr_working_dir)
 
         # change tape 10 accordingly
         local_master_tape10_file = os.path.abspath(os.path.join(curr_working_dir, 'tape10_master'))
@@ -257,12 +277,13 @@ class LarsimModel(Model):
             # results.append((result_file_path, runtime))
             # if you want to the transfer already read and processed result
             df_single_ergebnis = config.result_parser_toPandas(result_file_path, index_run)
+            df_single_ergebnis['Value'] = df_single_ergebnis['Value'].astype(float)
             return df_single_ergebnis
         else:
             return None #TODO Handle this more elegantly
 
 
-    #TODO This is not needed at all
+    #TODO Remove this - not used
     def divtd(td1, td2):
         divtdi = datetime.timedelta.__div__
         if isinstance(td2, (int, long)):
@@ -300,7 +321,7 @@ class LarsimModel(Model):
             # calulcate times - make sure that outputs are continuous in time
             if i == 0:
                 local_start_date = local_end_date
-                local_start_date_p_53 = local_start_date + datetime.timedelta(hours=53)
+                local_start_date_p_53 = local_start_date - datetime.timedelta(hours=53)
             else:
                 local_start_date_p_53 = local_end_date
                 local_start_date = local_start_date_p_53 - datetime.timedelta(hours=53)
@@ -317,8 +338,6 @@ class LarsimModel(Model):
 
             print("Process: {}; local_start_date: {}; local_end_date: {}".format(index_run, local_start_date, local_end_date))
             single_run_timeframe = (local_start_date, local_end_date)
-
-
 
             # run larsim for this shorter period and returned already parsed 'small' ergebnis
             local_resultDF = self._single_larsim_run(timeframe=single_run_timeframe, curr_working_dir=curr_working_dir, parameters=parameters, index_run=index_run, sub_index_run=i)
@@ -349,7 +368,6 @@ class LarsimModel(Model):
         df_simulation_result = pd.concat(local_resultDF_list, ignore_index=True, sort=True, axis=0)
         # sorting by time
         df_simulation_result.sort_values("TimeStamp", inplace=True)
-
         # clean concatanated file - dropping time duplicate values
         df_simulation_result.drop_duplicates(subset="TimeStamp", keep='first', inplace=True)
 
@@ -373,6 +391,3 @@ class LarsimModel(Model):
             linecache.clearcache()
             time.sleep(0.1)
             print("LARSIM INFO: rank {} retries reading larsim_ok".format(index_run))
-
-
-

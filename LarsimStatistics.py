@@ -19,7 +19,7 @@ class Samples(object):
      """
 
     #collects values from every simulation for each time steps as array, saves in dictionary
-    def __init__(self, rawSamples, station=None, type_of_output='Abfluss Simulation', pathsDataFormat="False", dailyOutput=False):
+    def __init__(self, rawSamples, station=None, type_of_output='Abfluss Simulation', pathsDataFormat="False", dailyOutput="False"):
         """
 
         :param rawSamples: results returned by solver. Either list of paths to diff. ergebnis files or pandas.DataFrame object containing output of all the runs
@@ -47,6 +47,10 @@ class Samples(object):
                     df_single_ergebnis['Type'] == type_of_output]
             list_of_single_df.append(df_single_ergebnis)
 
+
+        #TODO Calculate predictive power / correctness of the model
+
+
         df_simulation_result = pd.concat(list_of_single_df, ignore_index=True, sort=False, axis=0)
 
         df_simulation_result['Value'] = df_simulation_result['Value'].astype(float)
@@ -54,12 +58,14 @@ class Samples(object):
 
         if strtobool(dailyOutput):
             # Average over time - change colume TimeStamp and Value!!!
+            #df_simulation_result = config.transformToDailyResolution(df_simulation_result)
+            #or
             df_simulation_result['TimeStamp_Date'] = [entry.date() for entry in df_simulation_result['TimeStamp']]
             df_simulation_result['TimeStamp_Time'] = [entry.time() for entry in df_simulation_result['TimeStamp']]
             df_simulation_result = df_simulation_result.groupby(['Stationskennung', 'Type', 'TimeStamp_Date', 'Index_run'])['Value'].mean().reset_index()
             df_simulation_result = df_simulation_result.rename({'TimeStamp_Date' : 'TimeStamp'}, axis = 'columns')
             df_simulation_result['TimeStamp'] = df_simulation_result['TimeStamp'].apply(lambda x: pd.Timestamp(x))
-            print(df_simulation_result.dtypes)
+            #print(df_simulation_result.dtypes)
 
         self.df_simulation_result = df_simulation_result
 
@@ -390,6 +396,7 @@ class LarsimStatistics(Statistics):
             plotter.show()
 
         plotter.close()
+
 
 
 

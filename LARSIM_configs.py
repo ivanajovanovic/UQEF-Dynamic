@@ -1,15 +1,22 @@
 import csv
 import datetime
+from distutils.util import strtobool
 from glob import glob
 import json
 import pandas as pd
 import re #for regular expressions
 import os
 import os.path as osp
+import numpy as np
 import subprocess
 import time
 
 #from paths import *
+
+
+##############################################################
+##### Utility functions for time settings and calculation of different time variables
+##############################################################
 
 def datetime_parse(configuration):
 
@@ -32,7 +39,7 @@ def tape10_configurations(timeframe, master_tape10_file, new_path):
     ereignisende = "EREIGNISENDE         " + str(timeframe[1].day).zfill(2) + " " + str(timeframe[1].month).zfill(
         2) + " " + str(timeframe[1].year) + " " + str(timeframe[1].hour).zfill(2) + " " + str(timeframe[1].minute).zfill(2) + "\n"
 
-    vorhersagebeginn = "VORHERSAGEBEGINN     53\n" # this is set by default, might be changed as well...
+    vorhersagebeginn = "VORHERSAGEBEGINN     53\n" # this is set by default, might be changed as well... #TODO Change this
     changes = [ereignisbeginn, ereignisende, vorhersagebeginn]
     print(changes)
 
@@ -51,22 +58,58 @@ def tape10_configurations(timeframe, master_tape10_file, new_path):
                     f_out.write(line.replace(line, new_line))
 
     # calculates duration of prediction based on date settings in tape10, adds it to tape10
-    def calc_duration(changes):
+    def calc_duration(changes, timeframe):
 
         temp = changes[0].split(" ")
-        date_begin = datetime.datetime(int(temp[9]), int(temp[8]), int(temp[7]), int(temp[10]), int(temp[11]))
+        #date_begin = datetime.datetime(int(temp[9]), int(temp[8]), int(temp[7]), int(temp[10]), int(temp[11]))
+        date_begin = timeframe[0]
         temp = changes[1].split(" ")
-        date_end = datetime.datetime(int(temp[11]), int(temp[10]), int(temp[9]), int(temp[12]), int(temp[13]))
+        #date_end = datetime.datetime(int(temp[11]), int(temp[10]), int(temp[9]), int(temp[12]), int(temp[13]))
+        date_end = timeframe[1]
         total_time = date_end - date_begin
         total_time = int(total_time.total_seconds() / 3600)
         temp = changes[2].split(" ")
         beginn = int(temp[5])
         changes.append(parameter[3] + str(total_time - beginn) + "\n")
 
-    calc_duration(changes)
+    calc_duration(changes, timeframe)
     print(changes)
     replace(master_tape10_file, new_path, parameter, changes)
 
+
+#calculates number of timesteps set in tape10 configuration - one way by using VORHERSAGEDAUER
+def tape10_timesteps(tape10_path):
+    a = 0
+    b = 0
+    #interval = 0
+    with open(tape10_path, "r", encoding="ISO-8859-1") as tape:
+        for lines in tape:
+            line = lines.split(" ")
+            if line[0] == "INTERVALLAENGE":
+                interval = float(line[7])
+            if line[0] == "VORHERSAGEBEGINN":
+                a = float(line[5])
+            if line[0] == "VORHERSAGEDAUER":
+                b = float(line[6])
+
+    grid_size = int((a+b) / interval) + 1
+    t = [i * interval for i in range(grid_size)]
+
+    return t
+
+#calculates number of timesteps set in tape10 configuration - the second way by using difference in start and end time from tape10
+def tape10_array_of_tape10_timesteps(timeframe, interval=1):
+    start_timestep = timeframe[0]
+    end_timestep = timeframe[1]
+    dateTimeDifference = end_timestep - start_timestep
+    dateTimeDifferenceInHours = int(dateTimeDifference.total_seconds() / 3600)
+
+    t = [i * interval for i in range(dateTimeDifferenceInHours)]
+    return t
+
+##############################################################
+##### Utility functions for finding & filtering & parsing input and initial state files
+##############################################################
 
 # Filter out whm files
 def copy_whm_files(timeframe, all_whms_path, new_path):
@@ -134,28 +177,7 @@ def master_lila_parser_on_time_crete_new(timeframe, master_lila_paths, new_lila_
                         out.writelines(lines)
                         i = 0
                     if i == 1: out.writelines(lines)
-    print('You have successfully parsed master lila files based on input time span')
-
-
-#calculates # of timesteps set in tape10 configuration
-def tape10_timesteps(tape10_path):
-    a = 0
-    b = 0
-    #interval = 0
-    with open(tape10_path, "r", encoding="ISO-8859-1") as tape:
-        for lines in tape:
-            line = lines.split(" ")
-            if line[0] == "INTERVALLAENGE":
-                interval = float(line[7])
-            if line[0] == "VORHERSAGEBEGINN":
-                a = float(line[5])
-            if line[0] == "VORHERSAGEDAUER":
-                b = float(line[6])
-
-    grid_size = int((a+b) / interval) + 1
-    t = [i * interval for i in range(grid_size)]
-
-    return t
+    print('You have successfully parsed master lila files based on input timespan')
 
 
 def var_limits(var, limits):
@@ -165,9 +187,10 @@ def var_limits(var, limits):
 
 
 # tape 35 changes
-def tape35_configurations(parameters, curr_working_dir, configurationObject):
+def tape35_configurations(parameters, curr_working_dir, configurationObject, TGB=None, addSampledValue=True):
     #with open("configurations.json") as f:
     #    data = json.load(f)
+
 
     variable_names = []
     limits = []
@@ -187,13 +210,42 @@ def tape35_configurations(parameters, curr_working_dir, configurationObject):
     # Skip strip cause it might confuse Larsim afterwards
     #tape.rename(columns=lambda x: x.strip(), inplace=True)
 
+
+    #TODO Thnik if this should go outside - in a LarsimModel.run()
+    try:
+        TGB = int(configurationObject["GaugeControlRegion"]["TGB"])
+        addSampledValue = strtobool(configurationObject["GaugeControlRegion"]["addSampledValue"])
+    except KeyError:
+        TGB = None
+        addSampledValue = True
+
+
     # changes tape35 entries: original entry + added value
-    for j in range(0, len(variable_names)):
-        for i in range(0, len(tape[variable_names[0]])):
-            tape.loc[i, variable_names[j]] = var_limits((tape.loc[i, variable_names[j]] + parameters[j]), limits[j])
+    if TGB is not None:
+        if addSampledValue:
+            for j in range(0, len(variable_names)):
+                tape.loc[tape['   TGB'] == TGB, variable_names[j]] = float64(var_limits((tape.loc[tape['   TGB'] == TGB, variable_names[j]] + parameters[j]), limits[j]))
+        else:
+            for j in range(0, len(variable_names)):
+                tape.loc[tape['   TGB'] == TGB, variable_names[j]] = float64(var_limits(parameters[j], limits[j]))
+
+    else:
+        if addSampledValue:
+            for j in range(0, len(variable_names)):
+                for i in range(0, len(tape[variable_names[0]])):
+                    tape.loc[i, variable_names[j]] = float64(var_limits((tape.loc[i, variable_names[j]] + parameters[j]), limits[j]))
+        else:
+            for j in range(0, len(variable_names)):
+                for i in range(0, len(tape[variable_names[0]])):
+                    tape.loc[i, variable_names[j]] = float64(var_limits(parameters[j], limits[j]))
+
+
 
     tape.to_csv(curr_working_dir+"/tape35", index=False, sep=";")
 
+##############################################################
+##### Utility functions for parsing ergebnis files and storing the output timeseries into pandas.DataFrame object
+##############################################################
 
 def result_parser_toPandas(file_path, index_run = 0):
     """
@@ -216,7 +268,7 @@ def result_parser_toPandas(file_path, index_run = 0):
             if line[0] == "Stationskennung":
                 curr_ident = line[1]
 
-            #TODO Change this
+            #TODO Change this - examine Datenursprung
             if line[0] == "Kommentar":
                 if "Abfluss Messung" in line[1]:
                     curr_rtype = "Abfluss Messung"
@@ -247,9 +299,6 @@ def result_parser_toPandas(file_path, index_run = 0):
     labels = ['Index_run','Stationskennung', 'Type', 'TimeStamp', 'Value']
     result = pd.DataFrame.from_records(result_list, columns=labels)
     return result
-
-
-
 
 
 def lila_parser_toPandas(file_path, index_run=0):
@@ -293,3 +342,175 @@ def lila_parser_toPandas(file_path, index_run=0):
     labels = ['Index_run', 'Stationskennung', 'Type', 'TimeStamp', 'Value']
     result = pd.DataFrame.from_records(result_list, columns=labels)
     return result
+
+##############################################################
+##### Utility functions for deleteing files - cleaning folders for a clea start, etc.
+##############################################################
+
+def delete_larsim_output_files(curr_directory):
+
+    result_file_path = os.path.abspath(os.path.join(curr_directory, 'ergebnis.lila'))
+    larsim_ok_file_path = os.path.abspath(os.path.join(curr_directory, 'larsim.ok'))
+    tape11_file_path = os.path.abspath(os.path.join(curr_directory, 'tape11'))
+    karte_path = os.path.abspath(os.path.join(curr_directory, 'karten'))  # curr_working_dir + 'karten/*'
+    tape10_path = os.path.abspath(os.path.join(curr_directory, 'tape10'))
+
+    subprocess.run(["rm", result_file_path])
+    subprocess.run(["rm", larsim_ok_file_path])
+    subprocess.run(["rm", tape11_file_path])
+
+    # subprocess.run(["rm", "-R", karte_path])
+    # if not os.path.isdir(karte_path):
+    #    subprocess.run(["mkdir", karte_path])
+
+
+def delete_larsim_lila_whm_files():
+
+    subprocess.run(["rm", "*.whm"])
+    subprocess.run(["rm", "*.lila"])
+
+##############################################################
+##### Utility functions for working with pandas DataFrame created from Larsim Lila files - post-processing
+##############################################################
+
+
+def transformToDailyResolution(resultsDataFrame):
+    resultsDataFrame_Daily = resultsDataFrame.copy(deep=True)
+    resultsDataFrame_Daily['TimeStamp_Date'] = [entry.date() for entry in resultsDataFrame_Daily['TimeStamp']]
+    resultsDataFrame_Daily['TimeStamp_Time'] = [entry.time() for entry in resultsDataFrame_Daily['TimeStamp']]
+    resultsDataFrame_Daily = resultsDataFrame_Daily.groupby(['Stationskennung', 'Type', 'TimeStamp_Date', 'Index_run'])[
+        'Value'].mean().reset_index()
+    resultsDataFrame_Daily = resultsDataFrame_Daily.rename({'TimeStamp_Date': 'TimeStamp'}, axis='columns')
+    resultsDataFrame_Daily['TimeStamp'] = resultsDataFrame_Daily['TimeStamp'].apply(lambda x: pd.Timestamp(x))
+    return resultsDataFrame_Daily
+
+
+def align_dataFrames_timewise(biggerDF, smallerDF):
+
+    start_date, end_date = smallerDF.TimeStamp.values[0], smallerDF.TimeStamp.values[-1]
+    mask = (biggerDF['TimeStamp'] >= start_date) & (biggerDF['TimeStamp'] <= end_date)
+    biggerDF_aligned = biggerDF.loc[mask, :]
+    assert len(biggerDF_aligned['TimeStamp'].unique()) == len(smallerDF['TimeStamp'].unique())
+
+    return biggerDF_aligned
+
+
+def calculateRMSE(measuredDF, simulatedDF):
+    squared_error = np.square(
+        np.subtract(measuredDF.Value.values, simulatedDF.Value.values))
+    rmse = np.sqrt(np.mean(squared_error))
+    return rmse
+
+def calculateBIAS(measuredDF, simulatedDF):
+    residual = np.subtract(measuredDF.Value.values, simulatedDF.Value.values)
+    bias = np.abs(np.mean(residual))
+    return bias
+
+def calculateNSE(measuredDF, simulatedDF):
+    squared_error = np.square(
+        np.subtract(measuredDF.Value.values, simulatedDF.Value.values))
+    squared_error_to_mean = np.square(
+        np.subtract(simulatedDF.Value.values, np.mean(measuredDF.Value.values)))
+    nse = 1 - np.sum(squared_error) / np.sum(squared_error_to_mean)
+    return nse
+
+def calculateLogNSE(measuredDF, simulatedDF):
+    squared_error = np.square(
+        np.subtract(np.log(measuredDF.Value.values), np.log(simulatedDF.Value.values)))
+    squared_error_to_mean = np.square(
+        np.subtract(np.log(simulatedDF.Value.values), np.mean(np.log(measuredDF.Value.values))))
+    logNSE = 1 - np.sum(squared_error) / np.sum(squared_error_to_mean)
+    return logNSE
+
+def calculateBraviasPearson(measuredDF, simulatedDF):
+    mean_measured = np.mean(measuredDF.Value.values)
+    mean_simulated = np.mean(simulatedDF.Value.values)
+    term1 = np.subtract(measuredDF.Value.values, mean_measured)
+    term2 = np.subtract(simulatedDF.Value.values, mean_measured)
+    term3 = np.subtract(simulatedDF.Value.values, mean_simulated)
+    term4 = np.prod(term1, term2)
+    term5 = np.square(term1)
+    term6 = np.square(term3)
+    r_2 = np.square(np.sum(term4))/(np.sum(term5)*np.sum(term6))
+    return r_2
+
+# TODO remove this - seems as it is wrong formula
+def calculateNSE2(measuredDF, simulatedDF):
+    squared_error = np.square(
+        np.subtract(measuredDF.Value.values, simulatedDF.Value.values))
+    n = len(measuredDF.Value.values)
+    denumerator = np.sum(np.square(simulatedDF.Value.values)) - np.square(np.sum(measuredDF.Value.values)) / n
+    nse = 1 - np.sum(squared_error) / denumerator
+    return nse
+
+
+#TODO Choose which GOF do I want to compute
+def calculateGoodnessofFit(measuredDF, predictedDF, station="MARI", type_of_output_of_Interest="Abfluss Messung", dailyStatisict=False):
+    result_dictionary = {}
+    #calulcate statistics for all the stations
+    if isinstance(station, list):
+        #Iterate over STATIONS
+        for particulaStation in station:
+            result_tuple_ForSingleStation = _calculateGoodnessofFit_ForSingleStation(measuredDF, predictedDF, station=particulaStation, type_of_output_of_Interest=type_of_output_of_Interest, dailyStatisict=dailyStatisict)
+            result_dictionary[particulaStation] = result_tuple_ForSingleStation
+
+    #calulcate statistics for a particular station
+    else:
+        result_tuple_ForSingleStation = _calculateGoodnessofFit_ForSingleStation(measuredDF, predictedDF, station=station, type_of_output_of_Interest=type_of_output_of_Interest, dailyStatisict=dailyStatisict)
+        result_dictionary[station] = result_tuple_ForSingleStation
+    return result_dictionary
+
+def _calculateGoodnessofFit_ForSingleStation(measuredDF, predictedDF, station="MARI", type_of_output_of_Interest="Abfluss Messung", dailyStatisict=False):
+
+    #filter out particular station and data types from the bigger dataFrames
+    streamflow_gt_currentStation = measuredDF.loc[
+        (measuredDF['Stationskennung'] == station) & (measuredDF['Type'] == "Ground Truth")]
+
+    streamflow_predicted_currentStation = predictedDF.loc[
+        (predictedDF['Stationskennung'] == station) & (predictedDF['Type'] == type_of_output_of_Interest)]
+
+
+    if dailyStatisict:
+        # on daily basis
+        streamflow_gt_currentStation_daily = transformToDailyResolution(streamflow_gt_currentStation)
+        streamflow_predicted_currentStation_daily =transformToDailyResolution(streamflow_predicted_currentStation)
+
+        #DataFrame containing measurements might be longer than the one containing model predictions - alignment is needed
+        streamflow_gt_currentStation_daily_aligned = align_dataFrames_timewise(biggerDF=streamflow_gt_currentStation_daily, smallerDF=streamflow_predicted_currentStation_daily)
+
+        #calculate mean of the observed - measured discharge
+        #mean_gt_discharge = np.mean(streamflow_gt_currentStation_daily_aligned.Value.values)
+
+        #RMSE
+        rmse = calculateRMSE(measuredDF=streamflow_gt_currentStation_daily_aligned, simulatedDF=streamflow_predicted_currentStation_daily)
+
+        #BIAS
+        bias = calculateBIAS(measuredDF=streamflow_gt_currentStation_daily_aligned, simulatedDF=streamflow_predicted_currentStation_daily)
+
+        #NSE
+        nse = calculateNSE(measuredDF=streamflow_gt_currentStation_daily_aligned, simulatedDF=streamflow_predicted_currentStation_daily)
+
+        # NSE Calculation type 2
+        logNse = calculateLogNSE(measuredDF=streamflow_gt_currentStation_daily_aligned, simulatedDF=streamflow_predicted_currentStation_daily)
+
+    else:
+        # on hourly basis
+        #DataFrame containing measurements might be longer than the one containing model predictions - alignment is needed
+        streamflow_gt_currentStation_aligned = align_dataFrames_timewise(biggerDF=streamflow_gt_currentStation, smallerDF=streamflow_predicted_currentStation)
+
+        #calculate mean of the observed - measured discharge
+        #mean_gt_discharge = np.mean(streamflow_gt_currentStation_aligned.Value.values)
+
+        #RMSE
+        rmse = calculateRMSE(measuredDF=streamflow_gt_currentStation_aligned, simulatedDF=streamflow_predicted_currentStation)
+
+        #BIAS
+        bias = calculateBIAS(measuredDF=streamflow_gt_currentStation_aligned, simulatedDF=streamflow_predicted_currentStation)
+
+        #NSE
+        nse = calculateNSE(measuredDF=streamflow_gt_currentStation_aligned, simulatedDF=streamflow_predicted_currentStation)
+
+        # NSE Calculation type 2
+        logNse = calculateLogNSE(measuredDF=streamflow_gt_currentStation_aligned, simulatedDF=streamflow_predicted_currentStation)
+
+    return (rmse, bias, nse, logNse)
