@@ -1,6 +1,7 @@
 import chaospy as cp
 import numpy as np
 import pandas as pd
+from pandas.plotting import register_matplotlib_converters
 import matplotlib.pyplot as plotter
 import itertools
 import os
@@ -54,7 +55,7 @@ class Samples(object):
         df_simulation_result = pd.concat(list_of_single_df, ignore_index=True, sort=False, axis=0)
 
         df_simulation_result['Value'] = df_simulation_result['Value'].astype(float)
-        print("Data Frame with All the simulation results : {}".format(df_simulation_result.dtypes))
+        #print("Data Frame with All the simulation results : {}".format(df_simulation_result.dtypes))
 
         print("Number of Unique TimeStamps (Hourly): {}".format(len(df_simulation_result.TimeStamp.unique())))
 
@@ -68,8 +69,7 @@ class Samples(object):
             df_simulation_result = df_simulation_result.rename({'TimeStamp_Date' : 'TimeStamp'}, axis = 'columns')
             df_simulation_result['TimeStamp'] = df_simulation_result['TimeStamp'].apply(lambda x: pd.Timestamp(x))
             #print(df_simulation_result.dtypes)
-
-        print("Number of Unique TimeStamps (Daily): {}".format(len(df_simulation_result.TimeStamp.unique())))
+            print("Number of Unique TimeStamps (Daily): {}".format(len(df_simulation_result.TimeStamp.unique())))
 
         # TODO write get/set methods for this attributes
         self.df_simulation_result = df_simulation_result
@@ -130,8 +130,8 @@ class LarsimStatistics(Statistics):
         self.timesteps = samples.df_simulation_result.TimeStamp.unique()
         self.numbTimesteps = len(self.timesteps)
 
-        print("timesteps Info")
-        print(type(self.timesteps))
+        #print("timesteps Info")
+        #print(type(self.timesteps))
         print("numbTimesteps is: {}".format(self.numbTimesteps))
 
         # percentiles
@@ -143,13 +143,28 @@ class LarsimStatistics(Statistics):
 
         self.Abfluss = {}
 
+        #Gate ground truth measurements in case you want to plot them together with other statistics
+        gt_dataFrame = pd.read_csv(os.path.abspath(os.path.join(self.working_dir, "df_measured.csv")))
+        gt_dataFrame['TimeStamp'] = gt_dataFrame['TimeStamp'].astype('datetime64[ns]')
+        gt_dataFrame = config.filterResultForStation(gt_dataFrame, station=self.configurationObject["Output"]["station"])
+        gt_dataFrame_aligned = config.align_dataFrames_timewise(gt_dataFrame,
+                                                                      samples.df_simulation_result)  # TODO get rid of this eventually - make gt as long as predictions!
+        if strtobool(self.configurationObject["Output"]["dailyOutput"]):
+            gt_dataFrame_aligned_daily = config.transformToDailyResolution(gt_dataFrame_aligned)
+            gt_measurements_array = gt_dataFrame_aligned_daily.Value.values
+
+        else:
+            gt_measurements_array = gt_dataFrame_aligned.Value.values
+        self.Abfluss["Ground_Truth_Measurements"] = gt_measurements_array
+        
+
         grouped = samples.df_simulation_result.groupby(['Stationskennung','TimeStamp'])
         groups = grouped.groups
         # Do statistics calulcations for each station for each time step
         for key,val in groups.items():
             discharge_values = samples.df_simulation_result.iloc[val.values].Value.values #numpy array nx1, for sartelli it should be n(2+d)x1
-            print("Size of a single discharge array (single station  - single timestep) is: ")
-            print(discharge_values.shape)
+            #print("Size of a single discharge array (single station  - single timestep) is: ")
+            #print(discharge_values.shape)
 
             if regression:
                 qoi_gPCE = cp.fit_regression(P, nodes, discharge_values)
@@ -242,8 +257,8 @@ class LarsimStatistics(Statistics):
         self.timesteps = samples.df_simulation_result.TimeStamp.unique()
         self.numbTimesteps = len(self.timesteps)
 
-        print("timesteps Info")
-        print(type(self.timesteps))
+        #print("timesteps Info")
+        #print(type(self.timesteps))
         print("numbTimesteps is: {}".format(self.numbTimesteps))
 
 
@@ -255,6 +270,21 @@ class LarsimStatistics(Statistics):
         self.station_names = samples.df_simulation_result.Stationskennung.unique()
 
         self.Abfluss = {}
+
+        # Gate ground truth measurements in case you want to plot them together with other statistics
+        gt_dataFrame = pd.read_csv(os.path.abspath(os.path.join(self.working_dir, "df_measured.csv")))
+        gt_dataFrame['TimeStamp'] = gt_dataFrame['TimeStamp'].astype('datetime64[ns]')
+        gt_dataFrame = config.filterResultForStation(gt_dataFrame,
+                                                     station=self.configurationObject["Output"]["station"])
+        gt_dataFrame_aligned = config.align_dataFrames_timewise(gt_dataFrame,
+                                                                samples.df_simulation_result)  # TODO get rid of this eventually - make gt as long as predictions!
+        if strtobool(self.configurationObject["Output"]["dailyOutput"]):
+            gt_dataFrame_aligned_daily = config.transformToDailyResolution(gt_dataFrame_aligned)
+            gt_measurements_array = gt_dataFrame_aligned_daily.Value.values
+
+        else:
+            gt_measurements_array = gt_dataFrame_aligned.Value.values
+        self.Abfluss["Ground_Truth_Measurements"] = gt_measurements_array
 
         grouped = samples.df_simulation_result.groupby(['Stationskennung','TimeStamp'])
         groups = grouped.groups
@@ -268,7 +298,7 @@ class LarsimStatistics(Statistics):
                 qoi_gPCE = cp.fit_quadrature(P, nodes, weights, discharge_values) #fit_quadrature for each time step for this station over multiple runs
 
             print("Shape of the qoi gPCE cofficients:")
-            print(type(qoi_gPCE.shape))
+            #print(type(qoi_gPCE.shape))
             print(qoi_gPCE.shape)
 
 
@@ -311,14 +341,16 @@ class LarsimStatistics(Statistics):
         #self.Abfluss[((station,oneTimetep) for oneTimetep in pdTimesteps)]
         #listE = [self.Abfluss[key]["E"] for key in itertools.product([station,],pdTimesteps)]
 
+        
         plotter.subplot(411)
         # plotter.title('mean')
-        plotter.plot(pdTimesteps, [self.Abfluss[key]["E"] for key in keyIter], 'o', label='mean')
-        plotter.fill_between(pdTimesteps, [self.Abfluss[key]["P10"] for key in keyIter], [self.Abfluss[key]["P90"] for key in keyIter], facecolor='#5dcec6')
-        plotter.plot(pdTimesteps, [self.Abfluss[key]["P10"] for key in keyIter], 'o', label='10th percentile')
-        plotter.plot(pdTimesteps,[self.Abfluss[key]["P90"] for key in keyIter], 'o', label='90th percentile')
+        plotter.plot(pdTimesteps, [self.Abfluss[key]["E"] for key in keyIter], '-r', label='mean')
+        plotter.plot(pdTimesteps, self.Abfluss["Ground_Truth_Measurements"], '-g', label='gt')
+        #plotter.fill_between(pdTimesteps, [self.Abfluss[key]["P10"] for key in keyIter], [self.Abfluss[key]["P90"] for key in keyIter], facecolor='#5dcec6')
+        #plotter.plot(pdTimesteps, [self.Abfluss[key]["P10"] for key in keyIter], label='10th percentile')
+        #plotter.plot(pdTimesteps,[self.Abfluss[key]["P90"] for key in keyIter], label='90th percentile')
         plotter.xlabel('time', fontsize=13)
-        plotter.ylabel('Larsim Stat. Values', fontsize=13)
+        plotter.ylabel('Larsim Stat. Values [cm/s]', fontsize=13)
         #plotter.xlim(0, 200)
         #ymin, ymax = plotter.ylim()
         #plotter.ylim(0, 20)
@@ -328,9 +360,9 @@ class LarsimStatistics(Statistics):
 
         plotter.subplot(412)
         # plotter.title('standard deviation')
-        plotter.plot(pdTimesteps, [self.Abfluss[key]["StdDev"] for key in keyIter], 'o', label='std. dev.')
+        plotter.plot(pdTimesteps, [self.Abfluss[key]["StdDev"] for key in keyIter], label='std. dev.')
         plotter.xlabel('time', fontsize=13)
-        plotter.ylabel('Standard Deviation ', fontsize=13)
+        plotter.ylabel('Standard Deviation [cm/s]', fontsize=13)
         #plotter.xlim(0, 200)
         #plotter.ylim(0, 20)
         plotter.xticks(rotation=45)
@@ -352,10 +384,10 @@ class LarsimStatistics(Statistics):
             sobol_labels = simulationNodes.nodeNames
             for i in range(len(sobol_labels)):
                 if self.Abfluss[keyIter[0]]["Sobol_t"].shape[0] == len(self.timesteps):
-                    plotter.plot(pdTimesteps, [(self.Abfluss[key]["Sobol_t"].T)[i] for key in keyIter], 'o',
+                    plotter.plot(pdTimesteps, [(self.Abfluss[key]["Sobol_t"].T)[i] for key in keyIter],
                                  label=sobol_labels[i])
                 else:
-                    plotter.plot(pdTimesteps, [self.Abfluss[key]["Sobol_t"][i] for key in keyIter], 'o',
+                    plotter.plot(pdTimesteps, [self.Abfluss[key]["Sobol_t"][i] for key in keyIter],
                                  label=sobol_labels[i])
             plotter.xlabel('time', fontsize=13)
             plotter.ylabel('total sobol indices', fontsize=13)
@@ -370,10 +402,10 @@ class LarsimStatistics(Statistics):
             sobol_labels = simulationNodes.nodeNames
             for i in range(len(sobol_labels)):
                 if self.Abfluss[keyIter[0]]["Sobol_m"].shape[0] == len(self.timesteps):
-                    plotter.plot(pdTimesteps, [(self.Abfluss[key]["Sobol_m"].T)[i] for key in keyIter], 'o',
+                    plotter.plot(pdTimesteps, [(self.Abfluss[key]["Sobol_m"].T)[i] for key in keyIter],
                                  label=sobol_labels[i])
                 else:
-                    plotter.plot(pdTimesteps, [self.Abfluss[key]["Sobol_m"][i] for key in keyIter], 'o',
+                    plotter.plot(pdTimesteps, [self.Abfluss[key]["Sobol_m"][i] for key in keyIter],
                                  label=sobol_labels[i])
             plotter.xlabel('time', fontsize=13)
             plotter.ylabel('first order sobol indices', fontsize=13)

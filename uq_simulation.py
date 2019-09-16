@@ -9,6 +9,7 @@ matplotlib.use('Agg')
 
 import glob, os
 import pandas as pd
+import numpy as np
 import os.path as osp
 import sys
 import subprocess
@@ -277,12 +278,15 @@ if mpi == False or (mpi == True and rank == 0):
         list_gof_dataFrames = []
         path = configuration_object["Directories"]["working_dir"]
         files = [f for f in glob.glob(path + "/" + "**/goodness_of_fit_*.csv", recursive=True)]
-        print(files)
         for single_file in files:
             list_gof_dataFrames.append(pd.read_csv(single_file))  # TODO Maybe some postreading processing will be required
         gof_dataFrame = pd.concat(list_gof_dataFrames, ignore_index=True, sort=False, axis=0)
         # Printout
         print(tabulate(gof_dataFrame, headers=gof_dataFrame.columns, floatfmt=".4f"))
+        print("RMSE MEAN: {:.4f} \n".format(np.mean(gof_dataFrame.RMSE.values)))
+        print("BIAS MEAN: {:.4f} \n".format(np.mean(gof_dataFrame.BIAS.values)))
+        print("NSE MEAN: {:.4f} \n".format(np.mean(gof_dataFrame.NSE.values)))
+        print("LogNSE MEAN: {:.4f} \n".format(np.mean(gof_dataFrame.LogNSE.values)))
         # Save to CSV file
         gof_dataFrame.to_csv(path_or_buf=os.path.abspath(os.path.join(path, "goodness_of_fit.csv")),index=True)
 

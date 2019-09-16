@@ -15,7 +15,7 @@
       "end_minute": 0,
 
       "timestep": 10,
-      "cut_runs": "True"
+      "cut_runs": "False"
     }
 
   ,
@@ -67,7 +67,7 @@
     "type_of_output":"Abfluss Messung",
     "station":"MARI",
     "pathsDataFormat":"False",
-    "dailyOutput": "True"
+    "dailyOutput": "False"
   },
   "GaugeControlRegion":
   {

@@ -19,7 +19,18 @@ pip install -r ./requirements.txt
 ##I've had some extra conda remove, cond instal commands...
 
 ##Before each run##
+###Delete cmd (!!!)
 rm uq_larsim_sc_mpp2.cmd
 rm -r WHM* #not necessarly anymore
 rm *.cmd
 rm *.whm *.lila #from master_configuration
+
+Take care --num_cores and --nodes or --ntasks in salloc match
+Experiment with mpi.intel/2018 and mpi.intel/2019 - don't use mpi.intel/2017
+salloc --nodes=2 --cpus-per-task=1 --time=02:00:00 (or) -n 28 -t 120
+squeue
+scancel jobID
+
+scp -i ~/.ssh/linuxclaster ga45met2@lxlogin5.lrz.de:/naslx/projects/pr63so/ga45met2/Repositories/larsim_runs/2019-09-16:14:18/model_runs/statisticsFigure_uq.png /home/ga45met/Repositories/Larsim-UQ/figures
+
+scp -i ~/.ssh/linuxclaster ga45met2@lxlogin5.lrz.de:/naslx/projects/pr63so/ga45met2/Repositories/larsim_runs/2019-09-16:14:18/model_runs/statisticsFigure_uq.pdf /home/ga45met/Repositories/Larsim-UQ/figures

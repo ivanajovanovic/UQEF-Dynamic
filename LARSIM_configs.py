@@ -383,13 +383,26 @@ def transformToDailyResolution(resultsDataFrame):
     resultsDataFrame_Daily['TimeStamp'] = resultsDataFrame_Daily['TimeStamp'].apply(lambda x: pd.Timestamp(x))
     return resultsDataFrame_Daily
 
+def filterResultForStationAndTypeOfOutpu(resultsDataFrame, station="MARI", type_of_output='Abfluss Messung'):
+    resultsDataFrame = resultsDataFrame.loc[
+        (resultsDataFrame['Stationskennung'] == station) &
+        (resultsDataFrame['Type'] == type_of_output)]
+    return resultsDataFrame
+
+def filterResultForStation(resultsDataFrame, station="MARI"):
+    resultsDataFrame = resultsDataFrame.loc[resultsDataFrame['Stationskennung'] == station]
+    return resultsDataFrame
+
+def filterResultForTypeOfOutpu(resultsDataFrame, type_of_output='Abfluss Messung'):
+    resultsDataFrame = resultsDataFrame.loc[resultsDataFrame['Type'] == type_of_output]
+    return resultsDataFrame
 
 def align_dataFrames_timewise(biggerDF, smallerDF):
 
     start_date, end_date = smallerDF.TimeStamp.values[0], smallerDF.TimeStamp.values[-1]
     mask = (biggerDF['TimeStamp'] >= start_date) & (biggerDF['TimeStamp'] <= end_date)
     biggerDF_aligned = biggerDF.loc[mask, :]
-    assert len(biggerDF_aligned['TimeStamp'].unique()) == len(smallerDF['TimeStamp'].unique())
+    #assert len(biggerDF_aligned['TimeStamp'].unique()) == len(smallerDF['TimeStamp'].unique())
 
     return biggerDF_aligned
 
