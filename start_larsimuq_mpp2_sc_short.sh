@@ -1,6 +1,6 @@
 salloc --ntasks=16 --cpus-per-task=1 \
 mpiexec -genv I_MPI_DEBUG=+5 -print-rank-map python3 uq_simulation.py \
-                            --uq_method "mc" --mc_numevaluations 100 --sc_q_order 4 \
+                            --uq_method "mc" --mc_numevaluations 100 \
                             --model "larsim" \
                             --chunksize 1 \
                             --mpi --mpi_method "new" \
