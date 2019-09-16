@@ -1,0 +1,217 @@
+{
+  "Timeframe":
+    {
+      "start_day": 1,
+      "start_month": 10,
+      "start_year": 2012,
+      "start_hour": 0,
+      "start_minute": 0,
+
+
+      "end_day": 30,
+      "end_month": 9,
+      "end_year": 2013,
+      "end_hour": 0,
+      "end_minute": 0,
+
+      "timestep": 30,
+      "cut_runs": "True"
+    }
+
+  ,
+  "Variables": [
+    {
+      "name": "      BSF",
+      "distribution": "uniform",
+      "mean": 0.3,
+      "std": 0.2,
+      "uniform_low": 0.05,
+      "uniform_high": 0.5,
+      "lower_limit": 0.01,
+      "upper_limit": 0.5
+    },
+    {
+      "name": "       A2",
+      "distribution": "uniform",
+      "mean": 1.5,
+      "std": 0.75,
+      "uniform_low": 0.5,
+      "uniform_high": 3.0,
+      "lower_limit": 0.5 ,
+      "upper_limit": 4.0
+    },
+    {
+      "name": "     EQD2",
+      "distribution": "uniform",
+      "mean": 250,
+      "std": 150,
+      "uniform_low": 50,
+      "uniform_high": 500,
+      "lower_limit": 10,
+      "upper_limit": 1000
+    }
+
+  ],
+  "Output":
+  {
+    "type_of_output":"Abfluss Messung",
+    "station":"MARI",
+    "pathsDataFormat":"False",
+    "dailyOutput": "True"
+  },
+  "GaugeControlRegion":
+  {
+    "TGB":3085,
+    "addSampledValue":"False"
+  },
+  "Unused_Variables": [
+    {
+      "name": "      EQB",
+      "distribution": "uniform",
+      "mean": 40000,
+      "std": 10000,
+      "uniform_low": -10000,
+      "uniform_high": 10000,
+      "lower_limit": 5000,
+      "upper_limit": 100000
+    },
+    {
+      "name": "      EQD",
+      "distribution": "uniform",
+      "mean": 450,
+      "std": 200,
+      "uniform_low": 200,
+      "uniform_high": 1000,
+      "lower_limit": 50,
+      "upper_limit": 5000
+    },
+    {
+      "name": "      BSF",
+      "distribution": "uniform",
+      "mean": 0.15,
+      "std": 0.05,
+      "uniform_low": -0.05,
+      "uniform_high": 0.05,
+      "lower_limit": 0.01,
+      "upper_limit": 0.5
+    },
+    {
+      "name": "      TGr",
+      "distribution": "uniform",
+      "mean": -1,
+      "std": 0.5,
+      "uniform_low": -1,
+      "uniform_high": 1,
+      "lower_limit": -3,
+      "upper_limit": 2
+    },
+
+    {
+      "name": "       A2",
+      "distribution": "uniform",
+      "mean": 2.0,
+      "std": 0.75,
+      "uniform_low": -0.75,
+      "uniform_high": 0.75,
+      "lower_limit": 0.5 ,
+      "upper_limit": 4.0
+    },
+    {
+      "name": "      BSF",
+      "distribution": "uniform",
+      "mean": 0.15,
+      "std": 0.05,
+      "uniform_low": -0.05,
+      "uniform_high": 0.05,
+      "lower_limit": 0.01 ,
+      "upper_limit": 0.5
+    },
+
+    {
+      "name": "      TGr",
+      "distribution": "uniform",
+      "mean": -1,
+      "std": 0.5,
+      "uniform_low": -1,
+      "uniform_high": 1,
+      "lower_limit": -3,
+      "upper_limit": 2
+    },
+
+    {
+      "name": "     Tmit_Sr",
+      "distribution": "uniform",
+      "mean": -1,
+      "std": 0.5,
+      "uniform_low": -2,
+      "uniform_high": 3,
+      "lower_limit": -3,
+      "upper_limit": 3
+    },
+
+    {
+      "name": "     Tspann_Sr",
+      "distribution": "uniform",
+      "mean": 4,
+      "std": 1,
+      "uniform_low": -2,
+      "uniform_high": 4,
+      "lower_limit": 2,
+      "upper_limit": 8
+    },
+
+    {
+      "name": "     Abso",
+      "distribution": "normal",
+      "mean": 0.1,
+      "std": 0.05,
+      "lower_limit": 0.02,
+      "upper_limit": 0.25
+    },
+
+    {
+      "name": "       A0",
+      "distribution": "uniform",
+      "mean": 2.0,
+      "std": 0.5,
+      "uniform_low": -0.05,
+      "uniform_high": 0.15,
+      "lower_limit": 0.5 ,
+      "upper_limit": 3.5
+    },
+
+    {
+      "name": "       A1",
+      "distribution": "uniform",
+      "mean": 1.6,
+      "std": 0.3,
+      "uniform_low": -0.1,
+      "uniform_high": 0.1,
+      "lower_limit": 0.8,
+      "upper_limit": 2.5
+    },
+
+    {
+      "name": "     Abso",
+      "distribution": "uniform",
+      "mean": 0.1,
+      "std": 0.05,
+      "uniform_low": -0.08,
+      "uniform_high": 0.1,
+      "lower_limit": 0.02 ,
+      "upper_limit": 0.25
+    },
+
+    {
+      "name": "     SRet",
+      "distribution": "uniform",
+      "mean": 30,
+      "std": 10,
+      "uniform_low": -25,
+      "uniform_high": 17,
+      "lower_limit": 5 ,
+      "upper_limit": 47
+    }
+  ]
+
+}

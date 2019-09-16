@@ -31,6 +31,10 @@ salloc --nodes=2 --cpus-per-task=1 --time=02:00:00 (or) -n 28 -t 120
 squeue
 scancel jobID
 
+control --clusters=mpp2 show <jobid>
+squeue --clusters=mpp2
+scancel --clusters=mpp2 <jobid>
+
 scp -i ~/.ssh/linuxclaster ga45met2@lxlogin5.lrz.de:/naslx/projects/pr63so/ga45met2/Repositories/larsim_runs/2019-09-16:14:18/model_runs/statisticsFigure_uq.png /home/ga45met/Repositories/Larsim-UQ/figures
 
 scp -i ~/.ssh/linuxclaster ga45met2@lxlogin5.lrz.de:/naslx/projects/pr63so/ga45met2/Repositories/larsim_runs/2019-09-16:14:18/model_runs/statisticsFigure_uq.pdf /home/ga45met/Repositories/Larsim-UQ/figures

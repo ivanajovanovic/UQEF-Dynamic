@@ -97,7 +97,7 @@ echo "---- start sim:"
                             --num_cores $threads --mpi --mpi_method "new" \
                             --saltelli \
                             --run_statistics \
-                            --configurationsFile "configuration_larsim_v2.json"
+                            --configurationsFile "configuration_larsim_v3.json"
 
 echo "---- end \$i:"
 

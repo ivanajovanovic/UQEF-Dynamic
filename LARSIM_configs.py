@@ -284,13 +284,13 @@ def result_parser_toPandas(file_path, index_run = 0):
                     curr_rtype == "Abfluss Messung" or curr_rtype == "Abfluss Simulation"):
                 timestemp = pd.datetime.strptime(line[0], '%d.%m.%Y %H:%M')
 
-                if line[1] != "-":
+                if (line[1] != "-") and (line[1] != "-\n"):
                     result_list.append((int(index_run), curr_ident, curr_rtype, timestemp, float(line[1])))
                 else:
                     result_list.append((int(index_run), curr_ident, curr_rtype, timestemp, None))
 
                 if curr_rtype2 != "":
-                    if line[1] != "-":
+                    if (line[1] != "-") and (line[1] != "-\n"):
                         result_list.append((int(index_run), curr_ident, curr_rtype2, timestemp, float(line[2])))
                     else:
                         result_list.append((int(index_run), curr_ident, curr_rtype2, timestemp, None))
@@ -302,7 +302,7 @@ def result_parser_toPandas(file_path, index_run = 0):
 
 def lila_parser_toPandas(file_path, index_run=0):
     """
-    Function parses all data entries within some lila file
+    Function parses all data entries within measured lila file
 
     Returns pandas DataFrame.
     """
@@ -333,10 +333,10 @@ def lila_parser_toPandas(file_path, index_run=0):
                 timestemp = pd.datetime.strptime(line[0], '%d.%m.%Y %H:%M')
             # iterate through the rest of line array
             for idx, val in enumerate(line[1:]):
-                if val != "-":
-                    result_list.append((int(index_run), stations_array[idx], type_of_data, timestemp, float(val)))
-                else:
+                if (val == "-") or (val == "-\n"):
                     result_list.append((int(index_run), stations_array[idx], type_of_data, timestemp, None))
+                else:
+                    result_list.append((int(index_run), stations_array[idx], type_of_data, timestemp, float(val)))
 
     labels = ['Index_run', 'Stationskennung', 'Type', 'TimeStamp', 'Value']
     result = pd.DataFrame.from_records(result_list, columns=labels)
