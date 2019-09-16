@@ -59,3 +59,9 @@ mpiexec -n 4 python3 uq_simulation.py \
                                      --saltelli \
                                      --run_statistics \
                                      --outputResultDir "./larsim_runs/" \
+
+
+
+
+mpiexec -n 4 python3 uq_simulation.py --model "larsim" --uq_method "sc" --sc_q_order 5 --sc_p_order 3 \
+                                      --mpi --configurationsFile "configuration_larsim_sc.json" --run_statistics --outputResultDir "./larsim_runs/" \

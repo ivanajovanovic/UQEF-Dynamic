@@ -156,7 +156,7 @@ class LarsimStatistics(Statistics):
         else:
             gt_measurements_array = gt_dataFrame_aligned.Value.values
         self.Abfluss["Ground_Truth_Measurements"] = gt_measurements_array
-        
+
 
         grouped = samples.df_simulation_result.groupby(['Stationskennung','TimeStamp'])
         groups = grouped.groups
@@ -341,14 +341,14 @@ class LarsimStatistics(Statistics):
         #self.Abfluss[((station,oneTimetep) for oneTimetep in pdTimesteps)]
         #listE = [self.Abfluss[key]["E"] for key in itertools.product([station,],pdTimesteps)]
 
-        
+
         plotter.subplot(411)
         # plotter.title('mean')
         plotter.plot(pdTimesteps, [self.Abfluss[key]["E"] for key in keyIter], '-r', label='mean')
         plotter.plot(pdTimesteps, self.Abfluss["Ground_Truth_Measurements"], '-g', label='gt')
-        #plotter.fill_between(pdTimesteps, [self.Abfluss[key]["P10"] for key in keyIter], [self.Abfluss[key]["P90"] for key in keyIter], facecolor='#5dcec6')
-        #plotter.plot(pdTimesteps, [self.Abfluss[key]["P10"] for key in keyIter], label='10th percentile')
-        #plotter.plot(pdTimesteps,[self.Abfluss[key]["P90"] for key in keyIter], label='90th percentile')
+        plotter.fill_between(pdTimesteps, [self.Abfluss[key]["P10"] for key in keyIter], [self.Abfluss[key]["P90"] for key in keyIter], facecolor='#5dcec6')
+        plotter.plot(pdTimesteps, [self.Abfluss[key]["P10"] for key in keyIter], label='10th percentile')
+        plotter.plot(pdTimesteps,[self.Abfluss[key]["P90"] for key in keyIter], label='90th percentile')
         plotter.xlabel('time', fontsize=13)
         plotter.ylabel('Larsim Stat. Values [cm/s]', fontsize=13)
         #plotter.xlim(0, 200)

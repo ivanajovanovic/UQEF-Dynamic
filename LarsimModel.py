@@ -276,6 +276,15 @@ class LarsimModel(Model):
             #result_temp = result.loc[(result['Stationskennung'] == "MARI") & (result['Type'] == "Abfluss Messung")]
             #print("LARSIM INFO DEBUGGING: process {} - Number of Unique TimeStamps in result MARI and Messung (Hourly): {}".format(i, len(result_temp.TimeStamp.unique())))
 
+            #Delete everything except .log and .csv files
+            #list_of_files_to_be_deleted = [f for f in glob.glob(curr_working_dir)]
+            for single_file in glob.glob(curr_working_dir + "/*"):
+                if single_file.endswith(".csv") or single_file.endswith(".log"):
+                    pass
+                else:
+                    #os.remove(single_file)
+                    subprocess.run(["rm", "-r", single_file])
+
 
             # change back to starting directory of all the processes
             os.chdir(self.current_dir)
