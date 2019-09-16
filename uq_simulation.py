@@ -5,13 +5,15 @@ from mpi4py import MPI
 import multiprocessing
 
 import matplotlib
-matplotlib.use('Agg') 
+matplotlib.use('Agg')
 
-import os
+import glob, os
+import pandas as pd
 import os.path as osp
 import sys
 import subprocess
 import time
+from tabulate import tabulate
 
 import chaospy as cp
 
@@ -268,6 +270,23 @@ if mpi == False or (mpi == True and rank == 0):
     #####################################
     if args.run_statistics:
         print("calculate statistics...")
+
+        #####################################
+        ### as part of statistics - simple model predictions comparioson with groung truth - collect over different runs
+        #####################################
+        list_gof_dataFrames = []
+        path = configuration_object["Directories"]["working_dir"]
+        files = [f for f in glob.glob(path + "/" + "**/goodness_of_fit_*.csv", recursive=True)]
+        print(files)
+        for single_file in files:
+            list_gof_dataFrames.append(pd.read_csv(single_file))  # TODO Maybe some postreading processing will be required
+        gof_dataFrame = pd.concat(list_gof_dataFrames, ignore_index=True, sort=False, axis=0)
+        # Printout
+        print(tabulate(gof_dataFrame, headers=gof_dataFrame.columns, floatfmt=".4f"))
+        # Save to CSV file
+        gof_dataFrame.to_csv(path_or_buf=os.path.abspath(os.path.join(path, "goodness_of_fit.csv")),index=True)
+
+
         statistics_ = {
             "larsim": ( lambda: simulation.calculateStatistics(LarsimStatistics.LarsimStatistics(configuration_object), simulationNodes))
             ,"oscillator": (lambda: simulation.calculateStatistics(LinearDampedOscillatorStatistics.LinearDampedOscillatorStatistics(), simulationNodes))

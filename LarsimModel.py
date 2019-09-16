@@ -1,5 +1,6 @@
 import datetime
 from distutils.util import strtobool
+from decimal import Decimal
 import os
 import os.path as osp
 import pandas as pd
@@ -227,17 +228,40 @@ class LarsimModel(Model):
             #assert isinstance(self.variable_names, list), "Assertion Failed - variable names not a list"
             #assert len(self.variable_names) == len(parameter), "Assertion Failed parametr not of the same length as variable names"
 
+            result.to_csv(
+                path_or_buf=os.path.abspath(os.path.join(curr_working_dir, "ergebnis_df_" + str(i) + ".csv")),
+                index=True)
+
+
+            #####################################
+            ### compare model predictions of this simulation with measured (ground truth) data (compute RMSE | BIAS | NSE | logNSE)
+            ### this can be moved to Statistics - positioned here due to parallelisation
+            #####################################
+            gt_dataFrame = pd.read_csv(os.path.abspath(os.path.join(self.working_dir, "df_measured.csv")))
+            gt_dataFrame['TimeStamp'] = gt_dataFrame['TimeStamp'].astype('datetime64[ns]')
+            station_of_Interest = self.configurationObject["Output"]["station"]
+            type_of_output_of_Interest = self.configurationObject["Output"]["type_of_output"]
+            #allStations = result["Stationskennung"].unique()
+
+            goodnessofFit_tuple = config.calculateGoodnessofFit(measuredDF=gt_dataFrame, predictedDF=result, station=station_of_Interest, type_of_output_of_Interest=type_of_output_of_Interest, dailyStatisict=False)
+            #(rmse, bias, nse, logNse) = goodnessofFit_tuple[station_of_Interest]
+            goodnessofFit_DailyBasis_tuple = config.calculateGoodnessofFit(measuredDF=gt_dataFrame, predictedDF=result, station=station_of_Interest, type_of_output_of_Interest=type_of_output_of_Interest, dailyStatisict=True)
+            #(rmse_DailyBasis, bias_DailyBasis, nse_DailyBasis, logNSE_DailyBasis) = goodnessofFit_DailyBasis_tuple[station_of_Interest]
+
             header_array = ["Index_run",]
             for variable_name in self.variable_names:
                 header_array.append(variable_name)
-            index_parameter_array = [int(i),]
+            for gof_name in ["RMSE", "BIAS", "NSE", "LogNSE"]:
+                header_array.append(gof_name)
+            index_parameter_gof_array = [int(i),]
             for single_param in parameter:
-                index_parameter_array.append(float(single_param))
-            index_parameter_DF = pd.DataFrame([index_parameter_array], columns=header_array)
-            index_parameter_DF.to_csv(
-                path_or_buf= os.path.abspath(os.path.join(curr_working_dir, "parameter_values.csv")),
+                index_parameter_gof_array.append(round(Decimal(single_param), 4))
+            for single_gof in goodnessofFit_tuple[station_of_Interest]:
+                index_parameter_gof_array.append(round(Decimal(single_gof), 4))
+            index_parameter_gof_DF = pd.DataFrame([index_parameter_gof_array], columns=header_array)
+            index_parameter_gof_DF.to_csv(
+                path_or_buf= os.path.abspath(os.path.join(curr_working_dir, "goodness_of_fit_" + str(i) +  ".csv")),
                 index=True)
-
 
             # at the end you might delete everything except ergebnis files and saved dataFrame
             # If you want you can delete some of the local run data / or the whole folder
@@ -252,9 +276,6 @@ class LarsimModel(Model):
             #result_temp = result.loc[(result['Stationskennung'] == "MARI") & (result['Type'] == "Abfluss Messung")]
             #print("LARSIM INFO DEBUGGING: process {} - Number of Unique TimeStamps in result MARI and Messung (Hourly): {}".format(i, len(result_temp.TimeStamp.unique())))
 
-            result.to_csv(
-                path_or_buf=os.path.abspath(os.path.join(curr_working_dir, "ergebnis_df_" + str(i) + ".csv")),
-                index=True)
 
             # change back to starting directory of all the processes
             os.chdir(self.current_dir)
