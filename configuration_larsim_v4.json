@@ -2,15 +2,15 @@
   "Timeframe":
     {
       "start_day": 20,
-      "start_month": 5,
-      "start_year": 2013,
+      "start_month": 4,
+      "start_year": 2014,
       "start_hour": 0,
       "start_minute": 0,
 
 
       "end_day": 20,
-      "end_month": 6,
-      "end_year": 2013,
+      "end_month": 7,
+      "end_year": 2014,
       "end_hour": 0,
       "end_minute": 0,
 
@@ -24,7 +24,7 @@
       "name": "      BSF",
       "distribution": "normal",
       "mean": 0.3,
-      "std": 0.2,
+      "std": 0.1,
       "uniform_low": 0.05,
       "uniform_high": 0.5,
       "lower_limit": 0.01,
@@ -41,14 +41,14 @@
       "upper_limit": 4.0
     },
     {
-      "name": "      EQD",
+      "name": "     EQD2",
       "distribution": "normal",
-      "mean": 450,
-      "std": 200,
-      "uniform_low": 200,
-      "uniform_high": 1000,
-      "lower_limit": 50,
-      "upper_limit": 5000
+      "mean": 250,
+      "std": 150,
+      "uniform_low": 50,
+      "uniform_high": 500,
+      "lower_limit": 10,
+      "upper_limit": 1000
     }
   ],
   "Output":
@@ -75,14 +75,14 @@
       "upper_limit": 100000
     },
     {
-      "name": "     EQD2",
-      "distribution": "uniform",
-      "mean": 250,
-      "std": 150,
-      "uniform_low": 50,
-      "uniform_high": 500,
-      "lower_limit": 10,
-      "upper_limit": 1000
+      "name": "      EQD",
+      "distribution": "normal",
+      "mean": 450,
+      "std": 200,
+      "uniform_low": 200,
+      "uniform_high": 1000,
+      "lower_limit": 50,
+      "upper_limit": 5000
     },
     {
       "name": "      BSF",

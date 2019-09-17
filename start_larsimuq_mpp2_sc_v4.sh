@@ -91,19 +91,19 @@ echo "---- start sim:"
 
     mpiexec -genv I_MPI_DEBUG=+5 -print-rank-map python3 $executionPath/uq_simulation.py \
                             --outputResultDir "/naslx/projects/pr63so/ga45met2/Repositories/larsim_runs" \
-                            --uq_method "sc" --sc_q_order 12 --sc_p_order 6 \
+                            --uq_method "sc" --sc_q_order 18 --sc_p_order 6 \
                             --model "larsim" \
                             --chunksize 1 \
                             --num_cores $threads --mpi --mpi_method "new" \
                             --run_statistics \
-                            --configurationsFile "configuration_larsim_v2.json"
+                            --configurationsFile "configuration_larsim_v4.json"
 
 echo "---- end \$i:"
 
-" > uq_larsim_mpp2_sc_v2.cmd
+" > uq_larsim_mpp2_sc_v4.cmd
 
     #execute batch file
-    sbatch uq_larsim_mpp2_sc_v2.cmd
+    sbatch uq_larsim_mpp2_sc_v4.cmd
 }
 
 model="larsim"

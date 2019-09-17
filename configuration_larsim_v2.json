@@ -2,14 +2,14 @@
   "Timeframe":
     {
       "start_day": 1,
-      "start_month": 10,
+      "start_month": 11,
       "start_year": 2012,
       "start_hour": 0,
       "start_minute": 0,
 
 
       "end_day": 30,
-      "end_month": 9,
+      "end_month": 6,
       "end_year": 2013,
       "end_hour": 0,
       "end_minute": 0,
@@ -22,9 +22,9 @@
   "Variables": [
     {
       "name": "      BSF",
-      "distribution": "uniform",
+      "distribution": "normal",
       "mean": 0.3,
-      "std": 0.2,
+      "std": 0.1,
       "uniform_low": 0.05,
       "uniform_high": 0.5,
       "lower_limit": 0.01,
@@ -32,7 +32,7 @@
     },
     {
       "name": "       A2",
-      "distribution": "uniform",
+      "distribution": "normal",
       "mean": 1.5,
       "std": 0.75,
       "uniform_low": 0.5,
@@ -42,7 +42,7 @@
     },
     {
       "name": "     EQD2",
-      "distribution": "uniform",
+      "distribution": "normal",
       "mean": 250,
       "std": 150,
       "uniform_low": 50,
