@@ -22,7 +22,7 @@
   "Variables": [
     {
       "name": "      BSF",
-      "distribution": "normal",
+      "distribution": "uniform",
       "mean": 0.3,
       "std": 0.1,
       "uniform_low": 0.05,
@@ -32,7 +32,7 @@
     },
     {
       "name": "       A2",
-      "distribution": "normal",
+      "distribution": "uniform",
       "mean": 1.5,
       "std": 0.75,
       "uniform_low": 0.5,
@@ -41,8 +41,18 @@
       "upper_limit": 4.0
     },
     {
-      "name": "     EQD2",
+      "name": "      EQD",
       "distribution": "normal",
+      "mean": 450,
+      "std": 200,
+      "uniform_low": 200,
+      "uniform_high": 1000,
+      "lower_limit": 50,
+      "upper_limit": 5000
+    },
+    {
+      "name": "     EQD2",
+      "distribution": "uniform",
       "mean": 250,
       "std": 150,
       "uniform_low": 50,
