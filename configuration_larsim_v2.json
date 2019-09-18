@@ -8,14 +8,14 @@
       "start_minute": 0,
 
 
-      "end_day": 30,
-      "end_month": 6,
+      "end_day": 1,
+      "end_month": 7,
       "end_year": 2013,
       "end_hour": 0,
       "end_minute": 0,
 
       "timestep": 30,
-      "cut_runs": "True"
+      "cut_runs": "False"
     }
 
   ,
