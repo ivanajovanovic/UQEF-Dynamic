@@ -242,6 +242,8 @@ class LarsimStatistics(Statistics):
         weights = simulationNodes.weights
         dist = simulationNodes.joinedDists
 
+        dist_transformed =
+
         #samples = Samples(rawSamples, station='MARI', type_of_output='Abfluss Simulation', pathsDataFormat=True)
         samples = Samples(rawSamples, station=self.configurationObject["Output"]["station"],
                           type_of_output=self.configurationObject["Output"]["type_of_output"],
@@ -263,6 +265,12 @@ class LarsimStatistics(Statistics):
 
 
         P = cp.orth_ttr(order, dist)
+        P_transformed = cp.orth_ttr(order, dist_transformed)
+
+        print(P)
+        print(P_transformed)
+        print(np.array(P).shape)
+        print(np.array(P_transformed).shape)
 
         # percentiles
         numPercSamples = 10 ** 5
@@ -293,9 +301,11 @@ class LarsimStatistics(Statistics):
 
 
             if regression:
-                qoi_gPCE = cp.fit_regression(P, nodes, discharge_values)
+                #qoi_gPCE = cp.fit_regression(P, nodes, discharge_values)
+                qoi_gPCE = cp.fit_regression(P_transformed, nodes, discharge_values)
             else:
-                qoi_gPCE = cp.fit_quadrature(P, nodes, weights, discharge_values) #fit_quadrature for each time step for this station over multiple runs
+                #qoi_gPCE = cp.fit_quadrature(P, nodes, weights, discharge_values) #fit_quadrature for each time step for this station over multiple runs
+                qoi_gPCE = cp.fit_quadrature(P_transformed, nodes, weights, discharge_values)
 
             print("Shape of the qoi gPCE cofficients:")
             #print(type(qoi_gPCE.shape))
@@ -303,6 +313,7 @@ class LarsimStatistics(Statistics):
 
 
             self.Abfluss[key] = {}
+            self.Abfluss[key]["gPCE"] = qoi_gPCE
             self.Abfluss[key]["Q"] = discharge_values
             self.Abfluss[key]["E"] = (cp.E(qoi_gPCE, dist))
             self.Abfluss[key]["Var"] = (cp.Var(qoi_gPCE, dist))

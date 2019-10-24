@@ -74,6 +74,9 @@ parser.add_argument('--sc_p_order', type=int, default=2)  # number of terms in P
 
 parser.add_argument('--run_statistics', action='store_true', default=False)
 
+parser.add_argument('--transformToStandardDist', action='store_true', default=True)
+
+
 args = parser.parse_args()
 
 #####################################
@@ -149,17 +152,26 @@ if mpi == True:
 
 if mpi == False or (mpi == True and rank == 0):
     distributions = []
+    standard_distributions = []
+    transformation_param = {}
     nodeNames = []
     for i in configuration_object["Variables"]:
         if i["distribution"] == "normal":
             distributions.append((i["name"], cp.Normal(i["mean"], i["std"])))
+            standard_distributions.append((i["name"], cp.Normal()))
+            transformation_param[i["name"]] = (i["mean"], i["std"])
         elif i["distribution"] == "uniform":
             distributions.append((i["name"], cp.Uniform(i["uniform_low"], i["uniform_high"])))
+            standard_distributions.append((i["name"], cp.Uniform(-1,1)))
+            _a = (i["uniform_low"] + i["uniform_high"]) / 2
+            _b = (i["uniform_high"] - i["uniform_low"]) / 2
+            transformation_param[i["name"]] = (_a, _b)
         nodeNames.append(i["name"])
 
     simulationNodes = uqef.simulation.Nodes(nodeNames)
 
-    for items in distributions:
+    #for items in distributions:
+    for items in standard_distributions:
         simulationNodes.setDist(items[0], items[1])
 
     print("model: {}".format(args.model))
@@ -169,6 +181,8 @@ if mpi == False or (mpi == True and rank == 0):
     node_setup_name = outputResultDir + "/node_setup.txt"
     with open(node_setup_name, "w") as f:
         f.write(simulationNodes.printNodesSetup())
+
+    transformation = lambda x, mu, std: mu + std*x
 
 #####################################
 ### one time initial model setup
@@ -238,6 +252,7 @@ if mpi == False or (mpi == True and rank == 0):
 
     #generate simulation nodes
     simulation.generateSimulationNodes(simulationNodes) #simulation.parameters are set from now on
+    #TODO All this printing doesnt mean much if you cample from standard distributions and then do the transformation - CHANGE THIS
     print(simulationNodes.printNodes()) #this is after nodes = self.nodes.T
     # do smt. like print(simulation.parameters) print(simulationNodes.nodes)
     simulationNodes_save_file = outputResultDir + "/nodes.txt"
@@ -251,6 +266,11 @@ if mpi == False or (mpi == True and rank == 0):
     #####################################
     print("start the simulation...")
     solver.init()
+
+    if args.transformToStandardDist:
+        #TODO Perform transformation over parameters array (parameters.shape = #totalSamples x #ofParameters)
+        parameters = []
+        simulation.setParameters(parameters)
 
     simulation.prepareSolver() #this sets self.parameters of the main solver
 

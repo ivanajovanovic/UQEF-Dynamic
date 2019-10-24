@@ -9,7 +9,9 @@ import subprocess
 #####################################
 
 home_dir = "/home/hpc/pr63so/ga45met2" # uncomment for linux cluster execution
-data_dir = "/naslx/projects/pr63so/ga45met2/Repositories" # uncomment for linux cluster execution
+#new data_dri on dss linux cluster, the old one "/naslx/projects/pr63so/ga45met2/Repositories"
+data_dir = "/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/Repositories" # uncomment for linux cluster execution
+
 
 current_dir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parent_dir = os.path.dirname(current_dir)
