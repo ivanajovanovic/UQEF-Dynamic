@@ -271,6 +271,7 @@ if mpi == False or (mpi == True and rank == 0):
         #TODO Perform transformation over parameters array (parameters.shape = #totalSamples x #ofParameters)
         parameters = []
         simulation.setParameters(parameters)
+        #TODO Print parameters now and save them...
 
     simulation.prepareSolver() #this sets self.parameters of the main solver
 
