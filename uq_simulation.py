@@ -63,19 +63,16 @@ parser.add_argument('--model', default="larsim") #oscillator ishigami productFun
 parser.add_argument('--chunksize', type=int, default=1)
 parser.add_argument('--mpi_chunksize', type=int, default=1)
 
-
 parser.add_argument('--uq_method', default="sc")  # sc, mc
 parser.add_argument('--regression',action='store_true', default=False)
 parser.add_argument('--sparse_quadrature',action='store_true', default=False)
+parser.add_argument('--transformToStandardDist', action='store_true', default=True) #SC - set this variable so that guadrature nodes, weights and polynomials are set based on standard uniform/normal dist.
 parser.add_argument('--saltelli',action='store_true', default=False) # compute Sobol's Indices using MC and Saltelli method, if saltelli = True then uq_method should be mc and regression = False
 parser.add_argument('--mc_numevaluations', type=int, default=27)
 parser.add_argument('--sc_q_order', type=int, default=3)  # number of collocation points in each direction (Q)
 parser.add_argument('--sc_p_order', type=int, default=2)  # number of terms in PCE (N)
 
 parser.add_argument('--run_statistics', action='store_true', default=False)
-
-parser.add_argument('--transformToStandardDist', action='store_true', default=True)
-
 
 args = parser.parse_args()
 
@@ -157,21 +154,25 @@ if mpi == False or (mpi == True and rank == 0):
     nodeNames = []
     for i in configuration_object["Variables"]:
         if i["distribution"] == "normal":
-            distributions.append((i["name"], cp.Normal(i["mean"], i["std"])))
-            standard_distributions.append((i["name"], cp.Normal()))
-            transformation_param[i["name"]] = (i["mean"], i["std"])
+            if args.transformToStandardDist:
+                distributions.append((i["name"], cp.Normal()))
+                transformation_param[i["name"]] = (i["mean"], i["std"])
+            else:
+                distributions.append((i["name"], cp.Normal(i["mean"], i["std"])))
+
         elif i["distribution"] == "uniform":
-            distributions.append((i["name"], cp.Uniform(i["uniform_low"], i["uniform_high"])))
-            standard_distributions.append((i["name"], cp.Uniform(-1,1)))
-            _a = (i["uniform_low"] + i["uniform_high"]) / 2
-            _b = (i["uniform_high"] - i["uniform_low"]) / 2
-            transformation_param[i["name"]] = (_a, _b)
+            if args.transformToStandardDist:
+                distributions.append((i["name"], cp.Uniform(-1,1)))
+                _a = (i["uniform_low"] + i["uniform_high"]) / 2
+                _b = (i["uniform_high"] - i["uniform_low"]) / 2
+                transformation_param[i["name"]] = (_a, _b)
+            else:
+                distributions.append((i["name"], cp.Uniform(i["uniform_low"], i["uniform_high"])))
         nodeNames.append(i["name"])
 
     simulationNodes = uqef.simulation.Nodes(nodeNames)
 
-    #for items in distributions:
-    for items in standard_distributions:
+    for items in distributions:
         simulationNodes.setDist(items[0], items[1])
 
     print("model: {}".format(args.model))
@@ -182,7 +183,6 @@ if mpi == False or (mpi == True and rank == 0):
     with open(node_setup_name, "w") as f:
         f.write(simulationNodes.printNodesSetup())
 
-    transformation = lambda x, mu, std: mu + std*x
 
 #####################################
 ### one time initial model setup
@@ -252,7 +252,25 @@ if mpi == False or (mpi == True and rank == 0):
 
     #generate simulation nodes
     simulation.generateSimulationNodes(simulationNodes) #simulation.parameters are set from now on
-    #TODO All this printing doesnt mean much if you cample from standard distributions and then do the transformation - CHANGE THIS
+
+    #####################################
+    ### start the simulation
+    #####################################
+    print("start the simulation...")
+    solver.init()
+
+    dist_transformation = lambda x, mu, std: mu + std*xs
+    if args.transformToStandardDist:
+        #TODO Perform transformation over parameters array (parameters.shape = #totalSamples x #ofParameters)
+        parameters = simulation.nodes #parameters = simulationNodes.nodes.T
+        if (parameters.shape[0] == len(nodeNames)): parameters = parameters.T
+        parameters = np.apply_along_axis(dist_transformation, axis=1, arr=parameters)
+        simulation.setParameters(parameters)
+
+    #TODO All this printing doesnt mean much if you sample from standard distributions and then do the transformation - CHANGE THIS
+    #####################################
+    ### print and save to file sampled (quadrature) nodes / parameters
+    #####################################
     print(simulationNodes.printNodes()) #this is after nodes = self.nodes.T
     # do smt. like print(simulation.parameters) print(simulationNodes.nodes)
     simulationNodes_save_file = outputResultDir + "/nodes.txt"
@@ -262,17 +280,9 @@ if mpi == False or (mpi == True and rank == 0):
     #simulationNodes.saveToFile(simulationNodes_save_file)
 
     #####################################
-    ### start the simulation
+    ### praper the solver (set self.parameters of the main solver)
     #####################################
-    print("start the simulation...")
-    solver.init()
-
-    if args.transformToStandardDist:
-        #TODO Perform transformation over parameters array (parameters.shape = #totalSamples x #ofParameters)
-        parameters = []
-        simulation.setParameters(parameters)
-
-    simulation.prepareSolver() #this sets self.parameters of the main solver
+    simulation.prepareSolver()
 
 #####################################
 ### do "solving"
