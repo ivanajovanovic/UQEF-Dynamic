@@ -266,6 +266,7 @@ if mpi == False or (mpi == True and rank == 0):
         if (parameters.shape[0] == len(nodeNames)): parameters = parameters.T
         parameters = np.apply_along_axis(dist_transformation, axis=1, arr=parameters)
         simulation.setParameters(parameters)
+        #TODO Print parameters now and save them...
 
     #TODO All this printing doesnt mean much if you sample from standard distributions and then do the transformation - CHANGE THIS
     #####################################
