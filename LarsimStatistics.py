@@ -55,9 +55,9 @@ class Samples(object):
         df_simulation_result = pd.concat(list_of_single_df, ignore_index=True, sort=False, axis=0)
 
         df_simulation_result['Value'] = df_simulation_result['Value'].astype(float)
-        #print("Data Frame with All the simulation results : {}".format(df_simulation_result.dtypes))
+        #print("LARSIM STAT INFO: Data Frame with All the simulation results : {}".format(df_simulation_result.dtypes))
 
-        print("Number of Unique TimeStamps (Hourly): {}".format(len(df_simulation_result.TimeStamp.unique())))
+        print("LARSIM STAT INFO: Number of Unique TimeStamps (Hourly): {}".format(len(df_simulation_result.TimeStamp.unique())))
 
         if strtobool(dailyOutput):
             # Average over time - change colume TimeStamp and Value!!!
@@ -69,7 +69,7 @@ class Samples(object):
             df_simulation_result = df_simulation_result.rename({'TimeStamp_Date' : 'TimeStamp'}, axis = 'columns')
             df_simulation_result['TimeStamp'] = df_simulation_result['TimeStamp'].apply(lambda x: pd.Timestamp(x))
             #print(df_simulation_result.dtypes)
-            print("Number of Unique TimeStamps (Daily): {}".format(len(df_simulation_result.TimeStamp.unique())))
+            print("LARSIM STAT INFO: Number of Unique TimeStamps (Daily): {}".format(len(df_simulation_result.TimeStamp.unique())))
 
         # TODO write get/set methods for this attributes
         self.df_simulation_result = df_simulation_result
@@ -132,7 +132,7 @@ class LarsimStatistics(Statistics):
 
         #print("timesteps Info")
         #print(type(self.timesteps))
-        print("numbTimesteps is: {}".format(self.numbTimesteps))
+        print("LARSIM STAT INFO: numbTimesteps is: {}".format(self.numbTimesteps))
 
         # percentiles
         numPercSamples = 10 ** 5
@@ -260,16 +260,13 @@ class LarsimStatistics(Statistics):
 
         #print("timesteps Info")
         #print(type(self.timesteps))
-        print("numbTimesteps is: {}".format(self.numbTimesteps))
+        print("LARSIM STAT INFO: numbTimesteps is: {}".format(self.numbTimesteps))
 
 
         P = cp.orth_ttr(order, dist)
-        #P_transformed = cp.orth_ttr(order, dist_transformed)
 
-        print(P)
-        #print(P_transformed)
-        print(np.array(P).shape)
-        #print(np.array(P_transformed).shape)
+        #print(P)
+        print("LARSIM STAT INFO: Shape of the Chaospy Poly Base: {}".format(np.array(P).shape))
 
         # percentiles
         numPercSamples = 10 ** 5
@@ -306,9 +303,7 @@ class LarsimStatistics(Statistics):
                 qoi_gPCE = cp.fit_quadrature(P, nodes, weights, discharge_values) #fit_quadrature for each time step for this station over multiple runs
                 #qoi_gPCE = cp.fit_quadrature(P_transformed, nodes, weights, discharge_values)
 
-            print("Shape of the qoi gPCE cofficients:")
-            #print(type(qoi_gPCE.shape))
-            print(qoi_gPCE.shape)
+            #print("LARSIM STAT INFO: Shape of the qoi gPCE cofficients {}:".format(qoi_gPCE.shape))
 
 
             self.Abfluss[key] = {}

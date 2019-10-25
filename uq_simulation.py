@@ -149,14 +149,15 @@ if mpi == True:
 
 if mpi == False or (mpi == True and rank == 0):
     distributions = []
-    standard_distributions = []
     transformation_param = {}
+    dist_transformation = {}
     nodeNames = []
     for i in configuration_object["Variables"]:
         if i["distribution"] == "normal":
             if args.transformToStandardDist:
                 distributions.append((i["name"], cp.Normal()))
                 transformation_param[i["name"]] = (i["mean"], i["std"])
+                dist_transformation[i["name"]] = lambda x, mu, std: mu + std * x
             else:
                 distributions.append((i["name"], cp.Normal(i["mean"], i["std"])))
 
@@ -166,6 +167,7 @@ if mpi == False or (mpi == True and rank == 0):
                 _a = (i["uniform_low"] + i["uniform_high"]) / 2
                 _b = (i["uniform_high"] - i["uniform_low"]) / 2
                 transformation_param[i["name"]] = (_a, _b)
+                dist_transformation[i["name"]] = lambda x, mu, std: mu + std * x
             else:
                 distributions.append((i["name"], cp.Uniform(i["uniform_low"], i["uniform_high"])))
         nodeNames.append(i["name"])
@@ -174,6 +176,8 @@ if mpi == False or (mpi == True and rank == 0):
 
     for items in distributions:
         simulationNodes.setDist(items[0], items[1])
+        if args.transformToStandardDist:
+            simulationNodes.setTransformation(items[0], transformation_param[items[0]], dist_transformation[items[0]])
 
     print("model: {}".format(args.model))
     print("chunksize: {}".format(args.chunksize))
@@ -259,26 +263,13 @@ if mpi == False or (mpi == True and rank == 0):
     print("start the simulation...")
     solver.init()
 
-    dist_transformation = lambda x, mu, std: mu + std*xs
-    if args.transformToStandardDist:
-        #TODO Perform transformation over parameters array (parameters.shape = #totalSamples x #ofParameters)
-        parameters = simulation.nodes #parameters = simulationNodes.nodes.T
-        if (parameters.shape[0] == len(nodeNames)): parameters = parameters.T
-        parameters = np.apply_along_axis(dist_transformation, axis=1, arr=parameters)
-        simulation.setParameters(parameters)
-        #TODO Print parameters now and save them...
-
-    #TODO All this printing doesnt mean much if you sample from standard distributions and then do the transformation - CHANGE THIS
     #####################################
-    ### print and save to file sampled (quadrature) nodes / parameters
+    ### print and save to file sampled (quadrature) parameters - values used to evaluate the forward model
     #####################################
     print(simulationNodes.printNodes()) #this is after nodes = self.nodes.T
-    # do smt. like print(simulation.parameters) print(simulationNodes.nodes)
     simulationNodes_save_file = outputResultDir + "/nodes.txt"
     with open(simulationNodes_save_file, "w") as f:
         f.write(simulationNodes.printNodes())
-    #simulationNodes_save_file = outputResultDir + "/nodes"
-    #simulationNodes.saveToFile(simulationNodes_save_file)
 
     #####################################
     ### praper the solver (set self.parameters of the main solver)
