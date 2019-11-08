@@ -2,6 +2,7 @@ import chaospy as cp
 import numpy as np
 import pandas as pd
 from pandas.plotting import register_matplotlib_converters
+from tabulate import tabulate
 import matplotlib.pyplot as plotter
 import itertools
 import os
@@ -426,6 +427,9 @@ class LarsimStatistics(Statistics):
         if "Sobol_m" in self.Abfluss[keyIter[0]]:
             sobol_m_qoi_file = os.path.abspath(os.path.join(self.working_dir, "sobol_m_qoi_file.npy"))
             np.save(sobol_m_qoi_file, np.array([self.Abfluss[key]["Sobol_m"][i] for key in keyIter]))
+
+        if "gPCE" in self.Abfluss[keyIter[0]]:
+            print("LARSIM STAT INFO: Weight of the gPCE are" + "\n" + tabulate(np.array([self.Abfluss[key]["gPCE"][i] for key in keyIter]), floatfmt=".4f", tablefmt="github"))
 
 
         # save figure

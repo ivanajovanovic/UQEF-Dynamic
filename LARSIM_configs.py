@@ -98,7 +98,7 @@ def tape10_timesteps(tape10_path):
     return t
 
 #calculates number of timesteps set in tape10 configuration - the second way by using difference in start and end time from tape10
-def tape10_array_of_tape10_timesteps(timeframe, interval=1):
+def timeArray_of_tape10_timesteps(timeframe, interval=1):
     start_timestep = timeframe[0]
     end_timestep = timeframe[1]
     dateTimeDifference = end_timestep - start_timestep

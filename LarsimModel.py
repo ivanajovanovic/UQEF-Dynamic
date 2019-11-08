@@ -34,7 +34,7 @@ class LarsimModelSetUp():
         self.master_dir = os.path.abspath(os.path.join(self.working_dir, 'master_configuration'))
         if not os.path.isdir(self.master_dir): subprocess.run(["mkdir", self.master_dir])
         master_dir_for_copying = paths.master_dir + "/."
-        subprocess.run(['cp', '-a', master_dir_for_copying, self.master_dir])  # TODO IVANA Check if copy succeed
+        subprocess.run(['cp', '-a', master_dir_for_copying, self.master_dir])  # TODO Check if copy succeed
 
         timeframe = config.datetime_parse(self.configurationObject)  # tuple with EREIGNISBEGINN EREIGNISENDE
         #timestep = self.configurationObject["Timeframe"]["timestep"]  # how long one consecutive run should take - used later on in each Larsim run
@@ -68,7 +68,7 @@ class LarsimModelSetUp():
         print("LARSIM INFO: Model has been prepared - all the files have been copied to master folder! ")
 
         #####################################
-        ### extract ground truth discharge values
+        ### extract measured (ground truth) discharge values
         #####################################
         # station_wq.lila file containing ground truth (measured) discharges to lila file
         local_wq_file = lila_configured_paths[0] #os.path.abspath(os.path.join(self.master_dir, paths.lila_files[0]))
@@ -152,7 +152,7 @@ class LarsimModel(Model):
         # generate timesteps for plotting based on tape10 settings which are set in LarsimModelSetUp
         tape10_adjusted_path = self.master_dir + '/tape10'
         #self.t = config.tape10_timesteps(tape10_adjusted_path)
-        self.t = config.tape10_array_of_tape10_timesteps(self.timeframe)
+        self.t = config.timeArray_of_tape10_timesteps(self.timeframe)
 
         self.cut_runs = strtobool(self.configurationObject["Timeframe"]["cut_runs"])
 
@@ -172,7 +172,7 @@ class LarsimModel(Model):
 
     def run(self, i_s, parameters): #i_s - index chunk; parameters - parameters chunk
 
-        print("LARSIM INFO {}: paramater: {}".format(i_s, parameters))
+        print("LARSIM MODEL INFO {}: paramater: {}".format(i_s, parameters))
 
         results = []
         for ip in range(0, len(i_s)): # for each peace of work
@@ -191,19 +191,16 @@ class LarsimModel(Model):
             # except FileExistsError:
             #    pass
 
-            # write in a file parameter values of this particular simulation (TODO add GOF)
-            #TODO Some assertion - delete eventually
-
             # copy all the necessary files to the newly created directoy
             master_dir_for_copying = self.master_dir + "/."
             subprocess.run(['cp', '-a', master_dir_for_copying, curr_working_dir])  # TODO IVANA Check if copy succeed
-            print("LARSIM INFO: Successfully copied all the files")
+            print("LARSIM MODEL INFO: Successfully copied all the files")
 
             # change values inside tape35
             if parameter is not None:
                 config.tape35_configurations(parameters=parameter, curr_working_dir=curr_working_dir,
                                              configurationObject=self.configurationObject)
-                print("LARSIM INFO: Process {} successfully changed its tape35".format(i))
+                print("LARSIM MODEL INFO: Process {} successfully changed its tape35".format(i))
 
             # change working directory
             os.chdir(curr_working_dir)
@@ -224,7 +221,7 @@ class LarsimModel(Model):
             results.append((result, runtime))
 
             #Debugging TODO Delete afterwards
-            print("LARSIM INFO: Process {} returned / appended it's results".format(i))
+            print("LARSIM MODEL INFO: Process {} returned / appended it's results".format(i))
 
             #assert isinstance(self.variable_names, list), "Assertion Failed - variable names not a list"
             #assert len(self.variable_names) == len(parameter), "Assertion Failed parametr not of the same length as variable names"
@@ -290,7 +287,7 @@ class LarsimModel(Model):
             # change back to starting directory of all the processes
             os.chdir(self.current_dir)
 
-            print("LARSIM INFO: I am done - solver number {}".format(i))
+            print("LARSIM MODEL INFO: I am done - solver number {}".format(i))
 
 
         return results
@@ -302,7 +299,7 @@ class LarsimModel(Model):
     def _single_larsim_run(self, timeframe, curr_working_dir, parameters=None, index_run=0, sub_index_run=0):
 
         # start clean
-        config.delete_larsim_output_files(curr_directory=curr_working_dir) #TODO This will provide error - make it so that files are deleted if they exist
+        config.delete_larsim_output_files(curr_directory=curr_working_dir) #TODO This will provide warnings - make it so that files are deleted if they exist
 
         # change tape 10 accordingly
         local_master_tape10_file = os.path.abspath(os.path.join(curr_working_dir, 'tape10_master'))
@@ -313,11 +310,11 @@ class LarsimModel(Model):
         # log file for larsim
         local_log_file = os.path.abspath(
             os.path.join(curr_working_dir, "run" + str(index_run) + "_" + str(sub_index_run) + ".log"))
-        # print("LARSIM INFO: This is where I'm gonna write my log - {}".format(local_log_file))
+        # print("LARSIM MODEL INFO: This is where I'm gonna write my log - {}".format(local_log_file))
 
         # run Larsim as external process
         subprocess.run([self.larsim_exe], stdout=open(local_log_file, 'w'))
-        print("LARSIM INFO: I am done with LARSIM Execution {}".format(index_run))
+        print("LARSIM MODEL INFO: I am done with LARSIM Execution {}".format(index_run))
 
         # check if larsim.ok exist - Larsim execution was successful
         self._check_larsim_ok_file(curr_working_dir, index_run)
@@ -361,7 +358,7 @@ class LarsimModel(Model):
         karte_path = os.path.abspath(os.path.join(curr_working_dir, 'karten'))  # curr_working_dir + 'karten/*'
         tape10_path = os.path.abspath(os.path.join(curr_working_dir, 'tape10'))
 
-        print("LARSIM INFO: process {} gonna run {} shorter Lars runs (and number_of_runs_mode {})".format(index_run, number_of_runs, number_of_runs_mode))
+        print("LARSIM MODEL INFO: process {} gonna run {} shorter Larsim runs (and number_of_runs_mode {})".format(index_run, number_of_runs, number_of_runs_mode))
 
         local_resultDF_list = []
         for i in range(number_of_runs+1):
@@ -388,7 +385,7 @@ class LarsimModel(Model):
             if local_end_date > timeframe[1]:
                 local_end_date = timeframe[1]
 
-            print("Process: {}; local_start_date: {}; local_end_date: {}".format(index_run, local_start_date, local_end_date))
+            print("LARSIM MODEL INFO: Process {}; local_start_date: {}; local_end_date: {}".format(index_run, local_start_date, local_end_date))
             single_run_timeframe = (local_start_date, local_end_date)
 
             # run larsim for this shorter period and returned already parsed 'small' ergebnis
@@ -396,7 +393,7 @@ class LarsimModel(Model):
 
             #TODO Handle this more elegantly
             if local_resultDF is None:
-                raise ValueError("Process {}: The following Ergebnis file was not found - {}".format(index_run, result_file_path))
+                raise ValueError("LARSIM MODEL INFO: ERROR - Process {}: The following Ergebnis file was not found - {}".format(index_run, result_file_path))
 
             local_resultDF_drop = local_resultDF.drop(local_resultDF[local_resultDF['TimeStamp'] < local_start_date_p_53].index)
 

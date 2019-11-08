@@ -304,7 +304,7 @@ if mpi == False or (mpi == True and rank == 0):
             list_gof_dataFrames.append(pd.read_csv(single_file))  # TODO Maybe some postreading processing will be required
         gof_dataFrame = pd.concat(list_gof_dataFrames, ignore_index=True, sort=False, axis=0)
         # Printout
-        print(tabulate(gof_dataFrame, headers=gof_dataFrame.columns, floatfmt=".4f"))
+        print(tabulate(gof_dataFrame, headers=gof_dataFrame.columns, floatfmt=".4f", tablefmt="github"))
         print("RMSE MEAN: {:.4f} \n".format(np.mean(gof_dataFrame.RMSE.values)))
         print("BIAS MEAN: {:.4f} \n".format(np.mean(gof_dataFrame.BIAS.values)))
         print("NSE MEAN: {:.4f} \n".format(np.mean(gof_dataFrame.NSE.values)))
