@@ -39,6 +39,6 @@ mpiexec -genv I_MPI_DEBUG=+5 -print-rank-map python3 uq_simulation.py \
                             --model "larsim" --chunksize 1 --mpi --mpi_method "new" --num_cores 28 \
                             --run_statistics \
                             --configurationsFile "./configurations/configuration_larsim_v4.json" --outputResultDir "/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/Repositories/larsim_runs" \
-                            --uq_method "sc" --sc_q_order 5 --sc_p_order 3 \
+                            --uq_method "sc" --sc_q_order 3 --sc_p_order 2 \
                             --transformToStandardDist \
 2>&1 | tee log_larims_trial_run.txt

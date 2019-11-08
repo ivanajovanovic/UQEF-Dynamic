@@ -364,7 +364,7 @@ class LarsimModel(Model):
         for i in range(number_of_runs+1):
 
             # remove previous tape10
-            subprocess.run(["rm", tape10_path])
+            subprocess.run(["rm", "-f", tape10_path])
 
 
             # calulcate times - make sure that outputs are continuous in time

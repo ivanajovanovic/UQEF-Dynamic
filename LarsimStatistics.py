@@ -266,9 +266,6 @@ class LarsimStatistics(Statistics):
 
         P = cp.orth_ttr(order, dist)
 
-        #print(P)
-        print("LARSIM STAT INFO: Shape of the Chaospy Poly Base: {}".format(np.array(P).shape))
-
         # percentiles
         numPercSamples = 10 ** 5
 

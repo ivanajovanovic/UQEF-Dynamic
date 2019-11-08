@@ -354,9 +354,9 @@ def delete_larsim_output_files(curr_directory):
     karte_path = os.path.abspath(os.path.join(curr_directory, 'karten'))  # curr_working_dir + 'karten/*'
     tape10_path = os.path.abspath(os.path.join(curr_directory, 'tape10'))
 
-    subprocess.run(["rm", result_file_path])
-    subprocess.run(["rm", larsim_ok_file_path])
-    subprocess.run(["rm", tape11_file_path])
+    subprocess.run(["rm", "-f", result_file_path])
+    subprocess.run(["rm", "-f", larsim_ok_file_path])
+    subprocess.run(["rm", "-f", tape11_file_path])
 
     # subprocess.run(["rm", "-R", karte_path])
     # if not os.path.isdir(karte_path):
