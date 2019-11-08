@@ -15,6 +15,9 @@ start_larsim_uq_sim(){
     local mpi_method="$8"
     local cluster_nodes="$9"
     local time_limit="${10}"
+    local uq_method= "${11}"
+    local configurationsFile= "${12}"
+    local outputResultDir= "${13}"
 
     #get counter
     counter=$((`cat counter` +1))
@@ -90,13 +93,14 @@ export OMP_NUM_THREADS=$threads
 echo "---- start sim:"
 
     mpiexec -genv I_MPI_DEBUG=+5 -print-rank-map python3 $executionPath/uq_simulation.py \
-                            --outputResultDir "/naslx/projects/pr63so/ga45met2/Repositories/larsim_runs" \
-                            --uq_method "sc" --sc_q_order 18 --sc_p_order 9 \
-                            --model "larsim" \
+                            --outputResultDir "$outputResultDir" \
+                            --model $model \
                             --chunksize 1 \
-                            --num_cores $threads --mpi --mpi_method "new" \
+                            --num_cores $threads --mpi --mpi_method $mpi_method \
                             --run_statistics \
-                            --configurationsFile "configuration_larsim_v4.json"
+                            --configurationsFile "$configurationsFile" \
+                            --uq_method "$uq_method" --sc_q_order $q_order --sc_p_order $p_order \
+                            --transformToStandardDist
 
 echo "---- end \$i:"
 
@@ -113,5 +117,8 @@ nodes=4
 low_time="2:30:00"
 mid_time="5:45:00"
 max_time="48:00:00"
+uq_method="sc"
+configurationsFile="./configurations/configuration_larsim_v4.json"
+outputResultDir="/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/Repositories/larsim_runs"
 
-start_larsim_uq_sim "DYNAMIC" "NOALGO"  12  6 "$model" "$opt_add" 1 "new" "$nodes" "$max_time"
+start_larsim_uq_sim "DYNAMIC" "NOALGO"  18  9 "$model" "$opt_add" 1 "new" "$nodes" "$max_time" "$uq_method" "$configurationsFile" "$outputResultDir"

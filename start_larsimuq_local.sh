@@ -12,26 +12,22 @@
 # Linear Solver - SC
 #pytho3 uq_simulation.py \
 #                                    --model "larsim" \
-#                                    --uq_method "sc" --sc_q_order 10 --sc_p_order 6 \
-#                                    --uncertain "all"
+#                                    --uq_method "sc" --sc_q_order 10 --sc_p_order 6
 
 #python3 uq_simulation.py \
 #                                     --model "larsim" \
 #                                     --uq_method "sc" --sc_q_order 3 --sc_p_order 1 \
-#                                     --uncertain "all" \
 #                                     --regression
 
 #python3 uq_simulation.py \
 #                                     --model "larsim" \
 #                                     --uq_method "mc" --mc_numevaluations 1000 --sc_p_order 3 \
-#                                     --uncertain "all" \
 #                                     --regression
 
 #Parallel Solver - SC
 #python3 uq_simulation.py \
 #                                   --model "larsim" \
 #                                   --uq_method "sc" --sc_q_order 3 --sc_p_order 2 \
-#                                   --uncertain "all" \
 #                                   --parallel
 
 
@@ -39,29 +35,25 @@
 #mpiexec -n 4 python3 uq_simulation.py \
 #                                     --model "larsim" \
 #                                     --uq_method "sc" --sc_q_order 3 --sc_p_order 1 \
-#                                     --uncertain "all" \
 #                                     --mpi \
 #                                     --regression
 
-mpiexec -n 4 python3 uq_simulation.py \
-                                     --model "larsim" \
-                                     --uq_method "mc" --mc_numevaluations 100 --sc_p_order 8 \
-                                     --uncertain "all" \
-                                     --mpi \
-                                     --regression
+#mpiexec -n 4 python3 uq_simulation.py \
+#                                     --model "larsim" \
+#                                     --uq_method "mc" --mc_numevaluations 100 \
+#                                     --mpi \
+#                                     --regression
 
 
-mpiexec -n 4 python3 uq_simulation.py \
-                                     --model "larsim" \
-                                     --uq_method "mc" --mc_numevaluations 10 --sc_p_order 8 \
-                                     --mpi \
-                                     --configurationsFile "configuration_larsim.json" \
-                                     --saltelli \
-                                     --run_statistics \
-                                     --outputResultDir "./larsim_runs/" \
+#mpiexec -n 4 python3 uq_simulation.py \
+#                                     --model "larsim" \
+#                                     --uq_method "mc" --mc_numevaluations 10 \
+#                                     --mpi \
+#                                     --configurationsFile "./configurations/configuration_larsim.json" \
+#                                     --saltelli \
+#                                     --run_statistics \
+#                                     --outputResultDir "./larsim_runs/"
 
 
-
-
-mpiexec -n 4 python3 uq_simulation.py --model "larsim" --uq_method "sc" --sc_q_order 5 --sc_p_order 3 \
-                                      --mpi --configurationsFile "configuration_larsim_sc.json" --run_statistics --outputResultDir "./larsim_runs/" \
+mpiexec -n 4 python3 uq_simulation.py --model "larsim" --uq_method "sc" --sc_q_order 5 --sc_p_order 3 --transformToStandardDist \
+                                      --mpi --configurationsFile "./configurations/configuration_larsim_sc.json" --run_statistics --outputResultDir "./larsim_runs/" \

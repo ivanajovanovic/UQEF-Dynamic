@@ -1,4 +1,3 @@
-#!/bin/bash
 #SBATCH -o /home/hpc/.../.../myjob.%j.%N.out 
 #SBATCH -D /home/hpc/.../.../mydir 
 #SBATCH -J Jobname 
@@ -13,10 +12,6 @@
 source /etc/profile.d/modules.sh
 cd $SCRATCH/mydata
 mpiexec $HOME/exedir/myprog.exe
-
-
-
-
 
 
 #!/bin/bash 
@@ -41,7 +36,6 @@ mpiexec -n 16 --perhost 4 $HOME/exedir/myprog.exe
 # will start 16 MPI tasks with 7 threads each. Note that
 # each node has 28 cores, so 4 tasks must be started 
 # per host.
-
 
 
 #!/bin/bash

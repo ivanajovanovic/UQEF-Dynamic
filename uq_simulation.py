@@ -48,7 +48,7 @@ if rank == 0: print("parsing args...")
 parser = argparse.ArgumentParser(description='Uncertainty Quantification simulation.')
 parser.add_argument('--smoketest', action='store_true', default=False)
 
-parser.add_argument('-or','--outputResultDir', default="./saves/") #./oscilator/ or ./ishigami/
+parser.add_argument('-or','--outputResultDir', default="./saves/") #for example: ./oscilator/ or ./ishigami/ or ./larsim/
 
 parser.add_argument('--configurationsFile', default="configurations.json") #configuration_oscillator.json or configuration_ishigami.json or configuration_product_function
 
@@ -63,13 +63,13 @@ parser.add_argument('--model', default="larsim") #oscillator ishigami productFun
 parser.add_argument('--chunksize', type=int, default=1)
 parser.add_argument('--mpi_chunksize', type=int, default=1)
 
-parser.add_argument('--uq_method', default="sc")  # sc, mc
+parser.add_argument('--uq_method', default="sc")  # two options: "sc" or "mc"
 parser.add_argument('--regression',action='store_true', default=False)
 parser.add_argument('--sparse_quadrature',action='store_true', default=False)
-parser.add_argument('--transformToStandardDist', action='store_true', default=True) #SC - set this variable so that guadrature nodes, weights and polynomials are set based on standard uniform/normal dist.
-parser.add_argument('--saltelli',action='store_true', default=False) # compute Sobol's Indices using MC and Saltelli method, if saltelli = True then uq_method should be mc and regression = False
+parser.add_argument('--transformToStandardDist', action='store_true', default=False) #only valid when uq_method is "sc" - set this variable so that guadrature nodes, weights and polynomials are set based on standard uniform/normal dist.
+parser.add_argument('--saltelli',action='store_true', default=False) # compute Sobol's Indices using "mc" and Saltelli method, if saltelli = True then uq_method should be mc and regression = False
 parser.add_argument('--mc_numevaluations', type=int, default=27)
-parser.add_argument('--sc_q_order', type=int, default=3)  # number of collocation points in each direction (Q)
+parser.add_argument('--sc_q_order', type=int, default=3)  # number of collocation points in each dimension (Q)
 parser.add_argument('--sc_p_order', type=int, default=2)  # number of terms in PCE (N)
 
 parser.add_argument('--run_statistics', action='store_true', default=False)

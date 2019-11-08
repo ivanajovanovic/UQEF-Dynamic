@@ -22,7 +22,7 @@
   "Variables": [
     {
       "name": "      BSF",
-      "distribution": "uniform",
+      "distribution": "normal",
       "mean": 0.3,
       "std": 0.1,
       "uniform_low": 0.05,
@@ -32,7 +32,7 @@
     },
     {
       "name": "       A2",
-      "distribution": "uniform",
+      "distribution": "normal",
       "mean": 1.5,
       "std": 0.75,
       "uniform_low": 0.5,
@@ -52,7 +52,7 @@
     },
     {
       "name": "     EQD2",
-      "distribution": "uniform",
+      "distribution": "normal",
       "mean": 250,
       "std": 150,
       "uniform_low": 50,
