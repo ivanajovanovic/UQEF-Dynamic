@@ -8,6 +8,10 @@ A simple example for the usage of the UQEF with a test model.
 import matplotlib
 #matplotlib.use('Agg')
 
+import os
+import subprocess
+import datetime
+
 # numerical stuff
 import uqef
 
@@ -22,10 +26,6 @@ import IshigamiStatistics
 
 import ProductFunctionModel
 import ProductFunctionStatistics
-
-import os
-import subprocess
-import datetime
 
 # instantiate UQsim
 uqsim = uqef.UQsim()

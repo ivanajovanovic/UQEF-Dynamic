@@ -20,6 +20,9 @@ import time
 ##############################################################
 
 def datetime_parse(configuration):
+    """
+    Function which reads json configuration file and determins the start end end date of the simulation
+    """
 
     data = configuration["Timeframe"]
     start_date = datetime.datetime(data["start_year"],data["start_month"], data["start_day"],
