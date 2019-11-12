@@ -27,6 +27,17 @@ def parse_datetime_tuple(interval_of_interest):
     return [start_date, end_date]
 
 
+def _timeframe_to_datetime_tuple(timeframe=None):
+    if timeframe is None:
+        start_date = datetime.datetime(2014, 1, 1, 0, 0)
+
+        end_date = datetime.datetime(2015, 1, 1, 0, 0)
+        return [start_date, end_date]
+    elif isinstance(timeframe, tuple) and not isinstance(timeframe[0], datetime.datetime):
+        return parse_datetime_tuple(timeframe)
+    else:
+        return timeframe
+
 def parse_datetime_configuration(configuration):
     """
     Reads configuration directoy and determins the start end end date of the simulation
