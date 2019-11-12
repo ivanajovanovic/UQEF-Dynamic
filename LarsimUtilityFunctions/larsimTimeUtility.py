@@ -21,7 +21,13 @@ import subprocess
 import time
 
 
-def parse_datetime(configuration):
+def parse_datetime_tuple(interval_of_interest):
+    start_date = datetime.datetime.strptime(interval_of_interest[0], '%d.%m.%Y  %H:%M')
+    end_date = datetime.datetime.strptime(interval_of_interest[1], '%d.%m.%Y  %H:%M')
+    return [start_date, end_date]
+
+
+def parse_datetime_configuration(configuration):
     """
     Reads configuration directoy and determins the start end end date of the simulation
     """
@@ -33,6 +39,7 @@ def parse_datetime(configuration):
     end_date = datetime.datetime(data["end_year"], data["end_month"], data["end_day"],
                                  data["end_hour"], data["end_minute"])
     return [start_date, end_date]
+
 
 def tape10_configuration(timeframe, master_tape10_file="./tape10_master", new_path="./tape10"):
     """
@@ -109,6 +116,7 @@ def get_tape10_timesteps(tape10_path="./tape10"):
     t = [i * interval for i in range(grid_size)]
 
     return t
+
 
 def get_tape10_timesteps(timeframe, interval=1):
     """

@@ -30,6 +30,7 @@ def cleanDirecory(curr_directory="./"):
     _delete_larsim_output_files(curr_directory)
     _delete_larsim_lila_whm_files_2(curr_directory)
 
+
 def _delete_larsim_output_files(curr_directory="./"):
 
     result_file_path = os.path.abspath(os.path.join(curr_directory, 'ergebnis.lila'))
@@ -45,6 +46,7 @@ def _delete_larsim_output_files(curr_directory="./"):
     # subprocess.run(["rm", "-R", karte_path])
     # if not os.path.isdir(karte_path):
     #    subprocess.run(["mkdir", karte_path])
+
 
 def _delete_larsim_lila_whm_files(curr_directory="./"):
 
@@ -88,6 +90,8 @@ def check_larsim_ok_file(curr_working_dir):
 ##############################################################
 ##### WHM Files
 ##############################################################
+
+
 def copy_whm_files(timeframe, all_whms_path="./", new_path="./",start_date_min_3_bool=False):
     """
     Filter out whm files based on timeframe
@@ -131,6 +135,7 @@ def _var_limits(var, limits):
     if var < limits[0]: var = limits[0]
     elif var > limits[1]: var = limits[1]
     return var
+
 
 def tape35_clean(tape35_path):
     # Check if local tape35 file exists
@@ -207,9 +212,12 @@ def tape35_configurations(parameters, tape35_path, configurationObject, TGB=None
 ##############################################################
 ##### Parse big Lila files storing input metheorological data
 ##############################################################
+
 def master_lila_parser_based_on_time_crete_new(timeframe, master_lila_paths, new_lila_paths, start_date_min_3_bool=False):
     """
-    This function samples ALL big lila files (storing metheorological data for 2003-2018 period) based on the time interval
+    This function samples a list of big lila files
+    (storing metheorological data for 2003-2018 period) based on the time interval
+    It can as well sample single big lila file
 
     Args:
     timeframe - is tuple with begin and end of interval
@@ -221,6 +229,7 @@ def master_lila_parser_based_on_time_crete_new(timeframe, master_lila_paths, new
         start_date = timeframe[0] - datetime.timedelta(days=3)
     else:
         start_date = timeframe[0]
+
     interval_of_interest = (str(start_date.day).zfill(2) + "." + str(start_date.month).zfill(2) + "." +
                             str(start_date.year) + " " + str(start_date.hour).zfill(2) + ":" + str(start_date.minute).zfill(2),
 
@@ -228,6 +237,13 @@ def master_lila_parser_based_on_time_crete_new(timeframe, master_lila_paths, new
                             str(timeframe[1].hour).zfill(2) + ":" + str(timeframe[1].minute).zfill(2))
 
     i = 0
+
+    if not isinstance(master_lila_paths, list):
+        master_lila_paths = [master_lila_paths,]
+
+    if not isinstance(new_lila_paths, list):
+        new_lila_paths = [new_lila_paths,]
+
     for idx, file_path in enumerate(master_lila_paths):
         with open(master_lila_paths[idx], "r", encoding="ISO-8859-1") as f:
             with open(new_lila_paths[idx], "w", encoding="ISO-8859-1") as out:

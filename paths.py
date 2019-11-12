@@ -8,28 +8,22 @@ import socket
 #####################################
 ### All basic paths
 #####################################
+current_dir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+parent_dir = os.path.dirname(current_dir)
 
 if socket.gethostname().startswith("mpp2"):
     home_dir = "/home/hpc/pr63so/ga45met2"
     # new data_dri on dss linux cluster, the old one "/naslx/projects/pr63so/ga45met2/Repositories"
     data_dir = "/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/Repositories"
-
-current_dir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
-parent_dir = os.path.dirname(current_dir)
-
-if socket.gethostname().startswith("mpp2"):
-    working_dir = os.path.abspath(os.path.join(data_dir, "model_runs"))
 else:
-    working_dir = os.path.abspath(os.path.join(current_dir,"model_runs"))
+    home_dir = current_dir
+    data_dir = current_dir
 
+
+working_dir = os.path.abspath(os.path.join(data_dir, "model_runs"))
 
 #if not os.path.isdir(working_dir):
 #    subprocess.run(["mkdir", working_dir])
-
-statistics_dict_path_pkl = os.path.abspath(os.path.join(working_dir,"statistics_dict"))
-statistics_dict_path_np = os.path.abspath(os.path.join(working_dir,"statistics_dict"))
-figureFileName = "statisticsFigure"
-
 
 #####################################
 ### Larsim related paths
@@ -75,3 +69,5 @@ lila_files = ["station-wq.lila","station-n.lila", "station-tlu.lila",
 
 master_tape10_file = os.path.abspath(os.path.join(master_dir, 'tape10_master'))
 configured_tape10_file = master_dir
+
+figureFileName = "statisticsFigure"

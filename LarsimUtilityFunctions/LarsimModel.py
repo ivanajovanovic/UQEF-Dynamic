@@ -3,6 +3,7 @@ from distutils.util import strtobool
 from decimal import Decimal
 import os
 import glob
+import json
 import os.path as osp
 import pandas as pd
 import numpy as np
@@ -10,97 +11,262 @@ import subprocess
 import time
 import linecache
 
-from uqef.model import Model
 
-import paths
-import LARSIM_configs as config
+import larsimPaths as paths
+import larsimConfigurationSettings as config
+import larsimDataPostProcessing
+import larsimDataPreProcessing
+import larsimInputOutputUtilities
+import larsimTimeUtility
 
 
-class LarsimModelSetUp():
-    def __init__(self, configurationObject):
-        self.configurationObject = configurationObject
+def single_larsim_run(curr_working_dir="./", larsim_exe="./", index_run=None, sub_index_run=None):
+    """
+    The function executes a single Larsim run
+    Everything is supposed to already be sattled
+
+    :param curr_working_dir:
+    :param larsim_exe:
+    :param index_run:
+    :param sub_index_run:
+    :return: DataFrame containing the results of the simulation
+    """
+
+    # log file for larsim
+    if (index_run is not None) and (sub_index_run is not None):
+        local_log_file = os.path.abspath(os.path.join(curr_working_dir, "larsimRun" + str(index_run) + "_" + str(sub_index_run) + ".log"))
+    elif (index_run is not None):
+        local_log_file = os.path.abspath(
+            os.path.join(curr_working_dir, "larsimRun" + str(index_run) + ".log"))
+    else:
+        local_log_file = os.path.abspath(
+            os.path.join(curr_working_dir, "larsimRun" + ".log"))
+
+
+    # run Larsim as an external process
+    subprocess.run([larsim_exe], stdout=open(local_log_file, 'w'))
+    print("LARSIM MODEL INFO: I am done with LARSIM Execution")
+
+    # check if larsim.ok exist - Larsim execution was successful
+    config.check_larsim_ok_file(curr_working_dir)
+
+    result_file_path = os.path.abspath(os.path.join(curr_working_dir, 'ergebnis.lila'))
+
+    if os.path.isfile(result_file_path):
+        # if you want to transfer path to the resulted file
+        # results.append((result_file_path, runtime))
+        # if you want to the transfer already read and processed result
+        if index_run is not None:
+            df_single_ergebnis = larsimInputOutputUtilities.ergebnis_parser_toPandas(result_file_path, index_run)
+        else:
+            df_single_ergebnis = larsimInputOutputUtilities.ergebnis_parser_toPandas(result_file_path)
+        df_single_ergebnis['Value'] = df_single_ergebnis['Value'].astype(float)
+        return df_single_ergebnis
+    else:
+        return None
+
+
+def single_larsim_run_based_on_time(timeframe=None, curr_working_dir="./", larsim_exe="./", index_run=None, sub_index_run=None):
+    """
+    The function executes a single Larsim run based on timefram specified
+    Everything else should aready be sattled, etc., whm files, lila file
+
+    :param timeframe:
+    :param curr_working_dir:
+    :param larsim_exe:
+    :param index_run:
+    :param sub_index_run:
+    :return: DataFrame containing the results of the simulation
+    """
+
+    # set the timeframe
+    if timeframe is None:
+        start_date = datetime.datetime(2014, 1, 1, 0, 0)
+
+        end_date = datetime.datetime(2015, 1, 1, 0, 0)
+        timeframe = [start_date, end_date]
+
+    if isinstance(timeframe, tuple) and not isinstance(timeframe[0], datetime.datetime):
+        timeframe = larsimTimeUtility.parse_datetime_tuple(timeframe)
+
+    # start clean
+    config.cleanDirecory(curr_working_dir)
+
+    # change tape 10 accordingly
+    local_master_tape10_file = os.path.abspath(os.path.join(curr_working_dir, 'tape10_master'))
+    local_adjusted_path = os.path.abspath(os.path.join(curr_working_dir, 'tape10'))
+    larsimTimeUtility.tape10_configuration(timeframe, local_master_tape10_file, local_adjusted_path)
+
+
+    # log file for larsim
+    if (index_run is not None) and (sub_index_run is not None):
+        local_log_file = os.path.abspath(os.path.join(curr_working_dir, "larsimRun" + str(index_run) + "_" + str(sub_index_run) + ".log"))
+    elif (index_run is not None):
+        local_log_file = os.path.abspath(
+            os.path.join(curr_working_dir, "larsimRun" + str(index_run) + ".log"))
+    else:
+        local_log_file = os.path.abspath(
+            os.path.join(curr_working_dir, "larsimRun" + ".log"))
+
+
+    # run Larsim as an external process
+    subprocess.run([larsim_exe], stdout=open(local_log_file, 'w'))
+    print("LARSIM MODEL INFO: I am done with LARSIM Execution")
+
+    # check if larsim.ok exist - Larsim execution was successful
+    config.check_larsim_ok_file(curr_working_dir)
+
+    result_file_path = os.path.abspath(os.path.join(curr_working_dir, 'ergebnis.lila'))
+
+    if os.path.isfile(result_file_path):
+        # if you want to transfer path to the resulted file
+        # results.append((result_file_path, runtime))
+        # if you want to the transfer already read and processed result
+        if index_run is not None:
+            df_single_ergebnis = larsimInputOutputUtilities.ergebnis_parser_toPandas(result_file_path, index_run)
+        else:
+            df_single_ergebnis = larsimInputOutputUtilities.ergebnis_parser_toPandas(result_file_path)
+        df_single_ergebnis['Value'] = df_single_ergebnis['Value'].astype(float)
+        return df_single_ergebnis
+    else:
+        return None
+
+
+def single_larsim_run_with_env_settings(timeframe=None, curr_working_dir="./", larsim_exe="./",
+                                        all_whms_path="./", lila_files=paths.lila_files, master_lila_paths=paths.master_lila_paths, index_run=None, sub_index_run=None):
+    """
+    The function executes a single Larsim run based on timefram specified
+    However it first copies all the necessary files for the simulation (whms, lila, etc.) to curr_working_dir
+
+    :param timeframe:
+    :param curr_working_dir:
+    :param larsim_exe:
+    :param index_run:
+    :param sub_index_run:
+    :return: DataFrame containing the results of the simulation
+    """
+
+    # set the timeframe
+    if timeframe is None:
+        start_date = datetime.datetime(2014, 1, 1, 0, 0)
+
+        end_date = datetime.datetime(2015, 1, 1, 0, 0)
+        timeframe = [start_date, end_date]
+
+    if isinstance(timeframe, tuple) and not isinstance(timeframe[0], datetime.datetime):
+        timeframe = larsimTimeUtility.parse_datetime_tuple(timeframe)
+
+    #####################################
+    ### copy configuration files & do all the configurations needed for proper execution
+    #####################################
+
+    # Based on (big) time settings change tape10_master file - needed for unaltered run - this will be repeted once again by each process in LarsimModel.run()
+    local_master_tape10_file = os.path.abspath(os.path.join(curr_working_dir, 'tape10_master'))
+    local_adjusted_path = os.path.abspath(os.path.join(curr_working_dir, 'tape10'))
+    larsimTimeUtility.tape10_configuration(timeframe, local_master_tape10_file, local_adjusted_path)
+
+    # Filter out whm files
+    config.copy_whm_files(timeframe=timeframe, all_whms_path=all_whms_path, new_path=curr_working_dir, start_date_min_3_bool=True)
+
+     # Parse big lila files and create small ones
+    lila_configured_paths = [os.path.abspath(os.path.join(curr_working_dir, i)) for i in lila_files]
+
+    config.master_lila_parser_based_on_time_crete_new(timeframe=timeframe, master_lila_paths=master_lila_paths,
+                                                new_lila_paths=lila_configured_paths,
+                                                start_date_min_3_bool=False)
+
+    for one_lila_file in lila_configured_paths:
+        if not osp.exists(one_lila_file):
+            raise IOError('LARSIM Error: File does not exist: %s. %s' % (one_lila_file, IOError.strerror))
+
+    print("[LARSIM INFO] Model has been prepared - all the files have been copied!")
+
+    ergebnis_df = single_larsim_run(curr_working_dir=curr_working_dir, larsim_exe=larsim_exe, index_run=index_run, sub_index_run=sub_index_run)
+
+    return ergebnis_df
+
+
+class LarsimModel():
+    """
+    Class for running the Larsim simulation with configurationObject storing all the necessary simulation configurations
+    """
+    def __init__(self, configurationObject = None):
+        if configurationObject is not None:
+            self.configurationObject = configurationObject
+        else:
+            with open(paths.configurationsFile) as f:
+                self.configurationObject = json.load(f)
 
         self.current_dir = paths.current_dir  # base dircetory of the code
         self.larsim_exe_dir = paths.larsim_exe_dir
-        self.larsim_exe = os.path.abspath(os.path.join(self.larsim_exe_dir, 'larsim-linux-intel-1000.exe'))
+        self.larsim_exe = os.path.abspath(os.path.join(self.larsim_exe_dir, 'larsim-linux-intel-1000.exe')) #TODO Read this from configurationObject as well
 
         try:
             self.working_dir = configurationObject["Directories"]["working_dir"]
         except KeyError:
             self.working_dir = paths.working_dir  # directoy for all the larsim runs
 
-        #self.master_dir = paths.master_dir  # directoy containing all the base files for Larsim execution
-        # for safty reasons make a copy of the master_dir in the working_dir and continue working with that one
+        # Form now on everything will be master_configuration folder - in copy all the basic (master) files
         self.master_dir = os.path.abspath(os.path.join(self.working_dir, 'master_configuration'))
-        if not os.path.isdir(self.master_dir): subprocess.run(["mkdir", self.master_dir])
-        master_dir_for_copying = paths.master_dir + "/."
-        subprocess.run(['cp', '-a', master_dir_for_copying, self.master_dir])  # TODO Check if copy succeed
 
-        timeframe = config.datetime_parse(self.configurationObject)  # tuple with EREIGNISBEGINN EREIGNISENDE
-        #timestep = self.configurationObject["Timeframe"]["timestep"]  # how long one consecutive run should take - used later on in each Larsim run
-        #if timestep == 0:
-        #    pass
-        #else:
-        #    timeframe[1] = timeframe[0] + datetime.timedelta(days=timestep)
+        self.timeframe = larsimTimeUtility.parse_datetime_configuration(
+            self.configurationObject)  # tuple with EREIGNISBEGINN EREIGNISENDE
 
+        # Parse big lila files and create small ones
+        self.lila_configured_paths = [os.path.abspath(os.path.join(self.master_dir, i)) for i in paths.lila_files]
+
+        self.df_measured = None
+        self.df_unaltered_ergebnis = None
+
+    def setUp(self):
         #####################################
         ### copy configuration files & do all the configurations needed for proper execution
         #####################################
 
+        if not os.path.isdir(self.master_dir): subprocess.run(["mkdir", self.master_dir])
+        master_dir_for_copying = paths.master_dir + "/."
+        subprocess.run(['cp', '-a', master_dir_for_copying, self.master_dir])
+
         # Based on (big) time settings change tape10_master file - needed for unaltered run - this will be repeted once again by each process in LarsimModel.run()
-        tape10_adjusted_path = self.master_dir + '/tape10' #os.path.abspath(os.path.join(self.master_dir, 'tape10'))
-        master_tape10_file = os.path.abspath(os.path.join(self.master_dir, 'tape10_master'))
-        #config.tape10_configurations(timeframe=timeframe, master_tape10_file=paths.master_tape10_file, new_path=tape10_adjusted_path)
-        config.tape10_configurations(timeframe=timeframe, master_tape10_file=master_tape10_file, new_path=tape10_adjusted_path)
+        larsimTimeUtility.tape10_configuration(self.timeframe, os.path.abspath(os.path.join(self.master_dir, 'tape10_master')), os.path.abspath(os.path.join(self.master_dir, 'tape10')))
 
         # Filter out whm files
-        config.copy_whm_files(timeframe=timeframe, all_whms_path=paths.all_whms_path, new_path=self.master_dir)
+        config.copy_whm_files(self.timeframe, all_whms_path=paths.all_whms_path, new_path=self.master_dir, start_date_min_3_bool=True)
 
-        # Parse big lila files and create small ones
-        lila_configured_paths = [os.path.abspath(os.path.join(self.master_dir, i)) for i in paths.lila_files]
-        config.master_lila_parser_on_time_crete_new(timeframe=timeframe, master_lila_paths=paths.master_lila_paths,
-                                                    new_lila_paths=lila_configured_paths)
+        config.master_lila_parser_based_on_time_crete_new(timeframe=self.timeframe, master_lila_paths=paths.master_lila_paths,
+                                                    new_lila_paths=self.lila_configured_paths,
+                                                   start_date_min_3_bool=False)
 
-        for one_lila_file in lila_configured_paths:
+        for one_lila_file in self.lila_configured_paths:
             if not osp.exists(one_lila_file):
                 raise IOError('LARSIM Error: File does not exist: %s. %s' % (one_lila_file, IOError.strerror))
 
-        print("LARSIM INFO: Model has been prepared - all the files have been copied to master folder! ")
+        print("[LARSIM INFO] Model has been prepared - all the files have been copied to {} folder!".format(self.master_dir))
 
+    def extractMeasuredQ(self):
         #####################################
         ### extract measured (ground truth) discharge values
         #####################################
-        # station_wq.lila file containing ground truth (measured) discharges to lila file
-        local_wq_file = lila_configured_paths[0] #os.path.abspath(os.path.join(self.master_dir, paths.lila_files[0]))
-        # print("File containing measured discharges - {}".format(local_wq_file))
-        self.df_measured = config.lila_parser_toPandas(local_wq_file, index_run=0)
-        self.df_measured['Value'] = self.df_measured['Value'].astype(float)
-        #print("Data Frame with Measured Discharges dtypes : {}".format(self.df_measured.dtypes))
+        local_wq_file = self.lila_configured_paths[0]
+        self.df_measured = larsimInputOutputUtilities.big_q_lila_parser_toPandas(local_wq_file, index_run=0)
         self.df_measured.to_csv(path_or_buf=os.path.abspath(os.path.join(self.working_dir, "df_measured.csv")), index=True)
 
+
+    def runUnalteredSimulation(self):
         #####################################
         ### run unaltered simulation
         #####################################
-        dir_unaltered_run = os.path.abspath(os.path.join(self.working_dir,"WHM Regen 00"))
+        dir_unaltered_run = os.path.abspath(os.path.join(self.working_dir,"Unaltered run"))
         if not os.path.isdir(dir_unaltered_run):
             subprocess.run(["mkdir", dir_unaltered_run])
         master_dir_for_copying = self.master_dir + "/."
         subprocess.run(['cp', '-a', master_dir_for_copying, dir_unaltered_run])
         os.chdir(dir_unaltered_run)
-        #config.delete_larsim_output_files(curr_directory=dir_unaltered_run) #TODO This will provide error - make it so that files are deleted if they exist
-        local_log_file = os.path.abspath(os.path.join(dir_unaltered_run, "run.log"))
-        subprocess.run([self.larsim_exe], stdout=open(local_log_file, 'w'))
+        self.df_unaltered_ergebnis = single_larsim_run(curr_working_dir=dir_unaltered_run, larsim_exe=self.larsim_exe, index_run=00, sub_index_run=None)
         os.chdir(self.current_dir)
-        result_file_path = os.path.abspath(os.path.join(dir_unaltered_run, 'ergebnis.lila'))
-        self.df_unaltered_ergebnis = config.result_parser_toPandas(result_file_path, index_run=0)
-        self.df_unaltered_ergebnis['Value'] = self.df_unaltered_ergebnis['Value'].astype(float)
-        #print("Data Frame with Unaltered Simulation Discharges dtypes : {}".format(self.df_unaltered_ergebnis.dtypes))
-        # delte ergebnis.lila
-        #subprocess.run(["rm", result_file_path])
-        #subprocess.run(["rm", os.path.abspath(os.path.join(dir_unaltered_run, 'larsim.ok'))])
         self.df_unaltered_ergebnis.to_csv(path_or_buf=os.path.abspath(os.path.join(self.working_dir, "df_unaltered_ergebnis.csv")), index=True)
 
-
+    def computeBasicStatistics(self):
         #####################################
         ### compare ground truth measurements and unaltered run for this simulation (compute RMSE | BIAS | NSE | logNSE)
         #####################################
@@ -108,9 +274,11 @@ class LarsimModelSetUp():
         allStations = self.df_measured["Stationskennung"].unique()
         type_of_output_of_Interest = self.configurationObject["Output"]["type_of_output"]
 
-        goodnessofFit_tuple = config.calculateGoodnessofFit(measuredDF=self.df_measured, predictedDF=self.df_unaltered_ergebnis, station=station_of_Interest, type_of_output_of_Interest=type_of_output_of_Interest, dailyStatisict=False)
+        goodnessofFit_tuple = larsimDataPostProcessing.calculateGoodnessofFit(measuredDF=self.df_measured, predictedDF=self.df_unaltered_ergebnis, station=station_of_Interest, type_of_output_of_Interest_measured="Ground Truth",
+                                                            type_of_output_of_Interest=type_of_output_of_Interest, dailyStatisict=False)
         (rmse, bias, nse, logNse) = goodnessofFit_tuple[station_of_Interest]
-        goodnessofFit_DailyBasis_tuple = config.calculateGoodnessofFit(measuredDF=self.df_measured, predictedDF=self.df_unaltered_ergebnis, station=station_of_Interest, type_of_output_of_Interest=type_of_output_of_Interest, dailyStatisict=True)
+        goodnessofFit_DailyBasis_tuple = larsimDataPostProcessing.calculateGoodnessofFit(measuredDF=self.df_measured, predictedDF=self.df_unaltered_ergebnis, station=station_of_Interest, type_of_output_of_Interest_measured="Ground Truth",
+                                                                       type_of_output_of_Interest=type_of_output_of_Interest, dailyStatisict=True)
         (rmse_DailyBasis, bias_DailyBasis, nse_DailyBasis, logNSE_DailyBasis) = goodnessofFit_DailyBasis_tuple[station_of_Interest]
 
         # write in a file GOF values of the unaltered model prediction
@@ -125,15 +293,55 @@ class LarsimModelSetUp():
             #f.write('%f %f %f %f \n' % (rmse_DailyBasis, bias_DailyBasis, nse_DailyBasis, logNSE_DailyBasis))
         f.close()
 
-        print("LARSIM INFO: Model Initial setup is done! ")
 
 
-class LarsimModel(Model):
+class LarsimModel_Altered():
+    """
+    Class for running the Larsim simulation with configurationObject and changed calibration parameters
+    """
+    def __init__(self, configurationObject = None):
+        if configurationObject is not None:
+            self.configurationObject = configurationObject
+        else:
+            with open(paths.configurationsFile) as f:
+                self.configurationObject = json.load(f)
 
-    def __init__(self, configurationObject):
-        Model.__init__(self)
+        self.current_dir = paths.current_dir  # base dircetory of the code
+        self.larsim_exe_dir = paths.larsim_exe_dir
+        self.larsim_exe = os.path.abspath(os.path.join(self.larsim_exe_dir, 'larsim-linux-intel-1000.exe')) #TODO Read this from configurationObject as well
 
-        self.configurationObject = configurationObject
+        try:
+            self.working_dir = configurationObject["Directories"]["working_dir"]
+        except KeyError:
+            self.working_dir = paths.working_dir  # directoy for all the larsim runs
+
+        # Form now on everything will be master_configuration folder - in copy all the basic (master) files
+        self.master_dir = os.path.abspath(os.path.join(self.working_dir, 'master_configuration'))
+
+        self.timeframe = larsimTimeUtility.parse_datetime_configuration(
+            self.configurationObject)  # tuple with EREIGNISBEGINN EREIGNISENDE
+
+        try:
+            self.timestep = self.configurationObject["Timeframe"][
+                "timestep"]  # how long one consecutive run should take - used later on in each Larsim run
+        except KeyError:
+            self.timestep = 30
+
+        # Parse big lila files and create small ones
+        self.lila_configured_paths = [os.path.abspath(os.path.join(self.master_dir, i)) for i in paths.lila_files]
+
+        self.df_measured = None
+        self.df_unaltered_ergebnis = None
+
+
+    def __init__(self, configurationObject=None):
+
+        if configurationObject is not None:
+            self.configurationObject = configurationObject
+        else:
+            with open(paths.configurationsFile) as f:
+                self.configurationObject = json.load(f)
+
         self.current_dir = paths.current_dir #base dircetory of the code
         self.larsim_exe_dir = paths.larsim_exe_dir
         self.larsim_exe = os.path.abspath(os.path.join(self.larsim_exe_dir, 'larsim-linux-intel-1000.exe'))
@@ -332,14 +540,6 @@ class LarsimModel(Model):
             return None #TODO Handle this more elegantly
 
 
-    #TODO Remove this - not used
-    def divtd(td1, td2):
-        divtdi = datetime.timedelta.__div__
-        if isinstance(td2, (int, long)):
-            return divtdi(td1, td2)
-        us1 = td1.microseconds + 1000000 * (td1.seconds + 86400 * td1.days)
-        us2 = td2.microseconds + 1000000 * (td2.seconds + 86400 * td2.days)
-        return us1 / us2  # this does integer division, use float(us1) / us2 for fp division
 
 
     def _multiple_short_larsim_runs(self, timeframe, timestep, curr_working_dir, parameters=None, index_run=0):
@@ -422,19 +622,4 @@ class LarsimModel(Model):
         return df_simulation_result
 
 
-    def _check_larsim_ok_file(self, curr_working_dir, index_run):
-        # check for existence of larsim.ok and whether the file is readable
-        # while not os.path.exists(curr_working_dir+"/larsim.ok"):
-        #    time.sleep(5)
-        larsim_ok = False
-        larsim_ok_file = curr_working_dir + "/larsim.ok"
-        while larsim_ok is False:
-            lines = linecache.getlines(larsim_ok_file)
 
-            for l in lines:
-                if "ok" in l:
-                    larsim_ok = True
-
-            linecache.clearcache()
-            time.sleep(0.1)
-            print("LARSIM INFO: rank {} retries reading larsim_ok".format(index_run))
