@@ -17,10 +17,12 @@ if socket.gethostname().startswith("mpp2"):
     data_dir = "/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/Repositories"
 else:
     home_dir = current_dir
-    data_dir = current_dir
+    data_dir = parent_dir
 
-
-working_dir = os.path.abspath(os.path.join(data_dir, "model_runs"))
+if socket.gethostname().startswith("mpp2"):
+    working_dir = os.path.abspath(os.path.join(data_dir, "model_runs"))
+else:
+    working_dir = os.path.abspath(os.path.join(data_dir, "model_runs"))
 
 #if not os.path.isdir(working_dir):
 #    subprocess.run(["mkdir", working_dir])
@@ -29,11 +31,7 @@ working_dir = os.path.abspath(os.path.join(data_dir, "model_runs"))
 ### Larsim related paths
 #####################################
 
-if socket.gethostname().startswith("mpp2"):
-    larsim_data_path = os.path.abspath(os.path.join(data_dir, 'Larsim-data'))
-else:
-    larsim_data_path = os.path.abspath(os.path.join(parent_dir, 'Larsim-data')) 
-
+larsim_data_path = os.path.abspath(os.path.join(data_dir, 'Larsim-data'))
 
 larsim_exe_dir = os.path.abspath(os.path.join(larsim_data_path, 'Larsim-exe'))
 regen_data_path = os.path.abspath(os.path.join(larsim_data_path,'WHM Regen')) # Regen_data_root = data_working_dir
