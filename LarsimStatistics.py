@@ -5,7 +5,6 @@ import pandas as pd
 from pandas.plotting import register_matplotlib_converters
 from tabulate import tabulate
 import matplotlib.pyplot as plotter
-import plotly.plotly as py
 from plotly.offline import iplot, plot
 import plotly.graph_objs as go
 from plotly.subplots import make_subplots

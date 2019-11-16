@@ -4,8 +4,8 @@ import json
 from mpi4py import MPI
 import multiprocessing
 
-import matplotlib
-matplotlib.use('Agg')
+#import matplotlib
+#matplotlib.use('Agg')
 
 import glob, os
 import pandas as pd
