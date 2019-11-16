@@ -255,11 +255,11 @@ class LarsimModel(Model):
             index_parameter_gof_array = [int(i),]
             for single_param in parameter:
                 index_parameter_gof_array.append(round(Decimal(single_param), 4))
-            index_parameter_gof_array.append(round(Decimal(goodnessofFit_tuple[station_of_Interest][k]),4) for k in single_gof.keys())
-            #index_parameter_gof_array.append(round(Decimal(goodnessofFit_tuple[station_of_Interest]['RMSE']), 4))
-            #index_parameter_gof_array.append(round(Decimal(goodnessofFit_tuple[station_of_Interest]['BIAS']), 4))
-            #index_parameter_gof_array.append(round(Decimal(goodnessofFit_tuple[station_of_Interest]['NSE']), 4))
-            #index_parameter_gof_array.append(round(Decimal(goodnessofFit_tuple[station_of_Interest]['LogNSE']), 4))
+            #index_parameter_gof_array.append(round(Decimal(goodnessofFit_tuple[station_of_Interest][k]),4) for k in goodnessofFit_tuple[station_of_Interest].keys())
+            index_parameter_gof_array.append(round(Decimal(goodnessofFit_tuple[station_of_Interest]['RMSE']), 4))
+            index_parameter_gof_array.append(round(Decimal(goodnessofFit_tuple[station_of_Interest]['BIAS']), 4))
+            index_parameter_gof_array.append(round(Decimal(goodnessofFit_tuple[station_of_Interest]['NSE']), 4))
+            index_parameter_gof_array.append(round(Decimal(goodnessofFit_tuple[station_of_Interest]['LogNSE']), 4))
 
             index_parameter_gof_DF = pd.DataFrame([index_parameter_gof_array], columns=header_array)
             index_parameter_gof_DF.to_csv(
