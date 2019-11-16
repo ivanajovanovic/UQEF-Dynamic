@@ -374,10 +374,11 @@ class LarsimStatistics(Statistics):
                              line_color='deepskyblue'), row=1, col=1)
         fig.add_trace(go.Scatter(x=pdTimesteps, y=self.Abfluss["Ground_Truth_Measurements"], name='measured Q',
                              line_color='green'), row=1, col=1)
+
         fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["P10"] for key in keyIter], name='10th percentile',
-                             line_color='rgb(0,100,80)'), row=1, col=1)
+                             line_color='rgb(0,100,80)', stackgroup="group1"), row=1, col=1)
         fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["P90"] for key in keyIter], name='90th percentile',
-                             line_color='rgb(0,100,80)'), row=1, col=1)
+                             line_color='rgb(0,100,80)', stackgroup="group1"), row=1, col=1)
         #TODO Fill
         fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["StdDev"] for key in keyIter], name='std. dev.',
                              line_color='rgb(231,107,243)'), row=2, col=1)
