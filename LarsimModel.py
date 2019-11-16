@@ -257,7 +257,10 @@ class LarsimModel(Model):
                 index_parameter_gof_array.append(round(Decimal(single_param), 4))
             for single_gof in goodnessofFit_tuple[station_of_Interest]:
                 #index_parameter_gof_array.append(round(Decimal(single_gof[k]),4) for k in single_gof.keys())
-                index_parameter_gof_array.append(round(Decimal((single_gof['RMSE'],single_gof['BIAS'],single_gof['NSE'],single_gof['LogNSE'])), 4))
+                index_parameter_gof_array.append(round(Decimal(single_gof['RMSE']), 4))
+                index_parameter_gof_array.append(round(Decimal(single_gof['BIAS']), 4))
+                index_parameter_gof_array.append(round(Decimal(single_gof['NSE']), 4))
+                index_parameter_gof_array.append(round(Decimal(single_gof['LogNSE']), 4))
             index_parameter_gof_DF = pd.DataFrame([index_parameter_gof_array], columns=header_array)
             index_parameter_gof_DF.to_csv(
                 path_or_buf= os.path.abspath(os.path.join(curr_working_dir, "goodness_of_fit_" + str(i) +  ".csv")),

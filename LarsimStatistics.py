@@ -405,7 +405,7 @@ class LarsimStatistics(Statistics):
         fig.update_traces(mode='lines')
         fig.update_xaxes(title_text="Time")
         fig.update_yaxes(title_text="Larsim Stat. Values [cm/s]", side='left', showgrid=True, range=[0, 1], row=1, col=1)
-        fig.update_yaxes(title_text="Standard Deviation [cm/s]"", side='right', showgrid=True, range=[0, 1], row=2, col=1)
+        fig.update_yaxes(title_text="Standard Deviation [cm/s]", side='right', showgrid=True, range=[0, 1], row=2, col=1)
         fig.update_yaxes(title_text="Sobol_t", side='left', showgrid=True, range=[0, 1], row=3, col=1)
         fig.update_yaxes(title_text="Sobol_m", side='right', showgrid=True, range=[0, 1], row=4, col=1)
         fig.update_layout(height=600, width=800, title_text="Larsim Forward UQ Analysis",
