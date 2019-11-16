@@ -371,36 +371,32 @@ class LarsimStatistics(Statistics):
         #fig = go.Figure()
 
         fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["E"] for key in keyIter], name='mean',
-                             line_color='deepskyblue', row=1, col=1))
+                             line_color='deepskyblue'), row=1, col=1)
         fig.add_trace(go.Scatter(x=pdTimesteps, y=self.Abfluss["Ground_Truth_Measurements"], name='measured Q',
-                             line_color='green', row=1, col=1))
+                             line_color='green'), row=1, col=1)
         fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["P10"] for key in keyIter], name='10th percentile',
-                             line_color='rgb(0,176,246)', row=1, col=1))
+                             line_color='rgb(0,100,80)'), row=1, col=1)
         fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["P90"] for key in keyIter], name='90th percentile',
-                             line_color='rgb(0,176,246)', row=1, col=1))
+                             line_color='rgb(0,100,80)'), row=1, col=1)
         #TODO Fill
         fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["StdDev"] for key in keyIter], name='std. dev.',
-                             line_color='green', row=2, col=1))
+                             line_color='rgb(231,107,243)'), row=2, col=1)
 
         if "Sobol_t" in self.Abfluss[keyIter[0]]:
             sobol_labels = simulationNodes.nodeNames
             for i in range(len(sobol_labels)):
                 if self.Abfluss[keyIter[0]]["Sobol_t"].shape[0] == len(self.timesteps):
-                    fig.add_trace(go.Scatter(x=pdTimesteps, y=[(self.Abfluss[key]["Sobol_t"].T)[i] for key in keyIter], name=sobol_labels[i],
-                                     line_color='green', row=3, col=1))
+                    fig.add_trace(go.Scatter(x=pdTimesteps, y=[(self.Abfluss[key]["Sobol_t"].T)[i] for key in keyIter], name=sobol_labels[i]), row=3, col=1)
                 else:
-                    fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["Sobol_t"][i] for key in keyIter], name=sobol_labels[i],
-                                     line_color='green', row=3, col=1))
+                    fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["Sobol_t"][i] for key in keyIter], name=sobol_labels[i]), row=3, col=1)
 
         if "Sobol_m" in self.Abfluss[keyIter[0]]:
             sobol_labels = simulationNodes.nodeNames
             for i in range(len(sobol_labels)):
                 if self.Abfluss[keyIter[0]]["Sobol_m"].shape[0] == len(self.timesteps):
-                    fig.add_trace(go.Scatter(x=pdTimesteps, y=[(self.Abfluss[key]["Sobol_m"].T)[i] for key in keyIter], name=sobol_labels[i],
-                                     line_color='green', row=4, col=1))
+                    fig.add_trace(go.Scatter(x=pdTimesteps, y=[(self.Abfluss[key]["Sobol_m"].T)[i] for key in keyIter], name=sobol_labels[i]), row=4, col=1)
                 else:
-                    fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["Sobol_m"][i] for key in keyIter], name=sobol_labels[i],
-                                     line_color='green', row=4, col=1))
+                    fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["Sobol_m"][i] for key in keyIter], name=sobol_labels[i]), row=4, col=1)
 
         fig.update_traces(mode='lines')
         fig.update_xaxes(title_text="Time")
