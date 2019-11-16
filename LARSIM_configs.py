@@ -550,4 +550,4 @@ def _calculateGoodnessofFit_ForSingleStation(measuredDF, predictedDF, station="M
         # NSE Calculation type 2
         logNse = calculateLogNSE(measuredDF=streamflow_gt_currentStation_aligned, simulatedDF=streamflow_predicted_currentStation)
 
-    return {"RMSE": rmse, "BIAS":bias, "NSE":nse, "LogNSE":logNse}
+    return {"RMSE":rmse, "BIAS":bias, "NSE":nse, "LogNSE":logNse}
