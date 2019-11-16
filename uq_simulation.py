@@ -9,6 +9,7 @@ matplotlib.use('Agg')
 
 import glob, os
 import pandas as pd
+import pickle
 import numpy as np
 import os.path as osp
 import sys
@@ -110,7 +111,6 @@ if mpi == False or (mpi == True and rank == 0):
     if not os.path.isdir(outputResultDir): subprocess.run(["mkdir", outputResultDir])
     print("outputResultDir: {}".format(outputResultDir))
 
-
 #####################################
 ### read configuration setting and additional path settings:
 #####################################
@@ -136,6 +136,17 @@ if mpi == False or (mpi == True and rank == 0):
 
     if not os.path.isdir(configuration_object["Directories"]["working_dir"]):
         subprocess.run(["mkdir", configuration_object["Directories"]["working_dir"]])
+
+#####################################
+### Save args dictionary and configuration_object
+####################################
+args_dict_path=os.path.abspath(os.path.join(outputResultDir, "args.pkl"))
+with open(args_dict_path, 'wb') as handle:
+    pickle.dump(args, handle)
+
+configuration_object_dict_path=os.path.abspath(os.path.join(outputResultDir, "configuration_object.pkl"))
+with open(configuration_object_dict_path, 'wb') as handle:
+    pickle.dump(configuration_object, handle)
 
 #####################################
 ### initialise uncertain parameters - simulationNodes:

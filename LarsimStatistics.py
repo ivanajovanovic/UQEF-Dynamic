@@ -1,9 +1,14 @@
 import chaospy as cp
 import numpy as np
+import pickle
 import pandas as pd
 from pandas.plotting import register_matplotlib_converters
 from tabulate import tabulate
 import matplotlib.pyplot as plotter
+import plotly.plotly as py
+from plotly.offline import iplot, plot
+import plotly.graph_objs as go
+from plotly.subplots import make_subplots
 import itertools
 import os
 from distutils.util import strtobool
@@ -115,9 +120,9 @@ class LarsimStatistics(Statistics):
                           pathsDataFormat=self.configurationObject["Output"]["pathsDataFormat"],
                           dailyOutput=self.configurationObject["Output"]["dailyOutput"])
 
-        # Save the DataFrame containing all the simulation results
-        samples.df_time_discharges.to_csv(path_or_buf=os.path.abspath(os.path.join(self.working_dir, "df_all_simulations.csv")),
-                                index=True)
+        # Save the DataFrame containing all the simulation results - This is really important
+        #samples.df_time_discharges.to_csv(path_or_buf=os.path.abspath(os.path.join(self.working_dir, "df_all_simulations.csv")),index=True)
+        samples.df_time_discharges.to_pickle(os.path.abspath(os.path.join(self.working_dir, "df_all_simulations.pkl")), compression="gzip")
 
         #self.df_simulation_result = samples.df_simulation_result
 
@@ -215,8 +220,11 @@ class LarsimStatistics(Statistics):
                 self.Abfluss[key]["P10"]=self.Abfluss[key]["P10"][0]
                 self.Abfluss[key]["P90"]=self.Abfluss[key]["P90"][0]
 
-        statistics_dict_path_np=os.path.abspath(os.path.join(self.working_dir, "statistics_dict.npy"))
-        np.save(statistics_dict_path_np, self.Abfluss)
+        #statistics_dict_path_np=os.path.abspath(os.path.join(self.working_dir, "statistics_dict.npy"))
+        #np.save(statistics_dict_path_np, self.Abfluss)
+        statistics_dict_path_np=os.path.abspath(os.path.join(self.working_dir, "statistics_dict.pkl"))
+        with open(statistics_dict_path_np, 'wb') as handle:
+            pickle.dump(self.Abfluss, handle, protocol=pickle.HIGHEST_PROTOCOL)
         #pickle_out = open(paths.statistics_dict_path_pkl,"wb")
         #pickle.dump(self.Abfluss, pickle_out)
         #pickle_out.close()
@@ -251,9 +259,8 @@ class LarsimStatistics(Statistics):
                           dailyOutput=self.configurationObject["Output"]["dailyOutput"])
 
         # Save the DataFrame containing all the simulation results
-        samples.df_time_discharges.to_csv(
-            path_or_buf=os.path.abspath(os.path.join(self.working_dir, "df_all_simulations.csv")),
-            index=True)
+        #samples.df_time_discharges.to_csv(path_or_buf=os.path.abspath(os.path.join(self.working_dir, "df_all_simulations.csv")),index=True)
+        samples.df_time_discharges.to_pickle(os.path.abspath(os.path.join(self.working_dir, "df_all_simulations.pkl")), compression="gzip")
 
         #self.timesteps = timesteps #this is just a scalar representing total number of timesteps
         self.timesteps = samples.df_simulation_result.TimeStamp.unique()
@@ -320,8 +327,11 @@ class LarsimStatistics(Statistics):
                 self.Abfluss[key]["P10"]= self.Abfluss[key]["P10"][0]
                 self.Abfluss[key]["P90"] = self.Abfluss[key]["P90"][0]
 
-        statistics_dict_path_np=os.path.abspath(os.path.join(self.working_dir, "statistics_dict.npy"))
-        np.save(statistics_dict_path_np, self.Abfluss)
+        #statistics_dict_path_np=os.path.abspath(os.path.join(self.working_dir, "statistics_dict.npy"))
+        #np.save(statistics_dict_path_np, self.Abfluss)
+        statistics_dict_path_np=os.path.abspath(os.path.join(self.working_dir, "statistics_dict.pkl"))
+        with open(statistics_dict_path_np, 'wb') as handle:
+            pickle.dump(self.Abfluss, handle, protocol=pickle.HIGHEST_PROTOCOL)
         #pickle_out = open(paths.statistics_dict_path_pkl,"wb")
         #pickle.dump(self.Abfluss, pickle_out)
         #pickle_out.close()
@@ -334,89 +344,73 @@ class LarsimStatistics(Statistics):
         ### plot: mean + percentiles
         #####################################
 
-        figure = plotter.figure(1, figsize=(13, 10))
-        window_title = 'LarsimModel statistics - ' + station
-        figure.canvas.set_window_title(window_title)
-
         pdTimesteps = [pd.Timestamp(timestep) for timestep in self.timesteps]
 
         keyIter = list(itertools.product([station,],pdTimesteps))
         #self.Abfluss[((station,oneTimetep) for oneTimetep in pdTimesteps)]
         #listE = [self.Abfluss[key]["E"] for key in itertools.product([station,],pdTimesteps)]
 
+        # Create a trace
+        #trace = go.Scatter(x = random_x,y = random_y,mode = 'markers')
+        #data = [trace1, trace2, ]
+        ## Plot and embed in ipython notebook!
+        #py.iplot(data, filename='basic-scatter')
 
-        plotter.subplot(411)
-        # plotter.title('mean')
-        plotter.plot(pdTimesteps, [self.Abfluss[key]["E"] for key in keyIter], '-r', label='mean')
-        plotter.plot(pdTimesteps, self.Abfluss["Ground_Truth_Measurements"], '-g', label='gt')
-        plotter.fill_between(pdTimesteps, [self.Abfluss[key]["P10"] for key in keyIter], [self.Abfluss[key]["P90"] for key in keyIter], facecolor='#5dcec6')
-        plotter.plot(pdTimesteps, [self.Abfluss[key]["P10"] for key in keyIter], label='10th percentile')
-        plotter.plot(pdTimesteps,[self.Abfluss[key]["P90"] for key in keyIter], label='90th percentile')
-        plotter.xlabel('time', fontsize=13)
-        plotter.ylabel('Larsim Stat. Values [cm/s]', fontsize=13)
-        #plotter.xlim(0, 200)
-        #ymin, ymax = plotter.ylim()
-        #plotter.ylim(0, 20)
-        plotter.xticks(rotation=45)
-        plotter.legend()  # enable the legend
-        plotter.grid(True)
+        #colors
+        #fillcolor='rgba(0,100,80,0.2)',
+        #line_color='rgba(255,255,255,0)'
+        #fillcolor='rgba(0,176,246,0.2)',
+        #line_color='rgba(255,255,255,0)',
+        #fillcolor='rgba(231,107,243,0.2)',
+        #line_color='rgba(255,255,255,0)'
+        #line_color='rgb(0,100,80)'
+        #line_color='rgb(0,176,246)'
+        #line_color='rgb(231,107,243)'
 
-        plotter.subplot(412)
-        # plotter.title('standard deviation')
-        plotter.plot(pdTimesteps, [self.Abfluss[key]["StdDev"] for key in keyIter], label='std. dev.')
-        plotter.xlabel('time', fontsize=13)
-        plotter.ylabel('Standard Deviation [cm/s]', fontsize=13)
-        #plotter.xlim(0, 200)
-        #plotter.ylim(0, 20)
-        plotter.xticks(rotation=45)
-        plotter.legend()  # enable the legend
-        plotter.grid(True)
+        fig = make_subplots(rows=4, cols=1, shared_xaxes=True, vertical_spacing=0.02)
+        #subplot_titles=("Discharge", "Std", "Total SI", "First Order SI")
+        #fig = go.Figure()
 
-        #plotter.subplot(513)
-        ## plotter.title('discharge')
-        #plotter.plot(pdTimesteps, [self.Abfluss[key]["Q"] for key in keyIter])
-        #plotter.xlabel('time', fontsize=13)
-        #plotter.ylabel('Q value', fontsize=13)
-        #plotter.xticks(rotation=45)
-        #plotter.legend()  # enable the legend
-        #plotter.grid(True)
-
+        fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["E"] for key in keyIter], name='mean',
+                             line_color='deepskyblue', row=1, col=1))
+        fig.add_trace(go.Scatter(x=pdTimesteps, y=self.Abfluss["Ground_Truth_Measurements"], name='measured Q',
+                             line_color='green', row=1, col=1))
+        fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["P10"] for key in keyIter], name='10th percentile',
+                             line_color='rgb(0,176,246)', row=1, col=1))
+        fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["P90"] for key in keyIter], name='90th percentile',
+                             line_color='rgb(0,176,246)', row=1, col=1))
+        #TODO Fill
+        fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["StdDev"] for key in keyIter], name='std. dev.',
+                             line_color='green', row=2, col=1))
 
         if "Sobol_t" in self.Abfluss[keyIter[0]]:
-            plotter.subplot(413)
             sobol_labels = simulationNodes.nodeNames
             for i in range(len(sobol_labels)):
                 if self.Abfluss[keyIter[0]]["Sobol_t"].shape[0] == len(self.timesteps):
-                    plotter.plot(pdTimesteps, [(self.Abfluss[key]["Sobol_t"].T)[i] for key in keyIter],
-                                 label=sobol_labels[i])
+                    fig.add_trace(go.Scatter(x=pdTimesteps, y=[(self.Abfluss[key]["Sobol_t"].T)[i] for key in keyIter], name=sobol_labels[i],
+                                     line_color='green', row=3, col=1))
                 else:
-                    plotter.plot(pdTimesteps, [self.Abfluss[key]["Sobol_t"][i] for key in keyIter],
-                                 label=sobol_labels[i])
-            plotter.xlabel('time', fontsize=13)
-            plotter.ylabel('total sobol indices', fontsize=13)
-            ##plotter.xlim(0, 200)
-            # ##plotter.ylim(-0.1, 1.1)
-            plotter.xticks(rotation=45)
-            plotter.legend()  # enable the legend
-            # plotter.grid(True)
+                    fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["Sobol_t"][i] for key in keyIter], name=sobol_labels[i],
+                                     line_color='green', row=3, col=1))
 
         if "Sobol_m" in self.Abfluss[keyIter[0]]:
-            plotter.subplot(414)
             sobol_labels = simulationNodes.nodeNames
             for i in range(len(sobol_labels)):
                 if self.Abfluss[keyIter[0]]["Sobol_m"].shape[0] == len(self.timesteps):
-                    plotter.plot(pdTimesteps, [(self.Abfluss[key]["Sobol_m"].T)[i] for key in keyIter],
-                                 label=sobol_labels[i])
+                    fig.add_trace(go.Scatter(x=pdTimesteps, y=[(self.Abfluss[key]["Sobol_m"].T)[i] for key in keyIter], name=sobol_labels[i],
+                                     line_color='green', row=4, col=1))
                 else:
-                    plotter.plot(pdTimesteps, [self.Abfluss[key]["Sobol_m"][i] for key in keyIter],
-                                 label=sobol_labels[i])
-            plotter.xlabel('time', fontsize=13)
-            plotter.ylabel('first order sobol indices', fontsize=13)
-            ##plotter.xlim(0, 200)
-            # ##plotter.ylim(-0.1, 1.1)
-            plotter.xticks(rotation=45)
-            plotter.legend()  # enable the legend
-            # plotter.grid(True)
+                    fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["Sobol_m"][i] for key in keyIter], name=sobol_labels[i],
+                                     line_color='green', row=4, col=1))
+
+        fig.update_traces(mode='lines')
+        fig.update_xaxes(title_text="Time")
+        fig.update_yaxes(title_text="Larsim Stat. Values [cm/s]", side='left', showgrid=True, range=[0, 1], row=1, col=1)
+        fig.update_yaxes(title_text="Standard Deviation [cm/s]"", side='right', showgrid=True, range=[0, 1], row=2, col=1)
+        fig.update_yaxes(title_text="Sobol_t", side='left', showgrid=True, range=[0, 1], row=3, col=1)
+        fig.update_yaxes(title_text="Sobol_m", side='right', showgrid=True, range=[0, 1], row=4, col=1)
+        fig.update_layout(height=600, width=800, title_text="Larsim Forward UQ Analysis",
+                  xaxis_rangeslider_visible=True)
 
         if "Sobol_t" in self.Abfluss[keyIter[0]]:
             sobol_t_qoi_file = os.path.abspath(os.path.join(self.working_dir, "sobol_t_qoi_file.npy"))
@@ -425,23 +419,97 @@ class LarsimStatistics(Statistics):
             sobol_m_qoi_file = os.path.abspath(os.path.join(self.working_dir, "sobol_m_qoi_file.npy"))
             np.save(sobol_m_qoi_file, np.array([self.Abfluss[key]["Sobol_m"][i] for key in keyIter]))
 
-        if "gPCE" in self.Abfluss[keyIter[0]]:
-            print("LARSIM STAT INFO: Weight of the gPCE are" + "\n" + tabulate(np.array([self.Abfluss[key]["gPCE"][i] for key in keyIter]), floatfmt=".4f", tablefmt="github"))
-
-
         # save figure
         pdfFileName = os.path.abspath(os.path.join(self.working_dir, paths.figureFileName + "_uq.pdf"))
         pngFileName = os.path.abspath(os.path.join(self.working_dir, paths.figureFileName + "_uq.png"))
+        htmlFileName = os.path.abspath(os.path.join(self.working_dir, paths.figureFileName + "_uq.html"))
 
-        plotter.savefig(pdfFileName, format='pdf')
-        plotter.savefig(pngFileName, format='png')
+        #fig.write_image(pdfFileName)
+        #fig.write_image(pngFileName)
 
-        if display:
-            plotter.show()
+        #fig.show()
 
-        plotter.close()
+        plot(fig, filename=htmlFileName, auto_open=False)
 
 
+        #figure = plotter.figure(1, figsize=(13, 10))
+        #window_title = 'LarsimModel statistics - ' + station
+        #figure.canvas.set_window_title(window_title)
+
+        #plotter.subplot(411)
+        ## plotter.title('mean')
+        #plotter.plot(pdTimesteps, [self.Abfluss[key]["E"] for key in keyIter], '-r', label='mean')
+        #plotter.plot(pdTimesteps, self.Abfluss["Ground_Truth_Measurements"], '-g', label='gt')
+        #plotter.fill_between(pdTimesteps, [self.Abfluss[key]["P10"] for key in keyIter], [self.Abfluss[key]["P90"] for key in keyIter], facecolor='#5dcec6')
+        #plotter.plot(pdTimesteps, [self.Abfluss[key]["P10"] for key in keyIter], label='10th percentile')
+        #plotter.plot(pdTimesteps,[self.Abfluss[key]["P90"] for key in keyIter], label='90th percentile')
+        #plotter.xlabel('time', fontsize=13)
+        #plotter.ylabel('Larsim Stat. Values [cm/s]', fontsize=13)
+        ##plotter.xlim(0, 200)
+        ##ymin, ymax = plotter.ylim()
+        ##plotter.ylim(0, 20)
+        #plotter.xticks(rotation=45)
+        #plotter.legend()  # enable the legend
+        #plotter.grid(True)
+
+        #plotter.subplot(412)
+        ## plotter.title('standard deviation')
+        #plotter.plot(pdTimesteps, [self.Abfluss[key]["StdDev"] for key in keyIter], label='std. dev.')
+        #plotter.xlabel('time', fontsize=13)
+        #plotter.ylabel('Standard Deviation [cm/s]', fontsize=13)
+        ##plotter.xlim(0, 200)
+        ##plotter.ylim(0, 20)
+        #plotter.xticks(rotation=45)
+        #plotter.legend()  # enable the legend
+        #plotter.grid(True)
+
+
+        #if "Sobol_t" in self.Abfluss[keyIter[0]]:
+        #    plotter.subplot(413)
+        #    sobol_labels = simulationNodes.nodeNames
+        #    for i in range(len(sobol_labels)):
+        #        if self.Abfluss[keyIter[0]]["Sobol_t"].shape[0] == len(self.timesteps):
+        #            plotter.plot(pdTimesteps, [(self.Abfluss[key]["Sobol_t"].T)[i] for key in keyIter],
+        #                         label=sobol_labels[i])
+        #        else:
+        #            plotter.plot(pdTimesteps, [self.Abfluss[key]["Sobol_t"][i] for key in keyIter],
+        #                         label=sobol_labels[i])
+        #    plotter.xlabel('time', fontsize=13)
+        #    plotter.ylabel('total sobol indices', fontsize=13)
+        #    ##plotter.xlim(0, 200)
+        #    # ##plotter.ylim(-0.1, 1.1)
+        #    plotter.xticks(rotation=45)
+        #    plotter.legend()  # enable the legend
+        #    # plotter.grid(True)
+
+        #if "Sobol_m" in self.Abfluss[keyIter[0]]:
+        #    plotter.subplot(414)
+        #    sobol_labels = simulationNodes.nodeNames
+        #    for i in range(len(sobol_labels)):
+        #        if self.Abfluss[keyIter[0]]["Sobol_m"].shape[0] == len(self.timesteps):
+        #            plotter.plot(pdTimesteps, [(self.Abfluss[key]["Sobol_m"].T)[i] for key in keyIter],
+        #                         label=sobol_labels[i])
+        #        else:
+        #            plotter.plot(pdTimesteps, [self.Abfluss[key]["Sobol_m"][i] for key in keyIter],
+        #                         label=sobol_labels[i])
+        #    plotter.xlabel('time', fontsize=13)
+        #    plotter.ylabel('first order sobol indices', fontsize=13)
+        #    ##plotter.xlim(0, 200)
+        #    # ##plotter.ylim(-0.1, 1.1)
+        #    plotter.xticks(rotation=45)
+        #    plotter.legend()  # enable the legend
+        #    # plotter.grid(True)
+
+        ##if "gPCE" in self.Abfluss[keyIter[0]]:
+        ##    print("LARSIM STAT INFO: Weight of the gPCE are" + "\n" + tabulate(np.array([self.Abfluss[key]["gPCE"][i] for key in keyIter]), floatfmt=".4f", tablefmt="github"))
+
+        #plotter.savefig(pdfFileName, format='pdf')
+        #plotter.savefig(pngFileName, format='png')
+
+        #if display:
+        #    plotter.show()
+
+        #plotter.close()
 
 
 #helper function

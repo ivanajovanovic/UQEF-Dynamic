@@ -11,18 +11,33 @@ import socket
 current_dir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parent_dir = os.path.dirname(current_dir)
 
-if socket.gethostname().startswith("mpp2"):
+if socket.gethostname().startswith("mpp2"): #TODO Add branch for execution on jHub server!
     home_dir = "/home/hpc/pr63so/ga45met2"
     # new data_dri on dss linux cluster, the old one "/naslx/projects/pr63so/ga45met2/Repositories"
     data_dir = "/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/Repositories"
+    larsim_data_path = os.path.abspath(os.path.join(data_dir, 'Larsim-data'))
+elif socket.gethostname().startswith("atsccs70"):
+    home_dir = current_dir
+    data_dir = "/import/home/ga45met/Repositories/Larsim"
+    larsim_data_path = os.path.abspath(os.path.join(data_dir, 'Larsim-data-old'))
+elif socket.gethostname().startswith("hydrobits-dataex"):
+    home_dir = "/home/jupyter-ivana/Larsim_Utility_Set"
+    data_dir = "/home/jupyter-ivana"
+    larsim_data_path = os.path.abspath(os.path.join(data_dir, 'Larsim_data'))
 else:
     home_dir = current_dir
     data_dir = parent_dir
+    larsim_data_path = os.path.abspath(os.path.join(data_dir, 'Larsim-data'))
+
 
 if socket.gethostname().startswith("mpp2"):
     working_dir = os.path.abspath(os.path.join(data_dir, "model_runs"))
+elif socket.gethostname().startswith("atsccs70"):
+    working_dir = os.path.abspath(os.path.join(home_dir, "model_runs"))
+elif socket.gethostname().startswith("hydrobits-dataex"):
+    working_dir = os.path.abspath(os.path.join(home_dir, "model_runs"))
 else:
-    working_dir = os.path.abspath(os.path.join(data_dir, "model_runs"))
+    working_dir = os.path.abspath(os.path.join(current_dir, "model_runs"))
 
 #if not os.path.isdir(working_dir):
 #    subprocess.run(["mkdir", working_dir])
@@ -31,9 +46,8 @@ else:
 ### Larsim related paths
 #####################################
 
-larsim_data_path = os.path.abspath(os.path.join(data_dir, 'Larsim-data'))
-
 larsim_exe_dir = os.path.abspath(os.path.join(larsim_data_path, 'Larsim-exe'))
+larsim_exe = os.path.abspath(os.path.join(larsim_exe_dir, 'larsim-linux-intel-1000.exe'))
 regen_data_path = os.path.abspath(os.path.join(larsim_data_path,'WHM Regen')) # Regen_data_root = data_working_dir
 master_dir = os.path.abspath(os.path.join(larsim_data_path,'WHM Regen','master_configuration'))
 #sys.path.insert(0, parentdir)

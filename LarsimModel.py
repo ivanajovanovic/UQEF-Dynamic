@@ -109,9 +109,13 @@ class LarsimModelSetUp():
         type_of_output_of_Interest = self.configurationObject["Output"]["type_of_output"]
 
         goodnessofFit_tuple = config.calculateGoodnessofFit(measuredDF=self.df_measured, predictedDF=self.df_unaltered_ergebnis, station=station_of_Interest, type_of_output_of_Interest=type_of_output_of_Interest, dailyStatisict=False)
-        (rmse, bias, nse, logNse) = goodnessofFit_tuple[station_of_Interest]
+        (rmse, bias, nse, logNse) = (goodnessofFit_tuple[station_of_Interest]['RMSE'], goodnessofFit_tuple[station_of_Interest]['BIAS'], goodnessofFit_tuple[station_of_Interest]['NSE'], goodnessofFit_tuple[station_of_Interest]['LogNSE'])
+        #(rmse, bias, nse, logNse) = (goodnessofFit_tuple[station_of_Interest][k] for k in goodnessofFit_tuple[station_of_Interest].keys())
         goodnessofFit_DailyBasis_tuple = config.calculateGoodnessofFit(measuredDF=self.df_measured, predictedDF=self.df_unaltered_ergebnis, station=station_of_Interest, type_of_output_of_Interest=type_of_output_of_Interest, dailyStatisict=True)
-        (rmse_DailyBasis, bias_DailyBasis, nse_DailyBasis, logNSE_DailyBasis) = goodnessofFit_DailyBasis_tuple[station_of_Interest]
+        (rmse_DailyBasis, bias_DailyBasis, nse_DailyBasis, logNSE_DailyBasis) = (
+            goodnessofFit_DailyBasis_tuple[station_of_Interest]['RMSE'], goodnessofFit_DailyBasis_tuple[station_of_Interest]['BIAS'],
+            goodnessofFit_DailyBasis_tuple[station_of_Interest]['NSE'], goodnessofFit_DailyBasis_tuple[station_of_Interest]['LogNSE'])
+        #(rmse_DailyBasis, bias_DailyBasis, nse_DailyBasis, logNSE_DailyBasis) = (goodnessofFit_DailyBasis_tuple[station_of_Interest][k] for k in goodnessofFit_DailyBasis_tuple[station_of_Interest].keys())
 
         # write in a file GOF values of the unaltered model prediction
         column_labels = ("RMSE", "BIAS", "NSE", "LogNSE")
@@ -226,10 +230,7 @@ class LarsimModel(Model):
             #assert isinstance(self.variable_names, list), "Assertion Failed - variable names not a list"
             #assert len(self.variable_names) == len(parameter), "Assertion Failed parametr not of the same length as variable names"
 
-            result.to_csv(
-                path_or_buf=os.path.abspath(os.path.join(curr_working_dir, "ergebnis_df_" + str(i) + ".csv")),
-                index=True)
-
+            #result.to_csv(path_or_buf=os.path.abspath(os.path.join(curr_working_dir, "ergebnis_df_" + str(i) + ".csv")),index=True)
 
             #####################################
             ### compare model predictions of this simulation with measured (ground truth) data (compute RMSE | BIAS | NSE | logNSE)
@@ -255,7 +256,8 @@ class LarsimModel(Model):
             for single_param in parameter:
                 index_parameter_gof_array.append(round(Decimal(single_param), 4))
             for single_gof in goodnessofFit_tuple[station_of_Interest]:
-                index_parameter_gof_array.append(round(Decimal(single_gof), 4))
+                #index_parameter_gof_array.append(round(Decimal(single_gof[k]),4) for k in single_gof.keys())
+                index_parameter_gof_array.append(round(Decimal((single_gof['RMSE'],single_gof['BIAS'],single_gof['NSE'],single_gof['LogNSE'])), 4))
             index_parameter_gof_DF = pd.DataFrame([index_parameter_gof_array], columns=header_array)
             index_parameter_gof_DF.to_csv(
                 path_or_buf= os.path.abspath(os.path.join(curr_working_dir, "goodness_of_fit_" + str(i) +  ".csv")),
@@ -277,7 +279,8 @@ class LarsimModel(Model):
             #Delete everything except .log and .csv files
             #list_of_files_to_be_deleted = [f for f in glob.glob(curr_working_dir)]
             for single_file in glob.glob(curr_working_dir + "/*"):
-                if single_file.endswith(".csv") or single_file.endswith(".log"):
+                #if single_file.endswith(".csv") or single_file.endswith(".log"):
+                if single_file.endswith(".csv"):
                     pass
                 else:
                     #os.remove(single_file)
@@ -330,17 +333,6 @@ class LarsimModel(Model):
             return df_single_ergebnis
         else:
             return None #TODO Handle this more elegantly
-
-
-    #TODO Remove this - not used
-    def divtd(td1, td2):
-        divtdi = datetime.timedelta.__div__
-        if isinstance(td2, (int, long)):
-            return divtdi(td1, td2)
-        us1 = td1.microseconds + 1000000 * (td1.seconds + 86400 * td1.days)
-        us2 = td2.microseconds + 1000000 * (td2.seconds + 86400 * td2.days)
-        return us1 / us2  # this does integer division, use float(us1) / us2 for fp division
-
 
     def _multiple_short_larsim_runs(self, timeframe, timestep, curr_working_dir, parameters=None, index_run=0):
         # if you want to cut execution into shorter runs...

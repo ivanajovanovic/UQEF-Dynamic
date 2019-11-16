@@ -44,7 +44,7 @@ def tape10_configurations(timeframe, master_tape10_file, new_path):
 
     vorhersagebeginn = "VORHERSAGEBEGINN     53\n" # this is set by default, might be changed as well... #TODO Change this
     changes = [ereignisbeginn, ereignisende, vorhersagebeginn]
-    print(changes)
+    #print(changes)
 
     def replace(master_tape10_file, new_path, parameter, changes):
         i = 0
@@ -365,12 +365,28 @@ def delete_larsim_output_files(curr_directory):
     # if not os.path.isdir(karte_path):
     #    subprocess.run(["mkdir", karte_path])
 
+def _delete_larsim_lila_whm_files_2(curr_directory="./"):
+
+    for single_file in glob(curr_directory + "/*.whm"):
+        subprocess.run(["rm", single_file])
+    for single_file in glob(curr_directory + "/*.lila"):
+        subprocess.run(["rm", single_file])
+
+    print("[LARSIM CONFIGURATION INFO] Cleaning - You have just deleted all .whm and .lila files from the working folder")
 
 def delete_larsim_lila_whm_files():
 
     subprocess.run(["rm", "*.whm"])
     subprocess.run(["rm", "*.lila"])
 
+def _delete_larsim_lila_whm_files(curr_directory="./"):
+
+    os.chdir(curr_directory)
+    subprocess.run(["rm", "-f", "*.whm"])
+    subprocess.run(["rm", "-f", "*.lila"])
+    os.chdir(osp.dirname(osp.abspath(inspect.getfile(inspect.currentframe()))))
+
+    print("[LARSIM CONFIGURATION INFO] Cleaning - You have just deleted all .whm and .lila files from the working folder")
 ##############################################################
 ##### Utility functions for working with pandas DataFrame created from Larsim Lila files - post-processing
 ##############################################################
@@ -460,9 +476,15 @@ def calculateNSE2(measuredDF, simulatedDF):
 
 
 #TODO Choose which GOF do I want to compute
-def calculateGoodnessofFit(measuredDF, predictedDF, station="MARI", type_of_output_of_Interest="Abfluss Messung", dailyStatisict=False):
+def calculateGoodnessofFit(measuredDF, predictedDF, station="all", type_of_output_of_Interest="Abfluss Messung", dailyStatisict=False):
     result_dictionary = {}
     #calulcate statistics for all the stations
+
+    if station == "all":
+        station_predicted = predictedDF["Stationskennung"].unique()
+        station_measured = measuredDF["Stationskennung"].unique()
+        station = list(set(station_predicted).intersection(station_measured))
+
     if isinstance(station, list):
         #Iterate over STATIONS
         for particulaStation in station:
@@ -528,4 +550,4 @@ def _calculateGoodnessofFit_ForSingleStation(measuredDF, predictedDF, station="M
         # NSE Calculation type 2
         logNse = calculateLogNSE(measuredDF=streamflow_gt_currentStation_aligned, simulatedDF=streamflow_predicted_currentStation)
 
-    return (rmse, bias, nse, logNse)
+    return {"RMSE": rmse, "BIAS":bias, "NSE":nse, "LogNSE":logNse}
