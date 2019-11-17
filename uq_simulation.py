@@ -140,13 +140,15 @@ if mpi == False or (mpi == True and rank == 0):
 #####################################
 ### Save args dictionary and configuration_object
 ####################################
-args_dict_path=os.path.abspath(os.path.join(outputResultDir, "args.pkl"))
-with open(args_dict_path, 'wb') as handle:
-    pickle.dump(args, handle)
+if mpi == False or (mpi == True and rank == 0):
+    args_dict_path=os.path.abspath(os.path.join(outputResultDir, "args.pkl"))
 
-configuration_object_dict_path=os.path.abspath(os.path.join(outputResultDir, "configuration_object.pkl"))
-with open(configuration_object_dict_path, 'wb') as handle:
-    pickle.dump(configuration_object, handle)
+    with open(args_dict_path, 'wb') as handle:
+        pickle.dump(args, handle)
+    configuration_object_dict_path=os.path.abspath(os.path.join(outputResultDir, "configuration_object.pkl"))
+
+    with open(configuration_object_dict_path, 'wb') as handle:
+        pickle.dump(configuration_object, handle)
 
 #####################################
 ### initialise uncertain parameters - simulationNodes:

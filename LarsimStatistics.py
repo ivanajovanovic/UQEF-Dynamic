@@ -366,7 +366,7 @@ class LarsimStatistics(Statistics):
         #line_color='rgb(0,176,246)'
         #line_color='rgb(231,107,243)'
 
-        fig = make_subplots(rows=4, cols=1, shared_xaxes=True, vertical_spacing=0.02)
+        fig = make_subplots(rows=4, cols=1, shared_xaxes=True)
         #subplot_titles=("Discharge", "Std", "Total SI", "First Order SI")
         #fig = go.Figure()
 
@@ -381,7 +381,7 @@ class LarsimStatistics(Statistics):
                              line_color='green'), row=1, col=1)
         #TODO Fill
         fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["StdDev"] for key in keyIter], name='std. dev.',
-                             line_color='lavender'), row=2, col=1)
+                             line_color='darkviolet'), row=2, col=1)
 
         if "Sobol_t" in self.Abfluss[keyIter[0]]:
             sobol_labels = simulationNodes.nodeNames
@@ -401,11 +401,11 @@ class LarsimStatistics(Statistics):
 
         fig.update_traces(mode='lines')
         fig.update_xaxes(title_text="Time")
-        fig.update_yaxes(title_text="Q [cm/s]", side='left', showgrid=True, range=[0, 1], row=1, col=1)
-        fig.update_yaxes(title_text="Std. Dev. [cm/s]", side='left', showgrid=True, range=[0, 1], row=2, col=1)
+        fig.update_yaxes(title_text="Q [cm/s]", side='left', showgrid=True, row=1, col=1)
+        fig.update_yaxes(title_text="Std. Dev. [cm/s]", side='left', showgrid=True, row=2, col=1)
         fig.update_yaxes(title_text="Sobol_t", side='left', showgrid=True, range=[0, 1], row=3, col=1)
         fig.update_yaxes(title_text="Sobol_m", side='left', showgrid=True, range=[0, 1], row=4, col=1)
-        fig.update_layout(height=1000, width=1200, title_text="Larsim Forward UQ Analysis",
+        fig.update_layout(height=800, width=1000, title_text="Larsim Forward UQ Analysis",
                   xaxis_rangeslider_visible=True)
 
         if "Sobol_t" in self.Abfluss[keyIter[0]]:
@@ -440,7 +440,7 @@ class LarsimStatistics(Statistics):
         plotter.plot(pdTimesteps, [self.Abfluss[key]["P10"] for key in keyIter], label='10th percentile')
         plotter.plot(pdTimesteps,[self.Abfluss[key]["P90"] for key in keyIter], label='90th percentile')
         plotter.xlabel('time', fontsize=13)
-        plotter.ylabel('Larsim Stat. Values [cm/s]', fontsize=13)
+        plotter.ylabel('Q [cm/s]', fontsize=13)
         #plotter.xlim(0, 200)
         #ymin, ymax = plotter.ylim()
         #plotter.ylim(0, 20)
@@ -452,7 +452,7 @@ class LarsimStatistics(Statistics):
         # plotter.title('standard deviation')
         plotter.plot(pdTimesteps, [self.Abfluss[key]["StdDev"] for key in keyIter], label='std. dev.')
         plotter.xlabel('time', fontsize=13)
-        plotter.ylabel('Standard Deviation [cm/s]', fontsize=13)
+        plotter.ylabel('Std. Dev. [cm/s]', fontsize=13)
         #plotter.xlim(0, 200)
         #plotter.ylim(0, 20)
         plotter.xticks(rotation=45)
@@ -471,7 +471,7 @@ class LarsimStatistics(Statistics):
                     plotter.plot(pdTimesteps, [self.Abfluss[key]["Sobol_t"][i] for key in keyIter],
                                  label=sobol_labels[i])
             plotter.xlabel('time', fontsize=13)
-            plotter.ylabel('total sobol indices', fontsize=13)
+            plotter.ylabel('Total Sobol Indices', fontsize=13)
             ##plotter.xlim(0, 200)
             # ##plotter.ylim(-0.1, 1.1)
             plotter.xticks(rotation=45)
@@ -489,7 +489,7 @@ class LarsimStatistics(Statistics):
                     plotter.plot(pdTimesteps, [self.Abfluss[key]["Sobol_m"][i] for key in keyIter],
                                  label=sobol_labels[i])
             plotter.xlabel('time', fontsize=13)
-            plotter.ylabel('first order sobol indices', fontsize=13)
+            plotter.ylabel('First O. Sobol Indices', fontsize=13)
             ##plotter.xlim(0, 200)
             # ##plotter.ylim(-0.1, 1.1)
             plotter.xticks(rotation=45)
