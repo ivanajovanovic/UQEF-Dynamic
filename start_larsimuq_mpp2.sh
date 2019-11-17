@@ -121,4 +121,4 @@ uq_method="sc"
 configurationsFile="./configurations/configuration_larsim_v4.json"
 outputResultDir="/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/Repositories/larsim_runs"
 
-start_larsim_uq_sim "DYNAMIC" "NOALGO"  18  9 "$model" "$opt_add" 1 "new" "$nodes" "$max_time" "$uq_method" "$configurationsFile" "$outputResultDir"
+start_larsim_uq_sim "DYNAMIC" "NOALGO"  12  6 "$model" "$opt_add" 1 "new" "$nodes" "$max_time" "$uq_method" "$configurationsFile" "$outputResultDir"
