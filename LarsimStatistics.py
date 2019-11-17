@@ -376,12 +376,12 @@ class LarsimStatistics(Statistics):
                              line_color='green'), row=1, col=1)
 
         fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["P10"] for key in keyIter], name='10th percentile',
-                             line_color='rgb(0,100,80)', stackgroup="group1"), row=1, col=1)
+                             line_color='green'), row=1, col=1)
         fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["P90"] for key in keyIter], name='90th percentile',
-                             line_color='rgb(0,100,80)', stackgroup="group1"), row=1, col=1)
+                             line_color='green'), row=1, col=1)
         #TODO Fill
         fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["StdDev"] for key in keyIter], name='std. dev.',
-                             line_color='rgb(231,107,243)'), row=2, col=1)
+                             line_color='lavender'), row=2, col=1)
 
         if "Sobol_t" in self.Abfluss[keyIter[0]]:
             sobol_labels = simulationNodes.nodeNames
@@ -401,11 +401,11 @@ class LarsimStatistics(Statistics):
 
         fig.update_traces(mode='lines')
         fig.update_xaxes(title_text="Time")
-        fig.update_yaxes(title_text="Larsim Stat. Values [cm/s]", side='left', showgrid=True, range=[0, 1], row=1, col=1)
-        fig.update_yaxes(title_text="Standard Deviation [cm/s]", side='right', showgrid=True, range=[0, 1], row=2, col=1)
+        fig.update_yaxes(title_text="Q [cm/s]", side='left', showgrid=True, range=[0, 1], row=1, col=1)
+        fig.update_yaxes(title_text="Std. Dev. [cm/s]", side='left', showgrid=True, range=[0, 1], row=2, col=1)
         fig.update_yaxes(title_text="Sobol_t", side='left', showgrid=True, range=[0, 1], row=3, col=1)
-        fig.update_yaxes(title_text="Sobol_m", side='right', showgrid=True, range=[0, 1], row=4, col=1)
-        fig.update_layout(height=600, width=800, title_text="Larsim Forward UQ Analysis",
+        fig.update_yaxes(title_text="Sobol_m", side='left', showgrid=True, range=[0, 1], row=4, col=1)
+        fig.update_layout(height=1000, width=1200, title_text="Larsim Forward UQ Analysis",
                   xaxis_rangeslider_visible=True)
 
         if "Sobol_t" in self.Abfluss[keyIter[0]]:
@@ -428,84 +428,84 @@ class LarsimStatistics(Statistics):
         plot(fig, filename=htmlFileName, auto_open=False)
 
 
-        #figure = plotter.figure(1, figsize=(13, 10))
-        #window_title = 'LarsimModel statistics - ' + station
-        #figure.canvas.set_window_title(window_title)
+        figure = plotter.figure(1, figsize=(13, 10))
+        window_title = 'LarsimModel statistics - ' + station
+        figure.canvas.set_window_title(window_title)
 
-        #plotter.subplot(411)
-        ## plotter.title('mean')
-        #plotter.plot(pdTimesteps, [self.Abfluss[key]["E"] for key in keyIter], '-r', label='mean')
-        #plotter.plot(pdTimesteps, self.Abfluss["Ground_Truth_Measurements"], '-g', label='gt')
-        #plotter.fill_between(pdTimesteps, [self.Abfluss[key]["P10"] for key in keyIter], [self.Abfluss[key]["P90"] for key in keyIter], facecolor='#5dcec6')
-        #plotter.plot(pdTimesteps, [self.Abfluss[key]["P10"] for key in keyIter], label='10th percentile')
-        #plotter.plot(pdTimesteps,[self.Abfluss[key]["P90"] for key in keyIter], label='90th percentile')
-        #plotter.xlabel('time', fontsize=13)
-        #plotter.ylabel('Larsim Stat. Values [cm/s]', fontsize=13)
-        ##plotter.xlim(0, 200)
-        ##ymin, ymax = plotter.ylim()
-        ##plotter.ylim(0, 20)
-        #plotter.xticks(rotation=45)
-        #plotter.legend()  # enable the legend
-        #plotter.grid(True)
+        plotter.subplot(411)
+        # plotter.title('mean')
+        plotter.plot(pdTimesteps, [self.Abfluss[key]["E"] for key in keyIter], '-r', label='mean')
+        plotter.plot(pdTimesteps, self.Abfluss["Ground_Truth_Measurements"], '-g', label='gt')
+        plotter.fill_between(pdTimesteps, [self.Abfluss[key]["P10"] for key in keyIter], [self.Abfluss[key]["P90"] for key in keyIter], facecolor='#5dcec6')
+        plotter.plot(pdTimesteps, [self.Abfluss[key]["P10"] for key in keyIter], label='10th percentile')
+        plotter.plot(pdTimesteps,[self.Abfluss[key]["P90"] for key in keyIter], label='90th percentile')
+        plotter.xlabel('time', fontsize=13)
+        plotter.ylabel('Larsim Stat. Values [cm/s]', fontsize=13)
+        #plotter.xlim(0, 200)
+        #ymin, ymax = plotter.ylim()
+        #plotter.ylim(0, 20)
+        plotter.xticks(rotation=45)
+        plotter.legend()  # enable the legend
+        plotter.grid(True)
 
-        #plotter.subplot(412)
-        ## plotter.title('standard deviation')
-        #plotter.plot(pdTimesteps, [self.Abfluss[key]["StdDev"] for key in keyIter], label='std. dev.')
-        #plotter.xlabel('time', fontsize=13)
-        #plotter.ylabel('Standard Deviation [cm/s]', fontsize=13)
-        ##plotter.xlim(0, 200)
-        ##plotter.ylim(0, 20)
-        #plotter.xticks(rotation=45)
-        #plotter.legend()  # enable the legend
-        #plotter.grid(True)
+        plotter.subplot(412)
+        # plotter.title('standard deviation')
+        plotter.plot(pdTimesteps, [self.Abfluss[key]["StdDev"] for key in keyIter], label='std. dev.')
+        plotter.xlabel('time', fontsize=13)
+        plotter.ylabel('Standard Deviation [cm/s]', fontsize=13)
+        #plotter.xlim(0, 200)
+        #plotter.ylim(0, 20)
+        plotter.xticks(rotation=45)
+        plotter.legend()  # enable the legend
+        plotter.grid(True)
 
 
-        #if "Sobol_t" in self.Abfluss[keyIter[0]]:
-        #    plotter.subplot(413)
-        #    sobol_labels = simulationNodes.nodeNames
-        #    for i in range(len(sobol_labels)):
-        #        if self.Abfluss[keyIter[0]]["Sobol_t"].shape[0] == len(self.timesteps):
-        #            plotter.plot(pdTimesteps, [(self.Abfluss[key]["Sobol_t"].T)[i] for key in keyIter],
-        #                         label=sobol_labels[i])
-        #        else:
-        #            plotter.plot(pdTimesteps, [self.Abfluss[key]["Sobol_t"][i] for key in keyIter],
-        #                         label=sobol_labels[i])
-        #    plotter.xlabel('time', fontsize=13)
-        #    plotter.ylabel('total sobol indices', fontsize=13)
-        #    ##plotter.xlim(0, 200)
-        #    # ##plotter.ylim(-0.1, 1.1)
-        #    plotter.xticks(rotation=45)
-        #    plotter.legend()  # enable the legend
-        #    # plotter.grid(True)
+        if "Sobol_t" in self.Abfluss[keyIter[0]]:
+            plotter.subplot(413)
+            sobol_labels = simulationNodes.nodeNames
+            for i in range(len(sobol_labels)):
+                if self.Abfluss[keyIter[0]]["Sobol_t"].shape[0] == len(self.timesteps):
+                    plotter.plot(pdTimesteps, [(self.Abfluss[key]["Sobol_t"].T)[i] for key in keyIter],
+                                 label=sobol_labels[i])
+                else:
+                    plotter.plot(pdTimesteps, [self.Abfluss[key]["Sobol_t"][i] for key in keyIter],
+                                 label=sobol_labels[i])
+            plotter.xlabel('time', fontsize=13)
+            plotter.ylabel('total sobol indices', fontsize=13)
+            ##plotter.xlim(0, 200)
+            # ##plotter.ylim(-0.1, 1.1)
+            plotter.xticks(rotation=45)
+            plotter.legend()  # enable the legend
+            # plotter.grid(True)
 
-        #if "Sobol_m" in self.Abfluss[keyIter[0]]:
-        #    plotter.subplot(414)
-        #    sobol_labels = simulationNodes.nodeNames
-        #    for i in range(len(sobol_labels)):
-        #        if self.Abfluss[keyIter[0]]["Sobol_m"].shape[0] == len(self.timesteps):
-        #            plotter.plot(pdTimesteps, [(self.Abfluss[key]["Sobol_m"].T)[i] for key in keyIter],
-        #                         label=sobol_labels[i])
-        #        else:
-        #            plotter.plot(pdTimesteps, [self.Abfluss[key]["Sobol_m"][i] for key in keyIter],
-        #                         label=sobol_labels[i])
-        #    plotter.xlabel('time', fontsize=13)
-        #    plotter.ylabel('first order sobol indices', fontsize=13)
-        #    ##plotter.xlim(0, 200)
-        #    # ##plotter.ylim(-0.1, 1.1)
-        #    plotter.xticks(rotation=45)
-        #    plotter.legend()  # enable the legend
-        #    # plotter.grid(True)
+        if "Sobol_m" in self.Abfluss[keyIter[0]]:
+            plotter.subplot(414)
+            sobol_labels = simulationNodes.nodeNames
+            for i in range(len(sobol_labels)):
+                if self.Abfluss[keyIter[0]]["Sobol_m"].shape[0] == len(self.timesteps):
+                    plotter.plot(pdTimesteps, [(self.Abfluss[key]["Sobol_m"].T)[i] for key in keyIter],
+                                 label=sobol_labels[i])
+                else:
+                    plotter.plot(pdTimesteps, [self.Abfluss[key]["Sobol_m"][i] for key in keyIter],
+                                 label=sobol_labels[i])
+            plotter.xlabel('time', fontsize=13)
+            plotter.ylabel('first order sobol indices', fontsize=13)
+            ##plotter.xlim(0, 200)
+            # ##plotter.ylim(-0.1, 1.1)
+            plotter.xticks(rotation=45)
+            plotter.legend()  # enable the legend
+            # plotter.grid(True)
 
         ##if "gPCE" in self.Abfluss[keyIter[0]]:
         ##    print("LARSIM STAT INFO: Weight of the gPCE are" + "\n" + tabulate(np.array([self.Abfluss[key]["gPCE"][i] for key in keyIter]), floatfmt=".4f", tablefmt="github"))
 
-        #plotter.savefig(pdfFileName, format='pdf')
-        #plotter.savefig(pngFileName, format='png')
+        plotter.savefig(pdfFileName, format='pdf')
+        plotter.savefig(pngFileName, format='png')
 
-        #if display:
-        #    plotter.show()
+        if display:
+            plotter.show()
 
-        #plotter.close()
+        plotter.close()
 
 
 #helper function
