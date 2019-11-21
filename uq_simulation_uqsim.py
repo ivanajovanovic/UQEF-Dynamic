@@ -30,14 +30,15 @@ import datetime
 # instantiate UQsim
 uqsim = uqef.UQsim()
 
-# change args locally
+# change args locally for testing and debugging
 local_debugging = False
 if local_debugging:
     uqsim.args.model = "larsim"
     uqsim.args.uq_method = "mc"
-    uqsim.args.mc_numevaluations = 10
+    uqsim.args.mc_numevaluations = 5
     uqsim.args.outputResultDir = "./larsim_runs/"
-    uqsim.args.config_file = "configuration_larsim.json"
+    uqsim.args.config_file = "configuration_larsim_snow1.json"
+    uqsim.args.disable_statistics = True
 
     uqsim.setup_configuration_object()
 
@@ -56,7 +57,7 @@ else:
 outputResultDir = os.path.abspath(os.path.join(rootDir, datetime.datetime.now().strftime("%Y-%m-%d:%H:%M")))
 #args.outputResultDir = outputResultDir
 
-if uqsim.is_master():
+if uqsim.is_master() and not uqsim.is_restored():
     if not os.path.isdir(outputResultDir): subprocess.run(["mkdir", outputResultDir])
     print("outputResultDir: {}".format(outputResultDir))
 
@@ -65,7 +66,6 @@ if uqsim.is_master():
 #####################################
 
 if uqsim.is_master():
-    print("xx")
     print(uqsim.configuration_object)
 
 #Set the working folder where all the model runs related output and files will be written
@@ -79,7 +79,7 @@ except KeyError:
         uqsim.configuration_object["Directories"] = {}
         uqsim.configuration_object["Directories"]["working_dir"] = os.path.abspath(os.path.join(outputResultDir, "model_runs"))
 
-if uqsim.is_master():
+if uqsim.is_master() and not uqsim.is_restored():
     if not os.path.isdir(uqsim.configuration_object["Directories"]["working_dir"]):
         subprocess.run(["mkdir", uqsim.configuration_object["Directories"]["working_dir"]])
 
@@ -87,7 +87,7 @@ if uqsim.is_master():
 ### one time initial model setup
 #####################################
 # put here is there is something specifically related to the model that should be done only once
-if uqsim.is_master():
+if uqsim.is_master() and not uqsim.is_restored():
     def initialModelSetUp():
         models = {
             "larsim"         : (lambda: LarsimModel.LarsimModelSetUp(uqsim.configuration_object))
@@ -119,5 +119,8 @@ uqsim.simulate()
 # statistics:
 uqsim.calc_statistics()
 uqsim.print_statistics()
-uqsim.plot_statistics(display=True)
+uqsim.plot_statistics(display=False)
 uqsim.save_statistics()
+
+# tear down
+uqsim.tear_down()

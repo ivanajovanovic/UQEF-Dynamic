@@ -1,0 +1,212 @@
+{
+    "Timeframe": {
+        "start_day": 1,
+        "start_month": 3,
+        "start_year": 2013,
+        "start_hour": 0,
+        "start_minute": 0,
+
+        "end_day": 30,
+        "end_month": 4,
+        "end_year": 2013,
+        "end_hour": 0,
+        "end_minute": 0,
+
+        "timestep": 0,
+        "cut_runs": "False"
+    },
+    "parameters": [
+        {
+            "name": "     Tmit_Sr",
+            "distribution": "Uniform",
+            "default": -1,
+            "mean": -1,
+            "std": 0.5,
+            "lower": -2,
+            "upper": 3,
+            "lower_limit": -3,
+            "upper_limit": 2
+        },
+        {
+            "name": "     Tspann_Sr",
+            "distribution": "Uniform",
+            "default": 4,
+            "mean": 4,
+            "std": 1,
+            "lower": -2,
+            "upper": 4,
+            "lower_limit": 2,
+            "upper_limit": 8
+        },
+        {
+            "name": "     Abso",
+            "distribution": "Uniform",
+            "default": 0.1,
+            "mean": 0.1,
+            "std": 0.05,
+            "lower": -0.08,
+            "upper": 0.1,
+            "lower_limit": 0.02,
+            "upper_limit": 0.25
+        },
+        {
+            "name": "     SRet",
+            "distribution": "Uniform",
+            "default": 30,
+            "mean": 30,
+            "std": 10,
+            "lower": -25,
+            "upper": 17,
+            "lower_limit": 5,
+            "upper_limit": 47
+        }
+    ],
+    "parameters2": [
+        {
+            "name": "     Tmit_Sr",
+            "distribution": "Uniform",
+            "mean": -1,
+            "std": 0.5,
+            "lower": -2,
+            "upper": 3,
+            "lower_limit": -3,
+            "upper_limit": 2
+        },
+        {
+            "name": "     Tspann_Sr",
+            "distribution": "Uniform",
+            "mean": 4,
+            "std": 1,
+            "lower": -2,
+            "upper": 4,
+            "lower_limit": 2,
+            "upper_limit": 8
+        },
+        {
+            "name": "     Abso",
+            "distribution": "Uniform",
+            "mean": 0.1,
+            "std": 0.05,
+            "lower": -0.08,
+            "upper": 0.1,
+            "lower_limit": 0.02,
+            "upper_limit": 0.25
+        },
+        {
+            "name": "     SRet",
+            "distribution": "Uniform",
+            "mean": 30,
+            "std": 10,
+            "lower": -25,
+            "upper": 17,
+            "lower_limit": 5,
+            "upper_limit": 47
+        }
+    ],
+    "Output": {
+        "type_of_output": "Abfluss Simulation",
+        "station": "LOHB",
+        "pathsDataFormat": "False",
+        "dailyOutput": "True"
+    },
+    "Unused_Variables": [
+        {
+            "name": "       A2",
+            "distribution": "Uniform",
+            "mean": 2.0,
+            "std": 0.75,
+            "lower": -0.75,
+            "upper": 0.75,
+            "lower_limit": 0.5,
+            "upper_limit": 4.0
+        },
+        {
+            "name": "      BSF",
+            "distribution": "Uniform",
+            "mean": 0.15,
+            "std": 0.05,
+            "lower": -0.05,
+            "upper": 0.05,
+            "lower_limit": 0.01,
+            "upper_limit": 0.5
+        },
+        {
+            "name": "      TGr",
+            "distribution": "Uniform",
+            "mean": -1,
+            "std": 0.5,
+            "lower": -1,
+            "upper": 1,
+            "lower_limit": -3,
+            "upper_limit": 2
+        },
+        {
+            "name": "     Tmit_Sr",
+            "distribution": "Uniform",
+            "mean": -1,
+            "std": 0.5,
+            "lower": -2,
+            "upper": 3,
+            "lower_limit": -3,
+            "upper_limit": 3
+        },
+        {
+            "name": "     Tspann_Sr",
+            "distribution": "Uniform",
+            "mean": 4,
+            "std": 1,
+            "lower": -2,
+            "upper": 4,
+            "lower_limit": 2,
+            "upper_limit": 8
+        },
+        {
+            "name": "     Abso",
+            "distribution": "normal",
+            "mean": 0.1,
+            "std": 0.05,
+            "lower_limit": 0.02,
+            "upper_limit": 0.25
+        },
+        {
+            "name": "       A0",
+            "distribution": "Uniform",
+            "mean": 2.0,
+            "std": 0.5,
+            "lower": -0.05,
+            "upper": 0.15,
+            "lower_limit": 0.5,
+            "upper_limit": 3.5
+        },
+        {
+            "name": "       A1",
+            "distribution": "Uniform",
+            "mean": 1.6,
+            "std": 0.3,
+            "lower": -0.1,
+            "upper": 0.1,
+            "lower_limit": 0.8,
+            "upper_limit": 2.5
+        },
+        {
+            "name": "     Abso",
+            "distribution": "Uniform",
+            "mean": 0.1,
+            "std": 0.05,
+            "lower": -0.08,
+            "upper": 0.1,
+            "lower_limit": 0.02,
+            "upper_limit": 0.25
+        },
+        {
+            "name": "     SRet",
+            "distribution": "Uniform",
+            "mean": 30,
+            "std": 10,
+            "lower": -25,
+            "upper": 17,
+            "lower_limit": 5,
+            "upper_limit": 47
+        }
+    ]
+}

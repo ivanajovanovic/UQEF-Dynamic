@@ -182,8 +182,13 @@ def tape35_configurations(parameters, curr_working_dir, configurationObject):
         raise IOError('File does not exist: %s. %s' % (curr_working_dir+"/tape35", IOError.strerror))
 
     tape = pd.read_csv(curr_working_dir+"/tape35", index_col=False, delimiter=";")
-    tape.loc[:, "Unnamed: 32"] = ""
-    tape.rename(columns={"Unnamed: 32": ""}, inplace=True)
+    # Because the type35 has the delimiter also after the last column,
+    # panda detects an empty column and give it the name: "Unnamed: 35".
+    # The number is column number and may be different, depending on the number of columns in tape35.
+    # Here, we just change the NaN values to "" and rename the "Unnamed: 35" to "" to fix the issue.
+    unnamed_col = tape.columns[-1]
+    tape.loc[:, unnamed_col] = ""
+    tape.rename(columns={unnamed_col: ""}, inplace=True)
     # Skip strip cause it might confuse Larsim afterwards
     #tape.rename(columns=lambda x: x.strip(), inplace=True)
 

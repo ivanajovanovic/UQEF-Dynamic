@@ -28,7 +28,8 @@ figureFileName = "statisticsFigure"
 larsim_data_path = os.path.abspath(os.path.join(parent_dir, 'Larsim-data'))
 larsim_exe_dir = os.path.abspath(os.path.join(larsim_data_path, 'Larsim-exe'))
 regen_data_path = os.path.abspath(os.path.join(larsim_data_path,'WHM Regen')) # Regen_data_root = data_working_dir
-master_dir = os.path.abspath(os.path.join(larsim_data_path,'WHM Regen','master_configuration'))
+#master_dir = os.path.abspath(os.path.join(larsim_data_path,'WHM Regen','master_configuration'))
+master_dir = os.path.abspath(os.path.join(larsim_data_path,'WHM Regen','master_configuration_snow'))
 #sys.path.insert(0, parentdir)
 #sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 sys.path.insert(0, regen_data_path)

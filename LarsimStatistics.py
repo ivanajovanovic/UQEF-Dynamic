@@ -328,13 +328,16 @@ class LarsimStatistics(Statistics):
         # pickle.dump(self.Abfluss, pickle_out)
         # pickle_out.close()
 
-    def plotResults(self, display=False, station='MARI',
+    def plotResults(self, display=False, station='',
                     fileName="", fileNameIdent="", directory="./",
                     fileNameIdentIsFullName=False, safe=True):
 
         #####################################
         ### plot: mean + percentiles
         #####################################
+
+        if station == '':
+            station = self.configurationObject["Output"]["station"]
 
         figure = plotter.figure(1, figsize=(13, 10))
         window_title = 'LarsimModel statistics - ' + station
@@ -348,10 +351,10 @@ class LarsimStatistics(Statistics):
 
         plotter.subplot(411)
         # plotter.title('mean')
-        plotter.plot(pdTimesteps, [self.Abfluss[key]["E"] for key in keyIter], 'o', label='mean')
+        plotter.plot(pdTimesteps, [self.Abfluss[key]["E"] for key in keyIter], '-', label='mean')
         plotter.fill_between(pdTimesteps, [self.Abfluss[key]["P10"] for key in keyIter], [self.Abfluss[key]["P90"] for key in keyIter], facecolor='#5dcec6')
-        plotter.plot(pdTimesteps, [self.Abfluss[key]["P10"] for key in keyIter], 'o', label='10th percentile')
-        plotter.plot(pdTimesteps,[self.Abfluss[key]["P90"] for key in keyIter], 'o', label='90th percentile')
+        plotter.plot(pdTimesteps, [self.Abfluss[key]["P10"] for key in keyIter], '-', label='10th percentile')
+        plotter.plot(pdTimesteps,[self.Abfluss[key]["P90"] for key in keyIter], '-', label='90th percentile')
         plotter.xlabel('time', fontsize=13)
         plotter.ylabel('Larsim Stat. Values', fontsize=13)
         #plotter.xlim(0, 200)
@@ -363,7 +366,7 @@ class LarsimStatistics(Statistics):
 
         plotter.subplot(412)
         # plotter.title('standard deviation')
-        plotter.plot(pdTimesteps, [self.Abfluss[key]["StdDev"] for key in keyIter], 'o', label='std. dev.')
+        plotter.plot(pdTimesteps, [self.Abfluss[key]["StdDev"] for key in keyIter], '-', label='std. dev.')
         plotter.xlabel('time', fontsize=13)
         plotter.ylabel('Standard Deviation ', fontsize=13)
         #plotter.xlim(0, 200)
