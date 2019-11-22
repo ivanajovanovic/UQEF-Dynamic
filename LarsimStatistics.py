@@ -390,10 +390,10 @@ class LarsimStatistics(Statistics):
             sobol_labels = self.simulationNodes.nodeNames
             for i in range(len(sobol_labels)):
                 if self.Abfluss[keyIter[0]]["Sobol_t"].shape[0] == len(self.timesteps):
-                    plotter.plot(pdTimesteps, [(self.Abfluss[key]["Sobol_t"].T)[i] for key in keyIter], 'o',
+                    plotter.plot(pdTimesteps, [(self.Abfluss[key]["Sobol_t"].T)[i] for key in keyIter], '-',
                                  label=sobol_labels[i])
                 else:
-                    plotter.plot(pdTimesteps, [self.Abfluss[key]["Sobol_t"][i] for key in keyIter], 'o',
+                    plotter.plot(pdTimesteps, [self.Abfluss[key]["Sobol_t"][i] for key in keyIter], '-',
                                  label=sobol_labels[i])
             plotter.xlabel('time', fontsize=13)
             plotter.ylabel('total sobol indices', fontsize=13)
@@ -408,10 +408,10 @@ class LarsimStatistics(Statistics):
             sobol_labels = self.simulationNodes.nodeNames
             for i in range(len(sobol_labels)):
                 if self.Abfluss[keyIter[0]]["Sobol_m"].shape[0] == len(self.timesteps):
-                    plotter.plot(pdTimesteps, [(self.Abfluss[key]["Sobol_m"].T)[i] for key in keyIter], 'o',
+                    plotter.plot(pdTimesteps, [(self.Abfluss[key]["Sobol_m"].T)[i] for key in keyIter], '-',
                                  label=sobol_labels[i])
                 else:
-                    plotter.plot(pdTimesteps, [self.Abfluss[key]["Sobol_m"][i] for key in keyIter], 'o',
+                    plotter.plot(pdTimesteps, [self.Abfluss[key]["Sobol_m"][i] for key in keyIter], '-',
                                  label=sobol_labels[i])
             plotter.xlabel('time', fontsize=13)
             plotter.ylabel('first order sobol indices', fontsize=13)
