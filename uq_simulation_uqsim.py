@@ -26,6 +26,7 @@ import ProductFunctionStatistics
 import os
 import subprocess
 import datetime
+import socket
 
 # instantiate UQsim
 uqsim = uqef.UQsim()
