@@ -54,7 +54,10 @@ if uqsim.args.outputResultDir:
 else:
     rootDir = os.getcwd()
 
-outputResultDir = os.path.abspath(os.path.join(rootDir, datetime.datetime.now().strftime("%Y-%m-%d:%H:%M")))
+if socket.gethostname().startswith("mpp2"):
+    outputResultDir=rootDir
+else:
+    outputResultDir = os.path.abspath(os.path.join(rootDir, datetime.datetime.now().strftime("%Y-%m-%d:%H:%M")))
 #args.outputResultDir = outputResultDir
 
 if uqsim.is_master() and not uqsim.is_restored():
