@@ -131,12 +131,16 @@ echo "---- end \$i:"
 model="larsim"
 opt_add=""
 #runtimesim -> no wait!
-nodes=2
+nodes=10
 low_time="2:30:00"
 mid_time="5:45:00"
 max_time="48:00:00"
 uq_method="sc"
 
-test_time=0:30:00
 
-start_larsim_uq_sim "DYNAMIC" "NOALGO"  2  2 "$model" "$opt_add" 1 "MpiPoolSolver" "$nodes" "$test_time" "$uq_method"
+#nodes=2
+#test_time=0:30:00
+#start_larsim_uq_sim "DYNAMIC" "NOALGO"  2  2 "$model" "$opt_add" 1 "MpiPoolSolver" "$nodes" "$test_time" "$uq_method"
+
+
+start_larsim_uq_sim "DYNAMIC" "NOALGO"  11  6 "$model" "$opt_add" 1 "MpiPoolSolver" "$nodes" "$mid_time" "$uq_method"
