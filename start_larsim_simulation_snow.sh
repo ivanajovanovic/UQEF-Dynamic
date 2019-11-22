@@ -2,6 +2,10 @@
 
 #export PYTHONPATH=$PYTHONPATH:.
 
+#for linux cluster: mpp2
+#export PYTHONPATH=$HOME/work/simulation/diss.larsim/uqef.git/src:$PYTHONPATH
+
+#for local
 export PYTHONPATH=/data/repos/repos_tum/chaospy_run.git:$PYTHONPATH
 export PYTHONPATH=/data/repos/repos_tum/uqef.git/src:$PYTHONPATH
 
