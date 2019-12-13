@@ -189,10 +189,11 @@ class LarsimModel(Model):
             #print("LARSIM INFO: Process {} successfully changed its tape35".format(i))
 
         local_log_file = os.path.abspath(os.path.join(curr_working_dir, "run" + str(index_run) + ".log"))
+        local_err_file = os.path.abspath(os.path.join(curr_working_dir, "run" + str(index_run) + ".err"))
         # print("LARSIM INFO: This is where I'm gonna write my log - {}".format(local_log_file))
 
         # Run Larsim as external process
-        subprocess.run([self.larsim_exe], stdout=open(local_log_file, 'w'))
+        subprocess.run([self.larsim_exe], stdout=open(local_log_file, 'w'), stderr=open(local_err_file, 'w'))
         print("LARSIM INFO: I am done with LARSIM Execution {}".format(index_run))
 
         # check for existence of larsim.ok and whether the file is readable
@@ -207,9 +208,10 @@ class LarsimModel(Model):
                 if "ok" in l:
                     larsim_ok = True
 
-            linecache.clearcache()
-            time.sleep(0.1)
-            print("LARSIM INFO: rank {} retries reading larsim_ok".format(index_run))
+            if larsim_ok is False:
+                linecache.clearcache()
+                time.sleep(0.1)
+                print("LARSIM INFO: rank retries reading {} larsim_ok".format(index_run))
 
         # change back to starting directory of all the processes
         os.chdir(self.current_dir)
