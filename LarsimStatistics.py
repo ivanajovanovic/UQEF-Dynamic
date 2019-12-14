@@ -6,7 +6,7 @@ import itertools
 import os
 from distutils.util import strtobool
 
-
+import uqef
 from uqef.stat import Statistics
 
 import paths
