@@ -197,16 +197,17 @@ class LarsimStatistics(Statistics):
         weights = simulationNodes.weights
         dist = simulationNodes.joinedDists
 
-        #samples = Samples(rawSamples, station='MARI', type_of_output='Abfluss Simulation', pathsDataFormat=True)
-        samples = Samples(rawSamples, station=self.configurationObject["Output"]["station"],
-                          type_of_output=self.configurationObject["Output"]["type_of_output"],
-                          pathsDataFormat=self.configurationObject["Output"]["pathsDataFormat"],
-                          dailyOutput=self.configurationObject["Output"]["dailyOutput"])
+        with uqef.util.TimeMeasurement("Stats: samples") as t:
+            #samples = Samples(rawSamples, station='MARI', type_of_output='Abfluss Simulation', pathsDataFormat=True)
+            samples = Samples(rawSamples, station=self.configurationObject["Output"]["station"],
+                              type_of_output=self.configurationObject["Output"]["type_of_output"],
+                              pathsDataFormat=self.configurationObject["Output"]["pathsDataFormat"],
+                              dailyOutput=self.configurationObject["Output"]["dailyOutput"])
 
-        # Save the DataFrame containing all the simulation results
-        samples.df_time_discharges.to_csv(
-            path_or_buf=os.path.abspath(os.path.join(self.working_dir, "df_all_simulations.csv")),
-            index=True)
+            # Save the DataFrame containing all the simulation results
+            samples.df_time_discharges.to_csv(
+                path_or_buf=os.path.abspath(os.path.join(self.working_dir, "df_all_simulations.csv")),
+                index=True)
 
         #self.timesteps = timesteps #this is just a scalar representing total number of timesteps
         self.timesteps = samples.df_simulation_result.TimeStamp.unique()
@@ -220,7 +221,7 @@ class LarsimStatistics(Statistics):
         P = cp.orth_ttr(order, dist)
 
         # percentiles
-        numPercSamples = 10 ** 5
+        numPercSamples = 10 ** 3
 
         self.station_names = samples.df_simulation_result.Stationskennung.unique()
 
@@ -231,31 +232,39 @@ class LarsimStatistics(Statistics):
         for key,val in groups.items():
             discharge_values = samples.df_simulation_result.iloc[val.values].Value.values
 
+            with uqef.util.TimeMeasurement("Stats: gPCE") as t:
+                if regression:
+                    qoi_gPCE = cp.fit_regression(P, nodes, discharge_values)
+                else:
+                    qoi_gPCE = cp.fit_quadrature(P, nodes, weights, discharge_values) #fit_quadrature for each time step for this station over multiple runs
 
-            if regression:
-                qoi_gPCE = cp.fit_regression(P, nodes, discharge_values)
-            else:
-                qoi_gPCE = cp.fit_quadrature(P, nodes, weights, discharge_values) #fit_quadrature for each time step for this station over multiple runs
-
-            print("Shape of the qoi gPCE cofficients:")
-            print(type(qoi_gPCE.shape))
-            print(qoi_gPCE.shape)
+            #print("Shape of the qoi gPCE cofficients:")
+            #print(type(qoi_gPCE.shape))
+            #print(qoi_gPCE.shape)
 
 
             self.Abfluss[key] = {}
             self.Abfluss[key]["Q"] = discharge_values
-            self.Abfluss[key]["E"] = (cp.E(qoi_gPCE, dist))
-            self.Abfluss[key]["Var"] = (cp.Var(qoi_gPCE, dist))
-            self.Abfluss[key]["StdDev"] = (cp.Std(qoi_gPCE, dist))
-            self.Abfluss[key]["Sobol_m"] = cp.Sens_m(qoi_gPCE, dist)
-            self.Abfluss[key]["Sobol_m2"] = cp.Sens_m2(qoi_gPCE, dist)
-            self.Abfluss[key]["Sobol_t"] = cp.Sens_t(qoi_gPCE, dist)
-            self.Abfluss[key]["P10"] = cp.Perc(qoi_gPCE, 10, dist, numPercSamples)
-            self.Abfluss[key]["P90"] = cp.Perc(qoi_gPCE, 90, dist, numPercSamples)
+            with uqef.util.TimeMeasurement("Stats for {}: E".format(key)) as t:
+                self.Abfluss[key]["E"] = (cp.E(qoi_gPCE, dist))
+            with uqef.util.TimeMeasurement("Stats for {}: Var".format(key)) as t:
+                self.Abfluss[key]["Var"] = (cp.Var(qoi_gPCE, dist))
+            with uqef.util.TimeMeasurement("Stats for {}: StdDev".format(key)) as t:
+                self.Abfluss[key]["StdDev"] = (cp.Std(qoi_gPCE, dist))
+            with uqef.util.TimeMeasurement("Stats for {}: Sobol_m".format(key)) as t:
+                self.Abfluss[key]["Sobol_m"] = cp.Sens_m(qoi_gPCE, dist)
+            with uqef.util.TimeMeasurement("Stats for {}: Sobol_m2".format(key)) as t:
+                self.Abfluss[key]["Sobol_m2"] = cp.Sens_m2(qoi_gPCE, dist)
+            with uqef.util.TimeMeasurement("Stats for {}: Sobol_t".format(key)) as t:
+                self.Abfluss[key]["Sobol_t"] = cp.Sens_t(qoi_gPCE, dist)
+            with uqef.util.TimeMeasurement("Stats for {}: P10".format(key)) as t:
+                self.Abfluss[key]["P10"] = cp.Perc(qoi_gPCE, 10, dist, numPercSamples)
+            with uqef.util.TimeMeasurement("Stats for {}: P90".format(key)) as t:
+                self.Abfluss[key]["P90"] = cp.Perc(qoi_gPCE, 90, dist, numPercSamples)
 
-            if isinstance(self.Abfluss[key]["P10"], (list)) and len(self.Abfluss[key]["P10"]) == 1:
-                self.Abfluss[key]["P10"]= self.Abfluss[key]["P10"][0]
-                self.Abfluss[key]["P90"] = self.Abfluss[key]["P90"][0]
+                if isinstance(self.Abfluss[key]["P10"], (list)) and len(self.Abfluss[key]["P10"]) == 1:
+                    self.Abfluss[key]["P10"]= self.Abfluss[key]["P10"][0]
+                    self.Abfluss[key]["P90"] = self.Abfluss[key]["P90"][0]
 
 
         np.save(paths.statistics_dict_path_np, self.Abfluss)
