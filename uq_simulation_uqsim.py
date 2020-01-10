@@ -23,10 +23,19 @@ import IshigamiStatistics
 import ProductFunctionModel
 import ProductFunctionStatistics
 
+import sys
 import os
 import subprocess
 import datetime
 import socket
+
+# time measure
+import time
+import datetime
+
+# for message passing
+from mpi4py import MPI
+import mpi4py
 
 # instantiate UQsim
 uqsim = uqef.UQsim()
@@ -119,6 +128,10 @@ uqsim.setup()
 
 # start the simulation
 uqsim.simulate()
+if uqsim.is_master():
+    print("simulation done: now start stats")
+    sys.stdout.flush()
+uqsim.store_to_file()
 
 # statistics:
 uqsim.calc_statistics()
@@ -128,3 +141,6 @@ uqsim.save_statistics()
 
 # tear down
 uqsim.tear_down()
+
+rank = MPI.COMM_WORLD.Get_rank()
+print("rank {}: endtime: {}".format(rank, datetime.datetime.now().strftime('%Y.%m.%d %H:%M:%S')))
