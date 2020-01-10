@@ -53,13 +53,15 @@ start_larsim_uq_sim(){
 
     # init the stuff
     if [ "$strategy" == "FIXED_LINEAR" ] ; then
-        cpus=28
+        #cpus=28
+        cpus=20
         threads=$cpus
         tasks=1
     else
         cpus=1
         threads=$cpus
-        tasks=28
+        #tasks=28
+        tasks=20
         total_num_cores=56
     fi
 
@@ -70,7 +72,7 @@ echo "#!/bin/bash
 
 #SBATCH -o $baseSourcePath/uq_simulation.$counter.job.%j.%N.out
 #SBATCH -D $baseSourcePath
-#SBATCH -J larsim.$counter
+#SBATCH -J l.$counter
 #SBATCH --get-user-env
 #SBATCH --clusters=mpp2
 #SBATCH --nodes=$cluster_nodes
@@ -97,15 +99,24 @@ export OMP_NUM_THREADS=$threads
 pyfile="uq_simulation_uqsim.py"
 
 #config_file="configuration_larsim.json"
+
 config_file="configuration_larsim_snow1.json"
+#config_file="configuration_larsim_snow1_1.json"
+#config_file="configuration_larsim_snow1_2.json"
+#config_file="configuration_larsim_snow1_3.json"
+#config_file="configuration_larsim_snow1_4.json"
+
+#config_file="configuration_larsim_snow1_reduced.json"
 #config_file="configuration_oscillator.json"
 #config_file="configuration_ishigami.json"
 #config_file="configuration_product_function.json"
 
 
 #opts='--disable_statistics'
-opts='--uqsim_store_to_file'
+#opts='--uqsim_store_to_file'
+opts='--uqsim_store_to_file --disable_statistics'
 #opts='--uqsim_restore_from_file --disable_recalc_statistics'
+#opts='--analyse_runtime'
 
 # start simulation
 echo "---- start sim:"
@@ -117,7 +128,6 @@ echo "---- start sim:"
                             --num_cores $threads --mpi --mpi_method $mpi_method \
                             --config_file "\$config_file" \
                             --uqsim_file "$resultsPath/uqsim.saved" \
-                            --analyse_runtime \
                             \$opts
 
 echo "---- end \$i:"
@@ -131,16 +141,48 @@ echo "---- end \$i:"
 model="larsim"
 opt_add=""
 #runtimesim -> no wait!
-nodes=10
+nodes=1
 low_time="2:30:00"
-mid_time="5:45:00"
+mid_time="15:00:00"
 max_time="48:00:00"
 uq_method="sc"
 
 
-#nodes=2
+nodes=2
 #test_time=0:30:00
 #start_larsim_uq_sim "DYNAMIC" "NOALGO"  2  2 "$model" "$opt_add" 1 "MpiPoolSolver" "$nodes" "$test_time" "$uq_method"
+#start_larsim_uq_sim "DYNAMIC" "NOALGO"  1  1 "$model" "$opt_add" 1 "MpiPoolSolver" "$nodes" "0:10:00" "$uq_method"
+
+#start_larsim_uq_sim "DYNAMIC" "NOALGO"  1  1 "$model" "$opt_add" 1 "MpiPoolSolver" "$nodes" "0:20:00" "$uq_method"
+#start_larsim_uq_sim "DYNAMIC" "NOALGO"  2  2 "$model" "$opt_add" 1 "MpiPoolSolver" "$nodes" "0:30:00" "$uq_method"
+#start_larsim_uq_sim "DYNAMIC" "NOALGO"  3  3 "$model" "$opt_add" 1 "MpiPoolSolver" "$nodes" "0:60:00" "$uq_method"
+#start_larsim_uq_sim "DYNAMIC" "NOALGO"  4  4 "$model" "$opt_add" 1 "MpiPoolSolver" "$nodes" "3:00:00" "$uq_method"
+#start_larsim_uq_sim "DYNAMIC" "NOALGO"  5  5 "$model" "$opt_add" 1 "MpiPoolSolver" "$nodes" "12:00:00" "$uq_method"
+#start_larsim_uq_sim "DYNAMIC" "NOALGO"  6  6 "$model" "$opt_add" 1 "MpiPoolSolver" "$nodes" "12:00:00" "$uq_method"
+#start_larsim_uq_sim "DYNAMIC" "NOALGO"  7  6 "$model" "$opt_add" 1 "MpiPoolSolver" "$nodes" "24:00:00" "$uq_method"
+#start_larsim_uq_sim "DYNAMIC" "NOALGO"  8  6 "$model" "$opt_add" 1 "MpiPoolSolver" "$nodes" "32:00:00" "$uq_method"
+#start_larsim_uq_sim "DYNAMIC" "NOALGO"  9  6 "$model" "$opt_add" 1 "MpiPoolSolver" "$nodes" "40:00:00" "$uq_method"
+#start_larsim_uq_sim "DYNAMIC" "NOALGO"  10  6 "$model" "$opt_add" 1 "MpiPoolSolver" "$nodes" "48:00:00" "$uq_method"
+
+#start_larsim_uq_sim "DYNAMIC" "NOALGO"  1  1 "$model" "$opt_add" 1 "MpiPoolSolver" "$nodes" "0:10:00" "$uq_method"
+#start_larsim_uq_sim "DYNAMIC" "NOALGO"  2  2 "$model" "$opt_add" 1 "MpiPoolSolver" "$nodes" "0:20:00" "$uq_method"
+#start_larsim_uq_sim "DYNAMIC" "NOALGO"  3  3 "$model" "$opt_add" 1 "MpiPoolSolver" "$nodes" "0:30:00" "$uq_method"
+#start_larsim_uq_sim "DYNAMIC" "NOALGO"  4  4 "$model" "$opt_add" 1 "MpiPoolSolver" "$nodes" "1:00:00" "$uq_method"
+#start_larsim_uq_sim "DYNAMIC" "NOALGO"  5  5 "$model" "$opt_add" 1 "MpiPoolSolver" "$nodes" "1:30:00" "$uq_method"
+#start_larsim_uq_sim "DYNAMIC" "NOALGO"  6  6 "$model" "$opt_add" 1 "MpiPoolSolver" "$nodes" "3:00:00" "$uq_method"
+#start_larsim_uq_sim "DYNAMIC" "NOALGO"  7  6 "$model" "$opt_add" 1 "MpiPoolSolver" "$nodes" "4:00:00" "$uq_method"
+#start_larsim_uq_sim "DYNAMIC" "NOALGO"  8  6 "$model" "$opt_add" 1 "MpiPoolSolver" "$nodes" "6:00:00" "$uq_method"
+nodes=4
+#start_larsim_uq_sim "DYNAMIC" "NOALGO"  9  6 "$model" "$opt_add" 1 "MpiPoolSolver" "$nodes" "8:00:00" "$uq_method"
+nodes=8
+start_larsim_uq_sim "DYNAMIC" "NOALGO"  10  6 "$model" "$opt_add" 1 "MpiPoolSolver" "$nodes" "6:00:00" "$uq_method"
 
 
-start_larsim_uq_sim "DYNAMIC" "NOALGO"  11  6 "$model" "$opt_add" 1 "MpiPoolSolver" "$nodes" "$mid_time" "$uq_method"
+#start_larsim_uq_sim "DYNAMIC" "NOALGO"  4  4 "$model" "$opt_add" 1 "MpiPoolSolver" "$nodes" "$mid_time" "$uq_method"
+#start_larsim_uq_sim "DYNAMIC" "NOALGO"  5  5 "$model" "$opt_add" 1 "MpiPoolSolver" "$nodes" "$mid_time" "$uq_method"
+#start_larsim_uq_sim "DYNAMIC" "NOALGO"  6  6 "$model" "$opt_add" 1 "MpiPoolSolver" "$nodes" "$mid_time" "$uq_method"
+#start_larsim_uq_sim "DYNAMIC" "NOALGO"  7  6 "$model" "$opt_add" 1 "MpiPoolSolver" "$nodes" "$mid_time" "$uq_method"
+#start_larsim_uq_sim "DYNAMIC" "NOALGO"  8  6 "$model" "$opt_add" 1 "MpiPoolSolver" "$nodes" "$max_time" "$uq_method"
+#start_larsim_uq_sim "DYNAMIC" "NOALGO"  9  6 "$model" "$opt_add" 1 "MpiPoolSolver" "$nodes" "$max_time" "$uq_method"
+#start_larsim_uq_sim "DYNAMIC" "NOALGO"  10  6 "$model" "$opt_add" 1 "MpiPoolSolver" "$nodes" "$max_time" "$uq_method"
+#start_larsim_uq_sim "DYNAMIC" "NOALGO"  11  6 "$model" "$opt_add" 1 "MpiPoolSolver" "$nodes" "$max_time" "$uq_method"
