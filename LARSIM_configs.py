@@ -19,12 +19,12 @@ import time
 ##### Utility functions for time settings and calculation of different time variables
 ##############################################################
 
-def datetime_parse(configuration):
+def datetime_parse(configurationObject):
     """
     Function which reads json configuration file and determins the start end end date of the simulation
     """
 
-    data = configuration["Timeframe"]
+    data = configurationObject["Timeframe"]
     start_date = datetime.datetime(data["start_year"],data["start_month"], data["start_day"],
                                    data["start_hour"], data["start_minute"])
 
@@ -197,7 +197,8 @@ def tape35_configurations(parameters, curr_working_dir, configurationObject, TGB
 
     variable_names = []
     limits = []
-    for i in configurationObject["Variables"]:
+    #for i in configurationObject["Variables"]:
+    for i in configurationObject["parameters"]:
         variable_names.append(i["name"])
         limits.append((i["lower_limit"], i["upper_limit"]))
 

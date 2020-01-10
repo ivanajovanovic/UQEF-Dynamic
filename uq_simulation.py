@@ -204,7 +204,7 @@ if mpi == False or (mpi == True and rank == 0):
 #####################################
 ### one time initial model setup
 #####################################
-# put here is there is something specifically related to the model that should be done only once
+# put here if there is something specifically related to the model that should be done only once
 if mpi == False or (mpi == True and rank == 0):
     def initialModelSetUp():
         models = {

@@ -370,6 +370,28 @@ class LarsimStatistics(Statistics):
         #subplot_titles=("Discharge", "Std", "Total SI", "First Order SI")
         #fig = go.Figure()
 
+
+        #Plotting the statistics of the Quantity of Interest and Sobol Sensitivty Indices after Forward UQ anlysis
+
+        fig.add_trace(go.Scatter(x=pdTimesteps, y=self.Abfluss["Ground_Truth_Measurements"], name='measured Q'), row=1, col=1)
+        fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["E"] for key in keyIter], name='mean'), row=1, col=1)
+        fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["StdDev"] for key in keyIter], name='std. dev.'), row=2, col=1)
+
+        if "Sobol_t" in self.Abfluss[keyIter[0]]:
+            sobol_labels = simulationNodes.nodeNames
+            for i in range(len(sobol_labels)):
+                fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["Sobol_t"][i] for key in keyIter],\
+                                         name=sobol_labels[i]), row=3, col=1)
+
+        if "Sobol_m" in self.Abfluss[keyIter[0]]:
+            sobol_labels = simulationNodes.nodeNames
+            for i in range(len(sobol_labels)):
+                fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["Sobol_m"][i] for key in keyIter],\
+                                         name=sobol_labels[i]), row=4, col=1)
+
+
+
+
         fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["E"] for key in keyIter], name='mean',
                              line_color='deepskyblue'), row=1, col=1)
         fig.add_trace(go.Scatter(x=pdTimesteps, y=self.Abfluss["Ground_Truth_Measurements"], name='measured Q',

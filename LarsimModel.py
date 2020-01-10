@@ -161,7 +161,8 @@ class LarsimModel(Model):
         self.cut_runs = strtobool(self.configurationObject["Timeframe"]["cut_runs"])
 
         self.variable_names = []
-        for i in self.configurationObject["Variables"]:
+        #for i in self.configurationObject["Variables"]:
+        for i in self.configurationObject["parameters"]:
             self.variable_names.append(i["name"])
 
 
