@@ -1,10 +1,13 @@
 import chaospy as cp
 import numpy as np
 import pandas as pd
+import datetime
 import matplotlib.pyplot as plotter
+from matplotlib.ticker import MaxNLocator
 import itertools
 import os
 from distutils.util import strtobool
+import seaborn as sns
 
 import uqef
 from uqef.stat import Statistics
@@ -449,6 +452,341 @@ class LarsimStatistics(Statistics):
 
         plotter.close()
 
+        self.plotResults_fk_diss(display, station, fileName, fileNameIdent, directory, fileNameIdentIsFullName, safe)
+
+    def plotResults_fk_diss(self, display=False, station='',
+                    fileName="", fileNameIdent="", directory="./",
+                    fileNameIdentIsFullName=False, safe=True):
+
+        pdTimesteps = [pd.Timestamp(timestep) for timestep in self.timesteps]
+        t = np.arange(len(pdTimesteps))
+
+        keyIter = list(itertools.product([station, ], pdTimesteps))
+        # self.Abfluss[((station,oneTimetep) for oneTimetep in pdTimesteps)]
+        # listE = [self.Abfluss[key]["E"] for key in itertools.product([station,],pdTimesteps)]
+
+
+        if station == '':
+            station = self.configurationObject["Output"]["station"]
+
+        df_measured = pd.read_csv(os.path.abspath(os.path.join(self.working_dir, "df_measured.csv")))
+        df_measured = df_measured.loc[df_measured['Stationskennung'] == station]
+        df_measured = parse_df_based_on_time(df_measured, (pd.Timestamp(self.timesteps[0]).strftime("%d.%m.%Y %H:%M"),
+                                                           pd.Timestamp(self.timesteps[-1]).strftime("%d.%m.%Y %H:%M")))
+
+        if self.configurationObject["Output"]["dailyOutput"] == "True":
+            tick_reduction = 2
+
+            df_measured['TimeStamp_Date'] = [entry.date() for entry in df_measured['TimeStamp']]
+            df_measured = df_measured.groupby(["TimeStamp_Date"])['Value'].mean()
+            measured_data = df_measured.to_numpy()
+        else:
+            tick_reduction = 24 * 2
+
+            measured_data = df_measured['Value'].to_numpy()
+
+        #####################################
+        ### plot: mean + percentiles
+        #####################################
+        print("plot: mean + percentiles")
+        figure = plotter.figure(1, figsize=(12, 4))
+        sns.set()
+
+        fontsize = 15
+        plotter.rc('font', family='serif', size=fontsize)
+
+        ax = figure.add_subplot(111)
+        ax.set_title("Mean ($\mu$) of runoff")
+        ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+        # plotter.title('mean')
+        ax.plot(t, [self.Abfluss[key]["E"] for key in keyIter], '-', label='mean')
+        ax.fill_between(t, [self.Abfluss[key]["P10"] for key in keyIter],
+                             [self.Abfluss[key]["P90"] for key in keyIter], facecolor='#5dcec6')
+        ax.plot(t, [self.Abfluss[key]["P10"] for key in keyIter], '-', label='10th percentile')
+        ax.plot(t, [self.Abfluss[key]["P90"] for key in keyIter], '-', label='90th percentile')
+        if measured_data is not None:
+            ax.plot(t, measured_data, '-', label='measured data')
+        plotter.xlabel('date of simulation', fontsize=13)
+        plotter.ylabel('runoff ($m^3/s$)', fontsize=13)
+        # plotter.xlim(0, 200)
+        ymin, ymax = plotter.ylim()
+        plotter.ylim(0, ymax)
+        plotter.xticks(t[::tick_reduction], [p.date() for p in pdTimesteps][::tick_reduction], rotation=70, ha="right")
+        #plotter.xticks(t[::2], [p.date() for p in pdTimesteps][::2])
+        #for tick in ax.xaxis.get_majorticklabels():
+            #tick.set_horizontalalignment("right")
+        # rotates labels and aligns them horizontally to left
+        #plotter.setp(ax.xaxis.get_majorticklabels(), rotation=70, ha="center")#, rotation_mode="anchor")
+        plotter.legend()  # enable the legend
+        plotter.grid(True)
+
+        # Plotter settings
+        plotter.subplots_adjust(wspace=0.15, hspace=0.2, bottom=0.32, top=0.92, left=0.07, right=0.98)
+
+        # save figure
+        pdfFileName = os.path.abspath(os.path.join(self.working_dir, paths.figureFileName + "_mean_stats" + "_uq.pdf"))
+        pngFileName = os.path.abspath(os.path.join(self.working_dir, paths.figureFileName + "_mean_stats" + "_uq.png"))
+        plotter.savefig(pdfFileName, format='pdf')
+        plotter.savefig(pngFileName, format='png')
+
+        if display:
+            plotter.show()
+
+        plotter.close()
+
+        #####################################
+        ### plot: abs error
+        #####################################
+        if measured_data is not None:
+            print("plot: simulation absolute error")
+            figure = plotter.figure(1, figsize=(12, 4))
+
+            fontsize = 15
+            plotter.rc('font', family='serif', size=fontsize)
+
+            ax = figure.add_subplot(111)
+            ax.set_title("Simulation absolute error $(\epsilon)$ of runoff")
+            ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+
+            E = np.asarray([self.Abfluss[key]["E"] for key in keyIter])
+            error = np.abs(measured_data - E)
+
+            ax.plot(t, error, '-', label='abs_error')
+            plotter.xlabel('date of simulation', fontsize=13)
+            plotter.ylabel('absolute error of (runoff: $m^3/s$)', fontsize=13)
+            # plotter.xlim(0, 200)
+            # plotter.ylim(0, 20)
+            ymin, ymax = plotter.ylim()
+            plotter.ylim(0, ymax)
+            plotter.xticks(t[::tick_reduction], [p.date() for p in pdTimesteps][::tick_reduction], rotation=70, ha="right")
+            #plotter.legend()  # enable the legend
+            plotter.grid(True)
+
+            # plotter.subplot(513)
+            ## plotter.title('discharge')
+            # plotter.plot(pdTimesteps, [self.Abfluss[key]["Q"] for key in keyIter])
+            # plotter.xlabel('time', fontsize=13)
+            # plotter.ylabel('Q value', fontsize=13)
+            # plotter.xticks(rotation=45)
+            # plotter.legend()  # enable the legend
+            # plotter.grid(True)
+
+            # Plotter settings
+            plotter.subplots_adjust(wspace=0.15, hspace=0.2, bottom=0.32, top=0.92, left=0.07, right=0.98)
+
+            # save figure
+            pdfFileName = os.path.abspath(os.path.join(self.working_dir, paths.figureFileName + "_abs_error" + "_uq.pdf"))
+            pngFileName = os.path.abspath(os.path.join(self.working_dir, paths.figureFileName + "_abs_error" + "_uq.png"))
+            plotter.savefig(pdfFileName, format='pdf')
+            plotter.savefig(pngFileName, format='png')
+
+            if display:
+                plotter.show()
+
+            plotter.close()
+
+        #####################################
+        ### plot: rel error
+        #####################################
+        if measured_data is not None:
+            print("plot: simulation relative error")
+            figure = plotter.figure(1, figsize=(12, 4))
+
+            fontsize = 15
+            plotter.rc('font', family='serif', size=fontsize)
+
+            ax = figure.add_subplot(111)
+            ax.set_title("Simulation relative error $(\epsilon)$ of runoff")
+            ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+
+            E = np.asarray([self.Abfluss[key]["E"] for key in keyIter])
+            error = np.abs((measured_data - E)/measured_data)
+
+            ax.plot(t, error, '-', label='rel_error')
+            plotter.xlabel('date of simulation', fontsize=13)
+            plotter.ylabel('relative error of (runoff: $m^3/s$)', fontsize=13)
+            # plotter.xlim(0, 200)
+            # plotter.ylim(0, 20)
+            ymin, ymax = plotter.ylim()
+            plotter.ylim(0, ymax)
+            plotter.xticks(t[::tick_reduction], [p.date() for p in pdTimesteps][::tick_reduction], rotation=70, ha="right")
+            #plotter.legend()  # enable the legend
+            plotter.grid(True)
+
+            # plotter.subplot(513)
+            ## plotter.title('discharge')
+            # plotter.plot(pdTimesteps, [self.Abfluss[key]["Q"] for key in keyIter])
+            # plotter.xlabel('time', fontsize=13)
+            # plotter.ylabel('Q value', fontsize=13)
+            # plotter.xticks(rotation=45)
+            # plotter.legend()  # enable the legend
+            # plotter.grid(True)
+
+            # Plotter settings
+            plotter.subplots_adjust(wspace=0.15, hspace=0.2, bottom=0.32, top=0.92, left=0.07, right=0.98)
+
+            # save figure
+            pdfFileName = os.path.abspath(os.path.join(self.working_dir, paths.figureFileName + "_rel_error" + "_uq.pdf"))
+            pngFileName = os.path.abspath(os.path.join(self.working_dir, paths.figureFileName + "_rel_error" + "_uq.png"))
+            plotter.savefig(pdfFileName, format='pdf')
+            plotter.savefig(pngFileName, format='png')
+
+            if display:
+                plotter.show()
+
+            plotter.close()
+
+        #####################################
+        ### plot: stddev
+        #####################################
+        print("plot: standard deviation")
+        figure = plotter.figure(1, figsize=(12, 4))
+
+        fontsize = 15
+        plotter.rc('font', family='serif', size=fontsize)
+
+        ax = figure.add_subplot(111)
+        ax.set_title("Standard deviation $(\sigma)$ of runoff")
+        ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+
+        plotter.plot(t, [self.Abfluss[key]["StdDev"] for key in keyIter], '-', label='std. dev.')
+        plotter.xlabel('date of simulation', fontsize=13)
+        plotter.ylabel('standard deviation (runoff: $m^3/s$)', fontsize=13)
+        # plotter.xlim(0, 200)
+        # plotter.ylim(0, 20)
+        ymin, ymax = plotter.ylim()
+        plotter.ylim(0, ymax)
+        plotter.xticks(t[::tick_reduction], [p.date() for p in pdTimesteps][::tick_reduction], rotation=70, ha="right")
+        #plotter.legend()  # enable the legend
+        plotter.grid(True)
+
+        # plotter.subplot(513)
+        ## plotter.title('discharge')
+        # plotter.plot(pdTimesteps, [self.Abfluss[key]["Q"] for key in keyIter])
+        # plotter.xlabel('time', fontsize=13)
+        # plotter.ylabel('Q value', fontsize=13)
+        # plotter.xticks(rotation=45)
+        # plotter.legend()  # enable the legend
+        # plotter.grid(True)
+
+        # Plotter settings
+        plotter.subplots_adjust(wspace=0.15, hspace=0.2, bottom=0.32, top=0.92, left=0.07, right=0.98)
+
+        # save figure
+        pdfFileName = os.path.abspath(os.path.join(self.working_dir, paths.figureFileName + "_stddev" + "_uq.pdf"))
+        pngFileName = os.path.abspath(os.path.join(self.working_dir, paths.figureFileName + "_stddev" + "_uq.png"))
+        plotter.savefig(pdfFileName, format='pdf')
+        plotter.savefig(pngFileName, format='png')
+
+        if display:
+            plotter.show()
+
+        plotter.close()
+
+        #####################################
+        ### plot: sobol indices t (total order)
+        #####################################
+        if "Sobol_t" in self.Abfluss[keyIter[0]]:
+            print("plot: sobol indices t (total order)")
+            figure = plotter.figure(1, figsize=(12, 4))
+
+            fontsize = 15
+            plotter.rc('font', family='serif', size=fontsize)
+
+            ax = figure.add_subplot(111)
+            ax.set_title("(a) Total sensitivity indices for runoff")
+
+            sobol_labels = self.simulationNodes.nodeNames
+            sobol_labels = ["$st\_{}$".format(sl.replace("_", "\_")) for sl in sobol_labels]
+
+            x = np.zeros(len([self.Abfluss[key]["Sobol_t"][0] for key in keyIter]))
+
+            for i in range(len(sobol_labels)):
+                if self.Abfluss[keyIter[0]]["Sobol_m"].shape[0] == len(self.timesteps):
+                    ax.plot(t, [(self.Abfluss[key]["Sobol_tm"].T)[i] for key in keyIter], '-',
+                            label=sobol_labels[i])
+                else:
+                    ax.plot(t, [self.Abfluss[key]["Sobol_t"][i] for key in keyIter], '-',
+                            label=sobol_labels[i])
+                    x = x + np.asarray([self.Abfluss[key]["Sobol_t"][i] for key in keyIter])
+            plotter.xlabel('date of simulation', fontsize=13)
+            plotter.ylabel('sobol indices', fontsize=13)
+            # plotter.xscale('linear')
+            # plotter.xlim(0, plotter.xlim()[1])
+            ymin, ymax = plotter.ylim()
+            # plotter.ylim(0, ymax)
+            plotter.xticks(t[::tick_reduction], [p.date() for p in pdTimesteps][::tick_reduction], rotation=70, ha="right")
+            plotter.legend()  # enable the legend
+            plotter.grid(True)
+
+            # Plotter settings
+            plotter.subplots_adjust(wspace=0.15, hspace=0.2, bottom=0.32, top=0.92, left=0.07, right=0.98)
+
+            # save figure qoi_dist
+            pdfFileName = os.path.abspath(os.path.join(self.working_dir, paths.figureFileName + "_sobol_t" + "_uq.pdf"))
+            pngFileName = os.path.abspath(os.path.join(self.working_dir, paths.figureFileName + "_sobol_t" + "_uq.png"))
+            plotter.savefig(pdfFileName, format='pdf')
+            plotter.savefig(pngFileName, format='png')
+
+            if display:
+                plotter.show()
+
+            plotter.close()
+
+        #####################################
+        ### plot: sobol indices m (first order)
+        #####################################
+        if "Sobol_m" in self.Abfluss[keyIter[0]]:
+            print("plot: sobol indices m (first order)")
+            figure = plotter.figure(1, figsize=(12, 4))
+
+            fontsize = 15
+            plotter.rc('font', family='serif', size=fontsize)
+
+            ax = figure.add_subplot(111)
+            ax.set_title("(a) First order sensitivity indices for runoff")
+
+            sobol_labels = self.simulationNodes.nodeNames
+            sobol_labels = [ "$si\_{}$".format(sl.replace("_", "\_")) for sl in sobol_labels]
+
+            x = np.zeros(len([self.Abfluss[key]["Sobol_m"][0] for key in keyIter]))
+
+            for i in range(len(sobol_labels)):
+                if self.Abfluss[keyIter[0]]["Sobol_m"].shape[0] == len(self.timesteps):
+                    ax.plot(t, [(self.Abfluss[key]["Sobol_m"].T)[i] for key in keyIter], '-',
+                            label=sobol_labels[i])
+                else:
+                    ax.plot(t, [self.Abfluss[key]["Sobol_m"][i] for key in keyIter], '-',
+                            label=sobol_labels[i])
+                    x = x + np.asarray([self.Abfluss[key]["Sobol_m"][i] for key in keyIter])
+            interaction = 1 - x
+            ax.plot(t, interaction, '--', label="$si\_int$")
+            plotter.xlabel('date of simulation', fontsize=13)
+            plotter.ylabel('sobol indices', fontsize=13)
+            #plotter.xscale('linear')
+            #plotter.xlim(0, plotter.xlim()[1])
+            ymin, ymax = plotter.ylim()
+            #plotter.ylim(0, ymax)
+            plotter.xticks(t[::tick_reduction], [p.date() for p in pdTimesteps][::tick_reduction], rotation=70, ha="right")
+            plotter.legend()  # enable the legend
+            plotter.grid(True)
+
+            # Plotter settings
+            plotter.subplots_adjust(wspace=0.15, hspace=0.2, bottom=0.32, top=0.92, left=0.07, right=0.98)
+
+            # save figure qoi_dist
+            pdfFileName = os.path.abspath(os.path.join(self.working_dir, paths.figureFileName + "_sobol_m" + "_uq.pdf"))
+            pngFileName = os.path.abspath(os.path.join(self.working_dir, paths.figureFileName + "_sobol_m" + "_uq.png"))
+            plotter.savefig(pdfFileName, format='pdf')
+            plotter.savefig(pngFileName, format='png')
+
+            if display:
+                plotter.show()
+
+            plotter.close()
+
+
+
 
 
 #helper function
@@ -706,3 +1044,27 @@ def _total_order(A, AB, B):
     #return 0.5 * np.mean((A - AB) ** 2, axis=0) / np.var(np.r_[A, B], axis=0)
     #return np.mean(B * (AB - A), axis=0, dtype=np.float64) / np.var(np.concatenate((A, B), axis=0), axis=0, ddof=1, dtype=np.float64)
     return np.mean(B * (AB - A), axis=0, dtype=np.float64) / np.var(np.r_[A, B], axis=0, ddof=1, dtype=np.float64)
+
+def parse_df_based_on_time(df, interval_of_interest):
+    """
+    This function filters out only the values of the input object
+    which were measured during the interval_of_interest
+
+    Input: interval_of_interest - tuple of the fome (start_data, end_date)
+    start_data and end_date format - '%d.%m.%Y  %H:%M'
+
+    Return: pandas.DataFrame object
+    """
+    if interval_of_interest is None:
+        # raise ValueError('Error - sampled timeStamp+value file does not exist')
+        print("Error - you should have specify interval of interest")
+        return
+
+    start_date = datetime.datetime.strptime(interval_of_interest[0], '%d.%m.%Y  %H:%M')
+    end_date = datetime.datetime.strptime(interval_of_interest[1], '%d.%m.%Y  %H:%M')
+
+    # Parse panda object based on time values
+    df['TimeStamp'] = df['TimeStamp'].apply(lambda x: pd.Timestamp(x))
+    df = df.loc[(df["TimeStamp"] >= start_date) & (df["TimeStamp"] <= end_date)]
+
+    return df

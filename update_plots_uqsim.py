@@ -62,7 +62,7 @@ if args.dir:
 
 else:
     #directory = "/data/repos/repos_tum/promotion.git/Dissertation/DissertationRuns/LARSIM/cluster_results1"
-    directory = "/data/repos/repos_tum/promotion.git/Dissertation/DissertationRuns/LARSIM/cluster_results1/0095_sim"
+    directory = "/data/repos/repos_tum/promotion.git/Dissertation/DissertationRuns/LARSIM/cluster_results1/0121_sim"
 print("dir: {}".format(directory))
 
 dirs = [
@@ -94,6 +94,8 @@ def updatePlot(uqsim_file):
     uqsim.args.uqsim_file = uqsim_file
 
     uqsim.configuration_object["Directories"]["working_dir"] = outputResultDir + "/model_runs"
+    uqsim.configuration_object["Output"]["dailyOutput"] = "False"
+    uqsim.configuration_object["Output"]["station"] = "MARI"
 
     # re register statistics
     uqsim.statistics.update({"larsim"         : (lambda: LarsimStatistics.LarsimStatistics(uqsim.configuration_object))})
@@ -123,6 +125,9 @@ def updatePlot(uqsim_file):
 
     # start the simulation
     uqsim.simulate()
+
+    if uqsim.statistic:
+        uqsim.statistic.working_dir = uqsim.configuration_object["Directories"]["working_dir"]
 
     # statistics:
     uqsim.calc_statistics()
@@ -157,8 +162,8 @@ for directory in dirs:
         # fileNames = ["/data/repos/repos_tum/promotion.git/Dissertation/DissertationRuns/VADERE/scenario2_family/results_cluster/uq_sc_mpp2.0001.1/sc.stat"]
         print(fileNames)
 
-        pool = multiprocessing.Pool(multiprocessing.cpu_count())
-        samples = pool.map(updatePlot, fileNames)
+        #pool = multiprocessing.Pool(multiprocessing.cpu_count())
+        #samples = pool.map(updatePlot, fileNames)
 
-        # for f in fileNames:
-        #    updatePlot(f)
+        for f in fileNames:
+           updatePlot(f)
