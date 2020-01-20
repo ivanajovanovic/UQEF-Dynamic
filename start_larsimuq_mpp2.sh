@@ -15,7 +15,6 @@ start_larsim_uq_sim(){
     local mpi_method="$8"
     local cluster_nodes="$9"
     local time_limit="${10}"
-    local uq_method= "${11}"
 
     #get counter
     counter=$((`cat counter` +1))
@@ -97,7 +96,7 @@ echo "---- start sim:"
                             --num_cores $threads --mpi --mpi_method $mpi_method \
                             --run_statistics \
                             --configurationsFile "/home/hpc/pr63so/ga45met2/Repositories/Larsim-UQ/configurations/configuration_larsim_v4.json" \
-                            --uq_method "$uq_method" --sc_q_order $q_order --sc_p_order $p_order \
+                            --uq_method "sc" --sc_q_order $q_order --sc_p_order $p_order \
                             --transformToStandardDist
 
 echo "---- end \$i:"
@@ -117,4 +116,4 @@ mid_time="5:45:00"
 max_time="48:00:00"
 uq_method="sc"
 
-start_larsim_uq_sim "DYNAMIC" "NOALGO"  12  6 "$model" "$opt_add" 1 "new" "$nodes" "$max_time" "$uq_method"
+start_larsim_uq_sim "DYNAMIC" "NOALGO"  12  6 "$model" "$opt_add" 1 "new" "$nodes" "$max_time"
