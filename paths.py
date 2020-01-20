@@ -12,7 +12,8 @@ current_dir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentfra
 parent_dir = os.path.dirname(current_dir)
 
 if socket.gethostname().startswith("mpp2"): #TODO Add branch for execution on jHub server!
-    home_dir = "/home/hpc/pr63so/ga45met2"
+    #home_dir = "/home/hpc/pr63so/ga45met2"
+    home_dir = "/dss/dsshome1/lxc0C/ga45met2"
     # new data_dri on dss linux cluster, the old one "/naslx/projects/pr63so/ga45met2/Repositories"
     data_dir = "/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/Repositories"
     larsim_data_path = os.path.abspath(os.path.join(data_dir, 'Larsim-data'))
