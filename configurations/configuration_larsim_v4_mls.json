@@ -1,16 +1,16 @@
 {
   "Timeframe":
     {
-      "start_day": 1,
-      "start_month": 11,
-      "start_year": 2012,
+      "start_day": 15,
+      "start_month": 5,
+      "start_year": 2015,
       "start_hour": 0,
       "start_minute": 0,
 
 
-      "end_day": 1,
-      "end_month": 7,
-      "end_year": 2013,
+      "end_day": 15,
+      "end_month": 6,
+      "end_year": 2015,
       "end_hour": 0,
       "end_minute": 0,
 
@@ -22,7 +22,7 @@
   "Variables": [
     {
       "name": "      BSF",
-      "distribution": "normal",
+      "distribution": "uniform",
       "mu": 0.3,
       "sigma": 0.1,
       "lower": 0.05,
@@ -32,28 +32,16 @@
     },
     {
       "name": "       A2",
-      "distribution": "normal",
+      "distribution": "uniform",
       "mu": 1.5,
       "sigma": 0.75,
       "lower": 0.5,
       "upper": 3.0,
       "lower_limit": 0.5 ,
       "upper_limit": 4.0
-    },
-    {
-      "name": "     EQD2",
-      "distribution": "normal",
-      "mu": 250,
-      "sigma": 150,
-      "lower": 50,
-      "upper": 500,
-      "lower_limit": 10,
-      "upper_limit": 1000
     }
-
   ],
-  "Output":
-  {
+  "Output":  {
     "type_of_output":"Abfluss Messung",
     "station":"MARI",
     "pathsDataFormat":"False",
@@ -77,7 +65,7 @@
     },
     {
       "name": "      EQD",
-      "distribution": "uniform",
+      "distribution": "normal",
       "mu": 450,
       "sigma": 200,
       "lower": 200,

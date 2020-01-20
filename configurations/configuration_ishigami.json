@@ -8,20 +8,20 @@
      {
       "name": "x1",
       "distribution": "uniform",
-      "uniform_low": -3.14159265359,
-      "uniform_high": 3.14159265359
+      "lower": -3.14159265359,
+      "upper": 3.14159265359
     },
     {
       "name": "x2",
       "distribution": "uniform",
-      "uniform_low": -3.14159265359,
-      "uniform_high": 3.14159265359
+      "lower": -3.14159265359,
+      "upper": 3.14159265359
     },
     {
       "name": "x3",
       "distribution": "uniform",
-      "uniform_low": -3.14159265359,
-      "uniform_high": 3.14159265359
+      "lower": -3.14159265359,
+      "upper": 3.14159265359
     }
   ]
 }

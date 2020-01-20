@@ -26,28 +26,28 @@
      {
       "name": "w",
       "distribution": "uniform",
-      "uniform_low": 0.95,
-      "uniform_high": 1.05
+      "lower": 0.95,
+      "upper": 1.05
     },
     {
       "name": "y1",
       "distribution": "uniform",
-      "uniform_low": -0.05,
-      "uniform_high": 0.05
+      "lower": -0.05,
+      "upper": 0.05
     }
   ],
   "NotusedVariables": [
     {
       "name": "c",
       "distribution": "uniform",
-      "uniform_low": 0.08,
-      "uniform_high": 0.12
+      "lower": 0.08,
+      "upper": 0.12
     },
     {
       "name": "k",
       "distribution": "uniform",
-      "uniform_low": 0,
-      "uniform_high": 2
+      "lower": 0,
+      "upper": 2
     }
   ]
 }
