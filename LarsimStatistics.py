@@ -121,7 +121,7 @@ class LarsimStatistics(Statistics):
 
         # Save the DataFrame containing all the simulation results - This is really important
         #samples.df_time_discharges.to_csv(path_or_buf=os.path.abspath(os.path.join(self.working_dir, "df_all_simulations.csv")),index=True)
-        samples.df_time_discharges.to_pickle(os.path.abspath(os.path.join(self.working_dir, "df_all_simulations.pkl")), compression="gzip")
+        samples.df_simulation_result.to_pickle(os.path.abspath(os.path.join(self.working_dir, "df_all_simulations.pkl")), compression="gzip")
 
         #self.df_simulation_result = samples.df_simulation_result
 
@@ -259,7 +259,7 @@ class LarsimStatistics(Statistics):
 
         # Save the DataFrame containing all the simulation results
         #samples.df_time_discharges.to_csv(path_or_buf=os.path.abspath(os.path.join(self.working_dir, "df_all_simulations.csv")),index=True)
-        samples.df_time_discharges.to_pickle(os.path.abspath(os.path.join(self.working_dir, "df_all_simulations.pkl")), compression="gzip")
+        samples.df_simulation_result.to_pickle(os.path.abspath(os.path.join(self.working_dir, "df_all_simulations.pkl")), compression="gzip")
 
         #self.timesteps = timesteps #this is just a scalar representing total number of timesteps
         self.timesteps = samples.df_simulation_result.TimeStamp.unique()
@@ -328,6 +328,7 @@ class LarsimStatistics(Statistics):
 
         #statistics_dict_path_np=os.path.abspath(os.path.join(self.working_dir, "statistics_dict.npy"))
         #np.save(statistics_dict_path_np, self.Abfluss)
+
         statistics_dict_path_np=os.path.abspath(os.path.join(self.working_dir, "statistics_dict.pkl"))
         with open(statistics_dict_path_np, 'wb') as handle:
             pickle.dump(self.Abfluss, handle, protocol=pickle.HIGHEST_PROTOCOL)
@@ -432,10 +433,10 @@ class LarsimStatistics(Statistics):
 
         if "Sobol_t" in self.Abfluss[keyIter[0]]:
             sobol_t_qoi_file = os.path.abspath(os.path.join(self.working_dir, "sobol_t_qoi_file.npy"))
-            np.save(sobol_t_qoi_file, np.array([self.Abfluss[key]["Sobol_t"][i] for key in keyIter]))
+            np.save(sobol_t_qoi_file, np.array([self.Abfluss[key]["Sobol_t"] for key in keyIter]))
         if "Sobol_m" in self.Abfluss[keyIter[0]]:
             sobol_m_qoi_file = os.path.abspath(os.path.join(self.working_dir, "sobol_m_qoi_file.npy"))
-            np.save(sobol_m_qoi_file, np.array([self.Abfluss[key]["Sobol_m"][i] for key in keyIter]))
+            np.save(sobol_m_qoi_file, np.array([self.Abfluss[key]["Sobol_m"] for key in keyIter]))
 
         # save figure
         pdfFileName = os.path.abspath(os.path.join(self.working_dir, paths.figureFileName + "_uq.pdf"))
