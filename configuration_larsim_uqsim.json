@@ -2,7 +2,7 @@
   "Timeframe":
     {
       "start_day": 15,
-      "start_month": 6,
+      "start_month": 5,
       "start_year": 2013,
       "start_hour": 0,
       "start_minute": 0,
@@ -14,7 +14,7 @@
       "end_hour": 0,
       "end_minute": 0,
 
-      "timestep": 30,
+      "timestep": 10,
       "cut_runs": "False"
     },
   "parameters": [
@@ -50,7 +50,7 @@
     },
     {
       "name": "     EQD2",
-      "distribution": "Normal",
+      "distribution": "Uniform",
       "mu": 250,
       "sigma": 150,
       "lower": 50,
@@ -64,7 +64,7 @@
     "type_of_output":"Abfluss Messung",
     "station":"MARI",
     "pathsDataFormat":"False",
-    "dailyOutput": "True"
+    "dailyOutput": "False"
   },
   "GaugeControlRegion":
   {

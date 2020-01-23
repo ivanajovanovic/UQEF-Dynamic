@@ -57,6 +57,7 @@ if socket.gethostname().startswith("mpp2"):
     outputResultDir = uqsim.args.outputResultDir
 else:
     outputResultDir = os.path.abspath(os.path.join(uqsim.args.outputResultDir, datetime.datetime.now().strftime("%Y-%m-%d:%H:%M")))
+    uqsim.args.outputResultDir = outputResultDir
 
 if uqsim.is_master() and not uqsim.is_restored():
     if not os.path.isdir(outputResultDir): subprocess.run(["mkdir", outputResultDir])
