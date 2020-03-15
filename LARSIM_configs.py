@@ -426,6 +426,12 @@ def align_dataFrames_timewise(biggerDF, smallerDF):
 
     return biggerDF_aligned
 
+def align_dataFrame_timewise(DF, start_date, end_date):
+
+    mask = (DF['TimeStamp'] >= start_date) & (DF['TimeStamp'] <= end_date)
+    DF_aligned = DF.loc[mask, :]
+
+    return DF_aligned
 
 def calculateRMSE(measuredDF, simulatedDF):
     squared_error = np.square(

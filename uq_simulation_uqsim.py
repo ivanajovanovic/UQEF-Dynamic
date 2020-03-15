@@ -39,14 +39,18 @@ from tabulate import tabulate
 uqsim = uqef.UQsim()
 
 # change args locally for testing and debugging
-local_debugging = False
+local_debugging = True
 if local_debugging:
     uqsim.args.model = "larsim"
-    uqsim.args.uq_method = "mc"
-    uqsim.args.mc_numevaluations = 5
+    uqsim.args.uq_method = "saltelli"
+    uqsim.args.mc_numevaluations = 2
     uqsim.args.outputResultDir = "./larsim_runs/"
-    uqsim.args.config_file = "configuration_larsim_snow1.json"
-    uqsim.args.disable_statistics = True
+    uqsim.args.outputModelDir = "./larsim_runs/"
+    uqsim.args.inputModelDir = "./larsim_runs/"
+    uqsim.args.config_file = "configuration_larsim_uqsim.json"
+    uqsim.args.disable_statistics = False
+    uqsim.args.transformToStandardDist = True
+    uqsim.args.mpi = True
 
     uqsim.setup_configuration_object()
 
@@ -79,21 +83,6 @@ if uqsim.is_master() and not uqsim.is_restored():
         subprocess.run(["mkdir", uqsim.configuration_object["Directories"]["working_dir"]])
 
 #####################################
-### one time initial model setup
-#####################################
-# put here if there is something specifically related to the model that should be done only once
-if uqsim.is_master() and not uqsim.is_restored():
-    def initialModelSetUp():
-        models = {
-            "larsim"         : (lambda: LarsimModel.LarsimModelSetUp(uqsim.configuration_object))
-           ,"oscillator"     : (lambda: LinearDampedOscillatorModel.LinearDampedOscillatorModelSetUp(uqsim.configuration_object))
-           ,"ishigami"       : (lambda: IshigamiModel.IshigamiModelSetUp(uqsim.configuration_object))
-           ,"productFunction": (lambda: ProductFunctionModel.ProductFunctionModelSetUp(uqsim.configuration_object))
-        }
-        models[uqsim.args.model]()
-    initialModelSetUp()
-
-#####################################
 #####################################
 
 # register model
@@ -111,20 +100,38 @@ uqsim.statistics.update({"productFunction": (lambda: ProductFunctionStatistics.P
 # setup
 uqsim.setup()
 
-# TODO - Added by Ivana, add file as an optional argument to code in uqsim.setup_simulation() and directly to Nodes.printNodes()
-simulationNodes_save_file = outputResultDir + "/nodes.txt"
-with open(simulationNodes_save_file, "w") as f:
-    f.write(uqsim.simulationNodes.printNodes())
-#or
-#uqsim.simulationNodes.saveToFile()
+#####################################
+### one time initial model setup
+#####################################
+# put here if there is something specifically related to the model that should be done only once
+if uqsim.is_master() and not uqsim.is_restored():
+    def initialModelSetUp():
+        models = {
+            "larsim"         : (lambda: LarsimModel.LarsimModelSetUp(uqsim.configuration_object))
+           ,"oscillator"     : (lambda: LinearDampedOscillatorModel.LinearDampedOscillatorModelSetUp(uqsim.configuration_object))
+           ,"ishigami"       : (lambda: IshigamiModel.IshigamiModelSetUp(uqsim.configuration_object))
+           ,"productFunction": (lambda: ProductFunctionModel.ProductFunctionModelSetUp(uqsim.configuration_object))
+        }
+        models[uqsim.args.model]()
+    initialModelSetUp()
+
+simulationNodes_save_file = "/nodes"
+uqsim.save_simulationNodes(fileName=simulationNodes_save_file)
 
 # start the simulation
 uqsim.simulate()
 
+# save simulation results
+#samples = LarsimStatistics.LarsimSamples(uqsim.solver.results, station=uqsim.configuration_object["Output"]["station"],
+#                          type_of_output=uqsim.configuration_object["Output"]["type_of_output"],
+#                          pathsDataFormat=uqsim.configuration_object["Output"]["pathsDataFormat"],
+#                          dailyOutput=uqsim.configuration_object["Output"]["dailyOutput"])
+#samples.save_samples_to_file(uqsim.configuration_object["Directories"]["working_dir"])
+
 # statistics:
 uqsim.calc_statistics()
 #TODO: probably do not need it...
-uqsim.print_statistics()
+#uqsim.print_statistics()
 #TODO: customize this; to be the same as statistics.plotResults(simulationNodes, display=True)
 uqsim.plot_statistics(display=False)
 #uqsim.statistic.plotResults(simulationNodes, display=True)
@@ -132,4 +139,4 @@ uqsim.plot_statistics(display=False)
 uqsim.save_statistics()
 
 # tear down
-uqsim.tear_down()
+#uqsim.tear_down()
