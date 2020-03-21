@@ -339,7 +339,7 @@ class LarsimStatistics(Statistics):
 
         colors = ['darkred', 'midnightblue', 'mediumseagreen', 'darkorange']
         #sobol_labels = ["BSF", "A2", "EQD", "EQD2"]
-        labels = map(str.strip, self.nodeNames)
+        labels = list(map(str.strip, self.nodeNames))
 
         is_Sobol_t_computed = self._compute_Sobol_t()
         is_Sobol_m_computed = self._compute_Sobol_m()
@@ -401,7 +401,7 @@ class LarsimStatistics(Statistics):
             pdTimesteps = [pd.Timestamp(timestep) for timestep in self.timesteps]
 
         #sobol_labels = ["BSF", "A2", "EQD", "EQD2"]
-        labels = map(str.strip, self.nodeNames)
+        labels = list(map(str.strip, self.nodeNames))
 
         is_Sobol_t_computed = self._compute_Sobol_t()
         is_Sobol_m_computed = self._compute_Sobol_m()
