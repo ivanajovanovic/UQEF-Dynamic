@@ -28,46 +28,31 @@ class LarsimSamples(object):
 
     #TODO write get/set methods for the attributes of the class
 
-    def __init__(self, rawSamples, station=None, type_of_output='Abfluss Messung', pathsDataFormat="False", dailyOutput="False"):
+    def __init__(self, rawSamples, station=None, type_of_output='Abfluss Messung', dailyOutput="False"):
         """
-
         :param rawSamples: results returned by solver. Either list of paths to diff. ergebnis files or pandas.DataFrame object containing output of all the runs
-        :param pathsDataFormat: whether or not results are in form of the path to result file or concrete data arrays
         :param station: Name of the station in which output we are interested in, if None - filter out all the stations
         :param type_of_output: can be Abfluss Simulation or Abfluss Messung, corresponds to the entries in ergebnis.lils
         """
 
         list_of_single_df = []
         for index_run, value in enumerate(rawSamples,): #Important that the results inside rawSamples (resulted paths) are in sorted order and correspond to the parameters order
-
         #TODO-Ivana Add code which will disregard non-valid simulations with value=None and the corresponding nodes!
-
-            if strtobool(pathsDataFormat):
-                #df_single_ergebnis = config.result_parser_toPandas(value, index_run)
-                df_single_ergebnis = larsimInputOutputUtilities.ergebnis_parser_toPandas(value, index_run)
-            else:
-                df_single_ergebnis = value
-
-            #df_single_ergebnis = df_single_ergebnis.loc[df_single_ergebnis['Type'] == type_of_output]
-            df_single_ergebnis = larsimDataPostProcessing.filterResultForTypeOfOutpu(df_single_ergebnis, type_of_output=type_of_output)
-
-            if station is not None:
-                df_single_ergebnis = larsimDataPostProcessing.filterResultForStation(df_single_ergebnis, station=station)
-                #df_single_ergebnis = df_single_ergebnis.loc[(df_single_ergebnis['Stationskennung'] == station)]
-
+            df_single_ergebnis = larsimDataPostProcessing.read_process_write_discharge(df=value,\
+                                 index_run=index_run,\
+                                 type_of_output=type_of_output,\
+                                 station=station)
             list_of_single_df.append(df_single_ergebnis)
 
         self.df_simulation_result = pd.concat(list_of_single_df, ignore_index=True, sort=False, axis=0)
 
         self.df_simulation_result['Value'] = self.df_simulation_result['Value'].astype(float)
-        #print("LARSIM STAT INFO: Data Frame with All the simulation results : {}".format(self.df_simulation_result.dtypes))
 
         print("LARSIM STAT INFO: Number of Unique TimeStamps (Hourly): {}".format(len(self.df_simulation_result.TimeStamp.unique())))
 
         if strtobool(dailyOutput):
             # Average over time. i.e. change column TimeStamp and Value
-            #self.df_simulation_result = config.transformToDailyResolution(self.df_simulation_result)
-            self.df_simulation_result = larsimDataPostProcessing.transformToDailyResolution(self.df_simulation_result) #TODO Note sure if this will work?
+            self.df_simulation_result = larsimDataPostProcessing.transformToDailyResolution(self.df_simulation_result)
             print("LARSIM STAT INFO: Number of Unique TimeStamps (Daily): {}".format(len(self.df_simulation_result.TimeStamp.unique())))
 
         self.df_time_discharges = self.df_simulation_result.groupby(["Stationskennung","TimeStamp"])["Value"].apply(lambda df: df.reset_index(drop=True)).unstack()
@@ -104,8 +89,10 @@ class LarsimStatistics(Statistics):
 
         self.Abfluss = {}
 
-        self.unalatered = None
-        self.measured = None
+        self.df_unalatered = None
+        self.df_measured = None
+        self.unalatered_computed = False
+        self.groundTruth_computed = False
 
     def calcStatisticsForMc(self, rawSamples, timesteps,
                             simulationNodes, numEvaluations, order, regression, solverTimes,
@@ -113,7 +100,6 @@ class LarsimStatistics(Statistics):
 
         samples = LarsimSamples(rawSamples, station=self.configurationObject["Output"]["station"],
                           type_of_output=self.configurationObject["Output"]["type_of_output"],
-                          pathsDataFormat=self.configurationObject["Output"]["pathsDataFormat"],
                           dailyOutput=self.configurationObject["Output"]["dailyOutput"])
 
         # Save the DataFrame containing all the simulation results - This is really important
@@ -161,7 +147,6 @@ class LarsimStatistics(Statistics):
 
         samples = LarsimSamples(rawSamples, station=self.configurationObject["Output"]["station"],
                                  type_of_output=self.configurationObject["Output"]["type_of_output"],
-                                 pathsDataFormat=self.configurationObject["Output"]["pathsDataFormat"],
                                  dailyOutput=self.configurationObject["Output"]["dailyOutput"])
 
         samples.save_samples_to_file(self.working_dir)
@@ -214,7 +199,6 @@ class LarsimStatistics(Statistics):
 
         samples = LarsimSamples(rawSamples, station=self.configurationObject["Output"]["station"],
                           type_of_output=self.configurationObject["Output"]["type_of_output"],
-                          pathsDataFormat=self.configurationObject["Output"]["pathsDataFormat"],
                           dailyOutput=self.configurationObject["Output"]["dailyOutput"])
 
         # Save the DataFrame containing all the simulation results - This is really important
@@ -259,55 +243,35 @@ class LarsimStatistics(Statistics):
                 self.Abfluss[key]["P10"]=self.Abfluss[key]["P10"][0]
                 self.Abfluss[key]["P90"]=self.Abfluss[key]["P90"][0]
 
+
     def  _compute_Sobol_t(self):
         is_Sobol_t_computed = "Sobol_t" in self.Abfluss[self.keyIter[0]] #hasattr(self.Abfluss[self.keyIter[0], "Sobol_t")
         return is_Sobol_t_computed
+
 
     def  _compute_Sobol_m(self):
         is_Sobol_m_computed = "Sobol_m" in self.Abfluss[self.keyIter[0]] #hasattr(self.Abfluss[self.keyIter[0], "Sobol_m")
         return is_Sobol_m_computed
 
-    def _read_discharge_for_plotting(self, filename, timestepRange=None):
-        #TODO You can as well for example read ground truth values directly here
-        temp_dataFrame = pd.read_csv(filename) #TODO - this depends on csv, pkl
-        temp_dataFrame['TimeStamp'] = temp_dataFrame['TimeStamp'].astype('datetime64[ns]')
-        temp_dataFrame = larsimDataPostProcessing.filterResultForStation(temp_dataFrame, station=self.configurationObject["Output"]["station"])
 
-        if timestepRange is not None:
-            temp_dataFrame = larsimDataPostProcessing.align_dataFrame_timewise(temp_dataFrame, timestepRange[0], timestepRange[1]) #TODO Maybe before plotting check if two graphs are aligned
-
-        if strtobool(self.configurationObject["Output"]["dailyOutput"]):
-            temp_dataFrame_daily = larsimDataPostProcessing.transformToDailyResolution(temp_dataFrame)
-            result_array = temp_dataFrame_daily.Value.values
-        else:
-            result_array = temp_dataFrame.Value.values
-        return result_array
-
-
-    def get_unaltered_data(self, timestepRange=None):
-        self.unalatered = self._read_discharge_for_plotting(filename=os.path.abspath(os.path.join(self.working_dir, "df_unaltered_ergebnis.csv")), timestepRange=timestepRange)
-        #self.Abfluss["Unaltered"] = self.unalatered
-
-    def get_groundTruth_data(self, timestepRange=None):
-        self.measured = self._read_discharge_for_plotting(filename=os.path.abspath(os.path.join(self.working_dir, "df_measured.csv")), timestepRange=timestepRange)
+    def get_measured_discharge(self, timestepRange=None):
+        self.df_measured = larsimDataPostProcessing.read_process_write_discharge(df=os.path.abspath(os.path.join(self.working_dir, "df_measured.csv")),\
+                             timeframe=timestepRange,\
+                             station=self.configurationObject["Output"]["station"],\
+                             dailyOutput=strtobool(self.configurationObject["Output"]["dailyOutput"]))
+        self.groundTruth_computed = True
         #self.Abfluss["Ground_Truth_Measurements"] = self.measured
 
-    def saveToFile(self, fileName="statistics_dict", fileNameIdent="", directory="./",
-                   fileNameIdentIsFullName=False):
 
-        #save state to a file
+    def get_unaltered_discharge(self, timestepRange=None):
+        self.df_unalatered = larsimDataPostProcessing.read_process_write_discharge(df=os.path.abspath(os.path.join(self.working_dir, "df_unaltered_ergebnis.csv")),\
+                             timeframe=timestepRange,\
+                             type_of_output=self.configurationObject["Output"]["type_of_output"],\
+                             station=self.configurationObject["Output"]["station"],\
+                             dailyOutput=strtobool(self.configurationObject["Output"]["dailyOutput"]))
+        self.unalatered_computed = True
+        #self.Abfluss["Unaltered"] = self.unalatered
 
-        fileName = self.generateFileName(fileName=fileName, fileNameIdent=fileNameIdent,\
-         directory=self.working_dir, fileNameIdentIsFullName=fileNameIdentIsFullName)
-
-        statFileName = fileName + '.pkl'
-
-        with open(statFileName, 'wb') as handle:
-            pickle.dump(self.Abfluss, handle, protocol=pickle.HIGHEST_PROTOCOL)
-            #dill.dump(self, f)
-        #pickle_out = open(statFileName,"wb")
-        #pickle.dump(self.Abfluss, pickle_out)
-        #pickle_out.close()
 
     def plotResults(self, timestep=-1, display=False,
                     fileName="", fileNameIdent="", directory="./",
@@ -315,10 +279,11 @@ class LarsimStatistics(Statistics):
 
         fileName = self.generateFileName(fileName, fileNameIdent, directory, fileNameIdentIsFullName)
 
-        self.get_groundTruth_data(timestepRange=(self.timesteps.min(), self.timesteps.max()))
-        self.get_unaltered_data(timestepRange=(self.timesteps.min(), self.timesteps.max()))
+        timestepRange = (pd.Timestamp(self.timesteps.min()), pd.Timestamp(self.timesteps.max()))
+        self.get_measured_discharge(timestepRange=timestepRange)
+        self.get_unaltered_discharge(timestepRange=timestepRange)
 
-        self._plotStatisticsDict_plotly(unalatered=True, measured=True, station=self.configurationObject["Output"]["station"], recalculateTimesteps=False, filename=fileName, display=display)
+        self._plotStatisticsDict_plotly(unalatered=self.unalatered_computed, measured=self.groundTruth_computed, station=self.configurationObject["Output"]["station"], recalculateTimesteps=False, filename=fileName, display=display)
         #self._plotStatisticsDict_plotter(unalatered=None, measured=None, station=self.configurationObject["Output"]["station"], recalculateTimesteps=False, filename=fileName, display=display)
 
 
@@ -339,7 +304,8 @@ class LarsimStatistics(Statistics):
 
         colors = ['darkred', 'midnightblue', 'mediumseagreen', 'darkorange']
         #sobol_labels = ["BSF", "A2", "EQD", "EQD2"]
-        labels = list(map(str.strip, self.nodeNames))
+        labels = [nodeName.strip() for nodeName in self.nodeNames]
+        #labels = list(map(str.strip, self.nodeNames))
 
         is_Sobol_t_computed = self._compute_Sobol_t()
         is_Sobol_m_computed = self._compute_Sobol_m()
@@ -355,10 +321,10 @@ class LarsimStatistics(Statistics):
 
         if unalatered:
             #fig.add_trace(go.Scatter(x=pdTimesteps, y=self.unalatered['Value'], name="Q (unaltered simulation)",line_color='deepskyblue'), row=1, col=1)
-            fig.add_trace(go.Scatter(x=self.unalatered['TimeStamp'], y=self.unalatered['Value'], name="Q (unaltered simulation)",line_color='deepskyblue'), row=1, col=1)
+            fig.add_trace(go.Scatter(x=self.df_unalatered['TimeStamp'], y=self.df_unalatered['Value'], name="Q (unaltered simulation)",line_color='deepskyblue'), row=1, col=1)
         if measured:
             #fig.add_trace(go.Scatter(x=pdTimesteps, y=self.measured['Value'], name="Q (measured)",line_color='red'), row=1, col=1)
-            fig.add_trace(go.Scatter(x=self.measured['TimeStamp'], y=self.measured['Value'], name="Q (measured)",line_color='red'), row=1, col=1)
+            fig.add_trace(go.Scatter(x=self.df_measured['TimeStamp'], y=self.df_measured['Value'], name="Q (measured)",line_color='red'), row=1, col=1)
 
         fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["E"][0] for key in self.keyIter], name='E[Q]',line_color='green', mode='lines'), row=1, col=1)
         fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["P10"] for key in self.keyIter], name='10th percentile',line_color='indianred', mode='lines'), row=1, col=1)
@@ -401,7 +367,8 @@ class LarsimStatistics(Statistics):
             pdTimesteps = [pd.Timestamp(timestep) for timestep in self.timesteps]
 
         #sobol_labels = ["BSF", "A2", "EQD", "EQD2"]
-        labels = list(map(str.strip, self.nodeNames))
+        labels = [nodeName.strip() for nodeName in self.nodeNames]
+        #labels = list(map(str.strip, self.nodeNames))
 
         is_Sobol_t_computed = self._compute_Sobol_t()
         is_Sobol_m_computed = self._compute_Sobol_m()
@@ -415,10 +382,10 @@ class LarsimStatistics(Statistics):
 
         if unalatered:
             #plotter.plot(pdTimesteps, self.unalatered['Value'], label="Q (unaltered simulation)")
-            plotter.plot(self.unalatered['TimeStamp'], self.unalatered['Value'], label="Q (unaltered simulation)")
+            plotter.plot(self.df_unalatered['TimeStamp'], self.df_unalatered['Value'], label="Q (unaltered simulation)")
         if measured:
             #plotter.plot(pdTimesteps, self.measured['Value'], label="Q (measured)")
-            plotter.plot(self.measured['TimeStamp'], self.measured['Value'], label="Q (measured)")
+            plotter.plot(self.df_measured['TimeStamp'], self.df_measured['Value'], label="Q (measured)")
 
         self.keyIter = list(itertools.product([station,],pdTimesteps))
 
@@ -470,6 +437,25 @@ class LarsimStatistics(Statistics):
             plotter.show()
 
         plotter.close()
+
+    def saveToFile(self, fileName="statistics_dict", fileNameIdent="", directory="./",
+                   fileNameIdentIsFullName=False):
+
+        #save state to a file
+
+        fileName = self.generateFileName(fileName=fileName, fileNameIdent=fileNameIdent,\
+         directory=self.working_dir, fileNameIdentIsFullName=fileNameIdentIsFullName)
+
+        statFileName = fileName + '.pkl'
+
+        with open(statFileName, 'wb') as handle:
+            pickle.dump(self.Abfluss, handle, protocol=pickle.HIGHEST_PROTOCOL)
+            #dill.dump(self, f)
+        #pickle_out = open(statFileName,"wb")
+        #pickle.dump(self.Abfluss, pickle_out)
+        #pickle_out.close()
+
+
 
 
 #helper function

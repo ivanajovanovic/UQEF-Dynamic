@@ -38,6 +38,21 @@ class LarsimModelSetUp():
 
         self.master_dir = os.path.abspath(os.path.join(self.working_dir, 'master_configuration'))
 
+        try:
+            self.station_of_Interest = self.configurationObject["Output"]["station"]
+        except KeyError:
+            self.station_of_Interest = "MARI"
+
+        try:
+            self.type_of_output_of_Interest = self.configurationObject["Output"]["type_of_output"]
+        except KeyError:
+            self.type_of_output_of_Interest = "Abfluss Messung"
+
+        try:
+            self.type_of_output_of_Interest_measured = self.configurationObject["Output"]["type_of_output_measured"]
+        except KeyError:
+            self.type_of_output_of_Interest_measured  = "Ground Truth"
+
         self.copy_master_folder()
         self.configure_master_folder()
 
@@ -88,9 +103,12 @@ class LarsimModelSetUp():
         #####################################
         # station_wq.lila file containing ground truth (measured) discharges to lila file
         local_wq_file = os.path.abspath(os.path.join(self.master_dir, paths.lila_files[0])) #lila_configured_paths[0]
-        self.df_measured = larsimInputOutputUtilities.q_lila_parser_toPandas(local_wq_file, index_run=0, write_in_file=write_in_file, new_file_path=os.path.abspath(os.path.join(self.working_dir, "df_measured.csv")))
-        #self.df_measured.to_csv(path_or_buf=os.path.abspath(os.path.join(self.working_dir, "df_measured.csv")), index=True)
-        #print("Data Frame with Measured Discharges was read from the folder {}; dtype is {}".format(local_wq_file, self.df_measured.dtypes))
+        self.df_measured = larsimDataPostProcessing.read_process_write_discharge(df=local_wq_file,\
+                             index_run=0,\
+                             timeframe=self.timeframe,\
+                             write_to_file=os.path.abspath(os.path.join(self.working_dir, "df_measured.csv"))
+                             )
+
 
     def run_unaltered_sim(self, createNewFolder=False, write_in_file=True):
         #####################################
@@ -112,8 +130,9 @@ class LarsimModelSetUp():
         os.chdir(self.current_dir)
 
         result_file_path = os.path.abspath(os.path.join(dir_unaltered_run, 'ergebnis.lila'))
-        self.df_unaltered_ergebnis = larsimInputOutputUtilities.ergebnis_parser_toPandas(result_file_path, index_run=0, write_in_file=write_in_file, new_file_path=os.path.abspath(os.path.join(self.working_dir, "df_unaltered_ergebnis.csv")))
-        #self.df_unaltered_ergebnis.to_csv(path_or_buf=os.path.abspath(os.path.join(self.working_dir, "df_unaltered_ergebnis.csv")), index=True)
+        self.df_unaltered_ergebnis = larsimInputOutputUtilities.ergebnis_parser_toPandas(result_file_path, index_run=0, write_in_file=False)
+        if write_in_file:
+            larsimInputOutputUtilities.write_dataFrame_to_file(self.df_unaltered_ergebnis, os.path.abspath(os.path.join(self.working_dir, "df_unaltered_ergebnis.csv")))
 
         #print("Data Frame with Unaltered Simulation Discharges dtypes : {}".format(self.df_unaltered_ergebnis.dtypes))
 
@@ -128,35 +147,33 @@ class LarsimModelSetUp():
         #####################################
         ### compare ground truth measurements and unaltered run for this simulation (compute RMSE | BIAS | NSE | logNSE)
         #####################################
-        station_of_Interest = self.configurationObject["Output"]["station"]
-        type_of_output_of_Interest = self.configurationObject["Output"]["type_of_output"]
-        type_of_output_of_Interest_measured = "Ground Truth"
-
         #hourly
         goodnessofFit_tuple = larsimDataPostProcessing.calculateGoodnessofFit(self.df_measured, self.df_unaltered_ergebnis,
-                                                                       station=station_of_Interest,
-                                                                       type_of_output_of_Interest_measured=type_of_output_of_Interest_measured,
-                                                                       type_of_output_of_Interest=type_of_output_of_Interest,
+                                                                       station=self.station_of_Interest,
+                                                                       type_of_output_of_Interest_measured=self.type_of_output_of_Interest_measured,
+                                                                       type_of_output_of_Interest=self.type_of_output_of_Interest,
                                                                        dailyStatisict=False)
-        result_tuple = goodnessofFit_tuple[station_of_Interest]
+        result_tuple = goodnessofFit_tuple[self.station_of_Interest]
 
         # daily
         goodnessofFit_tuple_daily = larsimDataPostProcessing.calculateGoodnessofFit(self.df_measured, self.df_unaltered_ergebnis,
-                                                                       station=station_of_Interest,
-                                                                       type_of_output_of_Interest_measured=type_of_output_of_Interest_measured,
-                                                                       type_of_output_of_Interest=type_of_output_of_Interest,
+                                                                       station=self.station_of_Interest,
+                                                                       type_of_output_of_Interest_measured=self.type_of_output_of_Interest_measured,
+                                                                       type_of_output_of_Interest=self.type_of_output_of_Interest,
                                                                        dailyStatisict=True)
-        result_tuple_daily = goodnessofFit_tuple_daily[station_of_Interest]
+        result_tuple_daily = goodnessofFit_tuple_daily[self.station_of_Interest]
 
 
         # write in a file GOF values of the unaltered model prediction
-        column_labels = ("RMSE", "BIAS", "NSE", "LogNSE")
         gof_file_path = os.path.abspath(os.path.join(self.working_dir, "GOF_Measured_vs_Unaltered.txt"))
+        column_labels = result_tuple.keys()
         with open(gof_file_path, 'w') as f:
             line = ' '.join(str(x) for x in column_labels)
             f.write(line + "\n")
             f.write('{:.4f} {:.4f} {:.4f} {:.4f} \n'.format(result_tuple["RMSE"], result_tuple["BIAS"], result_tuple["NSE"], result_tuple["LogNSE"]))
+            #f.write('{:.4f} {:.4f} {:.4f} {:.4f} \n'.format(result_tuple[k] for k in result_tuple.keys()))
             f.write('{:.4f} {:.4f} {:.4f} {:.4f} \n'.format(result_tuple_daily["RMSE"], result_tuple_daily["BIAS"], result_tuple_daily["NSE"], result_tuple_daily["LogNSE"]))
+            #f.write('{:.4f} {:.4f} {:.4f} {:.4f} \n'.format(result_tuple_daily[k] for k in result_tuple.keys()))
         f.close()
 
 
@@ -177,6 +194,21 @@ class LarsimModel(Model):
         #self.master_dir = paths.master_dir #directoy containing all the base files for Larsim execution
         self.master_dir = os.path.abspath(os.path.join(self.working_dir, 'master_configuration'))
 
+        try:
+            self.station_of_Interest = self.configurationObject["Output"]["station"]
+        except KeyError:
+            self.station_of_Interest = "MARI"
+
+        try:
+            self.type_of_output_of_Interest = self.configurationObject["Output"]["type_of_output"]
+        except KeyError:
+            self.type_of_output_of_Interest = "Abfluss Messung"
+
+        try:
+            self.type_of_output_of_Interest_measured = self.configurationObject["Output"]["type_of_output_measured"]
+        except KeyError:
+            self.type_of_output_of_Interest_measured  = "Ground Truth"
+
         self.timeframe = larsimTimeUtility.parse_datetime_configuration(
             self.configurationObject)
         self.timestep = self.configurationObject["Timeframe"]["timestep"]  # how long one consecutive run should take - used later on in each Larsim run
@@ -188,6 +220,7 @@ class LarsimModel(Model):
         self.variable_names = []
         for i in self.configurationObject["parameters"]:
             self.variable_names.append(i["name"])
+
 
     def prepare(self):
         pass
@@ -258,39 +291,29 @@ class LarsimModel(Model):
             ### compare model predictions of this simulation with measured (ground truth) data (compute RMSE | BIAS | NSE | logNSE)
             ### this can be moved to Statistics - positioned here due to parallelisation
             #####################################
-            gt_dataFrame = pd.read_csv(os.path.abspath(os.path.join(self.working_dir, "df_measured.csv")))
-            gt_dataFrame['TimeStamp'] = gt_dataFrame['TimeStamp'].astype('datetime64[ns]')
-            station_of_Interest = self.configurationObject["Output"]["station"]
-            type_of_output_of_Interest = self.configurationObject["Output"]["type_of_output"]
-            type_of_output_of_Interest_measured = "Ground Truth"
-            #allStations = result["Stationskennung"].unique()
+            gt_dataFrame = larsimInputOutputUtilities.read_dataFrame_from_file(os.path.abspath(os.path.join(self.working_dir, "df_measured.csv")))
 
             goodnessofFit_tuple = larsimDataPostProcessing.calculateGoodnessofFit(measuredDF=gt_dataFrame, predictedDF=result,
-                                                                           station=station_of_Interest,
-                                                                           type_of_output_of_Interest_measured=type_of_output_of_Interest_measured,
-                                                                           type_of_output_of_Interest=type_of_output_of_Interest,
+                                                                           station=self.station_of_Interest,
+                                                                           type_of_output_of_Interest_measured=self.type_of_output_of_Interest_measured,
+                                                                           type_of_output_of_Interest=self.type_of_output_of_Interest,
                                                                            dailyStatisict=False)
-            #result_tuple = goodnessofFit_tuple[station_of_Interest]
             goodnessofFit_DailyBasis_tuple = larsimDataPostProcessing.calculateGoodnessofFit(measuredDF=gt_dataFrame, predictedDF=result,
-                                                                           station=station_of_Interest,
-                                                                           type_of_output_of_Interest_measured=type_of_output_of_Interest_measured,
-                                                                           type_of_output_of_Interest=type_of_output_of_Interest,
+                                                                           station=self.station_of_Interest,
+                                                                           type_of_output_of_Interest_measured=self.type_of_output_of_Interest_measured,
+                                                                           type_of_output_of_Interest=self.type_of_output_of_Interest,
                                                                            dailyStatisict=True)
-            #result_tuple_daily = goodnessofFit_DailyBasis_tuple[station_of_Interest]
-
             header_array = ["Index_run",]
+            index_parameter_gof_array = [int(i),]
+
             for variable_name in self.variable_names:
                 header_array.append(variable_name)
-            for gof_name in ["RMSE", "BIAS", "NSE", "LogNSE"]:
-                header_array.append(gof_name)
-            index_parameter_gof_array = [int(i),]
             for single_param in parameter:
                 index_parameter_gof_array.append(round(Decimal(single_param), 4))
-            #index_parameter_gof_array.append(round(Decimal(goodnessofFit_tuple[station_of_Interest][k]),4) for k in goodnessofFit_tuple[station_of_Interest].keys())
-            index_parameter_gof_array.append(round(Decimal(goodnessofFit_tuple[station_of_Interest]['RMSE']), 4))
-            index_parameter_gof_array.append(round(Decimal(goodnessofFit_tuple[station_of_Interest]['BIAS']), 4))
-            index_parameter_gof_array.append(round(Decimal(goodnessofFit_tuple[station_of_Interest]['NSE']), 4))
-            index_parameter_gof_array.append(round(Decimal(goodnessofFit_tuple[station_of_Interest]['LogNSE']), 4))
+
+            for gof_name in goodnessofFit_tuple[self.station_of_Interest].keys():
+                header_array.append(gof_name)
+                index_parameter_gof_array.append(round(Decimal(goodnessofFit_tuple[self.station_of_Interest][gof_name]), 4))
 
             index_parameter_gof_DF = pd.DataFrame([index_parameter_gof_array], columns=header_array)
             index_parameter_gof_DF.to_csv(
@@ -310,12 +333,12 @@ class LarsimModel(Model):
 
             print("LarsimModel INFO: I am done - solver number {}".format(i))
 
-
         return results
 
-    def timesteps(self):
 
+    def timesteps(self):
         return self.t
+
 
     def _single_larsim_run(self, timeframe, curr_working_dir, parameters=None, index_run=0, sub_index_run=0):
 
@@ -343,10 +366,10 @@ class LarsimModel(Model):
 
         if os.path.isfile(result_file_path):
             df_single_ergebnis = larsimInputOutputUtilities.ergebnis_parser_toPandas(result_file_path, index_run)
-            df_single_ergebnis['Value'] = df_single_ergebnis['Value'].astype(float)
             return df_single_ergebnis
         else:
             return None #TODO Handle this more elegantly
+
 
     def _multiple_short_larsim_runs(self, timeframe, timestep, curr_working_dir, parameters=None, index_run=0):
         # if you want to cut execution into shorter runs...

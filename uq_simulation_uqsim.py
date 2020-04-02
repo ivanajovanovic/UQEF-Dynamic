@@ -51,6 +51,9 @@ if local_debugging:
     uqsim.args.disable_statistics = False
     uqsim.args.transformToStandardDist = True
     uqsim.args.mpi = True
+    #
+    uqsim.args.uqsim_store_to_file=True
+
 
     uqsim.setup_configuration_object()
 
@@ -117,6 +120,10 @@ if uqsim.is_master() and not uqsim.is_restored():
 
 simulationNodes_save_file = "/nodes"
 uqsim.save_simulationNodes(fileName=simulationNodes_save_file)
+
+#just for trying, to check what is saved
+uqsim.args.uqsim_file=os.path.abspath(os.path.join(uqsim.configuration_object["Directories"]["working_dir"], "uqsim.saved"))
+uqsim.store_to_file()
 
 # start the simulation
 uqsim.simulate()
