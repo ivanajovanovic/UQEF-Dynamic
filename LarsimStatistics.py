@@ -217,26 +217,33 @@ class LarsimStatistics(Statistics):
         self.dim = len(simulationNodes.nodeNames)
 
         for key,val in groups.items():
-            discharge_values = samples.df_simulation_result.iloc[val.values].Value.values #numpy array - for sartelli it should be n(2+d)x1
             self.Abfluss[key] = {}
+
+            discharge_values = samples.df_simulation_result.iloc[val.values].Value.values #numpy array - for sartelli it should be n(2+d)x1
+            #extended_standard_discharge_values = discharge_values[:(2*numEvaluations)]
             discharge_values_saltelli = discharge_values[:, np.newaxis]
-            # TODO!!!
             standard_discharge_values = discharge_values_saltelli[:numEvaluations,:] #values based on which we calculate standard statistics
+            extended_standard_discharge_values = discharge_values_saltelli[:(2*numEvaluations),:]
 
             self.Abfluss[key]["Q"] = standard_discharge_values
-            self.Abfluss[key]["E"] = np.sum(standard_discharge_values, axis=0, dtype=np.float64) / numEvaluations
+
+            self.Abfluss[key]["min_q"] = np.amin(discharge_values) #standard_discharge_values.min()
+            self.Abfluss[key]["max_q"] = np.amax(discharge_values) #standard_discharge_values.max()
+
+            self.Abfluss[key]["E"] = np.sum(extended_standard_discharge_values, axis=0, dtype=np.float64) / (2*numEvaluations)
             self.Abfluss[key]["E_numpy"] = np.mean(discharge_values, 0) #TODO!!!
             #self.Abfluss[key]["Var"] = float(np.sum(power(standard_discharge_values)) / numEvaluations - self.Abfluss[key]["E"] ** 2)
-            self.Abfluss[key]["Var"] = np.sum((standard_discharge_values - self.Abfluss[key]["E"]) ** 2, axis=0, dtype=np.float64) / (numEvaluations - 1)
+            self.Abfluss[key]["Var"] = np.sum((extended_standard_discharge_values - self.Abfluss[key]["E"]) ** 2, axis=0, dtype=np.float64) / (2*numEvaluations - 1)
             self.Abfluss[key]["StdDev"] = np.sqrt(self.Abfluss[key]["Var"], dtype=np.float64)
             self.Abfluss[key]["StdDev_numpy"] = np.std(discharge_values, 0, ddof=1)  #TODO!!!
 
             #self.Abfluss[key]["P10"] = np.percentile(discharge_values[:numEvaluations], 10, axis=0)
             #self.Abfluss[key]["P90"] = np.percentile(discharge_values[:numEvaluations], 90, axis=0)
-            self.Abfluss[key]["P10"] = np.percentile(standard_discharge_values, 10, axis=0)
-            self.Abfluss[key]["P90"] = np.percentile(standard_discharge_values, 90, axis=0)
+            self.Abfluss[key]["P10"] = np.percentile(extended_standard_discharge_values, 10, axis=0)
+            self.Abfluss[key]["P90"] = np.percentile(extended_standard_discharge_values, 90, axis=0)
 
-            self.Abfluss[key]["Sobol_m"] = _Sens_m_sample_4(discharge_values_saltelli, self.dim, numEvaluations)
+            #self.Abfluss[key]["Sobol_m"] = _Sens_m_sample_4(discharge_values_saltelli, self.dim, numEvaluations)
+            self.Abfluss[key]["Sobol_m"] = _Sens_m_sample_3(discharge_values_saltelli, self.dim, numEvaluations)
             self.Abfluss[key]["Sobol_t"] = _Sens_t_sample_4(discharge_values_saltelli, self.dim, numEvaluations)
 
             if isinstance(self.Abfluss[key]["P10"], (list)) and len(self.Abfluss[key]["P10"]) == 1:
@@ -277,7 +284,7 @@ class LarsimStatistics(Statistics):
                     fileName="", fileNameIdent="", directory="./",
                     fileNameIdentIsFullName=False, safe=True):
 
-        fileName = self.generateFileName(fileName, fileNameIdent, directory, fileNameIdentIsFullName)
+        fileName = self.generateFileName(fileName=fileName, fileNameIdent=".html", directory=directory, fileNameIdentIsFullName=fileNameIdentIsFullName)
 
         timestepRange = (pd.Timestamp(self.timesteps.min()), pd.Timestamp(self.timesteps.max()))
         self.get_measured_discharge(timestepRange=timestepRange)
@@ -326,10 +333,15 @@ class LarsimStatistics(Statistics):
             #fig.add_trace(go.Scatter(x=pdTimesteps, y=self.measured['Value'], name="Q (measured)",line_color='red'), row=1, col=1)
             fig.add_trace(go.Scatter(x=self.df_measured['TimeStamp'], y=self.df_measured['Value'], name="Q (measured)",line_color='red'), row=1, col=1)
 
-        fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["E"][0] for key in self.keyIter], name='E[Q]',line_color='green', mode='lines'), row=1, col=1)
+        #fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["E"][0] for key in self.keyIter], name='E[Q]',line_color='green', mode='lines'), row=1, col=1)
         fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["P10"] for key in self.keyIter], name='10th percentile',line_color='indianred', mode='lines'), row=1, col=1)
         fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["P90"] for key in self.keyIter], name='90th percentile',line_color='yellow', mode='lines'), row=1, col=1)
-        fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["StdDev"][0] for key in self.keyIter], name='std. dev', line_color='darkviolet'), row=2, col=1)
+        #fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["StdDev"][0] for key in self.keyIter], name='std. dev', line_color='darkviolet'), row=2, col=1)
+
+        fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["E_numpy"] for key in self.keyIter], name='E[Q]',line_color='green', mode='lines'), row=1, col=1)
+        #fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["min_q"] for key in self.keyIter], name='min_q',line_color='indianred', mode='lines'), row=1, col=1)
+        #fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["max_q"] for key in self.keyIter], name='max_q',line_color='yellow', mode='lines'), row=1, col=1)
+        fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["StdDev_numpy"] for key in self.keyIter], name='std. dev', line_color='darkviolet'), row=2, col=1)
 
         if is_Sobol_m_computed:
             for i in range(len(labels)):
@@ -484,7 +496,8 @@ def _separate_output_values_2(Y, D, N):
     for j in range(D):
         start = (j + 2)*N
         end = start + N
-        A_B.append(Y[start:end,:])
+        temp = np.array(Y[start:end,:])
+        A_B.append(temp)
 
     #return A.T, B.T, A_B
     return A, B, A_B
@@ -562,16 +575,21 @@ def _Sens_m_sample_3(Y, D, N):
     A, B, A_B = _separate_output_values_2(Y, D, N)
 
     #variance = np.var(A, -1)
-    variance = np.var(A, axis=0)
+    variance = np.var(A, axis=0, ddof=1)
 
-    out = [
-        #np.mean(B*(A_B[j].T-A), -1) /
-        np.mean(B*(A_B[j]-A), axis=0) /
-        np.where(variance, variance, 1)
-        for j in range(D)
-        ]
+    #out = [
+    #    #np.mean(B*(A_B[j].T-A), -1) /
+    #    np.mean(B*(A_B[j]-A), axis=0) /
+    #    np.where(variance, variance, 1)
+    #    for j in range(D)
+    #    ]
+    s_i = []
+    for j in range(D):
+        #np.dot(B, (A_B[j]-A))
+        s_i_j = np.mean(B*(A_B[j]-A), axis=0) / np.where(variance, variance, 1)
+        s_i.append(s_i_j)
 
-    return np.array(out)
+    return np.array(s_i)
 
 def _Sens_m_sample_4(Y, D, N):
     """
@@ -580,7 +598,7 @@ def _Sens_m_sample_4(Y, D, N):
     A, B, A_B = _separate_output_values_2(Y, D, N)
 
     #variance = np.var(A, -1)
-    variance = np.var(A, axis=0)
+    variance = np.var(A, axis=0, ddof=1)
 
     out = [
         #1 - np.mean((A_B[j].T-B)**2, -1) /
@@ -640,7 +658,7 @@ def _Sens_t_sample_3(Y, D, N):
     A, B, A_B = _separate_output_values_2(Y, D, N)
 
     #variance = np.var(A, -1)
-    variance = np.var(A, axis=0)
+    variance = np.var(A, axis=0, ddof=1)
 
     out = [
         #np.mean(A*(A-A_B[j].T), -1) /
@@ -659,7 +677,7 @@ def _Sens_t_sample_4(Y, D, N):
     A, B, A_B = _separate_output_values_2(Y, D, N)
 
     #variance = np.var(A, -1)
-    variance = np.var(A, axis=0)
+    variance = np.var(A, axis=0, ddof=1)
 
     out = [
         #np.mean((A-A_B[j].T)**2, -1) /

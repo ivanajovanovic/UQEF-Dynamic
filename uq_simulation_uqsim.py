@@ -51,6 +51,7 @@ if local_debugging:
     uqsim.args.disable_statistics = False
     uqsim.args.transformToStandardDist = True
     uqsim.args.mpi = True
+    uqsim.args.sampling_rule = "S"# | "sobol"  | "latin_hypercube" | "halton"  | "hammersley"
     #
     uqsim.args.uqsim_store_to_file=True
 

@@ -2,7 +2,7 @@
   "Timeframe":
     {
       "start_day": 15,
-      "start_month": 5,
+      "start_month": 6,
       "start_year": 2013,
       "start_hour": 0,
       "start_minute": 0,
@@ -14,8 +14,8 @@
       "end_hour": 0,
       "end_minute": 0,
 
-      "timestep": 10,
-      "cut_runs": "False"
+      "timestep": 5,
+      "cut_runs": "True"
     },
   "parameters": [
     {
