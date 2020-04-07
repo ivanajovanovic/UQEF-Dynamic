@@ -31,7 +31,7 @@ start_larsim_uq_sim(){
 
     #print to the command line!
     #echo "$counter:mpp2: $@"
-    echo "$counter:mpp2: $@" >> started_jobs.txt
+    echo "$counter:cm2: $@" >> started_jobs.txt
 
     #create env
     # init vars
@@ -43,7 +43,7 @@ start_larsim_uq_sim(){
     modelMasterPath=$basePath
 
     executionPath=$baseExecutionPath
-    resultsPath=$baseResultsPath/Repositories/model_runs
+    resultsPath=$baseResultsPath/Repositories/larsim_runs
 
     # init the stuff
     if [ "$strategy" == "FIXED_LINEAR" ] ; then
@@ -66,7 +66,7 @@ echo "#!/bin/bash
 #SBATCH -D $baseSourcePath
 #SBATCH -J larsim.$counter
 #SBATCH --get-user-env
-#SBATCH --clusters=mpp2
+#SBATCH --clusters=cm2
 #SBATCH --nodes=$cluster_nodes
 #SBATCH --cpus-per-task=$cpus
 #SBATCH --ntasks-per-node=$tasks
@@ -79,9 +79,9 @@ echo "#!/bin/bash
 
 source /etc/profile.d/modules.sh
 module load python/3.6_intel
-module unload mpi.intel
+module unload intel-mpi/2019.6.166
 module load mpi.intel/2018
-source /home/hpc/pr63so/ga45met2/.conda/envs/larsimuq/bin/activate larsimuq
+source /dss/dsshome1/lxc0C/ga45met2/.conda/envs/larsimuq/bin/activate larsimuq
 
 export OMP_NUM_THREADS=$threads
 
@@ -89,22 +89,24 @@ export OMP_NUM_THREADS=$threads
 # start simulation
 echo "---- start sim:"
 
-    mpiexec -genv I_MPI_DEBUG=+5 -print-rank-map python3 $executionPath/uq_simulation.py \
+    mpiexec -genv I_MPI_DEBUG=+5 -print-rank-map python3 $executionPath/uq_simulation_uqsim.py \
                             --outputResultDir "/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/Repositories/larsim_runs" \
                             --model $model \
                             --chunksize 1 \
                             --num_cores $threads --mpi --mpi_method $mpi_method \
-                            --run_statistics \
-                            --configurationsFile "/home/hpc/pr63so/ga45met2/Repositories/Larsim-UQ/configurations/configuration_larsim_v4.json" \
-                            --uq_method "sc" --sc_q_order $q_order --sc_p_order $p_order \
+                            --config_file "/dss/dsshome1/lxc0C/ga45met2/Repositories/Larsim-UQ/configuration_larsim_uqsim_cm2.json" \
+                            --uq_method "saltelli"  \
+                            --mc_numevaluations 5000 \
+                            --sampling_rule "S" \
+                            --disable_statistics False \
                             --transformToStandardDist
 
 echo "---- end \$i:"
 
-" > uq_larsim_mpp2_sc_v4.cmd
+" > uq_larsim_cm2_saltelli.cmd
 
     #execute batch file
-    sbatch uq_larsim_mpp2_sc_v4.cmd
+    sbatch uq_larsim_cm2_saltelli.cmd
 }
 
 model="larsim"
@@ -114,6 +116,6 @@ nodes=4
 low_time="2:30:00"
 mid_time="5:45:00"
 max_time="48:00:00"
-uq_method="sc"
+uq_method="saltelli"
 
-start_larsim_uq_sim "DYNAMIC" "NOALGO"  12  6 "$model" "$opt_add" 1 "new" "$nodes" "$max_time"
+start_larsim_uq_sim "DYNAMIC" "NOALGO"  12  6 "$model" "$opt_add" 1 "MpiPoolSolver" "$nodes" "$max_time"

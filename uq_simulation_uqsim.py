@@ -35,6 +35,8 @@ import numpy as np
 import time
 from tabulate import tabulate
 
+import paths
+
 # instantiate UQsim
 uqsim = uqef.UQsim()
 
@@ -43,11 +45,11 @@ local_debugging = True
 if local_debugging:
     uqsim.args.model = "larsim"
     uqsim.args.uq_method = "saltelli"
-    uqsim.args.mc_numevaluations = 2
-    uqsim.args.outputResultDir = "./larsim_runs/"
-    uqsim.args.outputModelDir = "./larsim_runs/"
-    uqsim.args.inputModelDir = "./larsim_runs/"
-    uqsim.args.config_file = "configuration_larsim_uqsim.json"
+    uqsim.args.mc_numevaluations = 50#2
+    uqsim.args.outputResultDir =  "/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/Repositories/larsim_runs" # paths.scratch_dir| "./larsim_runs/"
+    uqsim.args.outputModelDir = uqsim.args.outputResultDir
+    uqsim.args.inputModelDir = uqsim.args.outputResultDir
+    uqsim.args.config_file = "/dss/dsshome1/lxc0C/ga45met2/Repositories/Larsim-UQ/configuration_larsim_uqsim_cm2.json" #"configuration_larsim_uqsim.json"
     uqsim.args.disable_statistics = False
     uqsim.args.transformToStandardDist = True
     uqsim.args.mpi = True
@@ -61,8 +63,11 @@ if local_debugging:
 #####################################
 ### additional path settings:
 #####################################
-if socket.gethostname().startswith("mpp2"):
-    outputResultDir = uqsim.args.outputResultDir
+if socket.gethostname().startswith("cm2"):
+    #outputResultDir = uqsim.args.outputResultDir
+    outputResultDir = os.path.abspath(os.path.join(uqsim.args.outputResultDir, datetime.datetime.now().strftime("%Y-%m-%d:%H:%M")))
+    #outputResultDir = os.path.abspath(os.path.join(paths.working_dir, datetime.datetime.now().strftime("%Y-%m-%d:%H:%M")))
+    uqsim.args.outputResultDir = outputResultDir
 else:
     outputResultDir = os.path.abspath(os.path.join(uqsim.args.outputResultDir, datetime.datetime.now().strftime("%Y-%m-%d:%H:%M")))
     uqsim.args.outputResultDir = outputResultDir
