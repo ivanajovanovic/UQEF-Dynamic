@@ -16,23 +16,22 @@ if socket.gethostname().startswith("cm2") or socket.gethostname().startswith("mp
     # new data_dri on dss linux cluster, the old one "/naslx/projects/pr63so/ga45met2/Repositories"
     data_dir = "/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/Repositories"
     scratch_dir = "/gpfs/scratch/pr63so/ga45met2/Larsim_runs"
-    larsim_data_path = os.path.abspath(os.path.join(data_dir, 'Larsim-data'))
 elif socket.gethostname().startswith("atsccs70"):
     home_dir = current_dir
     data_dir = "/import/home/ga45met/Repositories/Larsim"
-    larsim_data_path = os.path.abspath(os.path.join(data_dir, 'Larsim-data-old'))
+    scratch_dir = data_dir
 elif socket.gethostname().startswith("hydrobits-dataex"):
     home_dir = "/home/jupyter-ivana/Larsim_Utility_Set"
     data_dir = "/home/jupyter-ivana"
-    larsim_data_path = os.path.abspath(os.path.join(data_dir, 'Larsim_data'))
+    scratch_dir = data_dir
 else:
     home_dir = current_dir
     data_dir = parent_dir
-    larsim_data_path = os.path.abspath(os.path.join(data_dir, 'Larsim-data'))
+    scratch_dir = data_dir
 
-
-if socket.gethostname().startswith("cm2"):
-    working_dir = os.path.abspath(os.path.join(data_dir, "larsim_runs"))
+if socket.gethostname().startswith("cm2") or socket.gethostname().startswith("mpp3"):
+    #working_dir = os.path.abspath(os.path.join(data_dir, "larsim_runs"))
+    working_dir = scratch_dir
 elif socket.gethostname().startswith("atsccs70"):
     working_dir = os.path.abspath(os.path.join(home_dir, "model_runs"))
 elif socket.gethostname().startswith("hydrobits-dataex"):
@@ -46,7 +45,7 @@ else:
 #####################################
 ### Larsim related paths
 #####################################
-
+larsim_data_path = os.path.abspath(os.path.join(data_dir, 'Larsim-data'))
 larsim_exe_dir = os.path.abspath(os.path.join(larsim_data_path, 'Larsim-exe'))
 larsim_exe = os.path.abspath(os.path.join(larsim_exe_dir, 'larsim-linux-intel-1000.exe'))
 regen_data_path = os.path.abspath(os.path.join(larsim_data_path,'WHM Regen')) # Regen_data_root = data_working_dir

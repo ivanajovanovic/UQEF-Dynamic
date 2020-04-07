@@ -92,15 +92,16 @@ export OMP_NUM_THREADS=$threads
 echo "---- start sim:"
 
     mpiexec -genv I_MPI_DEBUG=+5 -print-rank-map python3 $executionPath/uq_simulation_uqsim.py \
-                            --outputResultDir "/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/Repositories/larsim_runs" \
+                            --outputResultDir "/gpfs/scratch/pr63so/ga45met2/Larsim_runs" \
                             --model "larsim" \
                             --chunksize 1 \
-                            --num_cores $threads --mpi --mpi_method "MpiPoolSolver" \
+                            --num_cores $threads \
+                            --mpi \
+                            --mpi_method "MpiPoolSolver" \
                             --config_file "/dss/dsshome1/lxc0C/ga45met2/Repositories/Larsim-UQ/configuration_larsim_uqsim_cm2.json" \
                             --uq_method "saltelli"  \
                             --mc_numevaluations 5000 \
                             --sampling_rule "S" \
-                            --disable_statistics False \
                             --transformToStandardDist
 
 echo "---- end \$i:"
