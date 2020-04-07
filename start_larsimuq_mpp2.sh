@@ -67,6 +67,8 @@ echo "#!/bin/bash
 #SBATCH -J larsim.$counter
 #SBATCH --get-user-env
 #SBATCH --clusters=cm2
+#SBATCH --partition=cm2_std
+#SBATCH --qos=cm2_std
 #SBATCH --nodes=$cluster_nodes
 #SBATCH --cpus-per-task=$cpus
 #SBATCH --ntasks-per-node=$tasks
@@ -91,9 +93,9 @@ echo "---- start sim:"
 
     mpiexec -genv I_MPI_DEBUG=+5 -print-rank-map python3 $executionPath/uq_simulation_uqsim.py \
                             --outputResultDir "/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/Repositories/larsim_runs" \
-                            --model $model \
+                            --model "larsim" \
                             --chunksize 1 \
-                            --num_cores $threads --mpi --mpi_method $mpi_method \
+                            --num_cores $threads --mpi --mpi_method "MpiPoolSolver" \
                             --config_file "/dss/dsshome1/lxc0C/ga45met2/Repositories/Larsim-UQ/configuration_larsim_uqsim_cm2.json" \
                             --uq_method "saltelli"  \
                             --mc_numevaluations 5000 \
