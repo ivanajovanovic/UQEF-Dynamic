@@ -15,8 +15,8 @@ from distutils.util import strtobool
 
 from uqef.stat import Statistics
 
-#import larsimPaths as paths
-import paths
+import larsimPaths as paths
+#import paths
 
 import larsimDataPostProcessing
 import larsimInputOutputUtilities

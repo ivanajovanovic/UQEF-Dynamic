@@ -12,8 +12,8 @@ import linecache
 
 from uqef.model import Model
 
-#import larsimPaths as paths
-import paths
+import larsimPaths as paths
+#import paths
 
 import larsimConfigurationSettings
 import larsimDataPostProcessing
