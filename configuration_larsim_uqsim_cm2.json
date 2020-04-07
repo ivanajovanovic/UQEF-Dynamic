@@ -69,7 +69,6 @@
   },
   "GaugeControlRegion":
   {
-    "TGB":3085,
     "addSampledValue":"False"
   }
 }

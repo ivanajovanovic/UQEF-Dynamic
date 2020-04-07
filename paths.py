@@ -11,7 +11,7 @@ import socket
 current_dir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parent_dir = os.path.dirname(current_dir)
 
-if socket.gethostname().startswith("cm2") or socket.gethostname().startswith("mpp3"):
+if socket.gethostname().startswith("cm2") or socket.gethostname().startswith("mpp3") or socket.gethostname().startswith("inter"):
     home_dir = "/dss/dsshome1/lxc0C/ga45met2"
     # new data_dri on dss linux cluster, the old one "/naslx/projects/pr63so/ga45met2/Repositories"
     data_dir = "/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/Repositories"
@@ -29,7 +29,7 @@ else:
     data_dir = parent_dir
     scratch_dir = data_dir
 
-if socket.gethostname().startswith("cm2") or socket.gethostname().startswith("mpp3"):
+if socket.gethostname().startswith("cm2") or socket.gethostname().startswith("mpp3") or socket.gethostname().startswith("inter"):
     #working_dir = os.path.abspath(os.path.join(data_dir, "larsim_runs"))
     working_dir = scratch_dir
 elif socket.gethostname().startswith("atsccs70"):
