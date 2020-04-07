@@ -63,7 +63,7 @@ if local_debugging:
 #####################################
 ### additional path settings:
 #####################################
-if socket.gethostname().startswith("cm2"):
+if socket.gethostname().startswith("cm2") or socket.gethostname().startswith("mpp3"):
     #outputResultDir = uqsim.args.outputResultDir
     outputResultDir = os.path.abspath(os.path.join(uqsim.args.outputResultDir, datetime.datetime.now().strftime("%Y-%m-%d:%H:%M")))
     #outputResultDir = os.path.abspath(os.path.join(paths.working_dir, datetime.datetime.now().strftime("%Y-%m-%d:%H:%M")))
