@@ -29,10 +29,10 @@ class LarsimModelSetUp():
         self.current_dir = paths.current_dir  #TODO-Ivana change this so that current_dir is gotten from uq_simulation_uqsim
         self.larsim_exe = os.path.abspath(os.path.join(paths.larsim_exe_dir, 'larsim-linux-intel-1000.exe'))
 
-        try:
-            self.working_dir = configurationObject["Directories"]["working_dir"]
-        except KeyError:
-            self.working_dir = paths.working_dir  # directoy for all the larsim runs
+        #try:
+        self.working_dir = configurationObject["Directories"]["working_dir"]
+        #except KeyError:
+        #    self.working_dir = paths.working_dir  # directoy for all the larsim runs
 
         self.master_dir = os.path.abspath(os.path.join(self.working_dir, 'master_configuration'))
 
@@ -184,10 +184,10 @@ class LarsimModel(Model):
         self.current_dir = paths.current_dir #TODO-Ivana change this so that current_dir is gotten from uq_simulation_uqsim
         self.larsim_exe = os.path.abspath(os.path.join(paths.larsim_exe_dir, 'larsim-linux-intel-1000.exe'))
 
-        try:
-            self.working_dir = self.configurationObject["Directories"]["working_dir"]
-        except KeyError:
-            self.working_dir = paths.working_dir  # directoy for all the larsim runs
+        #try:
+        self.working_dir = self.configurationObject["Directories"]["working_dir"]
+        #except KeyError:
+        #    self.working_dir = paths.working_dir  # directoy for all the larsim runs
 
         #self.master_dir = paths.master_dir #directoy containing all the base files for Larsim execution
         self.master_dir = os.path.abspath(os.path.join(self.working_dir, 'master_configuration'))
