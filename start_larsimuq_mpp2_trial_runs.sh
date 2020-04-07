@@ -44,7 +44,7 @@
 #2>&1 | tee log_larims_trial_run.txt
 
 salloc -n 28 -t 120
-mpiexec -genv I_MPI_DEBUG=+5 -print-rank-map python3 uq_simulation_uqsim.py \
+mpiexec -genv I_MPI_DEBUG=+5 -print-rank-map python uq_simulation_uqsim.py \
                         --outputResultDir "/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/Repositories/larsim_runs" \
                         --model "larsim" \
                         --chunksize 1 \
@@ -53,6 +53,5 @@ mpiexec -genv I_MPI_DEBUG=+5 -print-rank-map python3 uq_simulation_uqsim.py \
                         --uq_method "saltelli"  \
                         --mc_numevaluations 50 \
                         --sampling_rule "S" \
-                        --disable_statistics False \
                         --transformToStandardDist \
                         2>&1 | tee log_larims_trial_run.txt
