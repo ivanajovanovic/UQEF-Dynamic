@@ -78,8 +78,8 @@ echo "#!/bin/bash
 
 source /etc/profile.d/modules.sh
 module load python/3.6_intel
-module unload intel-mpi
-module load intel-mpi/2018-intel
+module unload mpi.intel/2019
+module load mpi.intel/2018
 source /dss/dsshome1/lxc0C/ga45met2/.conda/envs/larsimuq/bin/activate larsimuq
 
 export OMP_NUM_THREADS=$threads
