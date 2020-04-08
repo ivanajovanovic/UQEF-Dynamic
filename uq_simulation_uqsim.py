@@ -58,6 +58,7 @@ if local_debugging:
     uqsim.args.disable_statistics = False
     uqsim.args.transformToStandardDist = True
     uqsim.args.mpi = True
+    uqsim.args.mpi_method = "MpiPoolSolver"
     uqsim.args.sampling_rule = "S"# | "sobol"  | "latin_hypercube" | "halton"  | "hammersley"
     #
     #uqsim.args.uqsim_store_to_file=True
@@ -69,7 +70,7 @@ if local_debugging:
 ### additional path settings:
 #####################################
 
-outputResultDir = os.path.abspath(os.path.join(uqsim.args.outputResultDir, 'run_6'))
+outputResultDir = os.path.abspath(os.path.join(uqsim.args.outputResultDir, 'run_8'))
 uqsim.args.outputResultDir = outputResultDir
 
 if uqsim.is_master() and not uqsim.is_restored():
