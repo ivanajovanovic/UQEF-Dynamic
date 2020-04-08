@@ -46,10 +46,10 @@ local_debugging = True
 if local_debugging:
     uqsim.args.model = "larsim"
     uqsim.args.uq_method = "saltelli"
-    uqsim.args.mc_numevaluations = 50 #2
+    #uqsim.args.mc_numevaluations = 50 #2
     #uqsim.args.outputResultDir = os.path.abspath(os.path.join(paths.scratch_dir, 'Larsim_runs'))
     #uqsim.args.outputResultDir = os.path.abspath(os.path.join(paths.data_dir, 'larsim_runs'))
-    uqsim.args.outputResultDir = "/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/Repositories/larsim_runs"
+    uqsim.args.outputResultDir = "/gpfs/scratch/pr63so/ga45met2/Larsim_runs/"
     #uqsim.configuration_object["Directories"]["working_dir"] = os.path.abspath(os.path.join(uqsim.args.outputResultDir, "model_runs"))
     #"/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/Repositories/larsim_runs" | paths.scratch_dir | "/gpfs/scratch/pr63so/ga45met2/larsim_runs/" | "./larsim_runs/"
     uqsim.args.outputModelDir = uqsim.args.outputResultDir

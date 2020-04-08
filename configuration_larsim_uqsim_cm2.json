@@ -15,7 +15,7 @@
       "end_minute": 0,
 
       "timestep": 5,
-      "cut_runs": "False"
+      "cut_runs": "True"
     },
   "parameters": [
     {
