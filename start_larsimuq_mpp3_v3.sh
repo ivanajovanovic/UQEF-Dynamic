@@ -99,6 +99,7 @@ echo "---- start sim:"
                             --uq_method "saltelli"  \
                             --mc_numevaluations 2000 \
                             --sampling_rule "S" \
+                            --opt_algorithm "FCFS" \
                             --transformToStandardDist
 
 echo "---- end \$i:"
