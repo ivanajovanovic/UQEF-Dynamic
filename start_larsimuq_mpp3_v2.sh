@@ -54,7 +54,7 @@ start_larsim_uq_sim(){
         cpus=1
         threads=$cpus
         tasks=64
-        total_num_cores=256
+        total_num_cores=128
     fi
 
 #create batch file
@@ -88,14 +88,14 @@ export OMP_NUM_THREADS=$threads
 # start simulation
 echo "---- start sim:"
 
-    mpiexec -genv I_MPI_DEBUG=+5 -print-rank-map python3 $executionPath/uq_simulation_uqsim.py \
+    mpiexec -genv I_MPI_DEBUG=+5 -print-rank-map python3 $executionPath/uq_simulation_uqsim_v2.py \
                             --outputResultDir "/gpfs/scratch/pr63so/ga45met2/Larsim_runs" \
                             --model "larsim" \
                             --chunksize 1 \
                             --num_cores $threads \
                             --mpi \
                             --mpi_method "MpiPoolSolver" \
-                            --config_file "/dss/dsshome1/lxc0C/ga45met2/Repositories/Larsim-UQ/configuration_larsim_uqsim_cm2.json" \
+                            --config_file "/dss/dsshome1/lxc0C/ga45met2/Repositories/Larsim-UQ/configuration_larsim_uqsim_cm2_v2.json" \
                             --uq_method "saltelli"  \
                             --mc_numevaluations 5000 \
                             --sampling_rule "S" \
@@ -103,16 +103,16 @@ echo "---- start sim:"
 
 echo "---- end \$i:"
 
-" > uq_larsim_mpp3_saltelli.cmd
+" > uq_larsim_mpp3_saltelli_v2.cmd
 
     #execute batch file
-    sbatch uq_larsim_mpp3_saltelli.cmd
+    sbatch uq_larsim_mpp3_saltelli_v2.cmd
 }
 
 model="larsim"
 opt_add=""
 #runtimesim -> no wait!
-nodes=4
+nodes=2
 low_time="2:30:00"
 mid_time="5:45:00"
 max_time="48:00:00"
