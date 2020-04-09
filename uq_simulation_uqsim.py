@@ -42,19 +42,19 @@ import larsimPaths as paths
 uqsim = uqef.UQsim()
 
 # change args locally for testing and debugging
-local_debugging = True
+local_debugging = False
 if local_debugging:
     uqsim.args.model = "larsim"
     uqsim.args.uq_method = "saltelli"
     #uqsim.args.mc_numevaluations = 50 #2
     #uqsim.args.outputResultDir = os.path.abspath(os.path.join(paths.scratch_dir, 'Larsim_runs'))
     #uqsim.args.outputResultDir = os.path.abspath(os.path.join(paths.data_dir, 'larsim_runs'))
-    uqsim.args.outputResultDir = "/gpfs/scratch/pr63so/ga45met2/Larsim_runs/"
+    uqsim.args.outputResultDir = "/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/Repositories/larsim_runs"
     #uqsim.configuration_object["Directories"]["working_dir"] = os.path.abspath(os.path.join(uqsim.args.outputResultDir, "model_runs"))
     #"/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/Repositories/larsim_runs" | paths.scratch_dir | "/gpfs/scratch/pr63so/ga45met2/larsim_runs/" | "./larsim_runs/"
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
     uqsim.args.inputModelDir = uqsim.args.outputResultDir
-    uqsim.args.config_file = "/dss/dsshome1/lxc0C/ga45met2/Repositories/Larsim-UQ/configuration_larsim_uqsim_cm2.json" #"configuration_larsim_uqsim.json"
+    uqsim.args.config_file = "/dss/dsshome1/lxc0C/ga45met2/Repositories/Larsim-UQ/configuration_larsim_uqsim_cm2_v4.json" #"configuration_larsim_uqsim.json"
     uqsim.args.disable_statistics = False
     uqsim.args.transformToStandardDist = True
     uqsim.args.mpi = True
@@ -70,7 +70,7 @@ if local_debugging:
 ### additional path settings:
 #####################################
 
-outputResultDir = os.path.abspath(os.path.join(uqsim.args.outputResultDir, 'run_9'))
+outputResultDir = os.path.abspath(os.path.join(uqsim.args.outputResultDir, 'run_10'))
 uqsim.args.outputResultDir = outputResultDir
 
 if uqsim.is_master() and not uqsim.is_restored():

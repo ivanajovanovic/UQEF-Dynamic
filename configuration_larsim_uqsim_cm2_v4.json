@@ -1,0 +1,74 @@
+{
+  "Timeframe":
+    {
+      "start_day": 1,
+      "start_month": 6,
+      "start_year": 2013,
+      "start_hour": 0,
+      "start_minute": 0,
+
+
+      "end_day": 10,
+      "end_month": 6,
+      "end_year": 2013,
+      "end_hour": 0,
+      "end_minute": 0,
+
+      "timestep": 5,
+      "cut_runs": "False"
+    },
+  "parameters": [
+    {
+      "name": "      BSF",
+      "distribution": "Uniform",
+      "mu": 0.3,
+      "sigma": 0.1,
+      "lower": 0.05,
+      "upper": 0.5,
+      "lower_limit": 0.01,
+      "upper_limit": 0.5
+    },
+    {
+      "name": "       A2",
+      "distribution": "Uniform",
+      "mu": 1.5,
+      "sigma": 0.75,
+      "lower": 0.5,
+      "upper": 3.0,
+      "lower_limit": 0.5 ,
+      "upper_limit": 4.0
+    },
+    {
+      "name": "      EQD",
+      "distribution": "Uniform",
+      "mu": 450,
+      "sigma": 200,
+      "lower": 200,
+      "upper": 1000,
+      "lower_limit": 50,
+      "upper_limit": 5000
+    },
+    {
+      "name": "     EQD2",
+      "distribution": "Uniform",
+      "mu": 250,
+      "sigma": 150,
+      "lower": 50,
+      "upper": 500,
+      "lower_limit": 10,
+      "upper_limit": 1000
+    }
+  ],
+  "Output":
+  {
+    "type_of_output":"Abfluss Messung",
+    "type_of_output_measured":"Ground Truth",
+    "station":"MARI",
+    "pathsDataFormat":"False",
+    "dailyOutput": "False"
+  },
+  "GaugeControlRegion":
+  {
+    "addSampledValue":"False"
+  }
+}
