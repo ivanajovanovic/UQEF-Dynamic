@@ -92,7 +92,6 @@ echo "---- start sim:"
                             --outputResultDir "/gpfs/scratch/pr63so/ga45met2/Larsim_runs" \
                             --model "larsim" \
                             --chunksize 1 \
-                            --num_cores $threads \
                             --mpi \
                             --mpi_method "MpiPoolSolver" \
                             --config_file "/dss/dsshome1/lxc0C/ga45met2/Repositories/Larsim-UQ/configuration_larsim_uqsim_cm2.json" \
