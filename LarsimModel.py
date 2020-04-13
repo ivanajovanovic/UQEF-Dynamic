@@ -4,7 +4,7 @@ from decimal import Decimal
 import inspect
 import os
 import glob
-import osp as osp
+import os.path as osp
 import pandas as pd
 import numpy as np
 import subprocess
