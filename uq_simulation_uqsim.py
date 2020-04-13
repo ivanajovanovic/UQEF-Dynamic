@@ -52,7 +52,8 @@ if local_debugging:
     uqsim.args.outputResultDir = os.path.abspath(os.path.join(paths.scratch_dir, 'Larsim_runs/trial_run'))
     #uqsim.args.outputResultDir = os.path.abspath(os.path.join(paths.data_dir, 'Larsim_runs'))
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
-    uqsim.args.inputModelDir = uqsim.args.outputResultDir
+    uqsim.args.inputModelDir = paths.larsim_data_path
+    uqsim.args.sourceDir = path.sourceDir
     uqsim.args.config_file = "/dss/dsshome1/lxc0C/ga45met2/Repositories/Larsim-UQ/configurations_Larsim/configuration_larsim_uqsim_cm2_v4.json" #"configuration_larsim_uqsim.json"
     uqsim.args.disable_statistics = False
     uqsim.args.transformToStandardDist = True
@@ -68,7 +69,7 @@ if local_debugging:
 #####################################
 
 if uqsim.is_master() and not uqsim.is_restored():
-    if not os.path.isdir(uqsim.args.outputResultDir): subprocess.run(["mkdir", uqsim.args.outputResultDir])
+    if not os.path.isdir(uqsim.args.outputResultDir): subprocess.run(["mkdir", "-p", uqsim.args.outputResultDir])
     print("outputResultDir: {}".format(uqsim.args.outputResultDir))
 
 #Set the working folder where all the model runs related output and files will be written
@@ -89,7 +90,7 @@ if uqsim.is_master() and not uqsim.is_restored():
 #####################################
 
 # register model
-uqsim.models.update({"larsim"         : (lambda: LarsimModel.LarsimModel(uqsim.configuration_object))})
+uqsim.models.update({"larsim"         : (lambda: LarsimModel.LarsimModel(uqsim.configuration_object, inputModelDir=uqsim.args.inputModelDir, sourceDir=uqsim.args.sourceDir))})
 uqsim.models.update({"oscillator"     : (lambda: LinearDampedOscillatorModel.LinearDampedOscillatorModel(uqsim.configuration_object))})
 uqsim.models.update({"ishigami"       : (lambda: IshigamiModel.IshigamiModel(uqsim.configuration_object))})
 uqsim.models.update({"productFunction": (lambda: ProductFunctionModel.ProductFunctionModel(uqsim.configuration_object))})
@@ -110,7 +111,7 @@ uqsim.setup()
 if uqsim.is_master() and not uqsim.is_restored():
     def initialModelSetUp():
         models = {
-            "larsim"         : (lambda: LarsimModel.LarsimModelSetUp(uqsim.configuration_object))
+            "larsim"         : (lambda: LarsimModel.LarsimModelSetUp(uqsim.configuration_object, inputModelDir=uqsim.args.inputModelDir, sourceDir=uqsim.args.sourceDir))
            ,"oscillator"     : (lambda: LinearDampedOscillatorModel.LinearDampedOscillatorModelSetUp(uqsim.configuration_object))
            ,"ishigami"       : (lambda: IshigamiModel.IshigamiModelSetUp(uqsim.configuration_object))
            ,"productFunction": (lambda: ProductFunctionModel.ProductFunctionModelSetUp(uqsim.configuration_object))

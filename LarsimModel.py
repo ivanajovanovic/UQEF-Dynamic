@@ -1,6 +1,7 @@
 import datetime
 from distutils.util import strtobool
 from decimal import Decimal
+import inspect
 import os
 import glob
 import os.path as osp
@@ -22,18 +23,19 @@ import larsimTimeUtility
 
 
 class LarsimModelSetUp():
-    def __init__(self, configurationObject):
+    def __init__(self, configurationObject, *args, **kwargs):
+
         self.configurationObject = configurationObject
 
-        self.current_dir = paths.current_dir  #TODO-Ivana change this so that current_dir is gotten from uq_simulation_uqsim
-        self.global_master_dir = os.path.abspath(os.path.join(paths.larsim_data_path,'WHM Regen','master_configuration'))
-        #self.global_master_dir = os.path.abspath(os.path.join(inputModelDir,'WHM Regen','master_configuration'))
-        self.master_lila_paths = [osp.abspath(osp.join(paths.larsim_data_path,'WHM Regen', i)) for i in paths.master_lila_files]
-        #self.master_lila_paths = [osp.abspath(osp.join(inputModelDir,'WHM Regen', i)) for i in paths.master_lila_files]
-        self.all_whms_path = os.path.abspath(os.path.join(paths.larsim_data_path,'WHM Regen','var/WHM Regen WHMS'))
-        #self.all_whms_path = os.path.abspath(os.path.join(inputModelDir,'WHM Regen','var/WHM Regen WHMS'))
-        self.larsim_exe = os.path.abspath(os.path.join(paths.larsim_data_path, 'Larsim-exe', 'larsim-linux-intel-1000.exe'))
-        #self.larsim_exe = os.path.abspath(os.path.join(inputModelDir, 'Larsim-exe', 'larsim-linux-intel-1000.exe'))
+        self.current_dir = kwargs.get('sourceDir') if 'sourceDir' in kwargs \
+                            else os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+
+        self.inputModelDir = kwargs.get('inputModelDir') if 'inputModelDir' in kwargs else paths.larsim_data_path
+
+        self.global_master_dir = os.path.abspath(os.path.join(self.inputModelDir,'WHM Regen','master_configuration'))
+        self.master_lila_paths = [osp.abspath(osp.join(self.inputModelDir,'WHM Regen', i)) for i in paths.master_lila_files]
+        self.all_whms_path = os.path.abspath(os.path.join(self.inputModelDir,'WHM Regen','var/WHM Regen WHMS'))
+        self.larsim_exe = os.path.abspath(os.path.join(self.inputModelDir, 'Larsim-exe', 'larsim-linux-intel-1000.exe'))
 
         #try:
         self.working_dir = configurationObject["Directories"]["working_dir"]
@@ -132,6 +134,7 @@ class LarsimModelSetUp():
         local_log_file = os.path.abspath(os.path.join(dir_unaltered_run, "run.log"))
         subprocess.run([self.larsim_exe], stdout=open(local_log_file, 'w'))
         os.chdir(self.current_dir)
+        print("LARSIM SETUP: Unaltered Run is completed, current folder is:{}".format(self.current_dir))
 
         result_file_path = os.path.abspath(os.path.join(dir_unaltered_run, 'ergebnis.lila'))
         self.df_unaltered_ergebnis = larsimInputOutputUtilities.ergebnis_parser_toPandas(result_file_path, index_run=0, write_in_file=False)
@@ -183,14 +186,17 @@ class LarsimModelSetUp():
 
 class LarsimModel(Model):
 
-    def __init__(self, configurationObject):
+    def __init__(self, configurationObject, *args, **kwargs):
         Model.__init__(self)
 
         self.configurationObject = configurationObject
-        self.current_dir = paths.current_dir #TODO-Ivana change this so that current_dir is gotten from uq_simulation_uqsim
-        self.larsim_exe = os.path.abspath(os.path.join(paths.larsim_data_path, 'Larsim-exe', 'larsim-linux-intel-1000.exe'))
-        #self.larsim_exe = os.path.abspath(os.path.join(inputModelDir, 'Larsim-exe', 'larsim-linux-intel-1000.exe'))
 
+        self.current_dir = kwargs.get('sourceDir') if 'sourceDir' in kwargs \
+                            else os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+
+        self.inputModelDir = kwargs.get('inputModelDir') if 'inputModelDir' in kwargs else paths.larsim_data_path
+
+        self.larsim_exe = os.path.abspath(os.path.join(self.inputModelDir, 'Larsim-exe', 'larsim-linux-intel-1000.exe'))
 
         #try:
         self.working_dir = self.configurationObject["Directories"]["working_dir"]
