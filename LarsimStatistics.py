@@ -15,9 +15,6 @@ from distutils.util import strtobool
 
 from uqef.stat import Statistics
 
-import larsimPaths as paths
-#import paths
-
 import larsimDataPostProcessing
 import larsimInputOutputUtilities
 
@@ -84,8 +81,8 @@ class LarsimStatistics(Statistics):
 
         try:
             self.working_dir = self.configurationObject["Directories"]["working_dir"]
-        except KeyError:
-            self.working_dir = paths.working_dir
+        #except KeyError:
+        #    self.working_dir = paths.working_dir
 
         self.Abfluss = {}
 

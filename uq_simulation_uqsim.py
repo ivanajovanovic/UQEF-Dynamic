@@ -1,6 +1,6 @@
 """
-A simple example for the usage of the UQEF with a test model.
-@author: Florian Kuenzner
+Usage of the UQEF with a Larsim model.
+@author: Florian Kuenzner and Ivana Jovanovic
 """
 
 # plotting
@@ -41,28 +41,25 @@ import larsimPaths as paths
 # instantiate UQsim
 uqsim = uqef.UQsim()
 
+#####################################
+#####################################
 # change args locally for testing and debugging
 local_debugging = False
 if local_debugging:
     uqsim.args.model = "larsim"
     uqsim.args.uq_method = "saltelli"
-    #uqsim.args.mc_numevaluations = 50 #2
-    #uqsim.args.outputResultDir = os.path.abspath(os.path.join(paths.scratch_dir, 'Larsim_runs'))
-    #uqsim.args.outputResultDir = os.path.abspath(os.path.join(paths.data_dir, 'larsim_runs'))
-    uqsim.args.outputResultDir = "/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/Repositories/larsim_runs"
-    #uqsim.configuration_object["Directories"]["working_dir"] = os.path.abspath(os.path.join(uqsim.args.outputResultDir, "model_runs"))
-    #"/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/Repositories/larsim_runs" | paths.scratch_dir | "/gpfs/scratch/pr63so/ga45met2/larsim_runs/" | "./larsim_runs/"
+    uqsim.args.mc_numevaluations = 50 #2
+    uqsim.args.outputResultDir = os.path.abspath(os.path.join(paths.scratch_dir, 'Larsim_runs/trial_run'))
+    #uqsim.args.outputResultDir = os.path.abspath(os.path.join(paths.data_dir, 'Larsim_runs'))
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
     uqsim.args.inputModelDir = uqsim.args.outputResultDir
-    uqsim.args.config_file = "/dss/dsshome1/lxc0C/ga45met2/Repositories/Larsim-UQ/configuration_larsim_uqsim_cm2_v4.json" #"configuration_larsim_uqsim.json"
+    uqsim.args.config_file = "/dss/dsshome1/lxc0C/ga45met2/Repositories/Larsim-UQ/configurations_Larsim/configuration_larsim_uqsim_cm2_v4.json" #"configuration_larsim_uqsim.json"
     uqsim.args.disable_statistics = False
     uqsim.args.transformToStandardDist = True
     uqsim.args.mpi = True
     uqsim.args.mpi_method = "MpiPoolSolver"
-    uqsim.args.sampling_rule = "S"# | "sobol"  | "latin_hypercube" | "halton"  | "hammersley"
-    #
-    #uqsim.args.uqsim_store_to_file=True
-
+    uqsim.args.sampling_rule = "S"# | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
+    uqsim.args.uqsim_store_to_file=True
 
     uqsim.setup_configuration_object()
 
@@ -70,22 +67,19 @@ if local_debugging:
 ### additional path settings:
 #####################################
 
-outputResultDir = os.path.abspath(os.path.join(uqsim.args.outputResultDir, 'run_11'))
-uqsim.args.outputResultDir = outputResultDir
-
 if uqsim.is_master() and not uqsim.is_restored():
     if not os.path.isdir(uqsim.args.outputResultDir): subprocess.run(["mkdir", uqsim.args.outputResultDir])
     print("outputResultDir: {}".format(uqsim.args.outputResultDir))
 
 #Set the working folder where all the model runs related output and files will be written
 try:
-    uqsim.configuration_object["Directories"]["working_dir"] = os.path.abspath(os.path.join(outputResultDir,uqsim.configuration_object["Directories"]["working_dir"]))
+    uqsim.configuration_object["Directories"]["working_dir"] = os.path.abspath(os.path.join(uqsim.args.outputResultDir,uqsim.configuration_object["Directories"]["working_dir"]))
 except KeyError:
     try:
-        uqsim.configuration_object["Directories"]["working_dir"] = os.path.abspath(os.path.join(outputResultDir, "model_runs"))
+        uqsim.configuration_object["Directories"]["working_dir"] = os.path.abspath(os.path.join(uqsim.args.outputResultDir, "model_runs"))
     except KeyError:
         uqsim.configuration_object["Directories"] = {}
-        uqsim.configuration_object["Directories"]["working_dir"] = os.path.abspath(os.path.join(outputResultDir, "model_runs"))
+        uqsim.configuration_object["Directories"]["working_dir"] = os.path.abspath(os.path.join(uqsim.args.outputResultDir, "model_runs"))
 
 if uqsim.is_master() and not uqsim.is_restored():
     if not os.path.isdir(uqsim.configuration_object["Directories"]["working_dir"]):
@@ -139,9 +133,9 @@ uqsim.plot_statistics(display=False)
 uqsim.save_statistics()
 
 #save the dictionary with the arguments
-#argsFileName = os.path.abspath(os.path.join(uqsim.args.outputResultDir, "uqsim_args.pkl'"))
-#with open(argsFileName, 'wb') as handle:
-#    pickle.dump(self.uqsim.args, handle, protocol=pickle.HIGHEST_PROTOCOL)
+argsFileName = os.path.abspath(os.path.join(uqsim.args.outputResultDir, "uqsim_args.pkl'"))
+with open(argsFileName, 'wb') as handle:
+    pickle.dump(self.uqsim.args, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 # tear down
 #just for trying, to check what is saved

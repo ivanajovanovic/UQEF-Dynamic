@@ -13,7 +13,6 @@ import linecache
 from uqef.model import Model
 
 import larsimPaths as paths
-#import paths
 
 import larsimConfigurationSettings
 import larsimDataPostProcessing
@@ -27,7 +26,14 @@ class LarsimModelSetUp():
         self.configurationObject = configurationObject
 
         self.current_dir = paths.current_dir  #TODO-Ivana change this so that current_dir is gotten from uq_simulation_uqsim
-        self.larsim_exe = os.path.abspath(os.path.join(paths.larsim_exe_dir, 'larsim-linux-intel-1000.exe'))
+        self.global_master_dir = os.path.abspath(os.path.join(paths.larsim_data_path,'WHM Regen','master_configuration'))
+        #self.global_master_dir = os.path.abspath(os.path.join(inputModelDir,'WHM Regen','master_configuration'))
+        self.master_lila_paths = [osp.abspath(osp.join(paths.larsim_data_path,'WHM Regen', i)) for i in paths.master_lila_files]
+        #self.master_lila_paths = [osp.abspath(osp.join(inputModelDir,'WHM Regen', i)) for i in paths.master_lila_files]
+        self.all_whms_path = os.path.abspath(os.path.join(paths.larsim_data_path,'WHM Regen','var/WHM Regen WHMS'))
+        #self.all_whms_path = os.path.abspath(os.path.join(inputModelDir,'WHM Regen','var/WHM Regen WHMS'))
+        self.larsim_exe = os.path.abspath(os.path.join(paths.larsim_data_path, 'Larsim-exe', 'larsim-linux-intel-1000.exe'))
+        #self.larsim_exe = os.path.abspath(os.path.join(inputModelDir, 'Larsim-exe', 'larsim-linux-intel-1000.exe'))
 
         #try:
         self.working_dir = configurationObject["Directories"]["working_dir"]
@@ -63,7 +69,7 @@ class LarsimModelSetUp():
     def copy_master_folder(self):
         # for safety reasons make a copy of the master_dir in the working_dir and continue working with that one
         if not os.path.isdir(self.master_dir): subprocess.run(["mkdir", self.master_dir])
-        master_dir_for_copying = paths.master_dir + "/."
+        master_dir_for_copying = self.global_master_dir + "/."
         subprocess.run(['cp', '-a', master_dir_for_copying, self.master_dir])
 
     def configure_master_folder(self):
@@ -82,11 +88,11 @@ class LarsimModelSetUp():
         larsimTimeUtility.tape10_configuration(timeframe=self.timeframe, master_tape10_file=master_tape10_file, new_path=tape10_adjusted_path)
 
         # Filter out whm files
-        larsimConfigurationSettings.copy_whm_files(timeframe=self.timeframe, all_whms_path=paths.all_whms_path, new_path=self.master_dir)
+        larsimConfigurationSettings.copy_whm_files(timeframe=self.timeframe, all_whms_path=self.all_whms_path, new_path=self.master_dir)
 
         # Parse big lila files and create small ones
         lila_configured_paths = [os.path.abspath(os.path.join(self.master_dir, i)) for i in paths.lila_files]
-        larsimConfigurationSettings.master_lila_parser_based_on_time_crete_new(timeframe=self.timeframe, master_lila_paths=paths.master_lila_paths, new_lila_paths=lila_configured_paths,
+        larsimConfigurationSettings.master_lila_parser_based_on_time_crete_new(timeframe=self.timeframe, master_lila_paths=self.master_lila_paths, new_lila_paths=lila_configured_paths,
                                                    start_date_min_3_bool=False)
 
         for one_lila_file in lila_configured_paths:
@@ -182,14 +188,15 @@ class LarsimModel(Model):
 
         self.configurationObject = configurationObject
         self.current_dir = paths.current_dir #TODO-Ivana change this so that current_dir is gotten from uq_simulation_uqsim
-        self.larsim_exe = os.path.abspath(os.path.join(paths.larsim_exe_dir, 'larsim-linux-intel-1000.exe'))
+        self.larsim_exe = os.path.abspath(os.path.join(paths.larsim_data_path, 'Larsim-exe', 'larsim-linux-intel-1000.exe'))
+        #self.larsim_exe = os.path.abspath(os.path.join(inputModelDir, 'Larsim-exe', 'larsim-linux-intel-1000.exe'))
+
 
         #try:
         self.working_dir = self.configurationObject["Directories"]["working_dir"]
         #except KeyError:
         #    self.working_dir = paths.working_dir  # directoy for all the larsim runs
 
-        #self.master_dir = paths.master_dir #directoy containing all the base files for Larsim execution
         self.master_dir = os.path.abspath(os.path.join(self.working_dir, 'master_configuration'))
 
         try:
