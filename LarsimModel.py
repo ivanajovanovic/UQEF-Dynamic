@@ -4,7 +4,7 @@ from decimal import Decimal
 import inspect
 import os
 import glob
-import os.path as osp
+import osp as osp
 import pandas as pd
 import numpy as np
 import subprocess
@@ -27,22 +27,22 @@ class LarsimModelSetUp():
 
         self.configurationObject = configurationObject
 
-        self.current_dir = kwargs.get('sourceDir') if 'sourceDir' in kwargs \
-                            else os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+        self.current_dir = kwargs.get('sourceDir') if 'sourceDir' in kwargs and osp.isabs(kwargs.get('sourceDir')) \
+                            else osp.dirname(osp.abspath(inspect.getfile(inspect.currentframe())))
 
         self.inputModelDir = kwargs.get('inputModelDir') if 'inputModelDir' in kwargs else paths.larsim_data_path
 
-        self.global_master_dir = os.path.abspath(os.path.join(self.inputModelDir,'WHM Regen','master_configuration'))
+        self.global_master_dir = osp.abspath(osp.join(self.inputModelDir,'WHM Regen','master_configuration'))
         self.master_lila_paths = [osp.abspath(osp.join(self.inputModelDir,'WHM Regen', i)) for i in paths.master_lila_files]
-        self.all_whms_path = os.path.abspath(os.path.join(self.inputModelDir,'WHM Regen','var/WHM Regen WHMS'))
-        self.larsim_exe = os.path.abspath(os.path.join(self.inputModelDir, 'Larsim-exe', 'larsim-linux-intel-1000.exe'))
+        self.all_whms_path = osp.abspath(osp.join(self.inputModelDir,'WHM Regen','var/WHM Regen WHMS'))
+        self.larsim_exe = osp.abspath(osp.join(self.inputModelDir, 'Larsim-exe', 'larsim-linux-intel-1000.exe'))
 
         #try:
         self.working_dir = configurationObject["Directories"]["working_dir"]
         #except KeyError:
         #    self.working_dir = paths.working_dir  # directoy for all the larsim runs
 
-        self.master_dir = os.path.abspath(os.path.join(self.working_dir, 'master_configuration'))
+        self.master_dir = osp.abspath(osp.join(self.working_dir, 'master_configuration'))
 
         try:
             self.station_of_Interest = self.configurationObject["Output"]["station"]
@@ -70,7 +70,7 @@ class LarsimModelSetUp():
 
     def copy_master_folder(self):
         # for safety reasons make a copy of the master_dir in the working_dir and continue working with that one
-        if not os.path.isdir(self.master_dir): subprocess.run(["mkdir", self.master_dir])
+        if not osp.isdir(self.master_dir): subprocess.run(["mkdir", self.master_dir])
         master_dir_for_copying = self.global_master_dir + "/."
         subprocess.run(['cp', '-a', master_dir_for_copying, self.master_dir])
 
@@ -82,18 +82,18 @@ class LarsimModelSetUp():
         self.timeframe = larsimTimeUtility.parse_datetime_configuration(
             self.configurationObject)  # tuple with EREIGNISBEGINN EREIGNISENDE
 
-        if not os.path.isdir(self.master_dir): raise IOError('LarsimModelSetUp Error: Please first creat the following folder: %s. %s' % (self.master_dir, IOError.strerror))
+        if not osp.isdir(self.master_dir): raise IOError('LarsimModelSetUp Error: Please first creat the following folder: %s. %s' % (self.master_dir, IOError.strerror))
 
         # Based on time settings change tape10_master file - needed for unaltered run - this will be repeted once again by each process in LarsimModel.run()
-        tape10_adjusted_path = os.path.abspath(os.path.join(self.master_dir, 'tape10'))
-        master_tape10_file = os.path.abspath(os.path.join(self.master_dir, 'tape10_master'))
+        tape10_adjusted_path = osp.abspath(osp.join(self.master_dir, 'tape10'))
+        master_tape10_file = osp.abspath(osp.join(self.master_dir, 'tape10_master'))
         larsimTimeUtility.tape10_configuration(timeframe=self.timeframe, master_tape10_file=master_tape10_file, new_path=tape10_adjusted_path)
 
         # Filter out whm files
         larsimConfigurationSettings.copy_whm_files(timeframe=self.timeframe, all_whms_path=self.all_whms_path, new_path=self.master_dir)
 
         # Parse big lila files and create small ones
-        lila_configured_paths = [os.path.abspath(os.path.join(self.master_dir, i)) for i in paths.lila_files]
+        lila_configured_paths = [osp.abspath(osp.join(self.master_dir, i)) for i in paths.lila_files]
         larsimConfigurationSettings.master_lila_parser_based_on_time_crete_new(timeframe=self.timeframe, master_lila_paths=self.master_lila_paths, new_lila_paths=lila_configured_paths,
                                                    start_date_min_3_bool=False)
 
@@ -108,11 +108,11 @@ class LarsimModelSetUp():
         ### extract measured (ground truth) discharge values
         #####################################
         # station_wq.lila file containing ground truth (measured) discharges to lila file
-        local_wq_file = os.path.abspath(os.path.join(self.master_dir, paths.lila_files[0])) #lila_configured_paths[0]
+        local_wq_file = osp.abspath(osp.join(self.master_dir, paths.lila_files[0])) #lila_configured_paths[0]
         self.df_measured = larsimDataPostProcessing.read_process_write_discharge(df=local_wq_file,\
                              index_run=0,\
                              timeframe=self.timeframe,\
-                             write_to_file=os.path.abspath(os.path.join(self.working_dir, "df_measured.csv"))
+                             write_to_file=osp.abspath(osp.join(self.working_dir, "df_measured.csv"))
                              )
 
 
@@ -121,8 +121,8 @@ class LarsimModelSetUp():
         ### run unaltered simulation
         #####################################
         if createNewFolder:
-            dir_unaltered_run = os.path.abspath(os.path.join(self.working_dir, "WHM Regen 000"))
-            if not os.path.isdir(dir_unaltered_run):
+            dir_unaltered_run = osp.abspath(osp.join(self.working_dir, "WHM Regen 000"))
+            if not osp.isdir(dir_unaltered_run):
                 subprocess.run(["mkdir", dir_unaltered_run])
             master_dir_for_copying = self.master_dir + "/."
             subprocess.run(['cp', '-a', master_dir_for_copying, dir_unaltered_run])
@@ -131,15 +131,15 @@ class LarsimModelSetUp():
 
         os.chdir(dir_unaltered_run)
         larsimConfigurationSettings._delete_larsim_output_files(curr_directory=dir_unaltered_run)
-        local_log_file = os.path.abspath(os.path.join(dir_unaltered_run, "run.log"))
+        local_log_file = osp.abspath(osp.join(dir_unaltered_run, "run.log"))
         subprocess.run([self.larsim_exe], stdout=open(local_log_file, 'w'))
         os.chdir(self.current_dir)
         print("LARSIM SETUP: Unaltered Run is completed, current folder is:{}".format(self.current_dir))
 
-        result_file_path = os.path.abspath(os.path.join(dir_unaltered_run, 'ergebnis.lila'))
+        result_file_path = osp.abspath(osp.join(dir_unaltered_run, 'ergebnis.lila'))
         self.df_unaltered_ergebnis = larsimInputOutputUtilities.ergebnis_parser_toPandas(result_file_path, index_run=0, write_in_file=False)
         if write_in_file:
-            larsimInputOutputUtilities.write_dataFrame_to_file(self.df_unaltered_ergebnis, os.path.abspath(os.path.join(self.working_dir, "df_unaltered_ergebnis.csv")))
+            larsimInputOutputUtilities.write_dataFrame_to_file(self.df_unaltered_ergebnis, osp.abspath(osp.join(self.working_dir, "df_unaltered_ergebnis.csv")))
 
         #print("Data Frame with Unaltered Simulation Discharges dtypes : {}".format(self.df_unaltered_ergebnis.dtypes))
 
@@ -172,7 +172,7 @@ class LarsimModelSetUp():
 
 
         # write in a file GOF values of the unaltered model prediction
-        gof_file_path = os.path.abspath(os.path.join(self.working_dir, "GOF_Measured_vs_Unaltered.txt"))
+        gof_file_path = osp.abspath(osp.join(self.working_dir, "GOF_Measured_vs_Unaltered.txt"))
         column_labels = result_tuple.keys()
         with open(gof_file_path, 'w') as f:
             line = ' '.join(str(x) for x in column_labels)
@@ -191,19 +191,19 @@ class LarsimModel(Model):
 
         self.configurationObject = configurationObject
 
-        self.current_dir = kwargs.get('sourceDir') if 'sourceDir' in kwargs \
-                            else os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+        self.current_dir = kwargs.get('sourceDir') if 'sourceDir' in kwargs and osp.isabs(kwargs.get('sourceDir')) \
+                            else osp.dirname(osp.abspath(inspect.getfile(inspect.currentframe())))
 
         self.inputModelDir = kwargs.get('inputModelDir') if 'inputModelDir' in kwargs else paths.larsim_data_path
 
-        self.larsim_exe = os.path.abspath(os.path.join(self.inputModelDir, 'Larsim-exe', 'larsim-linux-intel-1000.exe'))
+        self.larsim_exe = osp.abspath(osp.join(self.inputModelDir, 'Larsim-exe', 'larsim-linux-intel-1000.exe'))
 
         #try:
         self.working_dir = self.configurationObject["Directories"]["working_dir"]
         #except KeyError:
         #    self.working_dir = paths.working_dir  # directoy for all the larsim runs
 
-        self.master_dir = os.path.abspath(os.path.join(self.working_dir, 'master_configuration'))
+        self.master_dir = osp.abspath(osp.join(self.working_dir, 'master_configuration'))
 
         try:
             self.station_of_Interest = self.configurationObject["Output"]["station"]
@@ -254,9 +254,9 @@ class LarsimModel(Model):
 
             # create local directory for this particular run
             working_folder_name = "WHM Regen" + str(i)
-            curr_working_dir = os.path.abspath(os.path.join(self.working_dir,working_folder_name))
+            curr_working_dir = osp.abspath(osp.join(self.working_dir,working_folder_name))
 
-            if not os.path.isdir(curr_working_dir):
+            if not osp.isdir(curr_working_dir):
                 subprocess.run(["mkdir", curr_working_dir])
 
             # copy all the necessary files to the newly created directoy
@@ -296,13 +296,13 @@ class LarsimModel(Model):
             #assert isinstance(self.variable_names, list), "Assertion Failed - variable names not a list"
             #assert len(self.variable_names) == len(parameter), "Assertion Failed parametr not of the same length as variable names"
 
-            #result.to_csv(path_or_buf=os.path.abspath(os.path.join(curr_working_dir, "ergebnis_df_" + str(i) + ".csv")),index=True)
+            #result.to_csv(path_or_buf=osp.abspath(osp.join(curr_working_dir, "ergebnis_df_" + str(i) + ".csv")),index=True)
 
             #####################################
             ### compare model predictions of this simulation with measured (ground truth) data (compute RMSE | BIAS | NSE | logNSE)
             ### this can be moved to Statistics - positioned here due to parallelisation
             #####################################
-            gt_dataFrame = larsimInputOutputUtilities.read_dataFrame_from_file(os.path.abspath(os.path.join(self.working_dir, "df_measured.csv")))
+            gt_dataFrame = larsimInputOutputUtilities.read_dataFrame_from_file(osp.abspath(osp.join(self.working_dir, "df_measured.csv")))
 
             goodnessofFit_tuple = larsimDataPostProcessing.calculateGoodnessofFit(measuredDF=gt_dataFrame, predictedDF=result,
                                                                            station=self.station_of_Interest,
@@ -328,7 +328,7 @@ class LarsimModel(Model):
 
             index_parameter_gof_DF = pd.DataFrame([index_parameter_gof_array], columns=header_array)
             index_parameter_gof_DF.to_csv(
-                path_or_buf= os.path.abspath(os.path.join(curr_working_dir, "goodness_of_fit_" + str(i) +  ".csv")),
+                path_or_buf= osp.abspath(osp.join(curr_working_dir, "goodness_of_fit_" + str(i) +  ".csv")),
                 index=True)
 
             #Debugging TODO Delete afterwards
@@ -357,13 +357,13 @@ class LarsimModel(Model):
         larsimConfigurationSettings._delete_larsim_output_files(curr_directory=curr_working_dir)
 
         # change tape 10 accordingly
-        local_master_tape10_file = os.path.abspath(os.path.join(curr_working_dir, 'tape10_master'))
-        local_adjusted_path = os.path.abspath(os.path.join(curr_working_dir, 'tape10'))
+        local_master_tape10_file = osp.abspath(osp.join(curr_working_dir, 'tape10_master'))
+        local_adjusted_path = osp.abspath(osp.join(curr_working_dir, 'tape10'))
         larsimTimeUtility.tape10_configuration(timeframe=timeframe, master_tape10_file=local_master_tape10_file, new_path=local_adjusted_path)
 
         # log file for larsim
-        local_log_file = os.path.abspath(
-            os.path.join(curr_working_dir, "run" + str(index_run) + "_" + str(sub_index_run) + ".log"))
+        local_log_file = osp.abspath(
+            osp.join(curr_working_dir, "run" + str(index_run) + "_" + str(sub_index_run) + ".log"))
         # print("LARSIM MODEL INFO: This is where I'm gonna write my log - {}".format(local_log_file))
 
         # run Larsim as external process
@@ -373,9 +373,9 @@ class LarsimModel(Model):
         # check if larsim.ok exist - Larsim execution was successful
         larsimConfigurationSettings.check_larsim_ok_file(curr_working_dir=curr_working_dir)
 
-        result_file_path = os.path.abspath(os.path.join(curr_working_dir, 'ergebnis.lila'))
+        result_file_path = osp.abspath(osp.join(curr_working_dir, 'ergebnis.lila'))
 
-        if os.path.isfile(result_file_path):
+        if osp.isfile(result_file_path):
             df_single_ergebnis = larsimInputOutputUtilities.ergebnis_parser_toPandas(result_file_path, index_run)
             return df_single_ergebnis
         else:
@@ -392,11 +392,11 @@ class LarsimModel(Model):
 
         local_end_date = timeframe[0]
 
-        result_file_path = os.path.abspath(os.path.join(curr_working_dir, 'ergebnis.lila'))
-        larsim_ok_file_path = os.path.abspath(os.path.join(curr_working_dir, 'larsim.ok'))
-        tape11_file_path = os.path.abspath(os.path.join(curr_working_dir, 'tape11'))
-        karte_path = os.path.abspath(os.path.join(curr_working_dir, 'karten'))  # curr_working_dir + 'karten/*'
-        tape10_path = os.path.abspath(os.path.join(curr_working_dir, 'tape10'))
+        result_file_path = osp.abspath(osp.join(curr_working_dir, 'ergebnis.lila'))
+        larsim_ok_file_path = osp.abspath(osp.join(curr_working_dir, 'larsim.ok'))
+        tape11_file_path = osp.abspath(osp.join(curr_working_dir, 'tape11'))
+        karte_path = osp.abspath(osp.join(curr_working_dir, 'karten'))  # curr_working_dir + 'karten/*'
+        tape10_path = osp.abspath(osp.join(curr_working_dir, 'tape10'))
 
         print("LarsimModel INFO: process {} gonna run {} shorter Larsim runs (and number_of_runs_mode {})".format(index_run, number_of_runs, number_of_runs_mode))
 
@@ -439,9 +439,9 @@ class LarsimModel(Model):
             local_resultDF_list.append(local_resultDF_drop)
 
             # rename ergebnis.lila
-            local_result_file_path = os.path.abspath(os.path.join(curr_working_dir, 'ergebnis' + '_' + str(i) + '.lila'))
+            local_result_file_path = osp.abspath(osp.join(curr_working_dir, 'ergebnis' + '_' + str(i) + '.lila'))
             subprocess.run(["mv", result_file_path, local_result_file_path])
-            local_larsim_ok_file_path = os.path.abspath(os.path.join(curr_working_dir, 'larsim' + '_' + str(i) + '.ok'))
+            local_larsim_ok_file_path = osp.abspath(osp.join(curr_working_dir, 'larsim' + '_' + str(i) + '.ok'))
             subprocess.run(["mv", larsim_ok_file_path, local_larsim_ok_file_path])
 
         # concatinate it
