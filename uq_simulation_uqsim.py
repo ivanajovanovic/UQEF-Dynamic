@@ -118,7 +118,7 @@ if uqsim.is_master() and not uqsim.is_restored():
         models[uqsim.args.model]()
     initialModelSetUp()
 
-simulationNodes_save_file = "/nodes"
+simulationNodes_save_file = "nodes"
 uqsim.save_simulationNodes(fileName=simulationNodes_save_file)
 
 #####################################
