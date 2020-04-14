@@ -134,7 +134,7 @@ uqsim.plot_statistics(display=False)
 uqsim.save_statistics()
 
 #save the dictionary with the arguments
-argsFileName = os.path.abspath(os.path.join(uqsim.args.outputResultDir, "uqsim_args.pkl'"))
+argsFileName = os.path.abspath(os.path.join(uqsim.args.outputResultDir, "uqsim_args.pkl"))
 with open(argsFileName, 'wb') as handle:
     pickle.dump(uqsim.args, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
