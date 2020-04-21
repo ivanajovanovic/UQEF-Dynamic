@@ -19,13 +19,13 @@
     },
   "parameters": [
     {
-      "name": "Lanu:Acker:Apr",
+      "name": "lanu:Acker:Apr",
       "distribution": "Uniform",
       "lower": 0.3,
       "upper": 3.0
     },
     {
-      "name": "LaNu:Acker:May",
+      "name": "lanu:Acker:May",
       "distribution": "Uniform",
       "lower": 0.7,
       "upper": 5.2
@@ -37,31 +37,31 @@
       "upper": 6.5
     },
     {
-      "name": "LaNu:locker baumbest.:May",
+      "name": "lanu:locker baumbest.:May",
       "distribution": "Uniform",
       "lower": 5.5,
       "upper": 7.5
     },
     {
-      "name": "LaNu:Laubwald:Apr",
+      "name": "lanu:Laubwald:Apr",
       "distribution": "Uniform",
       "lower": 1.5,
       "upper": 7.0
     },
     {
-      "name": "LaNu:Laubwald:May",
+      "name": "lanu:Laubwald:May",
       "distribution": "Uniform",
       "lower": 4.0,
       "upper": 11.0
     },
     {
-      "name": "LaNu:Mischwald:Apr",
+      "name": "lanu:Mischwald:Apr",
       "distribution": "Uniform",
       "lower": 4.0,
       "upper": 8.0
     },
     {
-      "name": "LaNu:Mischwald:May",
+      "name": "lanu:Mischwald:May",
       "distribution": "Uniform",
       "lower": 6.0,
       "upper": 11.0

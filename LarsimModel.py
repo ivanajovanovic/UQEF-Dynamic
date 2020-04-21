@@ -288,8 +288,8 @@ class LarsimModel(Model):
                 lanu_path = curr_working_dir + "/lanu.par"
                 larsimConfigurationSettings.params_configurations(parameters = parameter, tape35_path = tape35_path,
                                                                   lanu_path = lanu_path,
-                                                                  configurationObject = self.configurationObject)
-                print("LarsimModel INFO: Process {} successfully changed its tape35".format(i))
+                                                                  configurationObject = self.configurationObject,
+                                                                  process_id = i)
 
             # change working directory
             os.chdir(curr_working_dir)

@@ -65,6 +65,54 @@
       "upper": 3.0,
       "lower_limit": 0.3,
       "upper_limit": 3.0
+    },
+    {
+      "name": "lanu:Acker:May",
+      "distribution": "Uniform",
+      "lower": 0.7,
+      "upper": 5.2,
+      "lower_limit": 0.7,
+      "upper_limit": 5.2
+    },
+    {
+      "name": "lanu:locker baumbest.:May",
+      "distribution": "Uniform",
+      "lower": 5.5,
+      "upper": 7.5,
+      "lower_limit": 5.5,
+      "upper_limit": 7.5
+    },
+    {
+      "name": "lanu:Laubwald:Apr",
+      "distribution": "Uniform",
+      "lower": 1.5,
+      "upper": 7.0,
+      "lower_limit": 1.5,
+      "upper_limit": 7.0
+    },
+    {
+      "name": "lanu:Laubwald:May",
+      "distribution": "Uniform",
+      "lower": 4.0,
+      "upper": 11.0,
+      "lower_limit": 4.0,
+      "upper_limit": 11.0
+    },
+    {
+      "name": "lanu:Mischwald:Apr",
+      "distribution": "Uniform",
+      "lower": 4.0,
+      "upper": 8.0,
+      "lower_limit": 4.0,
+      "upper_limit": 8.0
+    },
+    {
+      "name": "lanu:Mischwald:May",
+      "distribution": "Uniform",
+      "lower": 6.0,
+      "upper": 11.0,
+      "lower_limit": 6.0,
+      "upper_limit": 11.0
     }
   ],
   "Output":
