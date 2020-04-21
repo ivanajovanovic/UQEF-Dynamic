@@ -53,7 +53,7 @@ if local_debugging:
     #uqsim.args.outputResultDir = os.path.abspath(os.path.join(paths.data_dir, 'Larsim_runs'))
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
     uqsim.args.inputModelDir = paths.larsim_data_path
-    uqsim.args.sourceDir = path.sourceDir
+    uqsim.args.sourceDir = paths.sourceDir
     uqsim.args.config_file = "/dss/dsshome1/lxc0C/ga45met2/Repositories/Larsim-UQ/configurations_Larsim/configuration_larsim_uqsim_cm2_v4.json" #"configuration_larsim_uqsim.json"
     uqsim.args.disable_statistics = False
     uqsim.args.transformToStandardDist = True
@@ -134,7 +134,7 @@ uqsim.plot_statistics(display=False)
 uqsim.save_statistics()
 
 #save the dictionary with the arguments
-argsFileName = os.path.abspath(os.path.join(uqsim.args.outputResultDir, "uqsim_args.pkl'"))
+argsFileName = os.path.abspath(os.path.join(uqsim.args.outputResultDir, "uqsim_args.pkl"))
 with open(argsFileName, 'wb') as handle:
     pickle.dump(uqsim.args, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
