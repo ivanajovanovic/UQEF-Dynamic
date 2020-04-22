@@ -331,8 +331,8 @@ class LarsimStatistics(Statistics):
             fig.add_trace(go.Scatter(x=self.df_measured['TimeStamp'], y=self.df_measured['Value'], name="Q (measured)",line_color='red'), row=1, col=1)
 
         #fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["E"][0] for key in self.keyIter], name='E[Q]',line_color='green', mode='lines'), row=1, col=1)
-        fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["P10"] for key in self.keyIter], name='10th percentile',line_color='indianred', mode='lines'), row=1, col=1)
-        fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["P90"] for key in self.keyIter], name='90th percentile',line_color='yellow', mode='lines'), row=1, col=1)
+        fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["P10"][0] for key in self.keyIter], name='10th percentile',line_color='indianred', mode='lines'), row=1, col=1)
+        fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["P90"][0] for key in self.keyIter], name='90th percentile',line_color='yellow', mode='lines'), row=1, col=1)
         #fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["StdDev"][0] for key in self.keyIter], name='std. dev', line_color='darkviolet'), row=2, col=1)
 
         fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["E_numpy"] for key in self.keyIter], name='E[Q]',line_color='green', mode='lines'), row=1, col=1)
@@ -342,10 +342,10 @@ class LarsimStatistics(Statistics):
 
         if is_Sobol_m_computed:
             for i in range(len(labels)):
-                fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["Sobol_m"][i] for key in self.keyIter], name=labels[i], legendgroup=labels[i], line_color=colors[i]), row=3, col=1)
+                fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["Sobol_m"][i][0] for key in self.keyIter], name=labels[i], legendgroup=labels[i], line_color=colors[i]), row=3, col=1)
         if is_Sobol_t_computed:
             for i in range(len(labels)):
-                fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["Sobol_t"][i] for key in self.keyIter], legendgroup=labels[i], showlegend = False, line_color=colors[i]), row=4, col=1)
+                fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["Sobol_t"][i][0] for key in self.keyIter], legendgroup=labels[i], showlegend = False, line_color=colors[i]), row=4, col=1)
 
         fig.update_traces(mode='lines')
         #fig.update_xaxes(title_text="Time")
