@@ -268,6 +268,7 @@ class LarsimModel(Model):
             if parameter is not None:
                 #config.tape35_configurations(parameters=parameter, curr_working_dir=curr_working_dir, configurationObject=self.configurationObject)
                 tape35_path = curr_working_dir+"/tape35"
+                parameter = larsimConfigurationSettings.preprocess_parameters_for_Larsim_tape35(parameters=parameter, configurationObject=self.configurationObject)
                 larsimConfigurationSettings.tape35_configurations(parameters=parameter, tape35_path=tape35_path,\
                  configurationObject=self.configurationObject)
                 print("LarsimModel INFO: Process {} successfully changed its tape35".format(i))
