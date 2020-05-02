@@ -545,15 +545,15 @@ class LarsimStatistics(Statistics):
             plotter.rc('font', family='serif', size=fontsize)
 
             ax = figure.add_subplot(111)
-            ax.set_title("Absolute error $(\epsilon)$ of runoff")
+            ax.set_title("Absolute error $(\epsilon(\mathcal{Q}))$ of runoff $\mathcal{Q}$")
             ax.xaxis.set_major_locator(MaxNLocator(integer=True))
 
             E = np.asarray([self.Abfluss[key]["E"] for key in keyIter])
             error = np.abs(measured_data - E)
 
-            ax.plot(t, error, '-', label='abs_error')
+            ax.plot(t, error, '-', label='$\epsilon(\mathcal{Q})$')
             plotter.xlabel('date of simulation', fontsize=13)
-            plotter.ylabel('absolute error of (runoff: $m^3/s$)', fontsize=13)
+            plotter.ylabel('runoff $\mathcal{Q}$ ($m^3/s$)', fontsize=13)
             # plotter.xlim(0, 200)
             # plotter.ylim(0, 20)
             ymin, ymax = plotter.ylim()
@@ -596,15 +596,15 @@ class LarsimStatistics(Statistics):
             plotter.rc('font', family='serif', size=fontsize)
 
             ax = figure.add_subplot(111)
-            ax.set_title("Relative error $(\epsilon_{rel})$ of runoff")
+            ax.set_title("Relative error $(\epsilon_{rel}(\mathcal{Q}))$ of runoff $\mathcal{Q}$")
             ax.xaxis.set_major_locator(MaxNLocator(integer=True))
 
             E = np.asarray([self.Abfluss[key]["E"] for key in keyIter])
             error = np.abs((measured_data - E)/measured_data)
 
-            ax.plot(t, error, '-', label='rel_error')
+            ax.plot(t, error, '-', label='$\epsilon_{rel}(\mathcal{Q})$')
             plotter.xlabel('date of simulation', fontsize=13)
-            plotter.ylabel('relative error of (runoff: $m^3/s$)', fontsize=13)
+            plotter.ylabel('runoff $\mathcal{Q}$ ($m^3/s$)', fontsize=13)
             # plotter.xlim(0, 200)
             # plotter.ylim(0, 20)
             ymin, ymax = plotter.ylim()
@@ -646,12 +646,12 @@ class LarsimStatistics(Statistics):
         plotter.rc('font', family='serif', size=fontsize)
 
         ax = figure.add_subplot(111)
-        ax.set_title("Standard deviation $(\sigma)$ of runoff")
+        ax.set_title("Standard deviation $(\sigma(\mathcal{Q}))$ of runoff \mathcal{Q}")
         ax.xaxis.set_major_locator(MaxNLocator(integer=True))
 
-        plotter.plot(t, [self.Abfluss[key]["StdDev"] for key in keyIter], '-', label='std. dev.')
+        plotter.plot(t, [self.Abfluss[key]["StdDev"] for key in keyIter], '-', label='$\sigma(\mathcal{Q})$')
         plotter.xlabel('date of simulation', fontsize=13)
-        plotter.ylabel('standard deviation (runoff: $m^3/s$)', fontsize=13)
+        plotter.ylabel('runoff $\mathcal{Q}$ ($m^3/s$)', fontsize=13)
         # plotter.xlim(0, 200)
         # plotter.ylim(0, 20)
         ymin, ymax = plotter.ylim()
