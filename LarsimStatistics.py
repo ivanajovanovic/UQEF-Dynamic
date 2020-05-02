@@ -499,7 +499,7 @@ class LarsimStatistics(Statistics):
         ax.set_title("Statistics of runoff")
         ax.xaxis.set_major_locator(MaxNLocator(integer=True))
         # plotter.title('mean')
-        ax.plot(t, [self.Abfluss[key]["E"] for key in keyIter], '-', label='$\mu$ runoff')
+        ax.plot(t, [self.Abfluss[key]["E"] for key in keyIter], '-', label='mean ($\mu$) runoff')
         ax.fill_between(t, [self.Abfluss[key]["P10"] for key in keyIter],
                            [self.Abfluss[key]["P90"] for key in keyIter], facecolor='#5dcec6')
         ax.plot(t, [self.Abfluss[key]["P10"] for key in keyIter], '-', label='10th percentile')
