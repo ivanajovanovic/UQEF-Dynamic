@@ -510,7 +510,7 @@ class LarsimStatistics(Statistics):
         plotter.ylabel('runoff $\mathcal{Q}$ ($m^3/s$)', fontsize=13)
         # plotter.xlim(0, 200)
         ymin, ymax = plotter.ylim()
-        plotter.ylim(0, ymax)
+        #plotter.ylim(0, ymax)
         plotter.xticks(t[::tick_reduction], [p.date() for p in pdTimesteps][::tick_reduction], rotation=70, ha="right")
         #plotter.xticks(t[::2], [p.date() for p in pdTimesteps][::2])
         #for tick in ax.xaxis.get_majorticklabels():
