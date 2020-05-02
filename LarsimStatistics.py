@@ -496,7 +496,7 @@ class LarsimStatistics(Statistics):
         plotter.rc('font', family='serif', size=fontsize)
 
         ax = figure.add_subplot(111)
-        ax.set_title("Statistics of runoff \mathcal{Q}")
+        ax.set_title("Statistics of runoff $\mathcal{Q}$")
         ax.xaxis.set_major_locator(MaxNLocator(integer=True))
         # plotter.title('mean')
         ax.plot(t, [self.Abfluss[key]["E"] for key in keyIter], '-', label='$\mu(\mathcal{Q})$')
