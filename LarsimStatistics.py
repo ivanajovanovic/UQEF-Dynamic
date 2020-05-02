@@ -646,7 +646,7 @@ class LarsimStatistics(Statistics):
         plotter.rc('font', family='serif', size=fontsize)
 
         ax = figure.add_subplot(111)
-        ax.set_title("Standard deviation $(\sigma(\mathcal{Q}))$ of runoff $\mathcal{Q}$")
+        ax.set_title("Standard deviation $\sigma(\mathcal{Q})$ of runoff $\mathcal{Q}$")
         ax.xaxis.set_major_locator(MaxNLocator(integer=True))
 
         plotter.plot(t, [self.Abfluss[key]["StdDev"] for key in keyIter], '-', label='$\sigma(\mathcal{Q})$')
