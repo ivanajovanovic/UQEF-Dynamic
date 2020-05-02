@@ -596,7 +596,7 @@ class LarsimStatistics(Statistics):
             plotter.rc('font', family='serif', size=fontsize)
 
             ax = figure.add_subplot(111)
-            ax.set_title("Relative error $(\epsilon)$ of runoff")
+            ax.set_title("Relative error $(\epsilon_{rel})$ of runoff")
             ax.xaxis.set_major_locator(MaxNLocator(integer=True))
 
             E = np.asarray([self.Abfluss[key]["E"] for key in keyIter])
