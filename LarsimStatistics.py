@@ -553,7 +553,7 @@ class LarsimStatistics(Statistics):
 
             ax.plot(t, error, '-', label='$\epsilon(\mathcal{Q})$')
             plotter.xlabel('date of simulation', fontsize=13)
-            plotter.ylabel('runoff $\mathcal{Q}$ ($m^3/s$)', fontsize=13)
+            plotter.ylabel('absolute error $\epsilon(\mathcal{Q})$', fontsize=13)
             # plotter.xlim(0, 200)
             # plotter.ylim(0, 20)
             ymin, ymax = plotter.ylim()
@@ -604,7 +604,7 @@ class LarsimStatistics(Statistics):
 
             ax.plot(t, error, '-', label='$\epsilon_{rel}(\mathcal{Q})$')
             plotter.xlabel('date of simulation', fontsize=13)
-            plotter.ylabel('runoff $\mathcal{Q}$ ($m^3/s$)', fontsize=13)
+            plotter.ylabel('relative error $\epsilon_{rel}(\mathcal{Q})$', fontsize=13)
             # plotter.xlim(0, 200)
             # plotter.ylim(0, 20)
             ymin, ymax = plotter.ylim()
