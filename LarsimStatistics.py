@@ -694,7 +694,7 @@ class LarsimStatistics(Statistics):
             plotter.rc('font', family='serif', size=fontsize)
 
             ax = figure.add_subplot(111)
-            ax.set_title("Total sensitivity indices for runoff")
+            ax.set_title("Total sensitivity indices for runoff $\mathcal{Q}$")
 
             sobol_labels = self.simulationNodes.nodeNames
             sobol_labels = ["$st\_{}$".format(sl.replace("_", "\_")) for sl in sobol_labels]
@@ -710,7 +710,7 @@ class LarsimStatistics(Statistics):
                             label=sobol_labels[i])
                     x = x + np.asarray([self.Abfluss[key]["Sobol_t"][i] for key in keyIter])
             plotter.xlabel('date of simulation', fontsize=13)
-            plotter.ylabel('sobol indices', fontsize=13)
+            plotter.ylabel('sensitivity indices', fontsize=13)
             # plotter.xscale('linear')
             # plotter.xlim(0, plotter.xlim()[1])
             ymin, ymax = plotter.ylim()
@@ -744,7 +744,7 @@ class LarsimStatistics(Statistics):
             plotter.rc('font', family='serif', size=fontsize)
 
             ax = figure.add_subplot(111)
-            ax.set_title("First order sensitivity indices for runoff")
+            ax.set_title("First order sensitivity indices for runoff $\mathcal{Q}$")
 
             sobol_labels = self.simulationNodes.nodeNames
             sobol_labels = [ "$si\_{}$".format(sl.replace("_", "\_")) for sl in sobol_labels]
@@ -762,7 +762,7 @@ class LarsimStatistics(Statistics):
             interaction = 1 - x
             ax.plot(t, interaction, '--', label="$si\_int$")
             plotter.xlabel('date of simulation', fontsize=13)
-            plotter.ylabel('sobol indices', fontsize=13)
+            plotter.ylabel('sensitivity indices', fontsize=13)
             #plotter.xscale('linear')
             #plotter.xlim(0, plotter.xlim()[1])
             ymin, ymax = plotter.ylim()
