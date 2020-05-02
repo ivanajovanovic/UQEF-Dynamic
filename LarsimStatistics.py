@@ -502,8 +502,8 @@ class LarsimStatistics(Statistics):
         ax.plot(t, [self.Abfluss[key]["E"] for key in keyIter], '-', label='mean ($\mu$) runoff')
         ax.fill_between(t, [self.Abfluss[key]["P10"] for key in keyIter],
                            [self.Abfluss[key]["P90"] for key in keyIter], facecolor='#5dcec6')
-        ax.plot(t, [self.Abfluss[key]["P10"] for key in keyIter], '-', label='10th percentile')
-        ax.plot(t, [self.Abfluss[key]["P90"] for key in keyIter], '-', label='90th percentile')
+        ax.plot(t, [self.Abfluss[key]["P10"] for key in keyIter], linestyle="--", label='10th percentile')
+        ax.plot(t, [self.Abfluss[key]["P90"] for key in keyIter], linestyle="-.", label='90th percentile')
         if measured_data is not None:
             ax.plot(t, measured_data, '-', label='measured runoff')
         plotter.xlabel('date of simulation', fontsize=13)
