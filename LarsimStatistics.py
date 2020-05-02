@@ -490,7 +490,7 @@ class LarsimStatistics(Statistics):
         #####################################
         print("plot: mean + percentiles")
         figure = plotter.figure(1, figsize=(12, 4))
-        sns.set()
+        #sns.set()
 
         fontsize = 15
         plotter.rc('font', family='serif', size=fontsize)
