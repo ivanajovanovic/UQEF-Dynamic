@@ -505,9 +505,9 @@ class LarsimStatistics(Statistics):
         ax.plot(t, [self.Abfluss[key]["P10"] for key in keyIter], linestyle="--", label='$p_{10}(\mathcal{Q})$')
         ax.plot(t, [self.Abfluss[key]["P90"] for key in keyIter], linestyle="-.", label='$p_{90}(\mathcal{Q})$')
         if measured_data is not None:
-            ax.plot(t, measured_data, '-', label='measured \mathcal{Q}')
+            ax.plot(t, measured_data, '-', label='measured $\mathcal{Q}$')
         plotter.xlabel('date of simulation', fontsize=13)
-        plotter.ylabel('runoff \mathcal{Q} ($m^3/s$)', fontsize=13)
+        plotter.ylabel('runoff $\mathcal{Q}$ ($m^3/s$)', fontsize=13)
         # plotter.xlim(0, 200)
         ymin, ymax = plotter.ylim()
         plotter.ylim(0, ymax)
