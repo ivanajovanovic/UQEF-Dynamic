@@ -105,7 +105,7 @@ def updatePlot(uqsim_file):
 
     print("uqsim.args.disable_statistics: {}".format(uqsim.args.disable_statistics))
 
-    force_recalc = True
+    force_recalc = False
     # turn statistics off here, after locally restored the UQsim instance
     # only calc stats if it isn't already calculated...
     if uqsim.args.disable_statistics is True or force_recalc is True:
