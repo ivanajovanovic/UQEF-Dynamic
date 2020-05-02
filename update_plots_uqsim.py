@@ -94,7 +94,7 @@ def updatePlot(uqsim_file):
     uqsim.args.uqsim_file = uqsim_file
 
     uqsim.configuration_object["Directories"]["working_dir"] = outputResultDir + "/model_runs"
-    uqsim.configuration_object["Output"]["dailyOutput"] = "False"
+    uqsim.configuration_object["Output"]["dailyOutput"] = "True"
     uqsim.configuration_object["Output"]["station"] = "MARI"
 
     # re register statistics
@@ -105,7 +105,7 @@ def updatePlot(uqsim_file):
 
     print("uqsim.args.disable_statistics: {}".format(uqsim.args.disable_statistics))
 
-    force_recalc = False
+    force_recalc = True
     # turn statistics off here, after locally restored the UQsim instance
     # only calc stats if it isn't already calculated...
     if uqsim.args.disable_statistics is True or force_recalc is True:
