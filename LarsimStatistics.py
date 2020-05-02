@@ -496,16 +496,16 @@ class LarsimStatistics(Statistics):
         plotter.rc('font', family='serif', size=fontsize)
 
         ax = figure.add_subplot(111)
-        ax.set_title("Mean ($\mu$) of runoff")
+        ax.set_title("Statistics of runoff")
         ax.xaxis.set_major_locator(MaxNLocator(integer=True))
         # plotter.title('mean')
-        ax.plot(t, [self.Abfluss[key]["E"] for key in keyIter], '-', label='mean')
+        ax.plot(t, [self.Abfluss[key]["E"] for key in keyIter], '-', label='$\mu$ runoff')
         ax.fill_between(t, [self.Abfluss[key]["P10"] for key in keyIter],
-                             [self.Abfluss[key]["P90"] for key in keyIter], facecolor='#5dcec6')
+                           [self.Abfluss[key]["P90"] for key in keyIter], facecolor='#5dcec6')
         ax.plot(t, [self.Abfluss[key]["P10"] for key in keyIter], '-', label='10th percentile')
         ax.plot(t, [self.Abfluss[key]["P90"] for key in keyIter], '-', label='90th percentile')
         if measured_data is not None:
-            ax.plot(t, measured_data, '-', label='measured data')
+            ax.plot(t, measured_data, '-', label='measured runoff')
         plotter.xlabel('date of simulation', fontsize=13)
         plotter.ylabel('runoff ($m^3/s$)', fontsize=13)
         # plotter.xlim(0, 200)
@@ -545,7 +545,7 @@ class LarsimStatistics(Statistics):
             plotter.rc('font', family='serif', size=fontsize)
 
             ax = figure.add_subplot(111)
-            ax.set_title("Simulation absolute error $(\epsilon)$ of runoff")
+            ax.set_title("Absolute error $(\epsilon)$ of runoff")
             ax.xaxis.set_major_locator(MaxNLocator(integer=True))
 
             E = np.asarray([self.Abfluss[key]["E"] for key in keyIter])
@@ -596,7 +596,7 @@ class LarsimStatistics(Statistics):
             plotter.rc('font', family='serif', size=fontsize)
 
             ax = figure.add_subplot(111)
-            ax.set_title("Simulation relative error $(\epsilon)$ of runoff")
+            ax.set_title("Relative error $(\epsilon)$ of runoff")
             ax.xaxis.set_major_locator(MaxNLocator(integer=True))
 
             E = np.asarray([self.Abfluss[key]["E"] for key in keyIter])
@@ -694,7 +694,7 @@ class LarsimStatistics(Statistics):
             plotter.rc('font', family='serif', size=fontsize)
 
             ax = figure.add_subplot(111)
-            ax.set_title("(a) Total sensitivity indices for runoff")
+            ax.set_title("Total sensitivity indices for runoff")
 
             sobol_labels = self.simulationNodes.nodeNames
             sobol_labels = ["$st\_{}$".format(sl.replace("_", "\_")) for sl in sobol_labels]
@@ -744,7 +744,7 @@ class LarsimStatistics(Statistics):
             plotter.rc('font', family='serif', size=fontsize)
 
             ax = figure.add_subplot(111)
-            ax.set_title("(a) First order sensitivity indices for runoff")
+            ax.set_title("First order sensitivity indices for runoff")
 
             sobol_labels = self.simulationNodes.nodeNames
             sobol_labels = [ "$si\_{}$".format(sl.replace("_", "\_")) for sl in sobol_labels]
