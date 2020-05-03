@@ -1,10 +1,18 @@
 #!/bin/bash
 
+# load modules
+module load slurm_setup
 module load python/3.6_intel
 module unload intel-mpi
 module load intel-mpi/2018.4.274
 
+# uqef
 export PYTHONPATH=$HOME/work/simulation/diss.larsim/uqef.git/src:$PYTHONPATH
+
+# load python conda env
+source activate larsim_uq
+conda info -e
+conda list
 
 start_update_stats(){
     local id="$1"
@@ -30,82 +38,21 @@ start_update_stats(){
         exit 1
     fi
 
-    cpus=28
-    threads=$cpus
-    tasks=1
+    echo "---- start sim: \`date\`"
 
-    if [ $cluster_nodes -lt 4 ]; then
-        partition="cm2_tiny"
-    else
-        partition="cm2_std"
-    fi
+    python "$executionPath/update_plots_uqsim.py" --dir "$resultIdPath"
 
-#create batch file
-echo "#!/bin/bash
-
-# config
-
-#SBATCH -o $baseSourcePath/st.$id.job.%j.%N.out
-#SBATCH -D $baseSourcePath
-#SBATCH -J st.$id
-#SBATCH --get-user-env
-#SBATCH --cluster=cm2
-#SBATCH --partition=$partition
-#SBATCH --qos=$partition
-#SBATCH --nodes=$cluster_nodes
-#SBATCH --cpus-per-task=$cpus
-#SBATCH --ntasks-per-node=$tasks
-#SBATCH --mem=55G
-#SBATCH --exclusive
-#SBATCH --mail-type=end
-#SBATCH --mail-user=florian.kuenzner@tum.de
-#SBATCH --export=NONE
-#SBATCH --time=$time_limit
-
-#module load slurm_setup
-#module load python/3.6_intel
-#module unload mpi.intel
-#module load mpi.intel/2018
-
-# load modules
-module load slurm_setup
-module load python/3.6_intel
-module unload intel-mpi
-module load intel-mpi/2018.4.274
-
-export OMP_NUM_THREADS=$threads
-
-# load python conda env
-source activate larsim_uq
-conda info -e
-conda list
-
-export CLASSPATH=$CLASSPATH
-export PYTHONPATH=$HOME/work/simulation/diss.larsim/uqef.git/src:$PYTHONPATH
-#export PYTHONPATH=$HOME/software/python/mpi4py.mpp2.git/build/lib.linux-x86_64-3.5:$PYTHONPATH
-#export PYTHONPATH=$HOME/software/python/chaospy_python3.git:$PYTHONPATH
-
-# start simulation
-echo "---- start sim: \`date\`"
-
-#python "$executionPath/update_plots_uqsim.py" --dir "$resultIdPath"
-
-echo "---- end sim: \`date\`"
-
-" > update_stats_gen.cmd
-
-    #execute batch file
-    sbatch update_stats_gen.cmd
+    echo "---- end sim: \`date\`"
 }
 
 #daily output
-start_update_stats 0121 4 "0:30:00"
+#start_update_stats 0121 1 "0:30:00"
 #start_update_stats 0122 1 "0:10:00"
 #start_update_stats 0123 1 "1:00:00"
 #start_update_stats 0124 1 "2:00:00"
 #start_update_stats 0125 1 "6:30:00"
 #start_update_stats 0127 1 "24:00:00"
-#start_update_stats 0133 1 "48:00:00"
+start_update_stats 0133 1 "48:00:00"
 #start_update_stats 0134 1 "48:00:00"
 #start_update_stats 0100 1 "5:40:00"
 #start_update_stats 0101 1 "7:30:00"
