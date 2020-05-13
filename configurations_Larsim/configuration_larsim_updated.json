@@ -15,11 +15,13 @@
       "end_minute": 0,
 
       "timestep": 5,
-      "cut_runs": "True"
+      "cut_runs": "True",
+      "warm_up_duration": 53
     },
   "parameters": [
     {
-      "name": "tape35:BSF",
+      "name": "BSF",
+      "type": "tape35",
       "distribution": "Uniform",
       "mu": 0.3,
       "sigma": 0.1,
@@ -29,7 +31,8 @@
       "upper_limit": 0.5
     },
     {
-      "name": "tape35:A2",
+      "name": "A2",
+      "type": "tape35",
       "distribution": "Uniform",
       "mu": 1.5,
       "sigma": 0.75,
@@ -39,7 +42,8 @@
       "upper_limit": 4.0
     },
     {
-      "name": "tape35:EQI",
+      "name": "EQI",
+      "type": "tape35",
       "distribution": "Uniform",
       "mu": 250,
       "sigma": 150,
@@ -51,7 +55,8 @@
       "direction":"decreasing"
     },
     {
-      "name": "tape35:EQD",
+      "name": "EQD",
+      "type": "tape35",
       "distribution": "Uniform",
       "mu": 450,
       "sigma": 200,
@@ -63,7 +68,8 @@
       "direction":"decreasing"
     },
     {
-      "name": "lanu:Acker:Apr",
+      "name": "Acker:Apr",
+      "type": "lanu",
       "distribution": "Uniform",
       "lower": 0,
       "upper": 1,
@@ -73,7 +79,8 @@
       "direction":"increasing"
     },
     {
-      "name": "lanu:Acker:May",
+      "name": "Acker:May",
+      "type": "lanu",
       "distribution": "Uniform",
       "lower": 0,
       "upper": 1,
@@ -83,7 +90,8 @@
       "direction":"increasing"
     },
     {
-      "name": "lanu:locker baumbest.:Apr",
+      "name": "locker baumbest.:Apr",
+      "type": "lanu",
       "distribution": "Uniform",
       "lower": 0,
       "upper": 1,
@@ -93,7 +101,8 @@
       "direction":"increasing"
     },
     {
-      "name": "lanu:locker baumbest.:May",
+      "name": "locker baumbest.:May",
+      "type": "lanu",
       "distribution": "Uniform",
       "lower": 0,
       "upper": 1,
@@ -106,6 +115,7 @@
   "unused_parameters": [
     {
       "name": "EKM",
+      "type": "tape35",
       "distribution": "Uniform",
       "lower": 0.3,
       "upper": 3.0,
@@ -114,6 +124,7 @@
     },
     {
       "name": "EKL",
+      "type": "tape35",
       "distribution": "Uniform",
       "lower": 0.3,
       "upper": 3.0,
@@ -122,6 +133,7 @@
     },
     {
       "name": "EKR",
+      "type": "tape35",
       "distribution": "Uniform",
       "lower": 0.3,
       "upper": 3.0,
@@ -130,6 +142,7 @@
     },
     {
       "name": "EQB",
+      "type": "tape35",
       "distribution": "Uniform",
       "lower": 5000,
       "upper": 100000,
@@ -138,6 +151,7 @@
     },
     {
       "name": "EQI",
+      "type": "tape35",
       "distribution": "Uniform",
       "lower": 200,
       "upper": 15000,
@@ -146,6 +160,7 @@
     },
     {
       "name": "Dmin",
+      "type": "tape35",
       "distribution": "Uniform",
       "lower": 0,
       "upper": 5,
@@ -154,6 +169,7 @@
     },
     {
       "name": "Dmax",
+      "type": "tape35",
       "distribution": "Uniform",
       "lower": 0,
       "upper": 10,
@@ -162,6 +178,7 @@
     },
     {
       "name": "beta",
+      "type": "tape35",
       "distribution": "Uniform",
       "lower": 0.000002,
       "upper": 0.1,
@@ -173,15 +190,21 @@
   {
     "type_of_output":"Abfluss Messung",
     "type_of_output_measured":"Ground Truth",
-    "station":"MARI",
+    "station_calibration_postproc":"MARI",
+    "station_model_runs": "all",
     "pathsDataFormat":"False",
     "dailyOutput": "False",
-    "calculate_GoF": "False",
-    "objective_function":"all"
+    "calculate_GoF": "True",
+    "objective_function":"all",
+    "run_and_save_simulations":"True",
+    "compute_gredients": "False"
   },
-  "GaugeControlRegion":
+  "parameters_settings":
   {
     "addSampledValue":"False",
-    "TGB_standard":3085
+    "TGB_standard":3085,
+    "roundParameters":"False",
+    "roundDecimal":2,
+    "cut_limits":"False"
   }
 }
