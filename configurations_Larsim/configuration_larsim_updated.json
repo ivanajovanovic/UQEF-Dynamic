@@ -19,7 +19,7 @@
     },
   "parameters": [
     {
-      "name": "BSF",
+      "name": "tape35:BSF",
       "distribution": "Uniform",
       "mu": 0.3,
       "sigma": 0.1,
@@ -29,7 +29,7 @@
       "upper_limit": 0.5
     },
     {
-      "name": "A2",
+      "name": "tape35:A2",
       "distribution": "Uniform",
       "mu": 1.5,
       "sigma": 0.75,
@@ -39,18 +39,7 @@
       "upper_limit": 4.0
     },
     {
-      "name": "D_EQD",
-      "distribution": "Uniform",
-      "mu": 450,
-      "sigma": 200,
-      "lower": 0,
-      "upper": 1,
-      "lower_limit": 50,
-      "upper_limit": 5000,
-      "depending_on":"EQI"
-    },
-    {
-      "name": "D_EQD2",
+      "name": "tape35:EQI",
       "distribution": "Uniform",
       "mu": 250,
       "sigma": 150,
@@ -58,7 +47,60 @@
       "upper": 1,
       "lower_limit": 10,
       "upper_limit": 1000,
-      "depending_on":"EQI"
+      "depends_on":"EQB",
+      "direction":"decreasing"
+    },
+    {
+      "name": "tape35:EQD",
+      "distribution": "Uniform",
+      "mu": 450,
+      "sigma": 200,
+      "lower": 0,
+      "upper": 1,
+      "lower_limit": 50,
+      "upper_limit": 5000,
+      "depends_on":"EQI",
+      "direction":"decreasing"
+    },
+    {
+      "name": "lanu:Acker:Apr",
+      "distribution": "Uniform",
+      "lower": 0,
+      "upper": 1,
+      "lower_limit": 0.3,
+      "upper_limit": 3.0,
+      "depends_on":"Acker:Mar",
+      "direction":"increasing"
+    },
+    {
+      "name": "lanu:Acker:May",
+      "distribution": "Uniform",
+      "lower": 0,
+      "upper": 1,
+      "lower_limit": 0.7,
+      "upper_limit": 5.2,
+      "depends_on":"Acker:Apr",
+      "direction":"increasing"
+    },
+    {
+      "name": "lanu:locker baumbest.:Apr",
+      "distribution": "Uniform",
+      "lower": 0,
+      "upper": 1,
+      "lower_limit": 3.0,
+      "upper_limit": 6.5,
+      "depends_on":"locker baumbest.:Mar",
+      "direction":"increasing"
+    },
+    {
+      "name": "lanu:locker baumbest.:May",
+      "distribution": "Uniform",
+      "lower": 0,
+      "upper": 1,
+      "lower_limit": 5.5,
+      "upper_limit": 7.5,
+      "depends_on":"locker baumbest.:Apr",
+      "direction":"increasing"
     }
   ],
   "unused_parameters": [
@@ -133,10 +175,13 @@
     "type_of_output_measured":"Ground Truth",
     "station":"MARI",
     "pathsDataFormat":"False",
-    "dailyOutput": "False"
+    "dailyOutput": "False",
+    "calculate_GoF": "False",
+    "objective_function":"all"
   },
   "GaugeControlRegion":
   {
-    "addSampledValue":"False"
+    "addSampledValue":"False",
+    "TGB_standard":3085
   }
 }

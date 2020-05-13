@@ -1,15 +1,15 @@
 import datetime
+import dill
 from distutils.util import strtobool
 from decimal import Decimal
 import inspect
 import os
-import glob
 import os.path as osp
 import pandas as pd
+import pickle
 import numpy as np
 import subprocess
 import time
-import linecache
 
 from uqef.model import Model
 
@@ -18,7 +18,6 @@ import larsimPaths as paths
 import larsimConfigurationSettings
 import larsimDataPostProcessing
 import larsimInputOutputUtilities
-import larsimModel
 import larsimTimeUtility
 
 
@@ -27,6 +26,11 @@ class LarsimModelSetUp():
 
         self.configurationObject = configurationObject
 
+        #####################################
+        # Sepcification of different directories - some are machine / location dependent,
+        # adjust path in larsimPaths moduel and configuration file/object accordingly
+        #####################################
+
         self.current_dir = kwargs.get('sourceDir') if 'sourceDir' in kwargs and osp.isabs(kwargs.get('sourceDir')) \
                             else osp.dirname(osp.abspath(inspect.getfile(inspect.currentframe())))
 
@@ -34,20 +38,30 @@ class LarsimModelSetUp():
 
         self.global_master_dir = osp.abspath(osp.join(self.inputModelDir,'WHM Regen','master_configuration'))
         self.master_lila_paths = [osp.abspath(osp.join(self.inputModelDir,'WHM Regen', i)) for i in paths.master_lila_files]
+        self.lila_configured_paths = [os.path.abspath(os.path.join(self.master_dir, i)) for i in paths.lila_files]
         self.all_whms_path = osp.abspath(osp.join(self.inputModelDir,'WHM Regen','var/WHM Regen WHMS'))
         self.larsim_exe = osp.abspath(osp.join(self.inputModelDir, 'Larsim-exe', 'larsim-linux-intel-1000.exe'))
 
         #try:
-        self.working_dir = configurationObject["Directories"]["working_dir"]
+        self.working_dir = self.configurationObject["Directories"]["working_dir"]
         #except KeyError:
         #    self.working_dir = paths.working_dir  # directoy for all the larsim runs
 
         self.master_dir = osp.abspath(osp.join(self.working_dir, 'master_configuration'))
 
+        #####################################
+        # Sepcification of different variables for setting the model run and purpose of the model run
+        #####################################
+
         try:
-            self.station_of_Interest = self.configurationObject["Output"]["station"]
+            self.station_of_Interest = self.configurationObject["Output"]["station_calibration_postproc"]
         except KeyError:
             self.station_of_Interest = "MARI"
+
+        try:
+            self.station_for_model_runs = self.configurationObject["Output"]["station_model_runs"]
+        except KeyError:
+            self.station_for_model_runs = "all"
 
         try:
             self.type_of_output_of_Interest = self.configurationObject["Output"]["type_of_output"]
@@ -58,6 +72,13 @@ class LarsimModelSetUp():
             self.type_of_output_of_Interest_measured = self.configurationObject["Output"]["type_of_output_measured"]
         except KeyError:
             self.type_of_output_of_Interest_measured  = "Ground Truth"
+
+        try:
+            self.warm_up_duration = self.configurationObject["Timeframe"]["warm_up_duration"]
+        except KeyError:
+            self.warm_up_duration = 53
+
+        larsimConfigurationSettings.update_configurationObject_with_parameters_info(configurationObject)
 
         self.copy_master_folder()
         self.configure_master_folder()
@@ -87,17 +108,17 @@ class LarsimModelSetUp():
         # Based on time settings change tape10_master file - needed for unaltered run - this will be repeted once again by each process in LarsimModel.run()
         tape10_adjusted_path = osp.abspath(osp.join(self.master_dir, 'tape10'))
         master_tape10_file = osp.abspath(osp.join(self.master_dir, 'tape10_master'))
-        larsimTimeUtility.tape10_configuration(timeframe=self.timeframe, master_tape10_file=master_tape10_file, new_path=tape10_adjusted_path)
+        larsimTimeUtility.tape10_configuration(timeframe=self.timeframe, master_tape10_file=master_tape10_file, \
+                                               new_path=tape10_adjusted_path, warm_up_duration=self.warm_up_duration)
 
         # Filter out whm files
         larsimConfigurationSettings.copy_whm_files(timeframe=self.timeframe, all_whms_path=self.all_whms_path, new_path=self.master_dir)
 
         # Parse big lila files and create small ones
-        lila_configured_paths = [osp.abspath(osp.join(self.master_dir, i)) for i in paths.lila_files]
-        larsimConfigurationSettings.master_lila_parser_based_on_time_crete_new(timeframe=self.timeframe, master_lila_paths=self.master_lila_paths, new_lila_paths=lila_configured_paths,
-                                                   start_date_min_3_bool=False)
+        larsimConfigurationSettings.master_lila_parser_based_on_time_crete_new(timeframe=self.timeframe, master_lila_paths=self.master_lila_paths, \
+                                                   new_lila_paths=self.lila_configured_paths,start_date_min_3_bool=False)
 
-        for one_lila_file in lila_configured_paths:
+        for one_lila_file in self.lila_configured_paths:
             if not osp.exists(one_lila_file):
                 raise IOError('LarsimModelSetUp Error: File does not exist: %s. %s' % (one_lila_file, IOError.strerror))
 
@@ -112,8 +133,10 @@ class LarsimModelSetUp():
         self.df_measured = larsimDataPostProcessing.read_process_write_discharge(df=local_wq_file,\
                              index_run=0,\
                              timeframe=self.timeframe,\
-                             write_to_file=osp.abspath(osp.join(self.working_dir, "df_measured.csv"))
+                             write_to_file=osp.abspath(osp.join(self.working_dir, "df_measured.pkl")),\
+                             compression="gzip"
                              )
+        #self.df_measured = larsimConfigurationSettings.extract_measured_discharge(self.timeframe[0], self.timeframe[1], station=self.station_for_model_runs, index_run=0)
 
 
     def run_unaltered_sim(self, createNewFolder=False, write_in_file=True):
@@ -138,8 +161,18 @@ class LarsimModelSetUp():
 
         result_file_path = osp.abspath(osp.join(dir_unaltered_run, 'ergebnis.lila'))
         self.df_unaltered_ergebnis = larsimInputOutputUtilities.ergebnis_parser_toPandas(result_file_path, index_run=0, write_in_file=False)
+
+        # filter output time-series in order to disregard warm-up time; important that these values are not take into account while computing GoF
+        # However, take care that is is not done twice!
+        #simulation_start_timestamp = self.timeframe[0] + datetime.timedelta(hours=self.warm_up_duration) # pd.Timestamp(result.TimeStamp.min())
+        #self.df_unaltered_ergebnis = larsimDataPostProcessing.parse_df_based_on_time(self.df_unaltered_ergebnis, (simulation_start_timestamp, None))
+
+        #filter out results for a concret station if specified in configuration json file
+        if self.station_for_model_runs!="all":
+            self.df_unaltered_ergebnis = larsimDataPostProcessing.filterResultForStation(self.df_unaltered_ergebnis, station=self.station_for_model_runs)
+
         if write_in_file:
-            larsimInputOutputUtilities.write_dataFrame_to_file(self.df_unaltered_ergebnis, osp.abspath(osp.join(self.working_dir, "df_unaltered_ergebnis.csv")))
+            larsimInputOutputUtilities.write_dataFrame_to_file(self.df_unaltered_ergebnis, osp.abspath(osp.join(self.working_dir, "df_unaltered_ergebnis.pkl")), compression="gzip")
 
         #print("Data Frame with Unaltered Simulation Discharges dtypes : {}".format(self.df_unaltered_ergebnis.dtypes))
 
@@ -159,7 +192,7 @@ class LarsimModelSetUp():
                                                                        station=self.station_of_Interest,
                                                                        type_of_output_of_Interest_measured=self.type_of_output_of_Interest_measured,
                                                                        type_of_output_of_Interest=self.type_of_output_of_Interest,
-                                                                       dailyStatisict=False)
+                                                                       dailyStatisict=False, gof_list="all", disregard_initila_timesteps=True, warm_up_duration=self.warm_up_duration)
         result_tuple = goodnessofFit_tuple[self.station_of_Interest]
 
         # daily
@@ -167,7 +200,7 @@ class LarsimModelSetUp():
                                                                        station=self.station_of_Interest,
                                                                        type_of_output_of_Interest_measured=self.type_of_output_of_Interest_measured,
                                                                        type_of_output_of_Interest=self.type_of_output_of_Interest,
-                                                                       dailyStatisict=True)
+                                                                       dailyStatisict=True, gof_list="all", disregard_initila_timesteps=True, warm_up_duration=self.warm_up_duration)
         result_tuple_daily = goodnessofFit_tuple_daily[self.station_of_Interest]
 
 
@@ -191,6 +224,11 @@ class LarsimModel(Model):
 
         self.configurationObject = configurationObject
 
+        #####################################
+        # Sepcification of different directories - some are machine / location dependent,
+        # adjust path in larsimPaths moduel and configuration file/object accordingly
+        #####################################
+
         self.current_dir = kwargs.get('sourceDir') if 'sourceDir' in kwargs and osp.isabs(kwargs.get('sourceDir')) \
                             else osp.dirname(osp.abspath(inspect.getfile(inspect.currentframe())))
 
@@ -198,17 +236,32 @@ class LarsimModel(Model):
 
         self.larsim_exe = osp.abspath(osp.join(self.inputModelDir, 'Larsim-exe', 'larsim-linux-intel-1000.exe'))
 
-        #try:
-        self.working_dir = self.configurationObject["Directories"]["working_dir"]
-        #except KeyError:
-        #    self.working_dir = paths.working_dir  # directoy for all the larsim runs
+        # directoy for the larsim runs
+        if "working_dir" in kwargs:
+            self.working_dir = kwargs.get('working_dir')
+        else:
+            try:
+                self.working_dir = self.configurationObject["Directories"]["working_dir"]
+            except KeyError:
+                self.working_dir = paths.working_dir
 
         self.master_dir = osp.abspath(osp.join(self.working_dir, 'master_configuration'))
 
+        #####################################
+        # Sepcification of different variables for setting the model run and purpose of the model run
+        #####################################
+
+        # TODO-Ivana deal with situation when self.station_of_Interest is a list
         try:
-            self.station_of_Interest = self.configurationObject["Output"]["station"]
+            self.station_of_Interest = self.configurationObject["Output"]["station_calibration_postproc"]
         except KeyError:
             self.station_of_Interest = "MARI"
+
+        # TODO-Ivana deal with situation when self.station_for_model_runs is a list
+        try:
+            self.station_for_model_runs = self.configurationObject["Output"]["station_model_runs"]
+        except KeyError:
+            self.station_for_model_runs = "all"
 
         try:
             self.type_of_output_of_Interest = self.configurationObject["Output"]["type_of_output"]
@@ -220,18 +273,55 @@ class LarsimModel(Model):
         except KeyError:
             self.type_of_output_of_Interest_measured  = "Ground Truth"
 
-        self.timeframe = larsimTimeUtility.parse_datetime_configuration(
-            self.configurationObject)
-        self.timestep = self.configurationObject["Timeframe"]["timestep"]  # how long one consecutive run should take - used later on in each Larsim run
-        # generate timesteps for plotting based on tape10 settings which are set in LarsimModelSetUp
-        self.t = larsimTimeUtility.get_tape10_timesteps(self.timeframe)
+        self.cut_runs = strtobool(self.configurationObject["Timeframe"]["cut_runs"])\
+                       if "cut_runs" in self.configurationObject["Timeframe"] else False
 
-        self.cut_runs = strtobool(self.configurationObject["Timeframe"]["cut_runs"])
+        self.warm_up_duration = self.configurationObject["Timeframe"]["warm_up_duration"] \
+                                if "warm_up_duration" in self.configurationObject["Timeframe"] else 53
 
         self.variable_names = []
-        for i in self.configurationObject["parameters"]:
-            self.variable_names.append(i["name"])
+        if "tuples_parameters_info" in self.configurationObject:
+            for i in self.configurationObject["tuples_parameters_info"]:
+                self.variable_names.append(i["parameter_name"])
+        else:
+            for i in self.configurationObject["parameters"]:
+                self.variable_names.append(i["name"])
 
+        # this variable stands for the purpose of LarsimModel run
+        # distinguis between different modes / purposes of LarsimModel runs:
+        #               calibration, run_and_save_simulations, gradient_computation, UQ_analysis
+        # These modes do not have to be mutually exclusive!
+
+        # if calibration is True some likelihood / objective functions / GoF functio should be calculated from model run and propageted further
+        self.calculate_GoF = strtobool(self.configurationObject["Output"]["calculate_GoF"])\
+                       if "calculate_GoF" in self.configurationObject["Output"] else False
+        if self.calculate_GoF:
+            # TODO-Ivana deal with situation when self.station_for_model_runs is a list/dictionary
+            self.objective_function = self.configurationObject["Output"]["objective_function"]
+            self.objective_function = larsimDataPostProcessing._gof_list_to_function_names(self.objective_function)
+
+        # save the output of each simulation just in run function just in case when run_and_save_simulations in json configuration file is True
+        # and no statistics calculations will be performed afterwards, otherwise the simulation results will be saved in LarsimStatistics
+        self.disable_statistics = kwargs.get('disable_statistics') if 'disable_statistics' in kwargs else False
+        self.run_and_save_simulations = strtobool(self.configurationObject["Output"]["run_and_save_simulations"])\
+                                        if "run_and_save_simulations" in self.configurationObject["Output"] else False
+        #self.run_and_save_simulations = self.run_and_save_simulations and self.disable_statistics
+
+
+        # if we want to compute the gradient (of some likelihood fun or output itself) w.r.t parameters
+        self.compute_gredients = strtobool(self.configurationObject["Output"]["compute_gredients"])\
+                       if "compute_gredients" in self.configurationObject["Output"] else False
+
+        #####################################
+        # getting the time span for running the model from the json configuration file
+        #####################################
+
+        self.timeframe = larsimTimeUtility.parse_datetime_configuration(
+            self.configurationObject)
+        self.timestep = self.configurationObject["Timeframe"]["timestep"]\
+                       if "timestep" in self.configurationObject["Timeframe"] else 5  # how long one consecutive run should take - used later on in each Larsim run
+        # generate timesteps for plotting based on tape10 settings which are set in LarsimModelSetUp
+        self.t = larsimTimeUtility.get_tape10_timesteps(self.timeframe)
 
     def prepare(self):
         pass
@@ -249,7 +339,12 @@ class LarsimModel(Model):
         results = []
         for ip in range(0, len(i_s)): # for each peace of work
             i = i_s[ip]# i is unique index run
-            parameter = parameters[ip]
+
+            if parameters is not None:
+                parameter = parameters[ip]
+            else:
+                parameter = None
+
             start = time.time()
 
             # create local directory for this particular run
@@ -264,14 +359,18 @@ class LarsimModel(Model):
             subprocess.run(['cp', '-a', master_dir_for_copying, curr_working_dir])  # TODO IVANA Check if copy succeed
             print("LarsimModel INFO: Successfully copied all the files")
 
-            # change values inside tape35
+            # change values
             if parameter is not None:
                 #config.tape35_configurations(parameters=parameter, curr_working_dir=curr_working_dir, configurationObject=self.configurationObject)
-                tape35_path = curr_working_dir+"/tape35"
-                parameter = larsimConfigurationSettings.preprocess_parameters_for_Larsim_tape35(parameters=parameter, configurationObject=self.configurationObject)
-                larsimConfigurationSettings.tape35_configurations(parameters=parameter, tape35_path=tape35_path,\
-                 configurationObject=self.configurationObject)
-                print("LarsimModel INFO: Process {} successfully changed its tape35".format(i))
+                tape35_path = curr_working_dir + "/tape35"
+                lanu_path = curr_working_dir + "/lanu.par"
+                parameters_dict = larsimConfigurationSettings.params_configurations(parameters = parameter, tape35_path = tape35_path,
+                                                                  lanu_path = lanu_path,
+                                                                  configurationObject = self.configurationObject,
+                                                                  process_id = i)
+
+            id_dict = {"index_run": i}
+            parameters_dict = {**id_dict, **parameters_dict}
 
             # change working directory
             os.chdir(curr_working_dir)
@@ -279,69 +378,122 @@ class LarsimModel(Model):
             # Run Larsim
             if self.cut_runs:
                 result = self._multiple_short_larsim_runs(timeframe=self.timeframe, timestep = self.timestep, curr_working_dir=curr_working_dir,
-                                                parameters=parameter, index_run=i)
+                                                parameters=parameter, index_run=i, warm_up_duration=self.warm_up_duration)
             else:
                 result = self._single_larsim_run(timeframe=self.timeframe, curr_working_dir=curr_working_dir,
                                             parameters=parameter, index_run=i)
 
-            #assert len(result['TimeStamp'].unique()) == len(self.t), "Assesrtion Failed: Something went wrong with time resolution of the result"
+            # filter output time-series in order to disregard warm-up time; if not then at least disregard these values when calculating statistics and GoF
+            # however, take care that is is not done twice!
+            simulation_start_timestamp = self.timeframe[0] + datetime.timedelta(hours=self.warm_up_duration) # pd.Timestamp(result.TimeStamp.min())
+            result = larsimDataPostProcessing.parse_df_based_on_time(result, (simulation_start_timestamp, None))
+
+            #filter out results for a concret station if specified in configuration json file
+            # TODO-Ivana deal with situation when self.station_for_model_runs is a list
+            if self.station_for_model_runs!="all":
+                result = larsimDataPostProcessing.filterResultForStation(result, station=self.station_for_model_runs)
 
             end = time.time()
             runtime = end - start
 
-            results.append((result, runtime))
+            result_dict = {"result_time_series": result, "run_time":runtime, "parameters_dict":parameters_dict}
 
-            #Debugging
+            # What comes fron this point onwards is to determin what is the purpose of the LarsimModel simulation run
+            # e.g. is to just run multiple simulations and store their outputs, and/or to propaget results for calibration,
+            # and/or to propaget results for UQ analysis, and/or to calculate gradients, etc.
+            # the behsviour is determined based on a couple of configuration variables, mostly coming from json configuration file such as:
+            #               calibration, run_and_save_simulations, UQ_analysis, gradient_computation
+            # These modes do not have to be mutually exclusive!
+
+            #TODO-Ivana distinguis between doing only calibration and doing UQ_analysis with evaluating some GoF
+            #####################################
+            ### compare model predictions of this simulation with measured (ground truth) data
+            ### this can be moved to Statistics - positioned here due to parallelisation
+            #####################################
+            # if calibration is True some likelihood / objective functions / GoF functio should be calculated from model run and propageted further and'or saved to file
+            if self.calculate_GoF:
+                # get the DataFrame storing measurments / ground truth discharge
+                local_measurment_file = osp.abspath(osp.join(self.working_dir, "df_measured.pkl"))
+                if os.path.exists(local_measurment_file):
+                    gt_dataFrame = larsimInputOutputUtilities.read_dataFrame_from_file(local_measurment_file, compression="gzip")
+                else:
+                    #gt_dataFrame=None #this will wokr as well because when calculationg GoF groundTruth DF will be read anyway
+                    gt_dataFrame = larsimConfigurationSettings.extract_measured_discharge(self.timeframe[0], self.timeframe[1], index_run=0)
+                    #gt_dataFrame = larsimConfigurationSettings.extract_measured_discharge(simulation_start_timestamp, self.timeframe[1], index_run=0)
+
+                # Make sure that burn-in time is disregard in result or will be disregard while computing GoF: disregard_initila_timesteps=False or disregard_initila_timesteps=True
+                # Check for which stations GoF should be calculated: station=self.station_of_Interest or station=self.station_for_model_runs
+                # Chech weather you want daily or hourly based computation of GoF functions: dailyStatisict=False or dailyStatisict=True
+                goodnessofFit_list_of_dictionaries = larsimDataPostProcessing.calculateGoodnessofFit(measuredDF=gt_dataFrame, predictedDF=result,\
+                                                                               station=self.station_of_Interest,\
+                                                                               type_of_output_of_Interest_measured=self.type_of_output_of_Interest_measured,\
+                                                                               type_of_output_of_Interest=self.type_of_output_of_Interest,\
+                                                                               dailyStatisict=False, gof_list=self.objective_function,\
+                                                                               disregard_initila_timesteps=False)
+                index_parameter_gof_list_of_dictionaries = []
+                for single_stations_gof in goodnessofFit_list_of_dictionaries:
+                    index_parameter_gof_dict = {**parameters_dict, **single_stations_gof}
+                    index_parameter_gof_list_of_dictionaries.append(index_parameter_gof_dict)
+                #index_parameter_gof_DF = pd.DataFrame(goodnessofFit_list_of_dictionaries)
+                index_parameter_gof_DF = pd.DataFrame(index_parameter_gof_list_of_dictionaries)
+                result_dict["gof_df"] = index_parameter_gof_DF
+
+                # save index_run, parameter values and GoF as pd.DataFrame in a file
+                # optionally glue it to the results and propagate everything further for postprocessing
+                #index_parameter_gof_DF.to_pickle(osp.abspath(osp.join(self.working_dir, "goodness_of_fit_" + str(i) +  ".pkl")), compression="gzip")
+
+            # compute gradient of the output, or some likelihood measure w.r.t parameters
+            if self.compute_gredients:
+                gradient_matrix = []
+                if gradient_matrix:
+                    result_dict["gradient"] = gradient_matrix
+
+            #TODO-Ivana distinguis between only saving reults and saving and propagating further
+            # save the output of each simulation here just in case the purpose of the simulation is to run multiple Larsim runs
+            # for different parameters and to save these simulations runs and when no statistics calculations will be performed afterwards,
+            # otherwise the simulation results will be saved in LarsimStatistics
+            if self.run_and_save_simulations:
+                file_path =  osp.abspath(osp.join(self.working_dir, "parameters_Larsim_run_" + str(i) +  ".pkl"))
+                with open(file_path, 'wb') as f:
+                    #pickle.dump(parameters_dict, f, protocol=pickle.HIGHEST_PROTOCOL)
+                    dill.dump(parameters_dict, f)
+                #if self.disable_statistics:
+                file_path =  osp.abspath(osp.join(self.working_dir, "df_Larsim_run_" + str(i) +  ".pkl"))
+                larsimDataPostProcessing.read_process_write_discharge(result, type_of_output=self.type_of_output_of_Interest,\
+                                             station=self.station_for_model_runs, write_to_file=file_path, compression="gzip")
+                if self.calculate_GoF:
+                    # save index_run, parameter values and GoF as pd.DataFrame in a file
+                    # optionally glue it to the results and propagate everything further for postprocessing
+                    index_parameter_gof_DF.to_pickle(osp.abspath(osp.join(self.working_dir, "goodness_of_fit_" + str(i) +  ".pkl")), compression="gzip")
+
+            #Debugging  - TODO Delete afterwards
             print("LarsimModel INFO: Process {} returned / appended it's results".format(i))
-
+            #assert len(result['TimeStamp'].unique()) == len(self.t), "Assesrtion Failed: Something went wrong with time resolution of the result"
             #assert isinstance(self.variable_names, list), "Assertion Failed - variable names not a list"
             #assert len(self.variable_names) == len(parameter), "Assertion Failed parametr not of the same length as variable names"
 
-            #result.to_csv(path_or_buf=osp.abspath(osp.join(curr_working_dir, "ergebnis_df_" + str(i) + ".csv")),index=True)
+            #if self.calculate_GoF:
+            #    # Extend resulted ergebnis pd.DataFrame with pd.DataFrame storing index_run, parameter values and GoF
+            #    result = (result, index_parameter_gof_DF)
+            #else:
+            #    # Extend reults with dict storing index_run and parameter values
+            #    result = (result, parameters_dict)
 
-            #####################################
-            ### compare model predictions of this simulation with measured (ground truth) data (compute RMSE | BIAS | NSE | logNSE)
-            ### this can be moved to Statistics - positioned here due to parallelisation
-            #####################################
-            gt_dataFrame = larsimInputOutputUtilities.read_dataFrame_from_file(osp.abspath(osp.join(self.working_dir, "df_measured.csv")))
+            # propagate further results for post-processingin LarsimStatistics
+            #results.append((result, runtime))
 
-            goodnessofFit_tuple = larsimDataPostProcessing.calculateGoodnessofFit(measuredDF=gt_dataFrame, predictedDF=result,
-                                                                           station=self.station_of_Interest,
-                                                                           type_of_output_of_Interest_measured=self.type_of_output_of_Interest_measured,
-                                                                           type_of_output_of_Interest=self.type_of_output_of_Interest,
-                                                                           dailyStatisict=False)
-            goodnessofFit_DailyBasis_tuple = larsimDataPostProcessing.calculateGoodnessofFit(measuredDF=gt_dataFrame, predictedDF=result,
-                                                                           station=self.station_of_Interest,
-                                                                           type_of_output_of_Interest_measured=self.type_of_output_of_Interest_measured,
-                                                                           type_of_output_of_Interest=self.type_of_output_of_Interest,
-                                                                           dailyStatisict=True)
-            header_array = ["Index_run",]
-            index_parameter_gof_array = [int(i),]
+            # result_dict contains at least the following entries:  "result_time_series", "run_time", "parameters_dict"
+            # optionally: "gof_df", "gradient" , etc.
+            results.append((result_dict, runtime))
 
-            for variable_name in self.variable_names:
-                header_array.append(variable_name)
-            for single_param in parameter:
-                index_parameter_gof_array.append(round(Decimal(single_param), 4))
-
-            for gof_name in goodnessofFit_tuple[self.station_of_Interest].keys():
-                header_array.append(gof_name)
-                index_parameter_gof_array.append(round(Decimal(goodnessofFit_tuple[self.station_of_Interest][gof_name]), 4))
-
-            index_parameter_gof_DF = pd.DataFrame([index_parameter_gof_array], columns=header_array)
-            index_parameter_gof_DF.to_csv(
-                path_or_buf= osp.abspath(osp.join(curr_working_dir, "goodness_of_fit_" + str(i) +  ".csv")),
-                index=True)
-
-            #Debugging TODO Delete afterwards
-            #print("LARSIM INFO DEBUGGING: process {} - Number of Unique TimeStamps in result (Hourly): {}".format(i, len(result.TimeStamp.unique())))
-            #result_temp = result.loc[(result['Stationskennung'] == "MARI") & (result['Type'] == "Abfluss Messung")]
-            #print("LARSIM INFO DEBUGGING: process {} - Number of Unique TimeStamps in result MARI and Messung (Hourly): {}".format(i, len(result_temp.TimeStamp.unique())))
-
-            #Delete everything except .log and .csv files
+            # Delete everything except .log and .csv files
             larsimConfigurationSettings.cleanDirecory_completely(curr_directory=curr_working_dir)
 
             # change back to starting directory of all the processes
             os.chdir(self.current_dir)
+
+            # Delete local working folde
+            subprocess.run(["rm", "-r", curr_working_dir])
 
             print("LarsimModel INFO: I am done - solver number {}".format(i))
 
@@ -352,7 +504,7 @@ class LarsimModel(Model):
         return self.t
 
 
-    def _single_larsim_run(self, timeframe, curr_working_dir, parameters=None, index_run=0, sub_index_run=0):
+    def _single_larsim_run(self, timeframe, curr_working_dir, index_run=0, sub_index_run=0):
 
         # start clean
         larsimConfigurationSettings._delete_larsim_output_files(curr_directory=curr_working_dir)
@@ -360,7 +512,7 @@ class LarsimModel(Model):
         # change tape 10 accordingly
         local_master_tape10_file = osp.abspath(osp.join(curr_working_dir, 'tape10_master'))
         local_adjusted_path = osp.abspath(osp.join(curr_working_dir, 'tape10'))
-        larsimTimeUtility.tape10_configuration(timeframe=timeframe, master_tape10_file=local_master_tape10_file, new_path=local_adjusted_path)
+        larsimTimeUtility.tape10_configuration(timeframe=timeframe, master_tape10_file=local_master_tape10_file, new_path=local_adjusted_path, warm_up_duration=self.warm_up_duration)
 
         # log file for larsim
         local_log_file = osp.abspath(
@@ -383,7 +535,7 @@ class LarsimModel(Model):
             return None #TODO Handle this more elegantly
 
 
-    def _multiple_short_larsim_runs(self, timeframe, timestep, curr_working_dir, parameters=None, index_run=0):
+    def _multiple_short_larsim_runs(self, timeframe, timestep, curr_working_dir, index_run=0, warm_up_duration=53):
         # if you want to cut execution into shorter runs...
         local_timestep = timestep
 
@@ -410,10 +562,10 @@ class LarsimModel(Model):
             # calulcate times - make sure that outputs are continuous in time
             if i == 0:
                 local_start_date = local_end_date
-                local_start_date_p_53 = local_start_date - datetime.timedelta(hours=53)
+                local_start_date_p_53 = local_start_date - datetime.timedelta(hours=warm_up_duration)
             else:
                 local_start_date_p_53 = local_end_date
-                local_start_date = local_start_date_p_53 - datetime.timedelta(hours=53)
+                local_start_date = local_start_date_p_53 - datetime.timedelta(hours=warm_up_duration)
 
             if local_start_date > timeframe[1]:
                 break
@@ -429,7 +581,7 @@ class LarsimModel(Model):
             single_run_timeframe = (local_start_date, local_end_date)
 
             # run larsim for this shorter period and returned already parsed 'small' ergebnis
-            local_resultDF = self._single_larsim_run(timeframe=single_run_timeframe, curr_working_dir=curr_working_dir, parameters=parameters, index_run=index_run, sub_index_run=i)
+            local_resultDF = self._single_larsim_run(timeframe=single_run_timeframe, curr_working_dir=curr_working_dir, index_run=index_run, sub_index_run=i)
 
             #TODO Handle this more elegantly
             if local_resultDF is None:

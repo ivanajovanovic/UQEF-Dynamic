@@ -18,6 +18,8 @@ from uqef.stat import Statistics
 import larsimDataPostProcessing
 import larsimInputOutputUtilities
 
+import saltelliSobolIndicesHelpingFunctions
+
 class LarsimSamples(object):
     """
      Samples is a collection of the (filtered) sampled results of a whole UQ simulation
@@ -25,25 +27,52 @@ class LarsimSamples(object):
 
     #TODO write get/set methods for the attributes of the class
 
-    def __init__(self, rawSamples, station=None, type_of_output='Abfluss Messung', dailyOutput="False"):
-        """
-        :param rawSamples: results returned by solver. Either list of paths to diff. ergebnis files or pandas.DataFrame object containing output of all the runs
-        :param station: Name of the station in which output we are interested in, if None - filter out all the stations
-        :param type_of_output: can be Abfluss Simulation or Abfluss Messung, corresponds to the entries in ergebnis.lils
-        """
+
+    def __init__(self, rawSamples, configurationObject)
+
+        station = configurationObject["Output"]["station_calibration_postproc"] if "station_calibration_postproc" in configurationObject["Output"] else "MARI"
+        type_of_output=configurationObject["Output"]["type_of_output"] if "type_of_output" in configurationObject["Output"] else "Abfluss Messung"
+        dailyOutput=configurationObject["Output"]["dailyOutput"] if "dailyOutput" in configurationObject["Output"] else "False"
+        #
+        calculate_GoF=configurationObject["Output"]["calculate_GoF"]
+        compute_gredients=configurationObject["Output"]["compute_gredients"]
 
         list_of_single_df = []
+        list_index_parameters_dict = []
         for index_run, value in enumerate(rawSamples,): #Important that the results inside rawSamples (resulted paths) are in sorted order and correspond to the parameters order
-        #TODO-Ivana Add code which will disregard non-valid simulations with value=None and the corresponding nodes!
-            df_single_ergebnis = larsimDataPostProcessing.read_process_write_discharge(df=value,\
+            if isinstance(value, tuple):
+                df_result = value[0]
+                index_parameters_dict = value[1]
+                list_index_parameters_dict.append(index_parameters_dict)
+            elif isinstance(value, dict):
+                df_result = value["result_time_series"]
+                index_parameters_dict = value["parameters_dict"]
+                list_index_parameters_dict.append(index_parameters_dict)
+                #runtime = value["run_time"]
+                if strtobool(calculate_GoF):
+                    index_parameter_gof_DF=value["gof_df"]
+                if strtobool(compute_gredients):
+                    index_parameter_gof_DF=value["gradient"]
+            else:
+                df_result = value
+
+            df_single_ergebnis = larsimDataPostProcessing.read_process_write_discharge(df=df_result,\
                                  index_run=index_run,\
                                  type_of_output=type_of_output,\
                                  station=station)
+
+            #larsimInputOutputUtilities._postProcessing_DataFrame_after_reading(df_single_ergebnis)
+            #simulation_start_timestamp = pd.Timestamp(df_single_ergebnis.TimeStamp.min()) + datetime.timedelta(hours=self.warm_up_duration)
+            #df_single_ergebnis = larsimDataPostProcessing.parse_df_based_on_time(df_single_ergebnis, (simulation_start_timestamp, None))
+
             list_of_single_df.append(df_single_ergebnis)
 
         self.df_simulation_result = pd.concat(list_of_single_df, ignore_index=True, sort=False, axis=0)
 
-        self.df_simulation_result['Value'] = self.df_simulation_result['Value'].astype(float)
+        larsimInputOutputUtilities._postProcessing_DataFrame_after_reading(self.df_simulation_result)
+
+        if list_index_parameters_dict:
+            self.df_index_parameter_values= pd.DataFrame(list_index_parameters_dict)
 
         print("LARSIM STAT INFO: Number of Unique TimeStamps (Hourly): {}".format(len(self.df_simulation_result.TimeStamp.unique())))
 
@@ -57,6 +86,10 @@ class LarsimSamples(object):
     def save_samples_to_file(self, file_path='./'):
         self.df_simulation_result.to_pickle(
             os.path.abspath(os.path.join(file_path, "df_all_simulations.pkl")), compression="gzip")
+
+    def save_index_parameter_values(self, file_path='./'):
+        self.df_index_parameter_values.to_pickle(
+            os.path.abspath(os.path.join(file_path, "df_all_index_parameter_values.pkl")), compression="gzip")
 
     def save_time_samples_to_file(self, file_path='./'):
         self.df_time_discharges.to_pickle(
@@ -74,15 +107,19 @@ class LarsimStatistics(Statistics):
        LarsimStatistics calculates the statistics for the LarsimModel
     """
 
-    def __init__(self, configurationObject):
+    def __init__(self, configurationObject, *args, **kwargs):
         Statistics.__init__(self)
 
         self.configurationObject = configurationObject
 
-        #try:
-        self.working_dir = self.configurationObject["Directories"]["working_dir"]
-        #except KeyError:
-        #    self.working_dir = paths.working_dir
+        # directoy for the larsim runs
+        if "working_dir" in kwargs:
+            self.working_dir = kwargs.get('working_dir')
+        else:
+            try:
+                self.working_dir = self.configurationObject["Directories"]["working_dir"]
+            except KeyError:
+                self.working_dir = paths.working_dir
 
         self.Abfluss = {}
 
@@ -91,23 +128,31 @@ class LarsimStatistics(Statistics):
         self.unalatered_computed = False
         self.groundTruth_computed = False
 
+        # check if simulation results were already saved in KarsimModel
+        self.run_and_save_simulations = strtobool(self.configurationObject["Output"]["run_and_save_simulations"])\
+                                        if "run_and_save_simulations" in self.configurationObject["Output"] else False
+
+        self.nodeNames = []
+        for i in self.configurationObject["parameters"]:
+            self.nodeNames.append(i["name"])
+
     def calcStatisticsForMc(self, rawSamples, timesteps,
                             simulationNodes, numEvaluations, order, regression, solverTimes,
                             work_package_indexes, original_runtime_estimator):
 
-        samples = LarsimSamples(rawSamples, station=self.configurationObject["Output"]["station"],
-                          type_of_output=self.configurationObject["Output"]["type_of_output"],
-                          dailyOutput=self.configurationObject["Output"]["dailyOutput"])
+        samples = LarsimSamples(rawSamples, configurationObject=self.configurationObject)
 
         # Save the DataFrame containing all the simulation results - This is really important
-        samples.save_samples_to_file(self.working_dir)
+        if not self.run_and_save_simulations:
+            samples.save_samples_to_file(self.working_dir)
+            samples.save_index_parameter_values(self.working_dir)
 
         self.timesteps = samples.get_simulation_timesteps()
         self.numbTimesteps = len(self.timesteps)
         print("LARSIM STAT INFO: numbTimesteps is: {}".format(self.numbTimesteps))
 
         self.station_names = samples.get_simulation_stations()
-        self.nodeNames = simulationNodes.nodeNames
+        #self.nodeNames = simulationNodes.nodeNames
 
         grouped = samples.df_simulation_result.groupby(['Stationskennung','TimeStamp'])
         groups = grouped.groups
@@ -142,18 +187,18 @@ class LarsimStatistics(Statistics):
                            simulationNodes, order, regression, solverTimes,
                            work_package_indexes, original_runtime_estimator):
 
-        samples = LarsimSamples(rawSamples, station=self.configurationObject["Output"]["station"],
-                                 type_of_output=self.configurationObject["Output"]["type_of_output"],
-                                 dailyOutput=self.configurationObject["Output"]["dailyOutput"])
+        samples = LarsimSamples(rawSamples, configurationObject=self.configurationObject)
 
-        samples.save_samples_to_file(self.working_dir)
+        if not self.run_and_save_simulations:
+            samples.save_samples_to_file(self.working_dir)
+            samples.save_index_parameter_values(self.working_dir)
 
         self.timesteps = samples.get_simulation_timesteps()
         self.numbTimesteps = len(self.timesteps)
         print("LARSIM STAT INFO: numbTimesteps is: {}".format(self.numbTimesteps))
 
         self.station_names = samples.get_simulation_stations()
-        self.nodeNames = simulationNodes.nodeNames
+        #self.nodeNames = simulationNodes.nodeNames
 
         nodes = simulationNodes.distNodes
         dist = simulationNodes.joinedDists
@@ -194,19 +239,19 @@ class LarsimStatistics(Statistics):
                             simulationNodes, numEvaluations, order, regression, solverTimes,
                             work_package_indexes, original_runtime_estimator=None):
 
-        samples = LarsimSamples(rawSamples, station=self.configurationObject["Output"]["station"],
-                          type_of_output=self.configurationObject["Output"]["type_of_output"],
-                          dailyOutput=self.configurationObject["Output"]["dailyOutput"])
+        samples = LarsimSamples(rawSamples, configurationObject=self.configurationObject)
 
         # Save the DataFrame containing all the simulation results - This is really important
-        samples.save_samples_to_file(self.working_dir)
+        if not self.run_and_save_simulations:
+            samples.save_samples_to_file(self.working_dir)
+            samples.save_index_parameter_values(self.working_dir)
 
         self.timesteps = samples.get_simulation_timesteps()
         self.numbTimesteps = len(self.timesteps)
         print("LARSIM STAT INFO: numbTimesteps is: {}".format(self.numbTimesteps))
 
         self.station_names = samples.get_simulation_stations()
-        self.nodeNames = simulationNodes.nodeNames
+        #self.nodeNames = simulationNodes.nodeNames
 
         grouped = samples.df_simulation_result.groupby(['Stationskennung','TimeStamp'])
         groups = grouped.groups
@@ -240,8 +285,8 @@ class LarsimStatistics(Statistics):
             self.Abfluss[key]["P90"] = np.percentile(extended_standard_discharge_values, 90, axis=0)
 
             #self.Abfluss[key]["Sobol_m"] = _Sens_m_sample_4(discharge_values_saltelli, self.dim, numEvaluations)
-            self.Abfluss[key]["Sobol_m"] = _Sens_m_sample_3(discharge_values_saltelli, self.dim, numEvaluations)
-            self.Abfluss[key]["Sobol_t"] = _Sens_t_sample_4(discharge_values_saltelli, self.dim, numEvaluations)
+            self.Abfluss[key]["Sobol_m"] = saltelliSobolIndicesHelpingFunctions._Sens_m_sample_3(discharge_values_saltelli, self.dim, numEvaluations)
+            self.Abfluss[key]["Sobol_t"] = saltelliSobolIndicesHelpingFunctions._Sens_t_sample_4(discharge_values_saltelli, self.dim, numEvaluations)
 
             if isinstance(self.Abfluss[key]["P10"], (list)) and len(self.Abfluss[key]["P10"]) == 1:
                 self.Abfluss[key]["P10"]=self.Abfluss[key]["P10"][0]
@@ -259,20 +304,22 @@ class LarsimStatistics(Statistics):
 
 
     def get_measured_discharge(self, timestepRange=None):
-        self.df_measured = larsimDataPostProcessing.read_process_write_discharge(df=os.path.abspath(os.path.join(self.working_dir, "df_measured.csv")),\
+        self.df_measured = larsimDataPostProcessing.read_process_write_discharge(df=os.path.abspath(os.path.join(self.working_dir, "df_measured.pkl")),\
                              timeframe=timestepRange,\
-                             station=self.configurationObject["Output"]["station"],\
-                             dailyOutput=strtobool(self.configurationObject["Output"]["dailyOutput"]))
+                             station=self.configurationObject["Output"]["station_calibration_postproc"],\
+                             dailyOutput=strtobool(self.configurationObject["Output"]["dailyOutput"]),\
+                             compression="gzip")
         self.groundTruth_computed = True
         #self.Abfluss["Ground_Truth_Measurements"] = self.measured
 
 
     def get_unaltered_discharge(self, timestepRange=None):
-        self.df_unalatered = larsimDataPostProcessing.read_process_write_discharge(df=os.path.abspath(os.path.join(self.working_dir, "df_unaltered_ergebnis.csv")),\
+        self.df_unalatered = larsimDataPostProcessing.read_process_write_discharge(df=os.path.abspath(os.path.join(self.working_dir, "df_unaltered_ergebnis.pkl")),\
                              timeframe=timestepRange,\
                              type_of_output=self.configurationObject["Output"]["type_of_output"],\
-                             station=self.configurationObject["Output"]["station"],\
-                             dailyOutput=strtobool(self.configurationObject["Output"]["dailyOutput"]))
+                             station=self.configurationObject["Output"]["station_calibration_postproc"],\
+                             dailyOutput=strtobool(self.configurationObject["Output"]["dailyOutput"]),\
+                             compression="gzip")
         self.unalatered_computed = True
         #self.Abfluss["Unaltered"] = self.unalatered
 
@@ -287,8 +334,8 @@ class LarsimStatistics(Statistics):
         self.get_measured_discharge(timestepRange=timestepRange)
         self.get_unaltered_discharge(timestepRange=timestepRange)
 
-        self._plotStatisticsDict_plotly(unalatered=self.unalatered_computed, measured=self.groundTruth_computed, station=self.configurationObject["Output"]["station"], recalculateTimesteps=False, filename=fileName, display=display)
-        #self._plotStatisticsDict_plotter(unalatered=None, measured=None, station=self.configurationObject["Output"]["station"], recalculateTimesteps=False, filename=fileName, display=display)
+        self._plotStatisticsDict_plotly(unalatered=self.unalatered_computed, measured=self.groundTruth_computed, station=self.configurationObject["Output"]["station_calibration_postproc"], recalculateTimesteps=False, filename=fileName, display=display)
+        #self._plotStatisticsDict_plotter(unalatered=None, measured=None, station=self.configurationObject["Output"]["station_calibration_postproc"], recalculateTimesteps=False, filename=fileName, display=display)
 
 
     def _plotStatisticsDict_plotly(self, unalatered=False, measured=False, station="MARI", recalculateTimesteps=False, window_title='Larsim Forward UQ & SA - MARI', filename="sim-plotly.html", display=False):
@@ -309,7 +356,6 @@ class LarsimStatistics(Statistics):
         colors = ['darkred', 'midnightblue', 'mediumseagreen', 'darkorange']
         #sobol_labels = ["BSF", "A2", "EQD", "EQD2"]
         labels = [nodeName.strip() for nodeName in self.nodeNames]
-        #labels = list(map(str.strip, self.nodeNames))
 
         is_Sobol_t_computed = self._compute_Sobol_t()
         is_Sobol_m_computed = self._compute_Sobol_m()
@@ -463,268 +509,3 @@ class LarsimStatistics(Statistics):
         #pickle_out = open(statFileName,"wb")
         #pickle.dump(self.Abfluss, pickle_out)
         #pickle_out.close()
-
-
-
-
-#helper function
-def _power(my_list):
-    return [ x**2 for x in my_list ]
-
-
-# Functions needed for calculating Sobol's indices using MC samples and Saltelli's method
-
-def _separate_output_values_2(Y, D, N):
-    """
-    Input:
-    dim(Y) = (N*(2+D) x t)
-    D - Stochastic dimension
-    N - Numer of samples
-    Return:
-    A - function evaluations based on m1 Nxt
-    B - function evaluations based on m2 Nxt
-    A_B - array of function evaluations based on m1 with some rows from m2,
-    len(A_B) = D;
-    """
-    A = Y[0:N,:]
-    B = Y[N:2*N,:]
-
-    A_B = []
-    for j in range(D):
-        start = (j + 2)*N
-        end = start + N
-        temp = np.array(Y[start:end,:])
-        A_B.append(temp)
-
-    #return A.T, B.T, A_B
-    return A, B, A_B
-
-def _separate_output_values_j(Y, D, N, j):
-    """
-    Input:
-    dim(Y) = (N*(2+D) x t)
-    D - Stochastic dimension
-    N - Numer of samples
-    j - in range(0,D)
-    Return:
-    A - function evaluations based on m1 Nxt
-    B - function evaluations based on m2 Nxt
-    A_B - function evaluations based on m1 with jth row from m2
-    """
-
-    A = Y[0:N,:]
-    B = Y[N:2*N, :]
-    start = (j + 2)*N
-    end = start + N
-    A_B = Y[start:end,:]
-
-    return A, B, A_B
-
-
-def _Sens_m_sample_1(Y, D, N):
-    """
-    First order sensitivity indices - Chaospy
-    """
-    A, B, A_B = _separate_output_values_2(Y, D, N)
-
-    #variance = np.var(A, -1)
-    variance = np.var(A, axis=0)
-
-    mean = .5*(np.mean(A) + np.mean(B))
-    #mean = .5*(np.mean(A, axis=0) + np.mean(B, axis=0))
-    A -= mean
-    B -= mean
-
-    out = [
-        #np.mean(B*((A_B[j].T-mean)-A), -1) /
-        np.mean(B*((A_B[j]-mean)-A),axis=0) /
-        np.where(variance, variance, 1)
-        for j in range(D)
-        ]
-
-    return np.array(out)
-
-def _Sens_m_sample_2(Y, D, N):
-    """
-    First order sensitivity indices - Homma(1996) & Sobolo (2007)
-    """
-    A, B, A_B = _separate_output_values_2(Y, D, N)
-
-    #variance = np.var(A, -1)
-    variance = np.var(A, axis=0)
-
-    #mean = .5*(np.mean(A) + np.mean(B))
-    mean = .5*(np.mean(A, axis=0) + np.mean(B, axis=0))
-
-    out = [
-        #(np.mean(B*A_B[j].T, -1) - mean**2) /
-        (np.mean(B*A_B[j], axis=0) - mean**2) /
-        np.where(variance, variance, 1)
-        for j in range(D)
-        ]
-
-    return np.array(out)
-
-def _Sens_m_sample_3(Y, D, N):
-    """
-    First order sensitivity indices - Saltelli 2010.
-    """
-    A, B, A_B = _separate_output_values_2(Y, D, N)
-
-    #variance = np.var(A, -1)
-    variance = np.var(A, axis=0, ddof=1)
-
-    #out = [
-    #    #np.mean(B*(A_B[j].T-A), -1) /
-    #    np.mean(B*(A_B[j]-A), axis=0) /
-    #    np.where(variance, variance, 1)
-    #    for j in range(D)
-    #    ]
-    s_i = []
-    for j in range(D):
-        #np.dot(B, (A_B[j]-A))
-        s_i_j = np.mean(B*(A_B[j]-A), axis=0) / np.where(variance, variance, 1)
-        s_i.append(s_i_j)
-
-    return np.array(s_i)
-
-def _Sens_m_sample_4(Y, D, N):
-    """
-    First order sensitivity indices - Jensen.
-    """
-    A, B, A_B = _separate_output_values_2(Y, D, N)
-
-    #variance = np.var(A, -1)
-    variance = np.var(A, axis=0, ddof=1)
-
-    out = [
-        #1 - np.mean((A_B[j].T-B)**2, -1) /
-        1 - np.mean((A_B[j]-B)**2, axis=0) /
-        (2*np.where(variance, variance, 1))
-        for j in range(D)
-        ]
-
-    return np.array(out)
-
-
-
-
-def _Sens_t_sample_1(Y, D, N):
-    """
-    Total order sensitivity indices - Chaospy
-    """
-    A, B, A_B = _separate_output_values_2(Y, D, N)
-
-    #variance = np.var(A, -1)
-    variance = np.var(A, axis=0)
-
-    out = [
-        #1-np.mean((A_B[j].T-B)**2, -1) /
-        1-np.mean((A_B[j]-B)**2, axis=0) /
-        (2*np.where(variance, variance, 1))
-        for j in range(D)
-        ]
-
-    return np.array(out)
-
-def _Sens_t_sample_2(Y, D, N):
-    """
-    Total order sensitivity indices - Homma 96
-    """
-    A, B, A_B = _separate_output_values_2(Y, D, N)
-
-    #mean = .5*(np.mean(A) + np.mean(B))
-    mean = .5*(np.mean(A, axis=0) + np.mean(B, axis=0))
-
-    #variance = np.var(A, -1)
-    variance = np.var(A, axis=0)
-
-    out = [
-        #1-(np.mean(A*A_B[j].T, -1) - mean**2)/
-        1-(np.mean(A*A_B[j], axis=0) - mean**2)/
-        np.where(variance, variance, 1)
-        for j in range(D)
-    ]
-
-    return np.array(out)
-
-def _Sens_t_sample_3(Y, D, N):
-    """
-    Total order sensitivity indices - Sobel 2007
-    """
-    A, B, A_B = _separate_output_values_2(Y, D, N)
-
-    #variance = np.var(A, -1)
-    variance = np.var(A, axis=0, ddof=1)
-
-    out = [
-        #np.mean(A*(A-A_B[j].T), -1) /
-        np.mean(A*(A-A_B[j]),  axis=0) /
-        np.where(variance, variance, 1)
-        for j in range(D)
-        ]
-
-    return np.array(out)
-
-
-def _Sens_t_sample_4(Y, D, N):
-    """
-    Total order sensitivity indices - Saltelli 2010 & Jensen
-    """
-    A, B, A_B = _separate_output_values_2(Y, D, N)
-
-    #variance = np.var(A, -1)
-    variance = np.var(A, axis=0, ddof=1)
-
-    out = [
-        #np.mean((A-A_B[j].T)**2, -1) /
-        np.mean((A-A_B[j])**2, axis=0) /
-        (2*np.where(variance, variance, 1))
-        for j in range(D)
-        ]
-
-    return np.array(out)
-
-
-
-
-
-
-# Old code
-
-def _separate_output_values(Y, D, N):
-    """
-    Return:
-    A - function evaluations based on m1 Nxt
-    B - function evaluations based on m2 Nxt
-    A_B - function evaluations based on m1 with some rows from m2 Nxt
-    """
-
-    A_B = np.zeros((N, D))
-
-    A = np.tile(Y[0:N], (D,1))
-    A = A.T
-
-    B = np.tile(Y[N:2*N], (D,1))
-    B = B.T
-
-    for j in range(D):
-        start = (j + 2)*N
-        end = start + N
-        A_B[:, j] = (Y[start:end]).T
-
-    return A, B, A_B
-
-def _first_order(A, AB, B):
-    # First order estimator following Saltelli et al. 2010 CPC, normalized by
-    # sample variance
-    #return np.mean(B * (AB - A), axis=0) / np.var(np.r_[A, B], axis=0)
-    #return np.mean(B * (AB - A), axis=0, dtype=np.float64) / np.var(np.concatenate((A, B), axis=0), axis=0, ddof=1, dtype=np.float64)
-    return np.mean(B * (AB - A), axis=0, dtype=np.float64) / np.var(np.r_[A, B], axis=0, ddof=1, dtype=np.float64)
-
-def _total_order(A, AB, B):
-    # Total order estimator following Saltelli et al. 2010 CPC, normalized by
-    # sample variance
-    #return 0.5 * np.mean((A - AB) ** 2, axis=0) / np.var(np.r_[A, B], axis=0)
-    #return np.mean(B * (AB - A), axis=0, dtype=np.float64) / np.var(np.concatenate((A, B), axis=0), axis=0, ddof=1, dtype=np.float64)
-    return np.mean(B * (AB - A), axis=0, dtype=np.float64) / np.var(np.r_[A, B], axis=0, ddof=1, dtype=np.float64)
