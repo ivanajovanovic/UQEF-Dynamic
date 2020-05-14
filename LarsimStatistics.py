@@ -28,7 +28,7 @@ class LarsimSamples(object):
     #TODO write get/set methods for the attributes of the class
 
 
-    def __init__(self, rawSamples, configurationObject)
+    def __init__(self, rawSamples, configurationObject):
 
         station = configurationObject["Output"]["station_calibration_postproc"] if "station_calibration_postproc" in configurationObject["Output"] else "MARI"
         type_of_output=configurationObject["Output"]["type_of_output"] if "type_of_output" in configurationObject["Output"] else "Abfluss Messung"

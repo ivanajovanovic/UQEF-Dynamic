@@ -36,18 +36,18 @@ class LarsimModelSetUp():
 
         self.inputModelDir = kwargs.get('inputModelDir') if 'inputModelDir' in kwargs else paths.larsim_data_path
 
-        self.global_master_dir = osp.abspath(osp.join(self.inputModelDir,'WHM Regen','master_configuration'))
-        self.master_lila_paths = [osp.abspath(osp.join(self.inputModelDir,'WHM Regen', i)) for i in paths.master_lila_files]
-        self.lila_configured_paths = [os.path.abspath(os.path.join(self.master_dir, i)) for i in paths.lila_files]
-        self.all_whms_path = osp.abspath(osp.join(self.inputModelDir,'WHM Regen','var/WHM Regen WHMS'))
-        self.larsim_exe = osp.abspath(osp.join(self.inputModelDir, 'Larsim-exe', 'larsim-linux-intel-1000.exe'))
-
         #try:
         self.working_dir = self.configurationObject["Directories"]["working_dir"]
         #except KeyError:
         #    self.working_dir = paths.working_dir  # directoy for all the larsim runs
 
         self.master_dir = osp.abspath(osp.join(self.working_dir, 'master_configuration'))
+
+        self.global_master_dir = osp.abspath(osp.join(self.inputModelDir,'WHM Regen','master_configuration'))
+        self.master_lila_paths = [osp.abspath(osp.join(self.inputModelDir,'WHM Regen', i)) for i in paths.master_lila_files]
+        self.lila_configured_paths = [os.path.abspath(os.path.join(self.master_dir, i)) for i in paths.lila_files]
+        self.all_whms_path = osp.abspath(osp.join(self.inputModelDir,'WHM Regen','var/WHM Regen WHMS'))
+        self.larsim_exe = osp.abspath(osp.join(self.inputModelDir, 'Larsim-exe', 'larsim-linux-intel-1000.exe'))
 
         #####################################
         # Sepcification of different variables for setting the model run and purpose of the model run
@@ -188,33 +188,16 @@ class LarsimModelSetUp():
         ### compare ground truth measurements and unaltered run for this simulation (compute RMSE | BIAS | NSE | logNSE)
         #####################################
         #hourly
-        goodnessofFit_tuple = larsimDataPostProcessing.calculateGoodnessofFit(self.df_measured, self.df_unaltered_ergebnis,
-                                                                       station=self.station_of_Interest,
-                                                                       type_of_output_of_Interest_measured=self.type_of_output_of_Interest_measured,
-                                                                       type_of_output_of_Interest=self.type_of_output_of_Interest,
-                                                                       dailyStatisict=False, gof_list="all", disregard_initila_timesteps=True, warm_up_duration=self.warm_up_duration)
-        result_tuple = goodnessofFit_tuple[self.station_of_Interest]
-
-        # daily
-        goodnessofFit_tuple_daily = larsimDataPostProcessing.calculateGoodnessofFit(self.df_measured, self.df_unaltered_ergebnis,
-                                                                       station=self.station_of_Interest,
-                                                                       type_of_output_of_Interest_measured=self.type_of_output_of_Interest_measured,
-                                                                       type_of_output_of_Interest=self.type_of_output_of_Interest,
-                                                                       dailyStatisict=True, gof_list="all", disregard_initila_timesteps=True, warm_up_duration=self.warm_up_duration)
-        result_tuple_daily = goodnessofFit_tuple_daily[self.station_of_Interest]
-
-
+        goodnessofFit_list_of_dictionaries = larsimDataPostProcessing.calculateGoodnessofFit(measuredDF=self.df_measured, predictedDF=self.df_unaltered_ergebnis,\
+                                                                       station=self.station_of_Interest,\
+                                                                       type_of_output_of_Interest_measured=self.type_of_output_of_Interest_measured,\
+                                                                       type_of_output_of_Interest=self.type_of_output_of_Interest,\
+                                                                       dailyStatisict=False, gof_list="all",\
+                                                                       disregard_initila_timesteps=True, warm_up_duration=self.warm_up_duration)
         # write in a file GOF values of the unaltered model prediction
-        gof_file_path = osp.abspath(osp.join(self.working_dir, "GOF_Measured_vs_Unaltered.txt"))
-        column_labels = result_tuple.keys()
-        with open(gof_file_path, 'w') as f:
-            line = ' '.join(str(x) for x in column_labels)
-            f.write(line + "\n")
-            f.write('{:.4f} {:.4f} {:.4f} {:.4f} \n'.format(result_tuple["RMSE"], result_tuple["BIAS"], result_tuple["NSE"], result_tuple["LogNSE"]))
-            #f.write('{:.4f} {:.4f} {:.4f} {:.4f} \n'.format(result_tuple[k] for k in result_tuple.keys()))
-            f.write('{:.4f} {:.4f} {:.4f} {:.4f} \n'.format(result_tuple_daily["RMSE"], result_tuple_daily["BIAS"], result_tuple_daily["NSE"], result_tuple_daily["LogNSE"]))
-            #f.write('{:.4f} {:.4f} {:.4f} {:.4f} \n'.format(result_tuple_daily[k] for k in result_tuple.keys()))
-        f.close()
+        self.index_parameter_gof_DF = pd.DataFrame(goodnessofFit_list_of_dictionaries)
+        gof_file_path = osp.abspath(osp.join(self.working_dir, "GOF_Measured_vs_Unaltered.pkl"))
+        self.index_parameter_gof_DF.to_pickle(gof_file_path, compression="gzip")
 
 
 class LarsimModel(Model):
@@ -250,14 +233,11 @@ class LarsimModel(Model):
         #####################################
         # Sepcification of different variables for setting the model run and purpose of the model run
         #####################################
-
-        # TODO-Ivana deal with situation when self.station_of_Interest is a list
         try:
             self.station_of_Interest = self.configurationObject["Output"]["station_calibration_postproc"]
         except KeyError:
             self.station_of_Interest = "MARI"
 
-        # TODO-Ivana deal with situation when self.station_for_model_runs is a list
         try:
             self.station_for_model_runs = self.configurationObject["Output"]["station_model_runs"]
         except KeyError:
@@ -377,11 +357,10 @@ class LarsimModel(Model):
 
             # Run Larsim
             if self.cut_runs:
-                result = self._multiple_short_larsim_runs(timeframe=self.timeframe, timestep = self.timestep, curr_working_dir=curr_working_dir,
-                                                parameters=parameter, index_run=i, warm_up_duration=self.warm_up_duration)
+                result = self._multiple_short_larsim_runs(timeframe=self.timeframe, timestep = self.timestep, curr_working_dir=curr_working_dir,\
+                                                          index_run=i, warm_up_duration=self.warm_up_duration)
             else:
-                result = self._single_larsim_run(timeframe=self.timeframe, curr_working_dir=curr_working_dir,
-                                            parameters=parameter, index_run=i)
+                result = self._single_larsim_run(timeframe=self.timeframe, curr_working_dir=curr_working_dir, index_run=i)
 
             # filter output time-series in order to disregard warm-up time; if not then at least disregard these values when calculating statistics and GoF
             # however, take care that is is not done twice!

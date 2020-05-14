@@ -1,7 +1,7 @@
 {
   "Timeframe":
     {
-      "start_day": 10,
+      "start_day": 20,
       "start_month": 5,
       "start_year": 2013,
       "start_hour": 0,
@@ -39,28 +39,6 @@
       "lower_limit": 3.0,
       "upper_limit": 7.0,
       "depends_on":"Acker:May",
-      "direction":"increasing"
-    },
-    {
-      "name": "locker baumbest.:May",
-      "type": "lanu",
-      "distribution": "Uniform",
-      "lower": 0,
-      "upper": 1,
-      "lower_limit": 4.5,
-      "upper_limit": 8.5,
-      "depends_on":"locker baumbest.:Apr",
-      "direction":"increasing"
-    },
-    {
-      "name": "locker baumbest.:Jun",
-      "type": "lanu",
-      "distribution": "Uniform",
-      "lower": 0,
-      "upper": 1,
-      "lower_limit": 5.5,
-      "upper_limit": 9.0,
-      "depends_on":"locker baumbest.:May",
       "direction":"increasing"
     }
   ],
