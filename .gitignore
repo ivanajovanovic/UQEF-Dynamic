@@ -29,3 +29,6 @@ __pycache__/
 *.zip
 
 *._*
+
+# Pycharm Folder #
+.idea/
