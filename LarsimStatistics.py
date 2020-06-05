@@ -27,7 +27,6 @@ class LarsimSamples(object):
 
     #TODO write get/set methods for the attributes of the class
 
-
     def __init__(self, rawSamples, configurationObject):
 
         station = configurationObject["Output"]["station_calibration_postproc"] if "station_calibration_postproc" in configurationObject["Output"] else "MARI"
@@ -53,7 +52,7 @@ class LarsimSamples(object):
                 if strtobool(calculate_GoF):
                     index_parameter_gof_DF=value["gof_df"]
                 if strtobool(compute_gradients):
-                    self.gradient_matrices.append(value["gradient"][0])
+                    self.gradient_matrices.append(value["gradient"][0]) # TODO : Maybe I (Teo) changed the meaning
 
             else:
                 df_result = value
@@ -106,6 +105,22 @@ class LarsimSamples(object):
 
     def get_simulation_stations(self):
         return self.df_simulation_result.Stationskennung.unique()
+
+    # TODO : this is just a draft
+    def calculate_active_subspaces(self):
+        C_list = []  # list of C-matrices from Bayesian Calibration paper; one C-matrix per station
+        for gradient_matrix in self.gradient_matrices:
+            C_list.append(np.array(gradient_matrix).dot(np.array(gradient_matrix).transpose()))
+        C_eigen_decomposition = []
+        for C in C_list:
+            EW, EV = np.linalg.eigh(C)
+            idx = EW.argsort()[::-1]
+            EW = EW[idx]
+            EV = EV[:,idx]
+            C_eigen_decomposition.append([EW, EV])
+
+        print(C_eigen_decomposition)
+        return C_eigen_decomposition
 
 class LarsimStatistics(Statistics):
     """
@@ -222,7 +237,6 @@ class LarsimStatistics(Statistics):
                 self.qoi_gPCE = cp.fit_quadrature(P, nodes, weights, discharge_values)
             self._calc_stats_for_gPCE(dist, key)
 
-
     def _calc_stats_for_gPCE(self, dist, key):
         #percentiles
         numPercSamples = 10 ** 5
@@ -297,6 +311,9 @@ class LarsimStatistics(Statistics):
                 self.Abfluss[key]["P10"]=self.Abfluss[key]["P10"][0]
                 self.Abfluss[key]["P90"]=self.Abfluss[key]["P90"][0]
 
+        # TODO : Don't know where to put this
+        print("\n\nI am in calcStatisticsForSaltelli!!! CHANGE THIS!!!\n\n\t")
+        C_eigen_decomposition = samples.calculate_active_subspaces()
 
     def  _compute_Sobol_t(self):
         is_Sobol_t_computed = "Sobol_t" in self.Abfluss[self.keyIter[0]] #hasattr(self.Abfluss[self.keyIter[0], "Sobol_t")
