@@ -35,7 +35,7 @@ class LarsimSamples(object):
         dailyOutput=configurationObject["Output"]["dailyOutput"] if "dailyOutput" in configurationObject["Output"] else "False"
         #
         calculate_GoF=configurationObject["Output"]["calculate_GoF"]
-        compute_gredients=configurationObject["Output"]["compute_gredients"]
+        compute_gradients=configurationObject["Output"]["compute_gradients"]
 
         list_of_single_df = []
         list_index_parameters_dict = []
@@ -51,8 +51,9 @@ class LarsimSamples(object):
                 #runtime = value["run_time"]
                 if strtobool(calculate_GoF):
                     index_parameter_gof_DF=value["gof_df"]
-                if strtobool(compute_gredients):
-                    index_parameter_gof_DF=value["gradient"]
+                if strtobool(compute_gradients):
+                    pass
+                    # index_parameter_gof_DF=value["gradient"] # TODO : this line throws an error! Adapt it!
             else:
                 df_result = value
 
