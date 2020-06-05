@@ -39,6 +39,7 @@ class LarsimSamples(object):
 
         list_of_single_df = []
         list_index_parameters_dict = []
+        self.gradient_matrices = []
         for index_run, value in enumerate(rawSamples,): #Important that the results inside rawSamples (resulted paths) are in sorted order and correspond to the parameters order
             if isinstance(value, tuple):
                 df_result = value[0]
@@ -52,8 +53,8 @@ class LarsimSamples(object):
                 if strtobool(calculate_GoF):
                     index_parameter_gof_DF=value["gof_df"]
                 if strtobool(compute_gradients):
-                    pass
-                    # index_parameter_gof_DF=value["gradient"] # TODO : this line throws an error! Adapt it!
+                    self.gradient_matrices.append(value["gradient"][0])
+
             else:
                 df_result = value
 
@@ -67,6 +68,10 @@ class LarsimSamples(object):
             #df_single_ergebnis = larsimDataPostProcessing.parse_df_based_on_time(df_single_ergebnis, (simulation_start_timestamp, None))
 
             list_of_single_df.append(df_single_ergebnis)
+
+        # Gradient matrices process - gradient_matrices[station_id] gives the gradient matrix per station
+        if strtobool(compute_gradients):
+            self.gradient_matrices = larsimDataPostProcessing.gradient_matrices_process(self.gradient_matrices)
 
         self.df_simulation_result = pd.concat(list_of_single_df, ignore_index=True, sort=False, axis=0)
 
@@ -102,7 +107,6 @@ class LarsimSamples(object):
     def get_simulation_stations(self):
         return self.df_simulation_result.Stationskennung.unique()
 
-
 class LarsimStatistics(Statistics):
     """
        LarsimStatistics calculates the statistics for the LarsimModel
@@ -113,7 +117,7 @@ class LarsimStatistics(Statistics):
 
         self.configurationObject = configurationObject
 
-        # directoy for the larsim runs
+        # directory for the larsim runs
         if "working_dir" in kwargs:
             self.working_dir = kwargs.get('working_dir')
         else:

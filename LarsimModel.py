@@ -434,9 +434,6 @@ class LarsimModel(Model):
 
             # compute gradient of the output, or some likelihood measure w.r.t parameters
             if self.compute_gradients:
-                # TODO Teo: complete with gradient computations
-                # TODO Teo: This is sequential and no separate copy to subfolders! Must be parallelized! - See above for only 1 run / proc
-
                 if self.configurationObject["Output"]["gradients_method"] == "Central Difference":
                     length_evaluations_gradient = 2 * len(parameter) # central differences
                     CD = 1  # flag for using Central Differences (with 2 * num_evaluations)
@@ -541,8 +538,6 @@ class LarsimModel(Model):
                     # Delete local working folder
                     subprocess.run(["rm", "-r", curr_working_dir_gradient])
 
-                print("\n\n\n \t -------> Gradient matrix bulk for proc. ", i, ": \n\n", gradient_matrix_bulk, "\n\n")
-                print("\n\n\n \t -------> h_vector for proc. ", i, ": \n\n", h_vector, "\n\n")
                 # 3. Process gradient_matrix_bulk -> compute the effective gradients by subtracting GoFs =>
                 # gradient_matrix
                 gradient_matrix = []  # matrix containing gradients on vertical and stations horizontal
@@ -559,7 +554,6 @@ class LarsimModel(Model):
                 #      In the testing case: only 1 station => gradient vector
                 if gradient_matrix:
                     result_dict["gradient"] = gradient_matrix
-                    print("\n\n\n \t -------> Gradient matrix for proc. ", i, ": \n\n", gradient_matrix, "\n\n")
 
             #TODO-Ivana distinguish between only saving reults and saving and propagating further
             # save the output of each simulation here just in case the purpose of the simulation is to run multiple Larsim runs
@@ -579,7 +573,7 @@ class LarsimModel(Model):
                     # optionally glue it to the results and propagate everything further for postprocessing
                     index_parameter_gof_DF.to_pickle(osp.abspath(osp.join(self.working_dir, "goodness_of_fit_" + str(i) +  ".pkl")), compression="gzip")
 
-            #Debugging  - TODO Delete afterwards
+            # Debugging  - TODO Delete afterwards
             print("LarsimModel INFO: Process {} returned / appended it's results".format(i))
             #assert len(result['TimeStamp'].unique()) == len(self.t), "Assesrtion Failed: Something went wrong with time resolution of the result"
             #assert isinstance(self.variable_names, list), "Assertion Failed - variable names not a list"
