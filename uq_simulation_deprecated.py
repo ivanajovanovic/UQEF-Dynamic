@@ -342,6 +342,11 @@ if mpi == False or (mpi == True and rank == 0):
         #print(statistics.printResults())
 
         #####################################
+        ### Gradient processing
+        #####################################
+
+
+        #####################################
         ### generate plots
         #####################################
         print("generate plots...")
