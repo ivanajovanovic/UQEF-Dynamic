@@ -20,6 +20,65 @@
     },
   "parameters": [
     {
+      "name": "BSF",
+      "type": "tape35",
+      "distribution": "Uniform",
+      "mu": 0.3,
+      "sigma": 0.1,
+      "lower": 0.01,
+      "upper": 0.5,
+      "lower_limit": 0.01,
+      "upper_limit": 0.5
+    },
+    {
+      "name": "A2",
+      "type": "tape35",
+      "distribution": "Uniform",
+      "mu": 1.5,
+      "sigma": 0.75,
+      "lower": 0.5,
+      "upper": 4.0,
+      "lower_limit": 0.5 ,
+      "upper_limit": 4.0
+    },
+    {
+      "name": "EQI",
+      "type": "tape35",
+      "distribution": "Uniform",
+      "mu": 250,
+      "sigma": 150,
+      "lower": 0,
+      "upper": 1,
+      "lower_limit": 10,
+      "upper_limit": 1000,
+      "depends_on":"EQB",
+      "direction":"decreasing"
+    },
+    {
+      "name": "EQD",
+      "type": "tape35",
+      "distribution": "Uniform",
+      "mu": 450,
+      "sigma": 200,
+      "lower": 0,
+      "upper": 1,
+      "lower_limit": 50,
+      "upper_limit": 5000,
+      "depends_on":"EQI",
+      "direction":"decreasing"
+    },
+    {
+      "name": "Acker:Apr",
+      "type": "lanu",
+      "distribution": "Uniform",
+      "lower": 0,
+      "upper": 1,
+      "lower_limit": 0.3,
+      "upper_limit": 3.0,
+      "depends_on":"Acker:Mar",
+      "direction":"increasing"
+    },
+    {
       "name": "Acker:May",
       "type": "lanu",
       "distribution": "Uniform",
@@ -31,14 +90,25 @@
       "direction":"increasing"
     },
     {
-      "name": "Acker:Jun",
+      "name": "locker baumbest.:Apr",
       "type": "lanu",
       "distribution": "Uniform",
       "lower": 0,
       "upper": 1,
       "lower_limit": 3.0,
-      "upper_limit": 7.0,
-      "depends_on":"Acker:May",
+      "upper_limit": 6.5,
+      "depends_on":"locker baumbest.:Mar",
+      "direction":"increasing"
+    },
+    {
+      "name": "locker baumbest.:May",
+      "type": "lanu",
+      "distribution": "Uniform",
+      "lower": 0,
+      "upper": 1,
+      "lower_limit": 5.5,
+      "upper_limit": 7.5,
+      "depends_on":"locker baumbest.:Apr",
       "direction":"increasing"
     }
   ],

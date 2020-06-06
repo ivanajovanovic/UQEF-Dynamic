@@ -116,10 +116,10 @@ class LarsimSamples(object):
             EW, EV = np.linalg.eigh(C)
             idx = EW.argsort()[::-1]
             EW = EW[idx]
-            EV = EV[:,idx]
-            C_eigen_decomposition.append([EW, EV])
+            EV = EV[:, idx]
+            C_eigen_decomposition.extend([idx, EW, EV])
 
-        print(C_eigen_decomposition)
+        print("\n\n ---> Eigen decomposition of C matrix: \n\n", C_eigen_decomposition, "\n\n")
         return C_eigen_decomposition
 
 class LarsimStatistics(Statistics):
@@ -311,8 +311,8 @@ class LarsimStatistics(Statistics):
                 self.Abfluss[key]["P10"]=self.Abfluss[key]["P10"][0]
                 self.Abfluss[key]["P90"]=self.Abfluss[key]["P90"][0]
 
-        # TODO : Don't know where to put this
-        print("\n\nI am in calcStatisticsForSaltelli!!! CHANGE THIS!!!\n\n\t")
+        # TODO : Move it from here, just testing purposes. Don't know where to put this
+        print("\n\nI am in calcStatisticsForSaltelli!!! Move me from here!!!\n\n\t")
         C_eigen_decomposition = samples.calculate_active_subspaces()
 
     def  _compute_Sobol_t(self):
@@ -375,7 +375,10 @@ class LarsimStatistics(Statistics):
 
         self.keyIter = list(itertools.product([station,],pdTimesteps))
 
-        colors = ['darkred', 'midnightblue', 'mediumseagreen', 'darkorange']
+        # extra 4 colours for running with 8 uncertain parameters(TODO 1. I am bad at choosing colors...; 2. We need a more comprehensive list of colors)
+        # colors = ['darkred', 'midnightblue', 'mediumseagreen', 'darkorange']
+        colors = ['darkred', 'midnightblue', 'mediumseagreen', 'darkorange',
+                  'limegreen', 'fuchsia', 'saddlebrown', 'darkgoldenrod']
         #sobol_labels = ["BSF", "A2", "EQD", "EQD2"]
         labels = [nodeName.strip() for nodeName in self.nodeNames]
 
