@@ -13,6 +13,8 @@ Additional Software requirements:
 
 ### How to run the code/simulation
 
+### Runing the simulation on HPC
+
 ### Things to be done before each run 
 - delete all subfolders in folder `model_runs`
 - optional - delete all whm and lila files inside `../Larsim-data/WHM Regen/master_configuration`
