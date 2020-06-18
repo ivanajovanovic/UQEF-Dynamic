@@ -1,4 +1,5 @@
 import chaospy as cp
+import dill
 import numpy as np
 import pickle
 import pandas as pd
@@ -39,6 +40,7 @@ class LarsimSamples(object):
 
         list_of_single_df = []
         list_index_parameters_dict = []
+        list_of_single_index_parameter_gof_df = []
         for index_run, value in enumerate(rawSamples,): #Important that the results inside rawSamples (resulted paths) are in sorted order and correspond to the parameters order
             if isinstance(value, tuple):
                 df_result = value[0]
@@ -51,6 +53,7 @@ class LarsimSamples(object):
                 #runtime = value["run_time"]
                 if strtobool(calculate_GoF):
                     index_parameter_gof_DF=value["gof_df"]
+                    list_of_single_index_parameter_gof_df.append(index_parameter_gof_DF)
                 if strtobool(compute_gredients):
                     index_parameter_gof_DF=value["gradient"]
             else:
@@ -72,7 +75,14 @@ class LarsimSamples(object):
         larsimInputOutputUtilities._postProcessing_DataFrame_after_reading(self.df_simulation_result)
 
         if list_index_parameters_dict:
-            self.df_index_parameter_values= pd.DataFrame(list_index_parameters_dict)
+            self.df_index_parameter_values = pd.DataFrame(list_index_parameters_dict)
+        else:
+            self.df_index_parameter_values = None
+
+        if list_of_single_index_parameter_gof_df:
+            self.df_index_parameter_gof_values = pd.concat(list_of_single_index_parameter_gof_df, ignore_index=True, sort=False, axis=0)
+        else:
+            self.df_index_parameter_gof_values = None
 
         print("LARSIM STAT INFO: Number of Unique TimeStamps (Hourly): {}".format(len(self.df_simulation_result.TimeStamp.unique())))
 
@@ -90,6 +100,10 @@ class LarsimSamples(object):
     def save_index_parameter_values(self, file_path='./'):
         self.df_index_parameter_values.to_pickle(
             os.path.abspath(os.path.join(file_path, "df_all_index_parameter_values.pkl")), compression="gzip")
+
+    def save_index_parameter_gof_values(self, file_path='./'):
+        self.df_index_parameter_gof_values.to_pickle(
+            os.path.abspath(os.path.join(file_path, "df_all_index_parameter_gof_values.pkl")), compression="gzip")
 
     def save_time_samples_to_file(self, file_path='./'):
         self.df_time_discharges.to_pickle(
@@ -136,6 +150,8 @@ class LarsimStatistics(Statistics):
         for i in self.configurationObject["parameters"]:
             self.nodeNames.append(i["name"])
 
+        self.uq_method = kwargs.get('uq_method') if 'uq_method' in kwargs else None
+
     def calcStatisticsForMc(self, rawSamples, timesteps,
                             simulationNodes, numEvaluations, order, regression, solverTimes,
                             work_package_indexes, original_runtime_estimator):
@@ -146,6 +162,7 @@ class LarsimStatistics(Statistics):
         if not self.run_and_save_simulations:
             samples.save_samples_to_file(self.working_dir)
             samples.save_index_parameter_values(self.working_dir)
+            samples.save_index_parameter_gof_values(self.working_dir)
 
         self.timesteps = samples.get_simulation_timesteps()
         self.numbTimesteps = len(self.timesteps)
@@ -160,14 +177,15 @@ class LarsimStatistics(Statistics):
         if regression:
             nodes = simulationNodes.distNodes
             dist = simulationNodes.joinedDists
-            P = cp.orth_ttr(order, dist)
+            polynomial_expansion = cp.orth_ttr(order, dist)
 
-        for key,val in groups.items():
-            discharge_values = samples.df_simulation_result.iloc[val.values].Value.values #numpy array nx1
+        for key,val_indices in groups.items():
+            discharge_values = samples.df_simulation_result.loc[val_indices.values].Value.values #numpy array nx1
+            #discharge_values = samples.df_simulation_result.Value.loc[val_indices].values
             self.Abfluss[key] = {}
             self.Abfluss[key]["Q"] = discharge_values
             if regression:
-                self.qoi_gPCE = cp.fit_regression(P, nodes, discharge_values)
+                self.qoi_gPCE = cp.fit_regression(polynomial_expansion, nodes, discharge_values)
                 self._calc_stats_for_gPCE(dist, key)
             else:
                 self.Abfluss[key]["E"] = np.sum(discharge_values, axis=0, dtype=np.float64)/ numEvaluations
@@ -192,6 +210,7 @@ class LarsimStatistics(Statistics):
         if not self.run_and_save_simulations:
             samples.save_samples_to_file(self.working_dir)
             samples.save_index_parameter_values(self.working_dir)
+            samples.save_index_parameter_gof_values(self.working_dir)
 
         self.timesteps = samples.get_simulation_timesteps()
         self.numbTimesteps = len(self.timesteps)
@@ -203,18 +222,18 @@ class LarsimStatistics(Statistics):
         nodes = simulationNodes.distNodes
         dist = simulationNodes.joinedDists
         weights = simulationNodes.weights
-        P = cp.orth_ttr(order, dist)
+        polynomial_expansion = cp.orth_ttr(order, dist)
 
         grouped = samples.df_simulation_result.groupby(['Stationskennung','TimeStamp'])
         groups = grouped.groups
-        for key,val in groups.items():
-            discharge_values = samples.df_simulation_result.iloc[val.values].Value.values
+        for key,val_indices in groups.items():
+            discharge_values = samples.df_simulation_result.loc[val_indices.values].Value.values
             self.Abfluss[key] = {}
             self.Abfluss[key]["Q"] = discharge_values
             if regression:
-                self.qoi_gPCE = cp.fit_regression(P, nodes, discharge_values)
+                self.qoi_gPCE = cp.fit_regression(polynomial_expansion, nodes, discharge_values)
             else:
-                self.qoi_gPCE = cp.fit_quadrature(P, nodes, weights, discharge_values)
+                self.qoi_gPCE = cp.fit_quadrature(polynomial_expansion, nodes, weights, discharge_values)
             self._calc_stats_for_gPCE(dist, key)
 
 
@@ -245,6 +264,7 @@ class LarsimStatistics(Statistics):
         if not self.run_and_save_simulations:
             samples.save_samples_to_file(self.working_dir)
             samples.save_index_parameter_values(self.working_dir)
+            samples.save_index_parameter_gof_values(self.working_dir)
 
         self.timesteps = samples.get_simulation_timesteps()
         self.numbTimesteps = len(self.timesteps)
@@ -258,10 +278,10 @@ class LarsimStatistics(Statistics):
 
         self.dim = len(simulationNodes.nodeNames)
 
-        for key,val in groups.items():
+        for key,val_indices in groups.items():
             self.Abfluss[key] = {}
 
-            discharge_values = samples.df_simulation_result.iloc[val.values].Value.values #numpy array - for sartelli it should be n(2+d)x1
+            discharge_values = samples.df_simulation_result.loc[val_indices.values].Value.values #numpy array - for sartelli it should be n(2+d)x1
             #extended_standard_discharge_values = discharge_values[:(2*numEvaluations)]
             discharge_values_saltelli = discharge_values[:, np.newaxis]
             standard_discharge_values = discharge_values_saltelli[:numEvaluations,:] #values based on which we calculate standard statistics
@@ -269,23 +289,23 @@ class LarsimStatistics(Statistics):
 
             self.Abfluss[key]["Q"] = standard_discharge_values
 
-            self.Abfluss[key]["min_q"] = np.amin(discharge_values) #standard_discharge_values.min()
-            self.Abfluss[key]["max_q"] = np.amax(discharge_values) #standard_discharge_values.max()
+            #self.Abfluss[key]["min_q"] = np.amin(discharge_values) #standard_discharge_values.min()
+            #self.Abfluss[key]["max_q"] = np.amax(discharge_values) #standard_discharge_values.max()
 
-            self.Abfluss[key]["E"] = np.sum(extended_standard_discharge_values, axis=0, dtype=np.float64) / (2*numEvaluations)
-            self.Abfluss[key]["E_numpy"] = np.mean(discharge_values, 0) #TODO!!!
+            #self.Abfluss[key]["E"] = np.sum(extended_standard_discharge_values, axis=0, dtype=np.float64) / (2*numEvaluations)
+            self.Abfluss[key]["E"] = np.mean(discharge_values[:(2*numEvaluations)], 0)
             #self.Abfluss[key]["Var"] = float(np.sum(power(standard_discharge_values)) / numEvaluations - self.Abfluss[key]["E"] ** 2)
-            self.Abfluss[key]["Var"] = np.sum((extended_standard_discharge_values - self.Abfluss[key]["E"]) ** 2, axis=0, dtype=np.float64) / (2*numEvaluations - 1)
-            self.Abfluss[key]["StdDev"] = np.sqrt(self.Abfluss[key]["Var"], dtype=np.float64)
-            self.Abfluss[key]["StdDev_numpy"] = np.std(discharge_values, 0, ddof=1)  #TODO!!!
+            #self.Abfluss[key]["Var"] = np.sum((extended_standard_discharge_values - self.Abfluss[key]["E"]) ** 2, axis=0, dtype=np.float64) / (2*numEvaluations - 1)
+            #self.Abfluss[key]["StdDev"] = np.sqrt(self.Abfluss[key]["Var"], dtype=np.float64)
+            self.Abfluss[key]["StdDev"] = np.std(discharge_values[:(2*numEvaluations)], 0, ddof=1)
 
             #self.Abfluss[key]["P10"] = np.percentile(discharge_values[:numEvaluations], 10, axis=0)
             #self.Abfluss[key]["P90"] = np.percentile(discharge_values[:numEvaluations], 90, axis=0)
-            self.Abfluss[key]["P10"] = np.percentile(extended_standard_discharge_values, 10, axis=0)
-            self.Abfluss[key]["P90"] = np.percentile(extended_standard_discharge_values, 90, axis=0)
+            self.Abfluss[key]["P10"] = np.percentile(discharge_values[:(2*numEvaluations)], 10, axis=0)
+            self.Abfluss[key]["P90"] = np.percentile(discharge_values[:(2*numEvaluations)], 90, axis=0)
 
-            #self.Abfluss[key]["Sobol_m"] = _Sens_m_sample_4(discharge_values_saltelli, self.dim, numEvaluations)
-            self.Abfluss[key]["Sobol_m"] = saltelliSobolIndicesHelpingFunctions._Sens_m_sample_3(discharge_values_saltelli, self.dim, numEvaluations)
+            self.Abfluss[key]["Sobol_m"] = saltelliSobolIndicesHelpingFunctions._Sens_m_sample_4(discharge_values_saltelli, self.dim, numEvaluations)
+            #self.Abfluss[key]["Sobol_m"] = saltelliSobolIndicesHelpingFunctions._Sens_m_sample_3(discharge_values_saltelli, self.dim, numEvaluations)
             self.Abfluss[key]["Sobol_t"] = saltelliSobolIndicesHelpingFunctions._Sens_t_sample_4(discharge_values_saltelli, self.dim, numEvaluations)
 
             if isinstance(self.Abfluss[key]["P10"], (list)) and len(self.Abfluss[key]["P10"]) == 1:
@@ -304,11 +324,20 @@ class LarsimStatistics(Statistics):
 
 
     def get_measured_discharge(self, timestepRange=None):
-        self.df_measured = larsimDataPostProcessing.read_process_write_discharge(df=os.path.abspath(os.path.join(self.working_dir, "df_measured.pkl")),\
-                             timeframe=timestepRange,\
-                             station=self.configurationObject["Output"]["station_calibration_postproc"],\
-                             dailyOutput=strtobool(self.configurationObject["Output"]["dailyOutput"]),\
-                             compression="gzip")
+        local_measurment_file = os.path.abspath(os.path.join(self.working_dir, "df_measured.pkl"))
+        if os.path.exists(local_measurment_file):
+            self.df_measured = larsimDataPostProcessing.read_process_write_discharge(df=local_measurment_file,\
+                                     timeframe=timestepRange,\
+                                     station=self.configurationObject["Output"]["station_calibration_postproc"],\
+                                     dailyOutput=strtobool(self.configurationObject["Output"]["dailyOutput"]),\
+                                     compression="gzip")
+        else:
+            self.df_measured = larsimConfigurationSettings.extract_measured_discharge(timestepRange[0], timestepRange[1], index_run=0)
+            self.df_measured = larsimDataPostProcessing.filterResultForStationAndTypeOfOutpu(self.df_measured,\
+                                                       station=self.configurationObject["Output"]["station_calibration_postproc"],\
+                                                       type_of_output=self.configurationObject["Output"]["type_of_output_measured"])
+            if strtobool(self.configurationObject["Output"]["dailyOutput"]):
+                self.df_measured = larsimDataPostProcessing.transformToDailyResolution(self.df_measured)
         self.groundTruth_computed = True
         #self.Abfluss["Ground_Truth_Measurements"] = self.measured
 
@@ -354,7 +383,6 @@ class LarsimStatistics(Statistics):
         self.keyIter = list(itertools.product([station,],pdTimesteps))
 
         colors = ['darkred', 'midnightblue', 'mediumseagreen', 'darkorange']
-        #sobol_labels = ["BSF", "A2", "EQD", "EQD2"]
         labels = [nodeName.strip() for nodeName in self.nodeNames]
 
         is_Sobol_t_computed = self._compute_Sobol_t()
@@ -376,22 +404,34 @@ class LarsimStatistics(Statistics):
             #fig.add_trace(go.Scatter(x=pdTimesteps, y=self.measured['Value'], name="Q (measured)",line_color='red'), row=1, col=1)
             fig.add_trace(go.Scatter(x=self.df_measured['TimeStamp'], y=self.df_measured['Value'], name="Q (measured)",line_color='red'), row=1, col=1)
 
-        #fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["E"][0] for key in self.keyIter], name='E[Q]',line_color='green', mode='lines'), row=1, col=1)
-        fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["P10"][0] for key in self.keyIter], name='10th percentile',line_color='indianred', mode='lines'), row=1, col=1)
-        fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["P90"][0] for key in self.keyIter], name='90th percentile',line_color='yellow', mode='lines'), row=1, col=1)
-        #fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["StdDev"][0] for key in self.keyIter], name='std. dev', line_color='darkviolet'), row=2, col=1)
 
-        fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["E_numpy"] for key in self.keyIter], name='E[Q]',line_color='green', mode='lines'), row=1, col=1)
+        fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["E"] for key in self.keyIter], name='E[Q]',line_color='green', mode='lines'), row=1, col=1)
         #fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["min_q"] for key in self.keyIter], name='min_q',line_color='indianred', mode='lines'), row=1, col=1)
         #fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["max_q"] for key in self.keyIter], name='max_q',line_color='yellow', mode='lines'), row=1, col=1)
-        fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["StdDev_numpy"] for key in self.keyIter], name='std. dev', line_color='darkviolet'), row=2, col=1)
+        fig.add_trace(go.Scatter(x=pdTimesteps, y=[(self.Abfluss[key]["E"] - self.Abfluss[key]["StdDev"]) for key in self.keyIter], name='mean - std. dev', line_color='darkviolet', mode='lines'), row=1, col=1)
+        fig.add_trace(go.Scatter(x=pdTimesteps, y=[(self.Abfluss[key]["E"] + self.Abfluss[key]["StdDev"]) for key in self.keyIter], name='mean + std. dev', line_color='darkviolet', mode='lines', fill='tonexty'), row=1, col=1)
+
+        if self.uq_method=="saltelli":
+            fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["P10"][0] for key in self.keyIter], name='10th percentile',line_color='yellow', mode='lines'), row=1, col=1)
+            fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["P90"][0] for key in self.keyIter], name='90th percentile',line_color='yellow', mode='lines',fill='tonexty'), row=1, col=1)
+        else:
+            fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["P10"] for key in self.keyIter], name='10th percentile',line_color='yellow', mode='lines'), row=1, col=1)
+            fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["P90"] for key in self.keyIter], name='90th percentile',line_color='yellow', mode='lines',fill='tonexty'), row=1, col=1)
+
+        fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["StdDev"] for key in self.keyIter], name='std. dev', line_color='darkviolet'), row=2, col=1)
 
         if is_Sobol_m_computed:
             for i in range(len(labels)):
-                fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["Sobol_m"][i][0] for key in self.keyIter], name=labels[i], legendgroup=labels[i], line_color=colors[i]), row=3, col=1)
+                if self.uq_method=="saltelli":
+                    fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["Sobol_m"][i][0] for key in self.keyIter], name=labels[i], legendgroup=labels[i], line_color=colors[i]), row=3, col=1)
+                else:
+                    fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["Sobol_m"][i] for key in self.keyIter], name=labels[i], legendgroup=labels[i], line_color=colors[i]), row=3, col=1)
         if is_Sobol_t_computed:
             for i in range(len(labels)):
-                fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["Sobol_t"][i][0] for key in self.keyIter], legendgroup=labels[i], showlegend = False, line_color=colors[i]), row=4, col=1)
+                if self.uq_method=="saltelli":
+                    fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["Sobol_t"][i][0] for key in self.keyIter], legendgroup=labels[i], showlegend = False, line_color=colors[i]), row=4, col=1)
+                else:
+                    fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["Sobol_t"][i] for key in self.keyIter], legendgroup=labels[i], showlegend = False, line_color=colors[i]), row=4, col=1)
 
         fig.update_traces(mode='lines')
         #fig.update_xaxes(title_text="Time")
@@ -402,7 +442,7 @@ class LarsimStatistics(Statistics):
         if is_Sobol_t_computed:
             fig.update_yaxes(title_text="Sobol_t", side='left', showgrid=True, range=[0, 1], row=4, col=1)
         #fig.update_layout(height=1200, width=1200, title_text='Larsim Forward UQ & SA - MARI',xaxis4_rangeslider_visible=True, xaxis4_rangeslider_thickness=0.05)
-        fig.update_layout(height=800, width=1200, title_text=window_title)
+        fig.update_layout(height=800, width=1200, title_text=window_title,xaxis4_rangeslider_visible=True, xaxis4_rangeslider_thickness=0.05)
 
         plot(fig, filename=filename, auto_open=display)
         #fig.write_image("sim-09-plotly.png")
@@ -466,7 +506,7 @@ class LarsimStatistics(Statistics):
         if is_Sobol_m_computed:
             plotter.subplot(413)
             for i in range(len(labels)):
-                plotter.plot(pdTimesteps, [self.Abfluss[key]["Sobol_m"][i] for key in self.keyIter],\
+                plotter.plot(pdTimesteps, [self.Abfluss[key]["Sobol_m"][i][0] for key in self.keyIter],\
                 label=labels[i])
             plotter.xlabel('time', fontsize=13)
             plotter.ylabel('First O. Sobol Indices', fontsize=13)
@@ -477,7 +517,7 @@ class LarsimStatistics(Statistics):
         if is_Sobol_t_computed:
             plotter.subplot(414)
             for i in range(len(labels)):
-                plotter.plot(pdTimesteps, [self.Abfluss[key]["Sobol_t"][i] for key in self.keyIter],\
+                plotter.plot(pdTimesteps, [self.Abfluss[key]["Sobol_t"][i][0] for key in self.keyIter],\
                 label=labels[i])
             plotter.xlabel('time', fontsize=13)
             plotter.ylabel('Total Sobol Indices', fontsize=13)
@@ -498,10 +538,11 @@ class LarsimStatistics(Statistics):
 
         #save state to a file
 
-        fileName = self.generateFileName(fileName=fileName, fileNameIdent=fileNameIdent,\
-         directory=self.working_dir, fileNameIdentIsFullName=fileNameIdentIsFullName)
+        #fileName = self.generateFileName(fileName=fileName, fileNameIdent=fileNameIdent,\
+        # directory=self.working_dir, fileNameIdentIsFullName=fileNameIdentIsFullName)
+        #statFileName = fileName + '.pkl'
 
-        statFileName = fileName + '.pkl'
+        statFileName = os.path.abspath(os.path.join(self.working_dir, "statistics_dictionary.pkl"))
 
         with open(statFileName, 'wb') as handle:
             pickle.dump(self.Abfluss, handle, protocol=pickle.HIGHEST_PROTOCOL)

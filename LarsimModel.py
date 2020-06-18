@@ -138,6 +138,21 @@ class LarsimModelSetUp():
                              )
         #self.df_measured = larsimConfigurationSettings.extract_measured_discharge(self.timeframe[0], self.timeframe[1], station=self.station_for_model_runs, index_run=0)
 
+    def get_Larsim_saved_simulations(self, write_in_file=True):
+        #TODO Make this work
+        self.df_simulation, _, mean_per_time_DF, discharge_measured = larsimDataPostProcessing.get_big_DF_with_simulated_data(sim_folder=paths.sim_folder,\
+                                               s_year=self.configurationObject["Timeframe"]["start_year"],\
+                                               s_mont=self.configurationObject["Timeframe"]["start_month"],\
+                                               s_day=self.configurationObject["Timeframe"]["start_day"],\
+                                               e_year=self.configurationObject["Timeframe"]["end_year"],\
+                                               e_mont=self.configurationObject["Timeframe"]["end_month"],\
+                                               e_day=self.configurationObject["Timeframe"]["end_day"],\
+                                               station=self.station_for_model_runs, type_of_output=self.type_of_output_of_Interest,\
+                                               one_day_simulation_run=True,\
+                                               calc_avrg=True, get_measured=True,\
+                                               plot=False, saveToFile=False)
+        self.df_simulation.drop_duplicates(subset=['TimeStamp','Stationskennung'], keep='last', inplace=True)
+
 
     def run_unaltered_sim(self, createNewFolder=False, write_in_file=True):
         #####################################
@@ -365,7 +380,7 @@ class LarsimModel(Model):
             # filter output time-series in order to disregard warm-up time; if not then at least disregard these values when calculating statistics and GoF
             # however, take care that is is not done twice!
             simulation_start_timestamp = self.timeframe[0] + datetime.timedelta(hours=self.warm_up_duration) # pd.Timestamp(result.TimeStamp.min())
-            result = larsimDataPostProcessing.parse_df_based_on_time(result, (simulation_start_timestamp, None))
+            result = larsimDataPostProcessing.parse_df_based_on_time(result, (simulation_start_timestamp, self.timeframe[1]))
 
             #filter out results for a concret station if specified in configuration json file
             # TODO-Ivana deal with situation when self.station_for_model_runs is a list
@@ -549,9 +564,14 @@ class LarsimModel(Model):
             if local_start_date > timeframe[1]:
                 break
 
-            local_start_date = local_start_date.replace(hour=0, minute=0, second=0)
+            #TODO This brings some confusion, try without this!
+            #local_start_date = local_start_date.replace(hour=0, minute=0, second=0)
 
-            local_end_date = local_start_date + datetime.timedelta(days=local_timestep)
+            if i == 0:
+                local_end_date = local_end_date + datetime.timedelta(hours=warm_up_duration) + datetime.timedelta(days=local_timestep)
+            else:
+                local_end_date = local_end_date + datetime.timedelta(days=local_timestep)
+
 
             if local_end_date > timeframe[1]:
                 local_end_date = timeframe[1]
@@ -566,8 +586,10 @@ class LarsimModel(Model):
             if local_resultDF is None:
                 raise ValueError("LarsimModel ERROR: Process {}: The following Ergebnis file was not found - {}".format(index_run, result_file_path))
 
+            #TODO Take maybe an average over duplicated timestamps instead of droping
             local_resultDF_drop = local_resultDF.drop(local_resultDF[local_resultDF['TimeStamp'] < local_start_date_p_53].index)
 
+            #TODO Check if some interpolation is needed...
             local_resultDF_list.append(local_resultDF_drop)
 
             # rename ergebnis.lila
@@ -583,7 +605,7 @@ class LarsimModel(Model):
         df_simulation_result.sort_values("TimeStamp", inplace=True)
 
         # clean concatanated file - dropping time duplicate values
-        df_simulation_result.drop_duplicates(subset=['TimeStamp', 'Stationskennung', 'Type'], keep='first', inplace=True)
+        df_simulation_result.drop_duplicates(subset=['TimeStamp', 'Stationskennung', 'Type'], keep='last', inplace=True)
 
         #print("DEBUGGING LARSIM INFO: process {} - After Droping -  MARI and Messung (Hourly):\n".format(i))
         #print(len(df_simulation_result.TimeStamp.unique()))

@@ -44,20 +44,25 @@ uqsim = uqef.UQsim()
 #####################################
 #####################################
 # change args locally for testing and debugging
-local_debugging = True
+local_debugging = False
 if local_debugging:
     uqsim.args.model = "larsim"
-    uqsim.args.uq_method = "saltelli"
+    #uqsim.args.uq_method = "saltelli"
+    uqsim.args.uq_method = "sc"
     uqsim.args.uncertain = "all"
     uqsim.args.chunksize = 1
-    uqsim.args.mc_numevaluations = 2 #50
+    uqsim.args.mc_numevaluations = 10 #50
+    uqsim.args.sc_q_order = 10
+    uqsim.args.sc_p_order = 8
     #uqsim.args.outputResultDir = os.path.abspath(os.path.join(paths.scratch_dir, 'Larsim_runs/trial_run'))
-    uqsim.args.outputResultDir = os.path.abspath(os.path.join(paths.scratch_dir, 'trial_run_lai_updated'))
+    uqsim.args.outputResultDir = os.path.abspath(os.path.join(paths.scratch_dir, 'larsim_run_lai_may'))
+    #uqsim.args.outputResultDir = os.path.abspath(os.path.join(paths.scratch_dir, 'trial_run_lai_jun_2'))
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
     uqsim.args.inputModelDir = paths.larsim_data_path
     uqsim.args.sourceDir = paths.sourceDir
     #uqsim.args.config_file = "/dss/dsshome1/lxc0C/ga45met2/Repositories/Larsim-UQ/configurations_Larsim/configuration_larsim_uqsim_cm2_v4.json" #"configuration_larsim_uqsim.json"
-    uqsim.args.config_file = "/home/ga45met/Repositories/Larsim/Larsim-UQ/configurations_Larsim/configuration_larsim_updated_local_test_run.json"
+    uqsim.args.config_file = "/home/ga45met/Repositories/Larsim/Larsim-UQ/configurations_Larsim/configurations_larsim_master_lai.json"
+    #uqsim.args.config_file = "/home/ga45met/Repositories/Larsim/Larsim-UQ/configurations_Larsim/configuration_larsim_updated_lai_jun.json"
     uqsim.args.disable_statistics = False
     uqsim.args.transformToStandardDist = True
     uqsim.args.mpi = True
@@ -99,7 +104,7 @@ uqsim.models.update({"ishigami"       : (lambda: IshigamiModel.IshigamiModel(uqs
 uqsim.models.update({"productFunction": (lambda: ProductFunctionModel.ProductFunctionModel(uqsim.configuration_object))})
 
 # register statistics
-uqsim.statistics.update({"larsim"         : (lambda: LarsimStatistics.LarsimStatistics(uqsim.configuration_object))})
+uqsim.statistics.update({"larsim"         : (lambda: LarsimStatistics.LarsimStatistics(uqsim.configuration_object, uq_method=uqsim.args.uq_method))})
 uqsim.statistics.update({"oscillator"     : (lambda: LinearDampedOscillatorStatistics.LinearDampedOscillatorStatistics())})
 uqsim.statistics.update({"ishigami"       : (lambda: IshigamiStatistics.IshigamiStatistics(uqsim.configuration_object))})
 uqsim.statistics.update({"productFunction": (lambda: ProductFunctionStatistics.ProductFunctionStatistics(uqsim.configuration_object))})
@@ -135,8 +140,8 @@ uqsim.simulate()
 
 # statistics:
 uqsim.calc_statistics()
-uqsim.plot_statistics(display=False)
 uqsim.save_statistics()
+uqsim.plot_statistics(display=False)
 
 #save the dictionary with the arguments
 argsFileName = os.path.abspath(os.path.join(uqsim.args.outputResultDir, "uqsim_args.pkl"))
