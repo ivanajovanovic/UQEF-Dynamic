@@ -1,5 +1,6 @@
 import datetime
 import dill
+from collections import defaultdict
 from distutils.util import strtobool
 from decimal import Decimal
 import inspect
@@ -192,8 +193,8 @@ class LarsimModelSetUp():
                                                                        station=self.station_of_Interest,\
                                                                        type_of_output_of_Interest_measured=self.type_of_output_of_Interest_measured,\
                                                                        type_of_output_of_Interest=self.type_of_output_of_Interest,\
-                                                                       dailyStatisict=False, gof_list="all",\
-                                                                       disregard_initila_timesteps=True, warm_up_duration=self.warm_up_duration)
+                                                                       dailyStatistics=False, gof_list="all",\
+                                                                       disregard_initial_timesteps=True, warm_up_duration=self.warm_up_duration)
         # write in a file GOF values of the unaltered model prediction
         self.index_parameter_gof_DF = pd.DataFrame(goodnessofFit_list_of_dictionaries)
         gof_file_path = osp.abspath(osp.join(self.working_dir, "GOF_Measured_vs_Unaltered.pkl"))
@@ -402,15 +403,15 @@ class LarsimModel(Model):
                     gt_dataFrame = larsimConfigurationSettings.extract_measured_discharge(self.timeframe[0], self.timeframe[1], index_run=0)
                     #gt_dataFrame = larsimConfigurationSettings.extract_measured_discharge(simulation_start_timestamp, self.timeframe[1], index_run=0)
 
-                # Make sure that burn-in time is disregard in result or will be disregard while computing GoF: disregard_initila_timesteps=False or disregard_initila_timesteps=True
+                # Make sure that burn-in time is disregard in result or will be disregard while computing GoF: disregard_initial_timesteps=False or disregard_initial_timesteps=True
                 # Check for which stations GoF should be calculated: station=self.station_of_Interest or station=self.station_for_model_runs
-                # Chech weather you want daily or hourly based computation of GoF functions: dailyStatisict=False or dailyStatisict=True
+                # Chech weather you want daily or hourly based computation of GoF functions: dailyStatistics=False or dailyStatistics=True
                 goodnessofFit_list_of_dictionaries = larsimDataPostProcessing.calculateGoodnessofFit(measuredDF=gt_dataFrame, predictedDF=result,\
                                                                                station=self.station_of_Interest,\
                                                                                type_of_output_of_Interest_measured=self.type_of_output_of_Interest_measured,\
                                                                                type_of_output_of_Interest=self.type_of_output_of_Interest,\
-                                                                               dailyStatisict=False, gof_list=self.objective_function,\
-                                                                               disregard_initila_timesteps=False)
+                                                                               dailyStatistics=False, gof_list=self.objective_function,\
+                                                                               disregard_initial_timesteps=False)
                 index_parameter_gof_list_of_dictionaries = []
                 for single_stations_gof in goodnessofFit_list_of_dictionaries:
                     index_parameter_gof_dict = {**parameters_dict, **single_stations_gof}
@@ -434,6 +435,8 @@ class LarsimModel(Model):
 
             # compute gradient of the output, or some likelihood measure w.r.t parameters
             if self.compute_gradients:
+                num_gradient_matrices = 0 # TODO Delete
+
                 if self.configurationObject["Output"]["gradients_method"] == "Central Difference":
                     length_evaluations_gradient = 2 * len(parameter) # central differences
                     CD = 1  # flag for using Central Differences (with 2 * num_evaluations)
@@ -446,11 +449,11 @@ class LarsimModel(Model):
                 eps_val_global = self.configurationObject["Output"]["eps_gradients"] # difference for gradient computation
 
                 h_vector = []
-                gradient_matrix_bulk = []
-                for id in range(0, length_evaluations_gradient):
+                gradient_matrix_bulk = defaultdict(list)
+                for id_param in range(0, length_evaluations_gradient):
                     # 2.1. For every uncertain parameter, create a new folder where 1 parameter is changed
                     os.chdir(curr_working_dir)
-                    working_folder_name = "Compute_gradient_" + str(i) + "_" + str(id)
+                    working_folder_name = "Compute_gradient_" + str(i) + "_" + str(id_param)
                     curr_working_dir_gradient = osp.abspath(osp.join(self.working_dir, working_folder_name))
 
                     if not osp.isdir(curr_working_dir_gradient):
@@ -467,14 +470,14 @@ class LarsimModel(Model):
                     os.chdir(curr_working_dir_gradient)
 
                     # 2.2. Adjust files
-                    if CD and (id % 2 == 1): # id = {1, 3, 5, 7, ...}
+                    if CD and (id_param % 2 == 1): # id_param = {1, 3, 5, 7, ...}
                         eps_val = -eps_val_global # used for computing f(x-h)
-                    else: # id = {0, 2, 4, 6 ...}
+                    else: # id_param = {0, 2, 4, 6 ...}
                         eps_val = eps_val_global # used for computing f(x+h)
                     if CD:
-                        param_index = int(id/2)
+                        param_index = int(id_param/2)
                     else:
-                        param_index = id
+                        param_index = id_param
 
                     tape35_path = curr_working_dir_gradient + "/tape35"
                     lanu_path = curr_working_dir_gradient + "/lanu.par"
@@ -485,12 +488,12 @@ class LarsimModel(Model):
                                                                                 configurationObject = self.configurationObject,
                                                                                 process_id = i,
                                                                                 eps_val = eps_val)
-                    if (CD and (id % 2 == 0)) or not CD:
+                    if (CD and (id_param % 2 == 0)) or not CD:
                         h_vector.append(h) # update vector of h's
 
                     # 2.3. Run the simulation
                     result = self._single_larsim_run(timeframe = self.timeframe, curr_working_dir = curr_working_dir_gradient,
-                                                     index_run = i, sub_index_run = id)
+                                                     index_run = i, sub_index_run = id_param)
 
                     # 2.4. Preparations before computing GoF
                     result = larsimDataPostProcessing.parse_df_based_on_time(result, (simulation_start_timestamp, None))
@@ -514,20 +517,21 @@ class LarsimModel(Model):
                                                                                               index_run = 0)
                         # gt_dataFrame = larsimConfigurationSettings.extract_measured_discharge(simulation_start_timestamp, self.timeframe[1], index_run=0)
 
-                    # Make sure that burn-in time is disregard in result or will be disregard while computing GoF: disregard_initila_timesteps=False or disregard_initila_timesteps=True
+                    # Make sure that burn-in time is disregard in result or will be disregard while computing GoF: disregard_initial_timesteps=False or disregard_initial_timesteps=True
                     # Check for which stations GoF should be calculated: station=self.station_of_Interest or station=self.station_for_model_runs
-                    # Chech weather you want daily or hourly based computation of GoF functions: dailyStatisict=False or dailyStatisict=True
+                    # Chech weather you want daily or hourly based computation of GoF functions: dailyStatistics=False or dailyStatistics=True
+
+                    # TODO: for the moment, station=self.station_of_Interest (-> extend to "all")
                     goodnessofFit_list_of_dictionaries = larsimDataPostProcessing.calculateGoodnessofFit(
                         measuredDF = gt_dataFrame, predictedDF = result, station = self.station_of_Interest,
                         type_of_output_of_Interest_measured = self.type_of_output_of_Interest_measured,
-                        type_of_output_of_Interest = self.type_of_output_of_Interest, dailyStatisict = False,
-                        gof_list = self.objective_function, disregard_initila_timesteps = False)
+                        type_of_output_of_Interest = self.type_of_output_of_Interest, dailyStatistics = False,
+                        gof_list = self.objective_function, disregard_initial_timesteps = False)
 
                     # 2.6. Extract GoF for each analysed station
-                    stations_gof_id = []
                     for single_stations_gof in goodnessofFit_list_of_dictionaries:
-                        stations_gof_id.append(single_stations_gof["calculateRMSE"]) # TODO : for the moment, just RMSE
-                    gradient_matrix_bulk.append(stations_gof_id) # append stations' values for each sample
+                        gradient_matrix_bulk[single_stations_gof["station"]].append(single_stations_gof[
+                                                                                        "calculateRMSE"]) # TODO : for the moment, just RMSE
 
                     # Delete everything except .log and .csv files
                     larsimConfigurationSettings.cleanDirecory_completely(curr_directory = curr_working_dir_gradient)
@@ -540,27 +544,32 @@ class LarsimModel(Model):
 
                 # 3. Process gradient_matrix_bulk -> compute the effective gradients by subtracting GoFs =>
                 # gradient_matrix
-                gradient_matrix = []  # matrix containing gradients on vertical and stations horizontal
-                # TODO : Usage of gradient_matrix: the effective gradient_matrix for a station i is obtained by
-                #  np.array(gradient_matrix)[:,:,i].T
+                gradient_matrix = {}  # dictionary having stations as keys and  gradients as values
                 if CD: # Central Difference scheme
-                    gradient_matrix.append((np.array(gradient_matrix_bulk[0::2]) - np.array(gradient_matrix_bulk[1::2])) / np.array(h_vector)[:, None] / 2)
+                    for single_station in gradient_matrix_bulk:
+                        gradient_matrix[single_station] = (np.array(gradient_matrix_bulk[single_station][0::2]) -
+                                                          np.array(gradient_matrix_bulk[single_station][1::2])) \
+                                                        / np.array(h_vector) / 2
                 else: # Forward Difference scheme
-                    # func_gof_RMSE_stations is f(x) -- computed ONLY if calculate_GoF flag is activated
-                    gradient_matrix.append((np.array(gradient_matrix_bulk) - np.array(func_gof_RMSE_stations)) /
-                                           np.array(h_vector)[:, None])
+                    for single_station in gradient_matrix_bulk:
+                        # TODO : just with RMSE
+                        #  func_gof_RMSE_stations is f(x) -- computed ONLY if calculate_GoF flag is  activated
+                        gradient_matrix[single_station] = (np.array(gradient_matrix_bulk[single_station]) -
+                                                          np.array(func_gof_RMSE_stations)) \
+                                                         / np.array(h_vector)
 
                 # 4. Add gradient_matrix to result_dict
                 #      In the testing case: only 1 station => gradient vector
                 if gradient_matrix:
                     result_dict["gradient"] = gradient_matrix
+                    num_gradient_matrices += 1
 
             #TODO-Ivana distinguish between only saving reults and saving and propagating further
             # save the output of each simulation here just in case the purpose of the simulation is to run multiple Larsim runs
             # for different parameters and to save these simulations runs and when no statistics calculations will be performed afterwards,
             # otherwise the simulation results will be saved in LarsimStatistics
             if self.run_and_save_simulations:
-                file_path =  osp.abspath(osp.join(self.working_dir, "parameters_Larsim_run_" + str(i) +  ".pkl"))
+                file_path = osp.abspath(osp.join(self.working_dir, "parameters_Larsim_run_" + str(i) +  ".pkl"))
                 with open(file_path, 'wb') as f:
                     #pickle.dump(parameters_dict, f, protocol=pickle.HIGHEST_PROTOCOL)
                     dill.dump(parameters_dict, f)

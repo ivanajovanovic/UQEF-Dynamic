@@ -20,6 +20,8 @@ import larsimInputOutputUtilities
 
 import saltelliSobolIndicesHelpingFunctions
 
+from collections import defaultdict
+
 class LarsimSamples(object):
     """
      Samples is a collection of the (filtered) sampled results of a whole UQ simulation
@@ -38,7 +40,7 @@ class LarsimSamples(object):
 
         list_of_single_df = []
         list_index_parameters_dict = []
-        self.gradient_matrices = []
+        gradient_vectors = defaultdict(list)
         for index_run, value in enumerate(rawSamples,): #Important that the results inside rawSamples (resulted paths) are in sorted order and correspond to the parameters order
             if isinstance(value, tuple):
                 df_result = value[0]
@@ -52,8 +54,8 @@ class LarsimSamples(object):
                 if strtobool(calculate_GoF):
                     index_parameter_gof_DF=value["gof_df"]
                 if strtobool(compute_gradients):
-                    self.gradient_matrices.append(value["gradient"][0]) # TODO : Maybe I (Teo) changed the meaning
-
+                    for station in value["gradient"]:
+                        gradient_vectors[station].append(value["gradient"][station]) # generate all the gradient vectors for a specific station
             else:
                 df_result = value
 
@@ -70,7 +72,8 @@ class LarsimSamples(object):
 
         # Gradient matrices process - gradient_matrices[station_id] gives the gradient matrix per station
         if strtobool(compute_gradients):
-            self.gradient_matrices = larsimDataPostProcessing.gradient_matrices_process(self.gradient_matrices)
+            # compute the gradient matrix for each station as C=(\sum_{j=1}^N (\nabla f(x_j) \nabla f(x_j)^T)/N
+            self.gradient_matrices = larsimDataPostProcessing.gradient_matrices_process_calibration_mode(gradient_vectors)
 
         self.df_simulation_result = pd.concat(list_of_single_df, ignore_index=True, sort=False, axis=0)
 
@@ -105,22 +108,6 @@ class LarsimSamples(object):
 
     def get_simulation_stations(self):
         return self.df_simulation_result.Stationskennung.unique()
-
-    # TODO : this is just a draft
-    def calculate_active_subspaces(self):
-        C_list = []  # list of C-matrices from Bayesian Calibration paper; one C-matrix per station
-        for gradient_matrix in self.gradient_matrices:
-            C_list.append(np.array(gradient_matrix).dot(np.array(gradient_matrix).transpose()))
-        C_eigen_decomposition = []
-        for C in C_list:
-            EW, EV = np.linalg.eigh(C)
-            idx = EW.argsort()[::-1]
-            EW = EW[idx]
-            EV = EV[:, idx]
-            C_eigen_decomposition.extend([idx, EW, EV])
-
-        print("\n\n ---> Eigen decomposition of C matrix: \n\n", C_eigen_decomposition, "\n\n")
-        return C_eigen_decomposition
 
 class LarsimStatistics(Statistics):
     """
@@ -310,10 +297,6 @@ class LarsimStatistics(Statistics):
             if isinstance(self.Abfluss[key]["P10"], (list)) and len(self.Abfluss[key]["P10"]) == 1:
                 self.Abfluss[key]["P10"]=self.Abfluss[key]["P10"][0]
                 self.Abfluss[key]["P90"]=self.Abfluss[key]["P90"][0]
-
-        # TODO : Move it from here, just testing purposes. Don't know where to put this
-        print("\n\nI am in calcStatisticsForSaltelli!!! Move me from here!!!\n\n\t")
-        C_eigen_decomposition = samples.calculate_active_subspaces()
 
     def  _compute_Sobol_t(self):
         is_Sobol_t_computed = "Sobol_t" in self.Abfluss[self.keyIter[0]] #hasattr(self.Abfluss[self.keyIter[0], "Sobol_t")
