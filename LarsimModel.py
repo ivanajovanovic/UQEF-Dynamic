@@ -304,11 +304,17 @@ class LarsimModel(Model):
                                         if "run_and_save_simulations" in self.configurationObject["Output"] else False
         # self.run_and_save_simulations = self.run_and_save_simulations and self.disable_statistics
 
-
         # if we want to compute the gradient (of some likelihood fun or output itself) w.r.t parameters
         self.compute_gradients = strtobool(self.configurationObject["Output"]["compute_gradients"])\
                        if "compute_gradients" in self.configurationObject["Output"] else False
 
+        self.calibration_mode = strtobool(
+                self.configurationObject["Output"]["calibration_mode"]) if "calibration_mode" in \
+                                                                           self.configurationObject["Output"] else False
+
+        self.non_calibration_mode = strtobool(
+                self.configurationObject["Output"]["non_calibration_mode"]) if "non_calibration_mode" in \
+                                                                           self.configurationObject["Output"] else False
         #####################################
         # getting the time span for running the model from the json configuration file
         #####################################
@@ -437,21 +443,12 @@ class LarsimModel(Model):
                 index_parameter_gof_DF = pd.DataFrame(index_parameter_gof_list_of_dictionaries)
                 result_dict["gof_df"] = index_parameter_gof_DF
 
-                # # 2.6. Extract GoF for each analysed station
-                # stations_gof_id = []
-                # for single_stations_gof in goodnessofFit_list_of_dictionaries:
-                #     stations_gof_id.append(single_stations_gof["calculateRMSE"])  # TODO : for the moment, just RMSE
-                # gradient_matrix_bulk.append(stations_gof_id)  # append stations' values for each sample
-
-
                 # save index_run, parameter values and GoF as pd.DataFrame in a file
                 # optionally glue it to the results and propagate everything further for postprocessing
                 #index_parameter_gof_DF.to_pickle(osp.abspath(osp.join(self.working_dir, "goodness_of_fit_" + str(i) +  ".pkl")), compression="gzip")
 
             # compute gradient of the output, or some likelihood measure w.r.t parameters
             if self.compute_gradients:
-                num_gradient_matrices = 0 # TODO Delete
-
                 if self.configurationObject["Output"]["gradients_method"] == "Central Difference":
                     length_evaluations_gradient = 2 * len(parameter) # central differences
                     CD = 1  # flag for using Central Differences (with 2 * num_evaluations)
@@ -464,7 +461,7 @@ class LarsimModel(Model):
                 eps_val_global = self.configurationObject["Output"]["eps_gradients"] # difference for gradient computation
 
                 h_vector = []
-                gradient_matrix_bulk = defaultdict(list)
+                gradient_matrix_calibration_bulk = defaultdict(list)
                 for id_param in range(0, length_evaluations_gradient):
                     # 2.1. For every uncertain parameter, create a new folder where 1 parameter is changed
                     os.chdir(curr_working_dir)
@@ -537,16 +534,23 @@ class LarsimModel(Model):
                     # Chech weather you want daily or hourly based computation of GoF functions: dailyStatistics=False or dailyStatistics=True
 
                     # TODO: for the moment, station=self.station_of_Interest (-> extend to "all")
-                    goodnessofFit_list_of_dictionaries = larsimDataPostProcessing.calculateGoodnessofFit(
-                        measuredDF = gt_dataFrame, predictedDF = result, station = self.station_of_Interest,
-                        type_of_output_of_Interest_measured = self.type_of_output_of_Interest_measured,
-                        type_of_output_of_Interest = self.type_of_output_of_Interest, dailyStatistics = False,
-                        gof_list = self.objective_function, disregard_initial_timesteps = False)
 
-                    # 2.6. Extract GoF for each analysed station
-                    for single_stations_gof in goodnessofFit_list_of_dictionaries:
-                        gradient_matrix_bulk[single_stations_gof["station"]].append(single_stations_gof[
-                                                                                        "calculateRMSE"]) # TODO : for the moment, just RMSE
+                    # Processing for calibration mode
+                    if self.calibration_mode:
+                        goodnessofFit_list_of_dictionaries = larsimDataPostProcessing.calculateGoodnessofFit(
+                            measuredDF = gt_dataFrame, predictedDF = result, station = self.station_of_Interest,
+                            type_of_output_of_Interest_measured = self.type_of_output_of_Interest_measured,
+                            type_of_output_of_Interest = self.type_of_output_of_Interest, dailyStatistics = False,
+                            gof_list = self.objective_function, disregard_initial_timesteps = False)
+
+                        # 2.6. Extract GoF for each analysed station
+                        for single_stations_gof in goodnessofFit_list_of_dictionaries:
+                            gradient_matrix_calibration_bulk[single_stations_gof["station"]].append(single_stations_gof[
+                                                                                            "calculateRMSE"]) # TODO : for the moment, just RMSE
+
+                    # Processing for non-calibration mode
+                    if self.non_calibration_mode:
+                        pass
 
                     # Delete everything except .log and .csv files
                     larsimConfigurationSettings.cleanDirecory_completely(curr_directory = curr_working_dir_gradient)
@@ -557,27 +561,31 @@ class LarsimModel(Model):
                     # Delete local working folder
                     subprocess.run(["rm", "-r", curr_working_dir_gradient])
 
-                # 3. Process gradient_matrix_bulk -> compute the effective gradients by subtracting GoFs =>
+                # 3. Process gradient_matrix_calibration_bulk -> compute the effective gradients by subtracting GoFs =>
                 # gradient_matrix
-                gradient_matrix = {}  # dictionary having stations as keys and  gradients as values
-                if CD: # Central Difference scheme
-                    for single_station in gradient_matrix_bulk:
-                        gradient_matrix[single_station] = (np.array(gradient_matrix_bulk[single_station][0::2]) -
-                                                          np.array(gradient_matrix_bulk[single_station][1::2])) \
-                                                        / np.array(h_vector) / 2
-                else: # Forward Difference scheme
-                    for single_station in gradient_matrix_bulk:
-                        # TODO : just with RMSE
-                        #  func_gof_RMSE_stations is f(x) -- computed ONLY if calculate_GoF flag is  activated
-                        gradient_matrix[single_station] = (np.array(gradient_matrix_bulk[single_station]) -
-                                                          np.array(func_gof_RMSE_stations)) \
-                                                         / np.array(h_vector)
+                # Processing for calibration mode
+                if self.calibration_mode:
+                    gradient_matrix_calibration = {}  # dictionary having stations as keys and outer product of gradients as values
+                    # compute gradient matrix for each station as C=(\sum_{j=1} ^ N (\nabla f(x_j) \nabla f(x_j) ^ T / N)
+                    if CD: # Central Difference scheme
+                        for single_station in gradient_matrix_calibration_bulk:
+                            gradient_vector = (np.array(gradient_matrix_calibration_bulk[single_station][0::2]) -
+                                              np.array(gradient_matrix_calibration_bulk[single_station][1::2])) \
+                                            / np.array(h_vector) / 2
+                            gradient_matrix_calibration[single_station] = np.outer(gradient_vector, gradient_vector) / len(i_s)
+                    else: # Forward Difference scheme
+                        for single_station in gradient_matrix_calibration_bulk:
+                            # TODO : just with RMSE
+                            #  func_gof_RMSE_stations is f(x) -- computed ONLY if calculate_GoF flag is  activated
+                            gradient_vector = (np.array(gradient_matrix_calibration_bulk[single_station]) -
+                                              np.array(func_gof_RMSE_stations)) \
+                                             / np.array(h_vector)
+                            gradient_matrix_calibration[single_station] = np.outer(gradient_vector, gradient_vector) / len(i_s)
 
-                # 4. Add gradient_matrix to result_dict
-                #      In the testing case: only 1 station => gradient vector
-                if gradient_matrix:
-                    result_dict["gradient"] = gradient_matrix
-                    num_gradient_matrices += 1
+                            # 4. Add gradient_matrix_calibration to result_dict
+                    #      In the testing case: only 1 station => gradient vector
+                    if gradient_matrix_calibration:
+                        result_dict["gradient"] = gradient_matrix_calibration
 
             #TODO-Ivana distinguish between only saving reults and saving and propagating further
             # save the output of each simulation here just in case the purpose of the simulation is to run multiple Larsim runs

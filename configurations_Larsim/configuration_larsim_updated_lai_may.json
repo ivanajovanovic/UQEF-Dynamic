@@ -2,23 +2,82 @@
   "Timeframe":
     {
       "start_day": 20,
-      "start_month": 4,
+      "start_month": 5,
       "start_year": 2013,
       "start_hour": 0,
       "start_minute": 0,
 
 
-      "end_day": 2,
+      "end_day": 10,
       "end_month": 6,
       "end_year": 2013,
       "end_hour": 0,
       "end_minute": 0,
 
-      "timestep": 1,
+      "timestep": 5,
       "cut_runs": "True",
       "warm_up_duration": 53
     },
   "parameters": [
+    {
+      "name": "BSF",
+      "type": "tape35",
+      "distribution": "Uniform",
+      "mu": 0.3,
+      "sigma": 0.1,
+      "lower": 0.01,
+      "upper": 0.5,
+      "lower_limit": 0.01,
+      "upper_limit": 0.5
+    },
+    {
+      "name": "A2",
+      "type": "tape35",
+      "distribution": "Uniform",
+      "mu": 1.5,
+      "sigma": 0.75,
+      "lower": 0.5,
+      "upper": 4.0,
+      "lower_limit": 0.5 ,
+      "upper_limit": 4.0
+    },
+    {
+      "name": "EQI",
+      "type": "tape35",
+      "distribution": "Uniform",
+      "mu": 250,
+      "sigma": 150,
+      "lower": 0,
+      "upper": 1,
+      "lower_limit": 10,
+      "upper_limit": 1000,
+      "depends_on":"EQB",
+      "direction":"decreasing"
+    },
+    {
+      "name": "EQD",
+      "type": "tape35",
+      "distribution": "Uniform",
+      "mu": 450,
+      "sigma": 200,
+      "lower": 0,
+      "upper": 1,
+      "lower_limit": 50,
+      "upper_limit": 5000,
+      "depends_on":"EQI",
+      "direction":"decreasing"
+    },
+    {
+      "name": "Acker:Apr",
+      "type": "lanu",
+      "distribution": "Uniform",
+      "lower": 0,
+      "upper": 1,
+      "lower_limit": 0.3,
+      "upper_limit": 3.0,
+      "depends_on":"Acker:Mar",
+      "direction":"increasing"
+    },
     {
       "name": "Acker:May",
       "type": "lanu",
@@ -31,6 +90,17 @@
       "direction":"increasing"
     },
     {
+      "name": "locker baumbest.:Apr",
+      "type": "lanu",
+      "distribution": "Uniform",
+      "lower": 0,
+      "upper": 1,
+      "lower_limit": 3.0,
+      "upper_limit": 6.5,
+      "depends_on":"locker baumbest.:Mar",
+      "direction":"increasing"
+    },
+    {
       "name": "locker baumbest.:May",
       "type": "lanu",
       "distribution": "Uniform",
@@ -40,53 +110,9 @@
       "upper_limit": 7.5,
       "depends_on":"locker baumbest.:Apr",
       "direction":"increasing"
-    },
-    {
-      "name": "Mischwald:May",
-      "type": "lanu",
-      "distribution": "Uniform",
-      "lower": 0,
-      "upper": 1,
-      "lower_limit": 6.0,
-      "upper_limit": 11.0,
-      "depends_on":"Mischwald:Apr",
-      "direction":"increasing"
     }
   ],
   "unused_parameters": [
-    {
-      "name": "Laubwald:May",
-      "type": "lanu",
-      "distribution": "Uniform",
-      "lower": 0,
-      "upper": 1,
-      "lower_limit": 4.0,
-      "upper_limit": 11.0,
-      "depends_on":"Laubwald:Apr",
-      "direction":"increasing"
-    },
-    {
-      "name": "Laubwald:May",
-      "type": "lanu",
-      "distribution": "Uniform",
-      "lower": 0,
-      "upper": 1,
-      "lower_limit": 4.0,
-      "upper_limit": 11.0,
-      "depends_on":"Laubwald:Apr",
-      "direction":"increasing"
-    },
-    {
-      "name": "Acker:Jun",
-      "type": "lanu",
-      "distribution": "Uniform",
-      "lower": 0,
-      "upper": 1,
-      "lower_limit": 3.0,
-      "upper_limit": 7.0,
-      "depends_on":"Acker:May",
-      "direction":"increasing"
-    },
     {
       "name": "BSF",
       "type": "tape35",
@@ -219,7 +245,11 @@
     "calculate_GoF": "True",
     "objective_function":"all",
     "run_and_save_simulations":"False",
-    "compute_gredients": "False"
+    "compute_gradients": "True",
+    "gradients_method" : "Central Difference",
+    "eps_gradients" : 1e-4,
+    "calibration_mode" : "True",
+    "non_calibration_mode" : "True"
   },
   "parameters_settings":
   {
