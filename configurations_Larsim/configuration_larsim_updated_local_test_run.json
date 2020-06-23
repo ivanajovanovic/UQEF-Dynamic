@@ -40,76 +40,6 @@
       "upper": 4.0,
       "lower_limit": 0.5 ,
       "upper_limit": 4.0
-    },
-    {
-      "name": "EQI",
-      "type": "tape35",
-      "distribution": "Uniform",
-      "mu": 250,
-      "sigma": 150,
-      "lower": 0,
-      "upper": 1,
-      "lower_limit": 10,
-      "upper_limit": 1000,
-      "depends_on":"EQB",
-      "direction":"decreasing"
-    },
-    {
-      "name": "EQD",
-      "type": "tape35",
-      "distribution": "Uniform",
-      "mu": 450,
-      "sigma": 200,
-      "lower": 0,
-      "upper": 1,
-      "lower_limit": 50,
-      "upper_limit": 5000,
-      "depends_on":"EQI",
-      "direction":"decreasing"
-    },
-    {
-      "name": "Acker:Apr",
-      "type": "lanu",
-      "distribution": "Uniform",
-      "lower": 0,
-      "upper": 1,
-      "lower_limit": 0.3,
-      "upper_limit": 3.0,
-      "depends_on":"Acker:Mar",
-      "direction":"increasing"
-    },
-    {
-      "name": "Acker:May",
-      "type": "lanu",
-      "distribution": "Uniform",
-      "lower": 0,
-      "upper": 1,
-      "lower_limit": 0.7,
-      "upper_limit": 5.2,
-      "depends_on":"Acker:Apr",
-      "direction":"increasing"
-    },
-    {
-      "name": "locker baumbest.:Apr",
-      "type": "lanu",
-      "distribution": "Uniform",
-      "lower": 0,
-      "upper": 1,
-      "lower_limit": 3.0,
-      "upper_limit": 6.5,
-      "depends_on":"locker baumbest.:Mar",
-      "direction":"increasing"
-    },
-    {
-      "name": "locker baumbest.:May",
-      "type": "lanu",
-      "distribution": "Uniform",
-      "lower": 0,
-      "upper": 1,
-      "lower_limit": 5.5,
-      "upper_limit": 7.5,
-      "depends_on":"locker baumbest.:Apr",
-      "direction":"increasing"
     }
   ],
   "unused_parameters": [
@@ -247,7 +177,9 @@
     "run_and_save_simulations":"True",
     "compute_gradients": "True",
     "gradients_method" : "Central Difference",
-    "eps_gradients" : 1e-4
+    "eps_gradients" : 1e-4,
+    "calibration_mode" : "True",
+    "non_calibration_mode" : "True"
   },
   "parameters_settings":
   {

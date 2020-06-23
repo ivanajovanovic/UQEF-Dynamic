@@ -32,15 +32,17 @@ class LarsimSamples(object):
     def __init__(self, rawSamples, configurationObject):
 
         station = configurationObject["Output"]["station_calibration_postproc"] if "station_calibration_postproc" in configurationObject["Output"] else "MARI"
-        type_of_output=configurationObject["Output"]["type_of_output"] if "type_of_output" in configurationObject["Output"] else "Abfluss Messung"
-        dailyOutput=configurationObject["Output"]["dailyOutput"] if "dailyOutput" in configurationObject["Output"] else "False"
+        type_of_output = configurationObject["Output"]["type_of_output"] if "type_of_output" in configurationObject["Output"] else "Abfluss Messung"
+        dailyOutput = configurationObject["Output"]["dailyOutput"] if "dailyOutput" in configurationObject["Output"] else "False"
         #
-        calculate_GoF=configurationObject["Output"]["calculate_GoF"]
-        compute_gradients=configurationObject["Output"]["compute_gradients"]
+        calculate_GoF = configurationObject["Output"]["calculate_GoF"]
+        compute_gradients = configurationObject["Output"]["compute_gradients"]
+        calibration_mode = configurationObject["Output"]["calibration_mode"]
+        non_calibration_mode = configurationObject["Output"]["non_calibration_mode"]
 
         list_of_single_df = []
         list_index_parameters_dict = []
-        gradient_vectors = defaultdict(list)
+        gradient_matrix_calibration = defaultdict(list)
         for index_run, value in enumerate(rawSamples,): #Important that the results inside rawSamples (resulted paths) are in sorted order and correspond to the parameters order
             if isinstance(value, tuple):
                 df_result = value[0]
@@ -50,12 +52,22 @@ class LarsimSamples(object):
                 df_result = value["result_time_series"]
                 index_parameters_dict = value["parameters_dict"]
                 list_index_parameters_dict.append(index_parameters_dict)
-                #runtime = value["run_time"]
+                # runtime = value["run_time"]
                 if strtobool(calculate_GoF):
-                    index_parameter_gof_DF=value["gof_df"]
+                    index_parameter_gof_DF = value["gof_df"]
                 if strtobool(compute_gradients):
-                    for station in value["gradient"]:
-                        gradient_vectors[station].append(value["gradient"][station]) # generate all the gradient vectors for a specific station
+                    # Calibration Mode
+                    if strtobool(calibration_mode):
+                        for station_gradient in value["gradient"]:
+                            # compute the sum of the outer product of gradients for a specific station
+                            # TODO : this can be parallelised - is a sum of matrices
+                            if station_gradient in gradient_matrix_calibration:
+                                gradient_matrix_calibration[station_gradient] += value["gradient"][station_gradient]
+                            else:
+                                gradient_matrix_calibration[station_gradient] = value["gradient"][station_gradient]
+                    # Non-calibrration Mode
+                    if strtobool(non_calibration_mode):
+                        pass
             else:
                 df_result = value
 
@@ -70,10 +82,15 @@ class LarsimSamples(object):
 
             list_of_single_df.append(df_single_ergebnis)
 
-        # Gradient matrices process - gradient_matrices[station_id] gives the gradient matrix per station
+        # Gradient matrices process - gradient_matrix_calibration[station_id] gives the gradient matrix per station
         if strtobool(compute_gradients):
-            # compute the gradient matrix for each station as C=(\sum_{j=1}^N (\nabla f(x_j) \nabla f(x_j)^T)/N
-            self.gradient_matrices = larsimDataPostProcessing.gradient_matrices_process_calibration_mode(gradient_vectors)
+            # Calibration Mode
+            if strtobool(calibration_mode):
+                # Compute the eigendecomposition of gradient matrices
+                self.gradient_matrix_calibration = larsimDataPostProcessing.compute_eigendecomposition_gradient_matrices(gradient_matrix_calibration)
+            # Non-calibration Mode
+            if strtobool(non_calibration_mode):
+                pass
 
         self.df_simulation_result = pd.concat(list_of_single_df, ignore_index=True, sort=False, axis=0)
 
