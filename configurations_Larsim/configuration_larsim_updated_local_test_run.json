@@ -29,17 +29,6 @@
       "upper": 0.5,
       "lower_limit": 0.01,
       "upper_limit": 0.5
-    },
-    {
-      "name": "A2",
-      "type": "tape35",
-      "distribution": "Uniform",
-      "mu": 1.5,
-      "sigma": 0.75,
-      "lower": 0.5,
-      "upper": 4.0,
-      "lower_limit": 0.5 ,
-      "upper_limit": 4.0
     }
   ],
   "unused_parameters": [
@@ -176,9 +165,9 @@
     "objective_function":"all",
     "run_and_save_simulations":"True",
     "compute_gradients": "True",
-    "gradients_method" : "Central Difference",
+    "gradients_method" : "Forward Difference",
     "eps_gradients" : 1e-4,
-    "calibration_mode" : "True",
+    "calibration_mode" : "False",
     "non_calibration_mode" : "True"
   },
   "parameters_settings":

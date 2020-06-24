@@ -43,6 +43,7 @@ class LarsimSamples(object):
         list_of_single_df = []
         list_index_parameters_dict = []
         gradient_matrix_calibration = defaultdict(list)
+        gradient_matrix_no_calibration = pd.DataFrame()
         for index_run, value in enumerate(rawSamples,): #Important that the results inside rawSamples (resulted paths) are in sorted order and correspond to the parameters order
             if isinstance(value, tuple):
                 df_result = value[0]
@@ -65,9 +66,13 @@ class LarsimSamples(object):
                                 gradient_matrix_calibration[station_gradient] += value["gradient"][station_gradient]
                             else:
                                 gradient_matrix_calibration[station_gradient] = value["gradient"][station_gradient]
-                    # Non-calibrration Mode
+                    # Non-calibration Mode
                     if strtobool(non_calibration_mode):
-                        pass
+                        if index_run == 0:
+                            gradient_matrix_no_calibration = value["gradient"]
+                        else:
+                            gradient_matrix_no_calibration["Gradient_Matrices"] += \
+                                value["gradient"]["Gradient_Matrices"]
             else:
                 df_result = value
 
@@ -90,6 +95,8 @@ class LarsimSamples(object):
                 self.gradient_matrix_calibration = larsimDataPostProcessing.compute_eigendecomposition_gradient_matrices(gradient_matrix_calibration)
             # Non-calibration Mode
             if strtobool(non_calibration_mode):
+                gradient_matrix_no_calibration.to_csv("/home/teo/Documents/Hiwi/Larsim-UQ/Full.csv")
+                print("Check no calibration:", gradient_matrix_no_calibration)
                 pass
 
         self.df_simulation_result = pd.concat(list_of_single_df, ignore_index=True, sort=False, axis=0)
