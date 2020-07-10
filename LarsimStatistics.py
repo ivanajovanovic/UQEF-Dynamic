@@ -62,20 +62,21 @@ class LarsimSamples(object):
                 if strtobool(compute_gradients):
                     # Calibration Mode
                     if strtobool(calibration_mode):
-                        for station_gradient in value["gradient"]:
+                        for station_gradient in value["gradient_calibration"]:
                             # compute the sum of the outer product of gradients for a specific station
                             # TODO : this can be parallelised - is a sum of matrices
                             if station_gradient in gradient_matrix_calibration:
-                                gradient_matrix_calibration[station_gradient] += value["gradient"][station_gradient]
+                                gradient_matrix_calibration[station_gradient] += value["gradient_calibration"][station_gradient]
                             else:
-                                gradient_matrix_calibration[station_gradient] = value["gradient"][station_gradient]
+                                gradient_matrix_calibration[station_gradient] = value["gradient_calibration"][station_gradient]
                     # Non-calibration Mode
                     if strtobool(non_calibration_mode):
+                        # only one station
                         if index_run == 0:
-                            gradient_matrix_no_calibration = value["gradient"]
+                            gradient_matrix_no_calibration = value["gradient_no_calibration"]
                         else:
                             gradient_matrix_no_calibration["Gradient_Matrices"] += \
-                                value["gradient"]["Gradient_Matrices"]
+                                value["gradient_no_calibration"]["Gradient_Matrices"]
             else:
                 df_result = value
 
@@ -96,11 +97,11 @@ class LarsimSamples(object):
             if strtobool(calibration_mode):
                 # Compute the eigendecomposition of gradient matrices
                 self.gradient_matrix_calibration = larsimDataPostProcessing.compute_eigendecomposition_gradient_matrices(gradient_matrix_calibration)
+                # print("\n\n ---> Eigendecomposition of C matrices: \n\n", self.gradient_matrix_calibration, "\n\n")
             # Non-calibration Mode
             if strtobool(non_calibration_mode):
-                gradient_matrix_no_calibration.to_csv("/home/teo/Documents/Hiwi/Larsim-UQ/Full.csv")
-                print("Check no calibration:", gradient_matrix_no_calibration)
-                pass
+                self.gradient_matrix_no_calibration = larsimDataPostProcessing.compute_eigendecomposition_gradient_matrices_no_calibration(gradient_matrix_no_calibration)
+                # gradient_matrix_no_calibration.to_csv("/home/teo/Documents/Hiwi/Larsim-UQ/Gradient_Matrices_No_Calibration_EVW.csv")
 
         self.df_simulation_result = pd.concat(list_of_single_df, ignore_index=True, sort=False, axis=0)
 

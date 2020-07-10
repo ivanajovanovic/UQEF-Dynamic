@@ -42,7 +42,8 @@ import larsimPaths as paths
 uqsim = uqef.UQsim()
 
 #####################################
-#####################################
+#####################################top
+
 # change args locally for testing and debugging
 local_debugging = False
 if local_debugging:
@@ -56,11 +57,12 @@ if local_debugging:
     # uqsim.args.outputResultDir = os.path.abspath(os.path.join(paths.scratch_dir, 'trial_run_lai_updated'))
     uqsim.args.outputResultDir = "/home/teo/Documents/Hiwi/Larsim-UQ/Larsim_runs"
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
-    uqsim.args.inputModelDir = paths.larsim_data_path
+    # uqsim.args.inputModelDir = paths.larsim_data_path
+    uqsim.args.inputModelDir = "/home/teo/Documents/Hiwi/Larsim-data/"    
     uqsim.args.sourceDir = paths.sourceDir
     # uqsim.args.config_file = "/dss/dsshome1/lxc0C/ga45met2/Repositories/Larsim-UQ/configurations_Larsim/configuration_larsim_uqsim_cm2_v4.json" #"configuration_larsim_uqsim.json"
-    # uqsim.args.config_file = "/home/ga45met/Repositories/Larsim/Larsim-UQ/configurations_Larsim/configuration_larsim_updated_local_test_run.json"
-    uqsim.args.config_file = "/home/teo/Documents/Hiwi/Larsim-UQ/configurations_Larsim/configuration_larsim_updated_local_test_run.json"
+    uqsim.args.config_file = "/home/ga45met/Repositories/Larsim/Larsim-UQ/configurations_Larsim/configuration_larsim_updated_local_test_run.json"
+    # uqsim.args.config_file = "/home/teo/Documents/Hiwi/Larsim-UQ/configurations_Larsim/configuration_larsim_updated_local_test_run.json"
     uqsim.args.disable_statistics = False
     uqsim.args.transformToStandardDist = True
     uqsim.args.mpi = True
