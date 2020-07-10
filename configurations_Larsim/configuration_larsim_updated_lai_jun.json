@@ -198,9 +198,9 @@
     "objective_function":"all",
     "run_and_save_simulations":"True",
     "compute_gradients": "True",
-    "gradients_method" : "Forward Difference",
+    "gradients_method" : "Central Difference",
     "eps_gradients" : 1e-4,
-    "calibration_mode" : "False",
+    "calibration_mode" : "True",
     "non_calibration_mode" : "True"
   },
   "parameters_settings":
