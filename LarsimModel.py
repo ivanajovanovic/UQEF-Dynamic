@@ -434,16 +434,18 @@ class LarsimModel(Model):
                 # Make sure that burn-in time is disregard in result or will be disregard while computing GoF: disregard_initial_timesteps=False or disregard_initial_timesteps=True
                 # Check for which stations GoF should be calculated: station=self.station_of_Interest or station=self.station_for_model_runs
                 # Chech weather you want daily or hourly based computation of GoF functions: dailyStatistics=False or dailyStatistics=True
-                goodnessofFit_list_of_dictionaries, gt_dataFrame_func = larsimDataPostProcessing.calculateGoodnessofFit(
+                goodnessofFit_list_of_dictionaries, predicted_dataFrame_func = larsimDataPostProcessing.calculateGoodnessofFit(
                     measuredDF = gt_dataFrame, predictedDF = result, station = self.station_of_Interest, \
                     type_of_output_of_Interest_measured = self.type_of_output_of_Interest_measured, \
                     type_of_output_of_Interest = self.type_of_output_of_Interest, dailyStatistics = False,
                     gof_list = self.objective_function, disregard_initial_timesteps = False)
+
                 index_parameter_gof_list_of_dictionaries = []
                 for single_stations_gof in goodnessofFit_list_of_dictionaries:
                     index_parameter_gof_dict = {**parameters_dict, **single_stations_gof}
                     index_parameter_gof_list_of_dictionaries.append(index_parameter_gof_dict)
-                    func_gof_RMSE_stations.append(single_stations_gof["calculateRMSE"])
+                    if self.calibration_mode:
+                        func_gof_RMSE_stations.append(single_stations_gof["calculateRMSE"])
 
                 # index_parameter_gof_DF = pd.DataFrame(goodnessofFit_list_of_dictionaries)
                 index_parameter_gof_DF = pd.DataFrame(index_parameter_gof_list_of_dictionaries)
@@ -538,7 +540,7 @@ class LarsimModel(Model):
                     # Check for which stations GoF should be calculated: station=self.station_of_Interest or station=self.station_for_model_runs
                     # Check wether you want daily or hourly based computation of GoF functions: dailyStatistics=False or dailyStatistics=True
                     # TODO: for the moment, station=self.station_of_Interest (-> extend to "all")
-                    goodnessofFit_list_of_dictionaries, gt_dataFrame = larsimDataPostProcessing.calculateGoodnessofFit(
+                    goodnessofFit_list_of_dictionaries, predicted_dataFrame = larsimDataPostProcessing.calculateGoodnessofFit(
                         measuredDF=gt_dataFrame, predictedDF=result, station=self.station_of_Interest,
                         type_of_output_of_Interest_measured=self.type_of_output_of_Interest_measured,
                         type_of_output_of_Interest=self.type_of_output_of_Interest, dailyStatistics=False,
@@ -550,31 +552,27 @@ class LarsimModel(Model):
                             gradient_matrix_calibration_bulk[single_stations_gof["station"]].append(
                                     single_stations_gof["calculateRMSE"])  # TODO : for the moment, just RMSE
 
-                    # Processing for non-calibration mode
-                    # TODO : not the proper way to do this (?!)
-                    # gt_dataFrame = larsimDataPostProcessing.align_dataFrames_timewise(gt_dataFrame, gt_dataFrame_func)
-                    gt_dataFrame, _ = larsimDataPostProcessing.filter_two_DF_on_common_timesteps(gt_dataFrame,
-                                                                                                 gt_dataFrame_func)
+                    # Processing for non-calibration mode                                                                      predicted_dataFrame_func)
                     if self.non_calibration_mode:
-                        # gt_dataFrame contains filtered results for a particular station, implicit 'MARI'
+                        # predicted_dataFrame contains filtered results for a particular station, implicit 'MARI'
                         if CD:
                             if id_param == 0:
-                                gradient_matrix_no_calibration = gt_dataFrame
+                                gradient_matrix_no_calibration = predicted_dataFrame
                                 gradient_matrix_no_calibration.rename(columns={'Value': '0'}, inplace=True)
                             elif id_param % 2 == 1:
-                                gradient_matrix_no_calibration[f"{int(id_param / 2)}"] -= gt_dataFrame["Value"]
+                                gradient_matrix_no_calibration[f"{int(id_param / 2)}"] -= predicted_dataFrame["Value"]
                                 gradient_matrix_no_calibration[f"{int(id_param / 2)}"] /= 2 * h
                             else:
-                                gradient_matrix_no_calibration[f"{int(id_param / 2)}"] = gt_dataFrame["Value"]
+                                gradient_matrix_no_calibration[f"{int(id_param / 2)}"] = predicted_dataFrame["Value"]
                         else:  # FD
                             if id_param == 0:
-                                gradient_matrix_no_calibration = gt_dataFrame
+                                gradient_matrix_no_calibration = predicted_dataFrame
                                 gradient_matrix_no_calibration.rename(columns={"Value": '0'}, inplace=True, errors="raise")
                                 gradient_matrix_no_calibration["0"] = (gradient_matrix_no_calibration["0"] -
-                                                                       gt_dataFrame_func["Value"]) / h
+                                                                       predicted_dataFrame_func["Value"]) / h
                             else:
-                                gradient_matrix_no_calibration[f"{int(id_param)}"] = (gt_dataFrame["Value"] -
-                                                                                      gt_dataFrame_func["Value"]) / h
+                                gradient_matrix_no_calibration[f"{int(id_param)}"] = (predicted_dataFrame["Value"] -
+                                                                                      predicted_dataFrame_func["Value"]) / h
 
                     # Delete everything except .log and .csv files
                     larsimConfigurationSettings.cleanDirecory_completely(curr_directory = curr_working_dir_gradient)

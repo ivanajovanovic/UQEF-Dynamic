@@ -94,11 +94,12 @@ class LarsimSamples(object):
             if strtobool(calibration_mode):
                 # Compute the eigendecomposition of gradient matrices
                 self.gradient_matrix_calibration = larsimDataPostProcessing.compute_eigendecomposition_gradient_matrices(gradient_matrix_calibration)
-                # print("\n\n ---> Eigendecomposition of C matrices: \n\n", self.gradient_matrix_calibration, "\n\n")
+                print("\n\n ---> Eigendecomposition of C matrices: \n\n", self.gradient_matrix_calibration, "\n\n")
             # Non-calibration Mode
             if strtobool(non_calibration_mode):
                 self.gradient_matrix_no_calibration = larsimDataPostProcessing.compute_eigendecomposition_gradient_matrices_no_calibration(gradient_matrix_no_calibration)
-                # gradient_matrix_no_calibration.to_csv("/home/teo/Documents/Hiwi/Larsim-UQ/Gradient_Matrices_No_Calibration_EVW.csv")
+                self.gradient_matrix_no_calibration.to_csv("/home/teo/Documents/Hiwi/Larsim-UQ/Gradient_Matrices_No_Calibration_EVW.csv")
+
 
         self.df_simulation_result = pd.concat(list_of_single_df, ignore_index=True, sort=False, axis=0)
 
