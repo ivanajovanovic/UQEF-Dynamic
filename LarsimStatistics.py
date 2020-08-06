@@ -1,5 +1,4 @@
 import chaospy as cp
-import dill
 import numpy as np
 import pickle
 import pandas as pd
@@ -37,7 +36,6 @@ class LarsimSamples(object):
         dailyOutput = configurationObject["Output"]["dailyOutput"] if "dailyOutput" in configurationObject["Output"] else "False"
         #
         calculate_GoF = configurationObject["Output"]["calculate_GoF"]
-        compute_gradients = configurationObject["Output"]["compute_gradients"]
         calibration_mode = configurationObject["Output"]["calibration_mode"]
         non_calibration_mode = configurationObject["Output"]["non_calibration_mode"]
 
@@ -59,24 +57,24 @@ class LarsimSamples(object):
                 if strtobool(calculate_GoF):
                     index_parameter_gof_DF = value["gof_df"]
                     list_of_single_index_parameter_gof_df.append(index_parameter_gof_DF)
-                if strtobool(compute_gradients):
-                    # Calibration Mode
-                    if strtobool(calibration_mode):
-                        for station_gradient in value["gradient_calibration"]:
-                            # compute the sum of the outer product of gradients for a specific station
-                            # TODO : this can be parallelised - is a sum of matrices
-                            if station_gradient in gradient_matrix_calibration:
-                                gradient_matrix_calibration[station_gradient] += value["gradient_calibration"][station_gradient]
-                            else:
-                                gradient_matrix_calibration[station_gradient] = value["gradient_calibration"][station_gradient]
-                    # Non-calibration Mode
-                    if strtobool(non_calibration_mode):
-                        # only one station
-                        if index_run == 0:
-                            gradient_matrix_no_calibration = value["gradient_no_calibration"]
+                # Gradients Computation
+                # Calibration Mode
+                if strtobool(calibration_mode):
+                    for station_gradient in value["gradient_calibration"]:
+                        # compute the sum of the outer product of gradients for a specific station
+                        # TODO : this can be parallelised - is a sum of matrices
+                        if station_gradient in gradient_matrix_calibration:
+                            gradient_matrix_calibration[station_gradient] += value["gradient_calibration"][station_gradient]
                         else:
-                            gradient_matrix_no_calibration["Gradient_Matrices"] += \
-                                value["gradient_no_calibration"]["Gradient_Matrices"]
+                            gradient_matrix_calibration[station_gradient] = value["gradient_calibration"][station_gradient]
+                # Non-calibration Mode
+                if strtobool(non_calibration_mode):
+                    # only one station
+                    if index_run == 0:
+                        gradient_matrix_no_calibration = value["gradient_no_calibration"]
+                    else:
+                        gradient_matrix_no_calibration["Gradient_Matrices"] += \
+                            value["gradient_no_calibration"]["Gradient_Matrices"]
             else:
                 df_result = value
 
@@ -92,17 +90,15 @@ class LarsimSamples(object):
             list_of_single_df.append(df_single_ergebnis)
 
         # Gradient matrices process - gradient_matrix_calibration[station_id] gives the gradient matrix per station
-        if strtobool(compute_gradients):
-            # Calibration Mode
-            if strtobool(calibration_mode):
-                # Compute the eigendecomposition of gradient matrices
-                self.gradient_matrix_calibration = larsimDataPostProcessing.compute_eigendecomposition_gradient_matrices(gradient_matrix_calibration)
-                print("\n\n ---> Eigendecomposition of C matrices: \n\n", self.gradient_matrix_calibration, "\n\n")
-            # Non-calibration Mode
-            if strtobool(non_calibration_mode):
-                self.gradient_matrix_no_calibration = larsimDataPostProcessing.compute_eigendecomposition_gradient_matrices_no_calibration(gradient_matrix_no_calibration)
-                self.gradient_matrix_no_calibration.to_csv("/home/teo/Documents/Hiwi/Larsim-UQ/Gradient_Matrices_No_Calibration_EVW.csv")
-
+        # Calibration Mode
+        if strtobool(calibration_mode):
+            # Compute the eigendecomposition of gradient matrices
+            self.gradient_matrix_calibration = larsimDataPostProcessing.compute_eigendecomposition_gradient_matrices(gradient_matrix_calibration)
+            print("\n\n ---> Eigendecomposition of C matrices: \n\n", self.gradient_matrix_calibration, "\n\n")
+        # Non-calibration Mode
+        if strtobool(non_calibration_mode):
+            self.gradient_matrix_no_calibration = larsimDataPostProcessing.compute_eigendecomposition_gradient_matrices_no_calibration(gradient_matrix_no_calibration)
+            self.gradient_matrix_no_calibration.to_csv("/home/teo/Documents/Hiwi/Larsim-UQ/Gradient_Matrices_No_Calibration_EVW.csv")
 
         self.df_simulation_result = pd.concat(list_of_single_df, ignore_index=True, sort=False, axis=0)
 
@@ -189,23 +185,8 @@ class LarsimStatistics(Statistics):
                             simulationNodes, numEvaluations, order, regression, solverTimes,
                             work_package_indexes, original_runtime_estimator):
 
-        samples = LarsimSamples(rawSamples, configurationObject=self.configurationObject)
-
         # Save the DataFrame containing all the simulation results - This is really important
-        if not self.run_and_save_simulations:
-            samples.save_samples_to_file(self.working_dir)
-            samples.save_index_parameter_values(self.working_dir)
-            samples.save_index_parameter_gof_values(self.working_dir)
-
-        self.timesteps = samples.get_simulation_timesteps()
-        self.numbTimesteps = len(self.timesteps)
-        print("LARSIM STAT INFO: numbTimesteps is: {}".format(self.numbTimesteps))
-
-        self.station_names = samples.get_simulation_stations()
-        #self.nodeNames = simulationNodes.nodeNames
-
-        grouped = samples.df_simulation_result.groupby(['Stationskennung','TimeStamp'])
-        groups = grouped.groups
+        samples, groups = self.save_prepare_samples(rawSamples, configurationObject = self.configurationObject)
 
         if regression:
             nodes = simulationNodes.distNodes
@@ -238,27 +219,14 @@ class LarsimStatistics(Statistics):
                            simulationNodes, order, regression, solverTimes,
                            work_package_indexes, original_runtime_estimator):
 
-        samples = LarsimSamples(rawSamples, configurationObject=self.configurationObject)
-
-        if not self.run_and_save_simulations:
-            samples.save_samples_to_file(self.working_dir)
-            samples.save_index_parameter_values(self.working_dir)
-            samples.save_index_parameter_gof_values(self.working_dir)
-
-        self.timesteps = samples.get_simulation_timesteps()
-        self.numbTimesteps = len(self.timesteps)
-        print("LARSIM STAT INFO: numbTimesteps is: {}".format(self.numbTimesteps))
-
-        self.station_names = samples.get_simulation_stations()
-        #self.nodeNames = simulationNodes.nodeNames
+        # Save the DataFrame containing all the simulation results - This is really important
+        samples, groups = self.save_prepare_samples(rawSamples, configurationObject = self.configurationObject)
 
         nodes = simulationNodes.distNodes
         dist = simulationNodes.joinedDists
         weights = simulationNodes.weights
         polynomial_expansion = cp.orth_ttr(order, dist)
 
-        grouped = samples.df_simulation_result.groupby(['Stationskennung','TimeStamp'])
-        groups = grouped.groups
         for key,val_indices in groups.items():
             discharge_values = samples.df_simulation_result.loc[val_indices.values].Value.values
             self.Abfluss[key] = {}
@@ -290,23 +258,8 @@ class LarsimStatistics(Statistics):
                             simulationNodes, numEvaluations, order, regression, solverTimes,
                             work_package_indexes, original_runtime_estimator=None):
 
-        samples = LarsimSamples(rawSamples, configurationObject=self.configurationObject)
-
         # Save the DataFrame containing all the simulation results - This is really important
-        if not self.run_and_save_simulations:
-            samples.save_samples_to_file(self.working_dir)
-            samples.save_index_parameter_values(self.working_dir)
-            samples.save_index_parameter_gof_values(self.working_dir)
-
-        self.timesteps = samples.get_simulation_timesteps()
-        self.numbTimesteps = len(self.timesteps)
-        print("LARSIM STAT INFO: numbTimesteps is: {}".format(self.numbTimesteps))
-
-        self.station_names = samples.get_simulation_stations()
-        #self.nodeNames = simulationNodes.nodeNames
-
-        grouped = samples.df_simulation_result.groupby(['Stationskennung','TimeStamp'])
-        groups = grouped.groups
+        samples, groups = self.save_prepare_samples(rawSamples, configurationObject = self.configurationObject)
 
         self.dim = len(simulationNodes.nodeNames)
 
@@ -585,3 +538,24 @@ class LarsimStatistics(Statistics):
         #pickle_out = open(statFileName,"wb")
         #pickle.dump(self.Abfluss, pickle_out)
         #pickle_out.close()
+
+    def save_prepare_samples(self, rawSamples, configurationObject):
+        samples = LarsimSamples(rawSamples, configurationObject = self.configurationObject)
+
+        # Save the DataFrame containing all the simulation results - This is really important
+        if not self.run_and_save_simulations:
+            samples.save_samples_to_file(self.working_dir)
+            samples.save_index_parameter_values(self.working_dir)
+            samples.save_index_parameter_gof_values(self.working_dir)
+
+        self.timesteps = samples.get_simulation_timesteps()
+        self.numbTimesteps = len(self.timesteps)
+        print("LARSIM STAT INFO: numbTimesteps is: {}".format(self.numbTimesteps))
+
+        self.station_names = samples.get_simulation_stations()
+        # self.nodeNames = simulationNodes.nodeNames
+
+        grouped = samples.df_simulation_result.groupby(['Stationskennung', 'TimeStamp'])
+        groups = grouped.groups
+
+        return samples, groups

@@ -204,9 +204,9 @@ class LarsimModelSetUp():
 
         # print("Data Frame with Unaltered Simulation Discharges dtypes : {}".format(self.df_unaltered_ergebnis.dtypes))
 
-        # delte ergebnis.lila and all other not necessary files
+        # delete ergebnis.lila and all other not necessary files
         if createNewFolder:
-            larsimConfigurationSettings.cleanDirecory_completely(curr_directory = dir_unaltered_run)
+            larsimConfigurationSettings.cleanDirectory_completely(curr_directory = dir_unaltered_run)
         else:
             larsimConfigurationSettings._delete_larsim_output_files(curr_directory = dir_unaltered_run)
 
@@ -320,11 +320,6 @@ class LarsimModel(Model):
         # self.run_and_save_simulations = self.run_and_save_simulations and self.disable_statistics
 
         # if we want to compute the gradient (of some likelihood fun or output itself) w.r.t parameters
-        self.compute_gradients = strtobool(
-                self.configurationObject["Output"]["compute_gradients"]) if "compute_gradients" in \
-                                                                            self.configurationObject[
-                                                                                "Output"] else False
-
         self.calibration_mode = strtobool(
                 self.configurationObject["Output"]["calibration_mode"]) if "calibration_mode" in \
                                                                            self.configurationObject["Output"] else False
@@ -333,6 +328,9 @@ class LarsimModel(Model):
                 self.configurationObject["Output"]["non_calibration_mode"]) if "non_calibration_mode" in \
                                                                                self.configurationObject[
                                                                                    "Output"] else False
+
+        self.compute_gradients = self.calibration_mode or self.non_calibration_mode
+
         #####################################
         # getting the time span for running the model from the json configuration file
         #####################################
@@ -374,7 +372,7 @@ class LarsimModel(Model):
             if not osp.isdir(curr_working_dir):
                 subprocess.run(["mkdir", curr_working_dir])
 
-            # copy all the necessary files to the newly created directoy
+            # copy all the necessary files to the newly created directory
             master_dir_for_copying = self.master_dir + "/."
             subprocess.run(['cp', '-a', master_dir_for_copying, curr_working_dir])  # TODO IVANA Check if copy succeed
             print("LarsimModel INFO: Successfully copied all the files")
@@ -395,7 +393,8 @@ class LarsimModel(Model):
 
             # change working directory
             os.chdir(curr_working_dir)
-
+            print(f"\n\n \t {i}. timeframe: {self.timeframe} \n")
+                
             # Run Larsim
             if self.cut_runs:
                 result = self._multiple_short_larsim_runs(timeframe = self.timeframe, timestep = self.timestep,
@@ -437,25 +436,7 @@ class LarsimModel(Model):
             func_gof_RMSE_stations = []  # stores RMSE for each station
             if self.calculate_GoF or self.compute_gradients:
                 # get the DataFrame storing measurements / ground truth discharge
-                local_measurement_file = osp.abspath(osp.join(self.working_dir, "df_measured.pkl"))
-                if os.path.exists(local_measurement_file):
-                    gt_dataFrame = larsimInputOutputUtilities.read_dataFrame_from_file(local_measurement_file,
-                                                                                       compression = "gzip")
-                else:
-                    # gt_dataFrame=None # this will work as well because when calculationg GoF groundTruth DF will be read anyway
-                    gt_dataFrame = larsimConfigurationSettings.extract_measured_discharge(self.timeframe[0],
-                                                                                          self.timeframe[1],
-                                                                                          index_run = 0)  # gt_dataFrame = larsimConfigurationSettings.extract_measured_discharge(simulation_start_timestamp, self.timeframe[1], index_run=0)
-
-                # Make sure that burn-in time is disregard in result or will be disregard while computing GoF: disregard_initial_timesteps=False or disregard_initial_timesteps=True
-                # Check for which stations GoF should be calculated: station=self.station_of_Interest or station=self.station_for_model_runs
-                # Chech weather you want daily or hourly based computation of GoF functions: dailyStatistics=False or dailyStatistics=True
-                goodnessofFit_list_of_dictionaries, predicted_dataFrame_func = larsimDataPostProcessing.calculateGoodnessofFit(
-                    measuredDF = gt_dataFrame, predictedDF = result, station = self.station_of_Interest, \
-                    type_of_output_of_Interest_measured = self.type_of_output_of_Interest_measured, \
-                    type_of_output_of_Interest = self.type_of_output_of_Interest, dailyStatistics = False,
-                    gof_list = self.objective_function, disregard_initial_timesteps = False)
-
+                goodnessofFit_list_of_dictionaries, predicted_dataFrame_func = self.compute_GoF(result)
                 index_parameter_gof_list_of_dictionaries = []
                 for single_stations_gof in goodnessofFit_list_of_dictionaries:
                     index_parameter_gof_dict = {**parameters_dict, **single_stations_gof}
@@ -485,39 +466,22 @@ class LarsimModel(Model):
 
                 h_vector = []
                 gradient_matrix_calibration_bulk = defaultdict(list)
-                gradient_matrix_no_calibration = pd.DataFrame()
+                grd_no_calib_dataFrame = pd.DataFrame()
                 for id_param in range(length_evaluations_gradient):
                     # 2.1. For every uncertain parameter, create a new folder where 1 parameter is changed
-                    os.chdir(curr_working_dir)
-                    working_folder_name = "Compute_gradient_" + str(i) + "_" + str(id_param)
-                    curr_working_dir_gradient = osp.abspath(osp.join(self.working_dir, working_folder_name))
+                    curr_working_dir_gradient = self.copy_files_for_gradient_computation(curr_working_dir, i, id_param)
 
-                    if not osp.isdir(curr_working_dir_gradient):
-                        subprocess.run(["mkdir", curr_working_dir_gradient])
-
-                    # copy all the necessary files to the newly created directoy
-                    master_dir_for_copying = self.master_dir + "/."
-                    subprocess.run(['cp', '-a', master_dir_for_copying,
-                                    curr_working_dir_gradient])  # TODO IVANA Check if copy succeed
-                    subprocess.run(["cp", "lanu.par", curr_working_dir_gradient])
-                    subprocess.run(["cp", "tape35", curr_working_dir_gradient])
-                    print("LarsimModel INFO: Successfully copied all the files")
-                    # change working directory
-                    os.chdir(curr_working_dir_gradient)
-
-                    # 2.2. Adjust files
-                    if CD and (id_param % 2 == 1):  # id_param = {1, 3, 5, 7, ...}
-                        eps_val = -eps_val_global  # used for computing f(x-h)
-                    else:  # id_param = {0, 2, 4, 6 ...}
-                        eps_val = eps_val_global  # used for computing f(x+h)
+                    # 2.2. Adjust configuration files (tape35 and lanu.par)
                     if CD:
+                        eps_val = eps_val_global if id_param % 2 == 0 else -eps_val_global # used for computing f(x+-h)
                         param_index = int(id_param / 2)
-                    else:
+                    else: # FD
+                        eps_val = eps_val_global  # used for computing f(x+h)
                         param_index = id_param
 
                     tape35_path = curr_working_dir_gradient + "/tape35"
                     lanu_path = curr_working_dir_gradient + "/lanu.par"
-                    # TODO (?) : Create function to generate a GoF for one modified parameter
+                    # TODO (?) : Create function to generate a GoF for only one modified parameter
                     h = larsimConfigurationSettings.params_configurations_gradient(parameter_index = param_index,
                                                                                    tape35_path = tape35_path,
                                                                                    lanu_path = lanu_path,
@@ -527,40 +491,33 @@ class LarsimModel(Model):
                         h_vector.append(h)  # update vector of h's
 
                     # 2.3. Run the simulation
-                    result = self._single_larsim_run(timeframe = self.timeframe,
-                                                     curr_working_dir = curr_working_dir_gradient, index_run = i,
-                                                     sub_index_run = id_param)
+                    # Run Larsim
+                    if self.cut_runs:
+                        result_grd = self._multiple_short_larsim_runs(timeframe = self.timeframe,
+                                                                  timestep = self.timestep,
+                                                                  curr_working_dir = curr_working_dir_gradient,
+                                                                  index_run = i,
+                                                                  warm_up_duration = self.warm_up_duration)
+                    else:
+                        result_grd = self._single_larsim_run(timeframe = self.timeframe,
+                                                             curr_working_dir = curr_working_dir_gradient,
+                                                             index_run = i,
+                                                             sub_index_run = id_param)
 
                     # 2.4. Preparations before computing GoF
-                    result = larsimDataPostProcessing.parse_df_based_on_time(result, (simulation_start_timestamp, None))
+                    result_grd = larsimDataPostProcessing.parse_df_based_on_time(result_grd,
+                                                                                 (simulation_start_timestamp, None))
 
                     # filter out results for a concrete station if specified in configuration json file
                     # TODO-Ivana : deal with situation when self.station_for_model_runs is a list
                     if self.station_for_model_runs != "all":
-                        result = larsimDataPostProcessing.filterResultForStation(result,
-                                                                                 station = self.station_for_model_runs)
+                        result_grd = larsimDataPostProcessing.filterResultForStation(result_grd,
+                                                                                     station = self.station_for_model_runs)
 
-                    # 2.5. Compute goodness of fit (GoF)
-                    # get the DataFrame storing measurements / ground truth discharge
-                    local_measurement_file = osp.abspath(osp.join(self.working_dir, "df_measured.pkl"))
-                    if os.path.exists(local_measurement_file):
-                        gt_dataFrame = larsimInputOutputUtilities.read_dataFrame_from_file(local_measurement_file,
-                                                                                           compression = "gzip")
-                    else:
-                        # gt_dataFrame=None # this will work as well because when calculationg GoF groundTruth DF will be read anyway
-                        gt_dataFrame = larsimConfigurationSettings.extract_measured_discharge(self.timeframe[0],
-                                                                                              self.timeframe[1],
-                                                                                              index_run=0)  # gt_dataFrame = larsimConfigurationSettings.extract_measured_discharge(simulation_start_timestamp, self.timeframe[1], index_run=0)
+                    # 2.5. Compute goodness of fit (GoF) &
+                    #       get the DataFrame storing measurements / ground truth discharge
+                    goodnessofFit_list_of_dictionaries, result_grd = self.compute_GoF(result_grd)
 
-                    # Make sure that burn-in time is disregard in result or will be disregard while computing GoF: disregard_initial_timesteps=False or disregard_initial_timesteps=True
-                    # Check for which stations GoF should be calculated: station=self.station_of_Interest or station=self.station_for_model_runs
-                    # Check wether you want daily or hourly based computation of GoF functions: dailyStatistics=False or dailyStatistics=True
-                    # TODO: for the moment, station=self.station_of_Interest (-> extend to "all")
-                    goodnessofFit_list_of_dictionaries, predicted_dataFrame = larsimDataPostProcessing.calculateGoodnessofFit(
-                        measuredDF=gt_dataFrame, predictedDF=result, station=self.station_of_Interest,
-                        type_of_output_of_Interest_measured=self.type_of_output_of_Interest_measured,
-                        type_of_output_of_Interest=self.type_of_output_of_Interest, dailyStatistics=False,
-                        gof_list=self.objective_function, disregard_initial_timesteps=False)
                     # Processing for calibration mode
                     if self.calibration_mode:
                         # 2.6. Extract GoF for each analysed station
@@ -568,30 +525,30 @@ class LarsimModel(Model):
                             gradient_matrix_calibration_bulk[single_stations_gof["station"]].append(
                                     single_stations_gof["calculateRMSE"])  # TODO : for the moment, just RMSE
 
-                    # Processing for non-calibration mode                                                                      predicted_dataFrame_func)
+                    # Processing for non-calibration mode
                     if self.non_calibration_mode:
-                        # predicted_dataFrame contains filtered results for a particular station, implicit 'MARI'
-                        if CD:
+                        # result_grd contains filtered results for a particular station, implicit 'MARI'
+                        if CD: # Central Difference (CD) computation
                             if id_param == 0:
-                                gradient_matrix_no_calibration = predicted_dataFrame
-                                gradient_matrix_no_calibration.rename(columns={'Value': '0'}, inplace=True)
+                                grd_no_calib_dataFrame = result_grd
+                                grd_no_calib_dataFrame.rename(columns={'Value': '0'}, inplace=True)
                             elif id_param % 2 == 1:
-                                gradient_matrix_no_calibration[f"{int(id_param / 2)}"] -= predicted_dataFrame["Value"]
-                                gradient_matrix_no_calibration[f"{int(id_param / 2)}"] /= 2 * h
+                                grd_no_calib_dataFrame[f"{int(id_param / 2)}"] = \
+                                    (grd_no_calib_dataFrame[f"{int(id_param / 2)}"] - result_grd["Value"]) / 2 * h
                             else:
-                                gradient_matrix_no_calibration[f"{int(id_param / 2)}"] = predicted_dataFrame["Value"]
-                        else:  # FD
+                                grd_no_calib_dataFrame[f"{int(id_param / 2)}"] = result_grd["Value"]
+                        else:  # Forward Difference (FD) computation
                             if id_param == 0:
-                                gradient_matrix_no_calibration = predicted_dataFrame
-                                gradient_matrix_no_calibration.rename(columns={"Value": '0'}, inplace=True, errors="raise")
-                                gradient_matrix_no_calibration["0"] = (gradient_matrix_no_calibration["0"] -
-                                                                       predicted_dataFrame_func["Value"]) / h
+                                grd_no_calib_dataFrame = result_grd
+                                grd_no_calib_dataFrame.rename(columns={'Value': '0'}, inplace=True)
+                                grd_no_calib_dataFrame["0"] = (grd_no_calib_dataFrame["0"] -
+                                                               predicted_dataFrame_func["Value"]) / h
                             else:
-                                gradient_matrix_no_calibration[f"{int(id_param)}"] = (predicted_dataFrame["Value"] -
-                                                                                      predicted_dataFrame_func["Value"]) / h
+                                grd_no_calib_dataFrame[f"{int(id_param)}"] = (result_grd["Value"] -
+                                                                              predicted_dataFrame_func["Value"]) / h
 
                     # Delete everything except .log and .csv files
-                    larsimConfigurationSettings.cleanDirecory_completely(curr_directory = curr_working_dir_gradient)
+                    larsimConfigurationSettings.cleanDirectory_completely(curr_directory = curr_working_dir_gradient)
 
                     # change back to starting directory of all the processes
                     os.chdir(self.current_dir)
@@ -599,40 +556,21 @@ class LarsimModel(Model):
                     # Delete local working folder
                     subprocess.run(["rm", "-r", curr_working_dir_gradient])
 
-                # 3. Process gradient_matrix_calibration_bulk -> compute the effective gradients by subtracting GoFs =>
-                # gradient_matrix
+                # 3. Process data for generating gradient matrices
                 # Processing for calibration mode
                 if self.calibration_mode:
-                    gradient_matrix_calibration = {}  # dictionary having stations as keys and outer product of gradients as values
-                    # compute gradient matrix for each station as C=(\sum_{j=1} ^ N (\nabla f(x_j) \nabla f(x_j) ^ T / N)
-                    if CD:  # Central Difference scheme
-                        for single_station in gradient_matrix_calibration_bulk:
-                            gradient_vector = (np.array(gradient_matrix_calibration_bulk[single_station][0::2]) -
-                                               np.array(gradient_matrix_calibration_bulk[single_station][1::2])) / \
-                                              np.array(h_vector) / 2
-                            gradient_matrix_calibration[single_station] = np.outer(gradient_vector, gradient_vector) / \
-                                                                          len(i_s)
-                    else:  # Forward Difference scheme
-                        for single_station in gradient_matrix_calibration_bulk:
-                            # TODO : currently, just RMSE implementation; func_gof_RMSE_stations is f(x)
-                            gradient_vector = (np.array(gradient_matrix_calibration_bulk[single_station]) -
-                                               np.array(func_gof_RMSE_stations)) / np.array(h_vector)
-                            gradient_matrix_calibration[single_station] = np.outer(gradient_vector,
-                                                                                   gradient_vector) / len(i_s)
-
-                    # 4. Add gradient_matrix_calibration to result_dict
-                    if gradient_matrix_calibration:
-                        result_dict["gradient_calibration"] = gradient_matrix_calibration
+                    self.grd_matrix_calibration_mode_processing(result_dict, gradient_matrix_calibration_bulk, h_vector,
+                                                                CD, func_gof_RMSE_stations)
 
                 # Processing for non-calibration mode
                 if self.non_calibration_mode:
                     ids_list = [str(i) for i in range(len(parameter))]
-                    gradient_matrices_list = [np.outer(rows, rows) / len(i_s) for rows in gradient_matrix_no_calibration[ids_list].to_numpy()]
-                    gradient_matrix_no_calibration["Gradient_Matrices"] = gradient_matrices_list
-                    gradient_matrix_no_calibration.drop(columns=ids_list, inplace=True)
+                    gradient_matrices_list = [np.outer(rows, rows) / len(i_s) for rows in grd_no_calib_dataFrame[ids_list].to_numpy()]
+                    grd_no_calib_dataFrame["Gradient_Matrices"] = gradient_matrices_list
+                    grd_no_calib_dataFrame.drop(columns=ids_list, inplace=True)
                     # 4. Add gradient_matrix_calibration to result_dict
-                    if not gradient_matrix_no_calibration.empty:
-                        result_dict["gradient_no_calibration"] = gradient_matrix_no_calibration
+                    if not grd_no_calib_dataFrame.empty:
+                        result_dict["gradient_no_calibration"] = grd_no_calib_dataFrame
 
             # TODO-Ivana distinguish between only saving results and saving and propagating further
             # save the output of each simulation here just in case the purpose of the simulation is to run multiple Larsim runs
@@ -646,7 +584,7 @@ class LarsimModel(Model):
                 # if self.disable_statistics:
                 file_path = osp.abspath(osp.join(self.working_dir, "df_Larsim_run_" + str(i) + ".pkl"))
                 larsimDataPostProcessing.read_process_write_discharge(result,
-                                                                      type_of_output = self.type_of_output_of_Interest, \
+                                                                      type_of_output = self.type_of_output_of_Interest,
                                                                       station = self.station_for_model_runs,
                                                                       write_to_file = file_path, compression = "gzip")
                 if self.calculate_GoF:
@@ -654,7 +592,7 @@ class LarsimModel(Model):
                     # optionally glue it to the results and propagate everything further for postprocessing
                     index_parameter_gof_DF.to_pickle(
                         osp.abspath(osp.join(self.working_dir, "goodness_of_fit_" + str(i) + ".pkl")),
-                        compression="gzip")
+                        compression = "gzip")
 
             # Debugging  - TODO Delete afterwards
             print("LarsimModel INFO: Process {} returned / appended it's results".format(i))
@@ -677,7 +615,7 @@ class LarsimModel(Model):
             results.append((result_dict, runtime))
 
             # Delete everything except .log and .csv files
-            larsimConfigurationSettings.cleanDirecory_completely(curr_directory = curr_working_dir)
+            larsimConfigurationSettings.cleanDirectory_completely(curr_directory = curr_working_dir)
 
             # change back to starting directory of all the processes
             os.chdir(self.current_dir)
@@ -704,8 +642,7 @@ class LarsimModel(Model):
                                                new_path = local_adjusted_path, warm_up_duration = self.warm_up_duration)
 
         # log file for larsim
-        local_log_file = osp.abspath(
-                osp.join(curr_working_dir, "run" + str(index_run) + "_" + str(sub_index_run) + ".log"))
+        local_log_file = osp.abspath(osp.join(curr_working_dir, f"run_{index_run}_{sub_index_run}.log"))
         # print("LARSIM MODEL INFO: This is where I'm gonna write my log - {}".format(local_log_file))
 
         # run Larsim as external process
@@ -718,12 +655,17 @@ class LarsimModel(Model):
         result_file_path = osp.abspath(osp.join(curr_working_dir, 'ergebnis.lila'))
 
         if osp.isfile(result_file_path):
+            # TODO (TEO) : check if we need sub_index_run here (used for gradients)
             df_single_ergebnis = larsimInputOutputUtilities.ergebnis_parser_toPandas(result_file_path, index_run)
             return df_single_ergebnis
         else:
-            return None  # TODO Handle this more elegantly
+            # TODO Handle this more elegantly
+            raise ValueError(
+                "LarsimModel ERROR: Process {}: The following Ergebnis file was not found - {}".format(index_run,
+                                                                                                       result_file_path))
 
-    def _multiple_short_larsim_runs(self, timeframe, timestep, curr_working_dir, index_run = 0, warm_up_duration = 53):
+    def _multiple_short_larsim_runs(self, timeframe, timestep, curr_working_dir, index_run = 0, sub_index_run = 0,
+                                    warm_up_duration = 53):
         # if you want to cut execution into shorter runs...
         local_timestep = timestep
 
@@ -739,8 +681,10 @@ class LarsimModel(Model):
         karte_path = osp.abspath(osp.join(curr_working_dir, 'karten'))  # curr_working_dir + 'karten/*'
         tape10_path = osp.abspath(osp.join(curr_working_dir, 'tape10'))
 
-        print("LarsimModel INFO: process {} gonna run {} shorter Larsim runs (and number_of_runs_mode {})".format(
-            index_run, number_of_runs, number_of_runs_mode))
+        print(
+            "LarsimModel INFO:"
+            f" process {index_run} gonna run {number_of_runs} shorter Larsim runs (and number_of_runs_mode {number_of_runs_mode})"
+            f" and local_timestep {local_timestep} and initial local_end_date {local_end_date} and warmup duration {warm_up_duration}")
 
         local_resultDF_list = []
         for i in range(number_of_runs + 1):
@@ -751,6 +695,7 @@ class LarsimModel(Model):
             # calculate times - make sure that outputs are continuous in time
             if i == 0:
                 local_start_date = local_end_date
+                # TODO : This (local_start_date_p_53) can be local_start_date?
                 local_start_date_p_53 = local_start_date - datetime.timedelta(hours = warm_up_duration)
             else:
                 local_start_date_p_53 = local_end_date
@@ -767,25 +712,17 @@ class LarsimModel(Model):
             else:
                 local_end_date = local_end_date + datetime.timedelta(days=local_timestep)
 
-
             if local_end_date > timeframe[1]:
                 local_end_date = timeframe[1]
 
-            print("LarsimModel INFO: Process {}; local_start_date: {}; local_end_date: {}".format(index_run,
-                                                                                                  local_start_date,
-                                                                                                  local_end_date))
+            print("LarsimModel INFO: Process {}; local_start_date: {}; local_end_date: {}".format(
+                    index_run, local_start_date, local_end_date))
             single_run_timeframe = (local_start_date, local_end_date)
 
             # run larsim for this shorter period and returned already parsed 'small' ergebnis
             local_resultDF = self._single_larsim_run(timeframe = single_run_timeframe,
                                                      curr_working_dir = curr_working_dir, index_run = index_run,
                                                      sub_index_run = i)
-
-            # TODO Handle this more elegantly
-            if local_resultDF is None:
-                raise ValueError(
-                    "LarsimModel ERROR: Process {}: The following Ergebnis file was not found - {}".format(index_run,
-                                                                                                           result_file_path))
             # TODO Take maybe an average over duplicated timestamps instead of droping
             local_resultDF_drop = local_resultDF.drop(
                 local_resultDF[local_resultDF['TimeStamp'] < local_start_date_p_53].index)
@@ -795,9 +732,10 @@ class LarsimModel(Model):
 
             # rename ergebnis.lila
             local_result_file_path = osp.abspath(osp.join(curr_working_dir, 'ergebnis' + '_' + str(i) + '.lila'))
-            subprocess.run(["mv", result_file_path, local_result_file_path])
+            subprocess.run(["cp", result_file_path, local_result_file_path])
+            # subprocess.run(["mv", result_file_path, local_result_file_path])
             local_larsim_ok_file_path = osp.abspath(osp.join(curr_working_dir, 'larsim' + '_' + str(i) + '.ok'))
-            subprocess.run(["mv", larsim_ok_file_path, local_larsim_ok_file_path])
+            subprocess.run(["cp", larsim_ok_file_path, local_larsim_ok_file_path])
 
         # concatenate it
         df_simulation_result = pd.concat(local_resultDF_list, ignore_index = True, sort = True, axis = 0)
@@ -815,3 +753,70 @@ class LarsimModel(Model):
         # print(len((df_simulation_result.loc[(df_simulation_result['Stationskennung'] == "MARI") & (df_simulation_result['Type'] == "Abfluss Messung")]).TimeStamp.unique()))
 
         return df_simulation_result
+
+    def compute_GoF(self, result):
+        local_measurement_file = osp.abspath(osp.join(self.working_dir, "df_measured.pkl"))
+        if os.path.exists(local_measurement_file):
+            gt_dataFrame = larsimInputOutputUtilities.read_dataFrame_from_file(local_measurement_file,
+                                                                               compression = "gzip")
+        else:
+            # gt_dataFrame=None # this will work as well because when calculationg GoF groundTruth DF will be read anyway
+            gt_dataFrame = larsimConfigurationSettings.extract_measured_discharge(self.timeframe[0],
+                                                                                  self.timeframe[1],
+                                                                                  index_run = 0)  # gt_dataFrame = larsimConfigurationSettings.extract_measured_discharge(simulation_start_timestamp, self.timeframe[1], index_run=0)
+
+        # Make sure that burn-in time is disregard in result_grd or will be disregard while computing GoF: disregard_initial_timesteps=False or disregard_initial_timesteps=True
+        # Check for which stations GoF should be calculated: station=self.station_of_Interest or station=self.station_for_model_runs
+        # Check wether you want daily or hourly based computation of GoF functions: dailyStatistics=False or dailyStatistics=True
+        # TODO: for the moment, station=self.station_of_Interest (-> extend to "all")
+        goodnessofFit_list_of_dictionaries, result = larsimDataPostProcessing.calculateGoodnessofFit(
+            measuredDF = gt_dataFrame, predictedDF = result, station = self.station_of_Interest,
+            type_of_output_of_Interest_measured = self.type_of_output_of_Interest_measured,
+            type_of_output_of_Interest = self.type_of_output_of_Interest, dailyStatistics = False,
+            gof_list = self.objective_function, disregard_initial_timesteps = False)
+
+        return goodnessofFit_list_of_dictionaries, result
+
+    def copy_files_for_gradient_computation(self, curr_working_dir, i, id_param):
+        os.chdir(curr_working_dir)
+        working_folder_name = "Compute_gradient_" + str(i) + "_" + str(id_param)
+        curr_working_dir_gradient = osp.abspath(osp.join(self.working_dir, working_folder_name))
+
+        if not osp.isdir(curr_working_dir_gradient):
+            subprocess.run(["mkdir", curr_working_dir_gradient])
+
+        # copy all the necessary files to the newly created directory
+        master_dir_for_copying = self.master_dir + "/."
+        subprocess.run(['cp', '-a', master_dir_for_copying, curr_working_dir_gradient])  # TODO IVANA Check if copy succeed
+        subprocess.run(['cp', 'lanu.par', curr_working_dir_gradient])
+        subprocess.run(['cp', 'tape35', curr_working_dir_gradient])
+        print("LarsimModel INFO: Successfully copied all the files for gradient computation")
+        # change working directory
+        os.chdir(curr_working_dir_gradient)
+
+        return curr_working_dir_gradient
+
+    def grd_matrix_calibration_mode_processing(self, result_dict, gradient_matrix_calibration_bulk, h_vector, CD = True,
+                                               func_gof_RMSE_stations = None):
+        gradient_matrix_calibration = {}  # dictionary having stations as keys and outer product of gradients as values
+        # compute gradient matrix for each station as C=(\sum_{j=1} ^ N (\nabla f(x_j) \nabla f(x_j) ^ T / N)
+        # TODO : currently, just RMSE implementation
+        num_params = len(h_vector)
+        if CD:  # Central Difference scheme
+            for single_station in gradient_matrix_calibration_bulk:
+                gradient_vector = (np.array(gradient_matrix_calibration_bulk[single_station][0::2]) -
+                                   np.array(gradient_matrix_calibration_bulk[single_station][1::2])) / np.array(h_vector) / 2
+                gradient_matrix_calibration[single_station] = np.outer(gradient_vector, gradient_vector) / num_params
+        else:  # Forward Difference scheme
+            for single_station in gradient_matrix_calibration_bulk:
+                # func_gof_RMSE_stations is f(x)
+                gradient_vector = (np.array(gradient_matrix_calibration_bulk[single_station]) -
+                                   np.array(func_gof_RMSE_stations)) / np.array(h_vector)
+                gradient_matrix_calibration[single_station] = np.outer(gradient_vector,
+                                                                       gradient_vector) / num_params
+
+        # 4. Add gradient_matrix_calibration to result_dict
+        if gradient_matrix_calibration:
+            result_dict["gradient_calibration"] = gradient_matrix_calibration
+
+
