@@ -19,48 +19,15 @@
     },
   "parameters": [
     {
-      "name": "Acker:Jun",
-      "type": "lanu",
+      "name": "BSF",
+      "type": "tape35",
       "distribution": "Uniform",
-      "lower": 0,
-      "upper": 1,
-      "lower_limit": 3.0,
-      "upper_limit": 7.0,
-      "depends_on":"Acker:May",
-      "direction":"increasing"
-    },
-    {
-      "name": "locker baumbest.:Jun",
-      "type": "lanu",
-      "distribution": "Uniform",
-      "lower": 0,
-      "upper": 1,
-      "lower_limit": 6.5,
-      "upper_limit": 8.0,
-      "depends_on":"locker baumbest.:May",
-      "direction":"increasing"
-    },
-    {
-      "name": "Laubwald:Jun",
-      "type": "lanu",
-      "distribution": "Uniform",
-      "lower": 0,
-      "upper": 1,
-      "lower_limit": 7.0,
-      "upper_limit": 12.0,
-      "depends_on":"Laubwald:May",
-      "direction":"increasing"
-    },
-    {
-      "name": "Mischwald:Jun",
-      "type": "lanu",
-      "distribution": "Uniform",
-      "lower": 0,
-      "upper": 1,
-      "lower_limit": 8.0,
-      "upper_limit": 12.0,
-      "depends_on":"Mischwald:May",
-      "direction":"increasing"
+      "mu": 0.3,
+      "sigma": 0.1,
+      "lower": 0.01,
+      "upper": 0.5,
+      "lower_limit": 0.01,
+      "upper_limit": 0.5
     }
   ],
   "unused_parameters": [
@@ -195,11 +162,12 @@
     "dailyOutput": "False",
     "calculate_GoF": "True",
     "objective_function":"all",
-    "run_and_save_simulations":"False",
-    "calibration_mode" : "True",
-    "non_calibration_mode" : "True",
+    "run_and_save_simulations":"True",
+    "compute_gradients": "True",
     "gradients_method" : "Central Difference",
-    "eps_gradients" : 1e-4    
+    "eps_gradients" : 1e-4,
+    "calibration_mode" : "True",
+    "non_calibration_mode" : "True"
   },
   "parameters_settings":
   {
