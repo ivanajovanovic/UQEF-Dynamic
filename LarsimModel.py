@@ -32,22 +32,23 @@ class LarsimModelSetUp():
         # adjust path in larsimPaths moduel and configuration file/object accordingly
         #####################################
 
-        self.current_dir = kwargs.get('sourceDir') if 'sourceDir' in kwargs and osp.isabs(kwargs.get('sourceDir')) \
-                            else osp.dirname(osp.abspath(inspect.getfile(inspect.currentframe())))
+        self.current_dir = kwargs.get('sourceDir') if 'sourceDir' in kwargs and osp.isabs(
+            kwargs.get('sourceDir')) else osp.dirname(osp.abspath(inspect.getfile(inspect.currentframe())))
 
         self.inputModelDir = kwargs.get('inputModelDir') if 'inputModelDir' in kwargs else paths.larsim_data_path
 
-        #try:
+        # try:
         self.working_dir = self.configurationObject["Directories"]["working_dir"]
-        #except KeyError:
+        # except KeyError:
         #    self.working_dir = paths.working_dir  # directoy for all the larsim runs
 
         self.master_dir = osp.abspath(osp.join(self.working_dir, 'master_configuration'))
 
-        self.global_master_dir = osp.abspath(osp.join(self.inputModelDir,'WHM Regen','master_configuration'))
-        self.master_lila_paths = [osp.abspath(osp.join(self.inputModelDir,'WHM Regen', i)) for i in paths.master_lila_files]
+        self.global_master_dir = osp.abspath(osp.join(self.inputModelDir, 'WHM Regen', 'master_configuration'))
+        self.master_lila_paths = [osp.abspath(osp.join(self.inputModelDir, 'WHM Regen', i)) for i in
+                                  paths.master_lila_files]
         self.lila_configured_paths = [os.path.abspath(os.path.join(self.master_dir, i)) for i in paths.lila_files]
-        self.all_whms_path = osp.abspath(osp.join(self.inputModelDir,'WHM Regen','var/WHM Regen WHMS'))
+        self.all_whms_path = osp.abspath(osp.join(self.inputModelDir, 'WHM Regen', 'var/WHM Regen WHMS'))
         self.larsim_exe = osp.abspath(osp.join(self.inputModelDir, 'Larsim-exe', 'larsim-linux-intel-1000.exe'))
 
         #####################################
