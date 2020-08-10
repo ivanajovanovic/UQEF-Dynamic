@@ -150,16 +150,16 @@ class LarsimModelSetUp():
 
     def get_Larsim_saved_simulations(self, write_in_file=True):
         #TODO Make this work
-        self.df_simulation, _, mean_per_time_DF, discharge_measured = larsimDataPostProcessing.get_big_DF_with_simulated_data(sim_folder=paths.sim_folder,\
-                                               s_year=self.configurationObject["Timeframe"]["start_year"],\
-                                               s_mont=self.configurationObject["Timeframe"]["start_month"],\
-                                               s_day=self.configurationObject["Timeframe"]["start_day"],\
-                                               e_year=self.configurationObject["Timeframe"]["end_year"],\
-                                               e_mont=self.configurationObject["Timeframe"]["end_month"],\
-                                               e_day=self.configurationObject["Timeframe"]["end_day"],\
-                                               station=self.station_for_model_runs, type_of_output=self.type_of_output_of_Interest,\
-                                               one_day_simulation_run=True,\
-                                               calc_avrg=True, get_measured=True,\
+        self.df_simulation, _, mean_per_time_DF, discharge_measured = larsimDataPostProcessing.get_big_DF_with_simulated_data(sim_folder=paths.sim_folder,
+                                               s_year=self.configurationObject["Timeframe"]["start_year"],
+                                               s_mont=self.configurationObject["Timeframe"]["start_month"],
+                                               s_day=self.configurationObject["Timeframe"]["start_day"],
+                                               e_year=self.configurationObject["Timeframe"]["end_year"],
+                                               e_mont=self.configurationObject["Timeframe"]["end_month"],
+                                               e_day=self.configurationObject["Timeframe"]["end_day"],
+                                               station=self.station_for_model_runs, type_of_output=self.type_of_output_of_Interest,
+                                               one_day_simulation_run=True,
+                                               calc_avrg=True, get_measured=True,
                                                plot=False, saveToFile=False)
         self.df_simulation.drop_duplicates(subset=['TimeStamp','Stationskennung'], keep='last', inplace=True)
 
@@ -394,7 +394,6 @@ class LarsimModel(Model):
 
             # change working directory
             os.chdir(curr_working_dir)
-            print(f"\n\n \t {i}. timeframe: {self.timeframe} \n")
                 
             # Run Larsim
             if self.cut_runs:
@@ -404,7 +403,6 @@ class LarsimModel(Model):
             else:
                 result = self._single_larsim_run(timeframe = self.timeframe, curr_working_dir = curr_working_dir,
                                                  index_run = i)
-
             # filter output time-series in order to disregard warm-up time; if not then at least disregard these values when calculating statistics and GoF
             # however, take care that is is not done twice!
             simulation_start_timestamp = self.timeframe[0] + datetime.timedelta(
@@ -434,11 +432,11 @@ class LarsimModel(Model):
             ### this can be moved to Statistics - positioned here due to parallelisation
             #####################################
             # if calibration is True some likelihood / objective functions / GoF functio should be calculated from model run and propageted further and'or saved to file
-            func_gof_RMSE_stations = []  # stores RMSE for each station
             if self.calculate_GoF or self.compute_gradients:
                 # get the DataFrame storing measurements / ground truth discharge
                 goodnessofFit_list_of_dictionaries, predicted_dataFrame_func = self.compute_GoF(result)
                 index_parameter_gof_list_of_dictionaries = []
+                func_gof_RMSE_stations = []  # stores RMSE for each station
                 for single_stations_gof in goodnessofFit_list_of_dictionaries:
                     index_parameter_gof_dict = {**parameters_dict, **single_stations_gof}
                     index_parameter_gof_list_of_dictionaries.append(index_parameter_gof_dict)
@@ -502,8 +500,7 @@ class LarsimModel(Model):
                     else:
                         result_grd = self._single_larsim_run(timeframe = self.timeframe,
                                                              curr_working_dir = curr_working_dir_gradient,
-                                                             index_run = i,
-                                                             sub_index_run = id_param)
+                                                             index_run = i)
 
                     # 2.4. Preparations before computing GoF
                     result_grd = larsimDataPostProcessing.parse_df_based_on_time(result_grd,
@@ -595,7 +592,7 @@ class LarsimModel(Model):
                         osp.abspath(osp.join(self.working_dir, "goodness_of_fit_" + str(i) + ".pkl")),
                         compression = "gzip")
 
-            # Debugging  - TODO Delete afterwards
+                # Debugging  - TODO Delete afterwards
             print("LarsimModel INFO: Process {} returned / appended it's results".format(i))
             # assert len(result['TimeStamp'].unique()) == len(self.t), "Assesrtion Failed: Something went wrong with time resolution of the result"
             # assert isinstance(self.variable_names, list), "Assertion Failed - variable names not a list"
@@ -644,11 +641,11 @@ class LarsimModel(Model):
 
         # log file for larsim
         local_log_file = osp.abspath(osp.join(curr_working_dir, f"run_{index_run}_{sub_index_run}.log"))
-        # print("LARSIM MODEL INFO: This is where I'm gonna write my log - {}".format(local_log_file))
+        # print(f"LARSIM MODEL INFO: This is where I'm gonna write my log - {local_log_file}")
 
         # run Larsim as external process
         subprocess.run([self.larsim_exe], stdout = open(local_log_file, 'w'))
-        print("LarsimModel INFO: I am done with LARSIM Execution {}".format(index_run))
+        print(f"LarsimModel INFO: I am done with LARSIM Execution {index_run}")
 
         # check if larsim.ok exist - Larsim execution was successful
         larsimConfigurationSettings.check_larsim_ok_file(curr_working_dir = curr_working_dir)
@@ -660,13 +657,10 @@ class LarsimModel(Model):
             df_single_ergebnis = larsimInputOutputUtilities.ergebnis_parser_toPandas(result_file_path, index_run)
             return df_single_ergebnis
         else:
-            # TODO Handle this more elegantly
             raise ValueError(
-                "LarsimModel ERROR: Process {}: The following Ergebnis file was not found - {}".format(index_run,
-                                                                                                       result_file_path))
+                f"LarsimModel ERROR: Process {index_run}: The following Ergebnis file was not found - {result_file_path}")
 
-    def _multiple_short_larsim_runs(self, timeframe, timestep, curr_working_dir, index_run = 0, sub_index_run = 0,
-                                    warm_up_duration = 53):
+    def _multiple_short_larsim_runs(self, timeframe, timestep, curr_working_dir, index_run = 0, warm_up_duration = 53):
         # if you want to cut execution into shorter runs...
         local_timestep = timestep
 
@@ -696,7 +690,6 @@ class LarsimModel(Model):
             # calculate times - make sure that outputs are continuous in time
             if i == 0:
                 local_start_date = local_end_date
-                # TODO : This (local_start_date_p_53) can be local_start_date?
                 local_start_date_p_53 = local_start_date - datetime.timedelta(hours = warm_up_duration)
             else:
                 local_start_date_p_53 = local_end_date
@@ -705,38 +698,44 @@ class LarsimModel(Model):
             if local_start_date > timeframe[1]:
                 break
 
-            #TODO This brings some confusion, try without this!
-            #local_start_date = local_start_date.replace(hour = 0, minute = 0, second = 0)
+            # TODO This brings some confusion, try without this!
+            # local_start_date = local_start_date.replace(hour=0, minute=0, second=0)
 
             if i == 0:
-                local_end_date = local_end_date + datetime.timedelta(hours=warm_up_duration) + datetime.timedelta(days=local_timestep)
+                local_end_date = local_end_date + datetime.timedelta(hours = warm_up_duration) + datetime.timedelta(
+                    days = local_timestep)
             else:
-                local_end_date = local_end_date + datetime.timedelta(days=local_timestep)
+                local_end_date = local_end_date + datetime.timedelta(days = local_timestep)
 
             if local_end_date > timeframe[1]:
                 local_end_date = timeframe[1]
 
-            print("LarsimModel INFO: Process {}; local_start_date: {}; local_end_date: {}".format(
-                    index_run, local_start_date, local_end_date))
+            print(
+                f"LarsimModel INFO: Process {index_run}; local_start_date: {local_start_date}; local_end_date: {local_end_date}")
             single_run_timeframe = (local_start_date, local_end_date)
 
             # run larsim for this shorter period and returned already parsed 'small' ergebnis
             local_resultDF = self._single_larsim_run(timeframe = single_run_timeframe,
                                                      curr_working_dir = curr_working_dir, index_run = index_run,
                                                      sub_index_run = i)
+
+            # TODO Handle this more elegantly
+            if local_resultDF is None:
+                raise ValueError(
+                    f"LarsimModel ERROR: Process {index_run}: The following Ergebnis file was not found - {result_file_path}")
+
             # TODO Take maybe an average over duplicated timestamps instead of droping
             local_resultDF_drop = local_resultDF.drop(
                 local_resultDF[local_resultDF['TimeStamp'] < local_start_date_p_53].index)
 
-            #TODO Check if some interpolation is needed...
+            # TODO Check if some interpolation is needed...
             local_resultDF_list.append(local_resultDF_drop)
 
             # rename ergebnis.lila
             local_result_file_path = osp.abspath(osp.join(curr_working_dir, 'ergebnis' + '_' + str(i) + '.lila'))
-            subprocess.run(["cp", result_file_path, local_result_file_path])
-            # subprocess.run(["mv", result_file_path, local_result_file_path])
+            subprocess.run(["mv", result_file_path, local_result_file_path])
             local_larsim_ok_file_path = osp.abspath(osp.join(curr_working_dir, 'larsim' + '_' + str(i) + '.ok'))
-            subprocess.run(["cp", larsim_ok_file_path, local_larsim_ok_file_path])
+            subprocess.run(["mv", larsim_ok_file_path, local_larsim_ok_file_path])
 
         # concatenate it
         df_simulation_result = pd.concat(local_resultDF_list, ignore_index = True, sort = True, axis = 0)
@@ -744,7 +743,7 @@ class LarsimModel(Model):
         # sorting by time
         df_simulation_result.sort_values("TimeStamp", inplace = True)
 
-        # clean concatenated file - dropping time duplicate values
+        # clean concatanated file - dropping time duplicate values
         df_simulation_result.drop_duplicates(subset = ['TimeStamp', 'Stationskennung', 'Type'], keep = 'last',
                                              inplace = True)
 
@@ -771,10 +770,12 @@ class LarsimModel(Model):
         # Check wether you want daily or hourly based computation of GoF functions: dailyStatistics=False or dailyStatistics=True
         # TODO: for the moment, station=self.station_of_Interest (-> extend to "all")
         goodnessofFit_list_of_dictionaries, result = larsimDataPostProcessing.calculateGoodnessofFit(
-            measuredDF = gt_dataFrame, predictedDF = result, station = self.station_of_Interest,
+            measuredDF = gt_dataFrame, predictedDF = result,
+            station = self.station_of_Interest,
             type_of_output_of_Interest_measured = self.type_of_output_of_Interest_measured,
-            type_of_output_of_Interest = self.type_of_output_of_Interest, dailyStatistics = False,
-            gof_list = self.objective_function, disregard_initial_timesteps = False)
+            type_of_output_of_Interest = self.type_of_output_of_Interest,
+            dailyStatistics = False, gof_list = self.objective_function,
+            disregard_initial_timesteps = False)
 
         return goodnessofFit_list_of_dictionaries, result
 
