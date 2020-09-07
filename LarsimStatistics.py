@@ -95,12 +95,37 @@ class LarsimSamples(object):
             # Calibration Mode
             if calibrationMode:
                 # Compute the eigendecomposition of gradient matrices
-                self.gradient_matrix_calibration = larsimDataPostProcessing.compute_eigendecomposition_gradient_matrices(gradient_matrix_calibration)
-                print("\n\n ---> Eigendecomposition of C matrices: \n\n", self.gradient_matrix_calibration, "\n\n")
+                self.gradient_matrix_calibration = larsimDataPostProcessing.compute_eigendecomposition_gradient_matrices(
+                    gradient_matrix_calibration)
+                # print(f"\n\n ---> Eigendecomposition of C matrices: \n\n {self.gradient_matrix_calibration} \n\n")
+                plot_eigenvalues(self.gradient_matrix_calibration[station]['EW'],
+                                 dataset_name='Eigenvalues Calibration mode',
+                                 title='Eigenvalues for station Mari in Calibration mode',
+                                 xaxis_title='index',
+                                 yaxis_title='Eigenvalue')
+
             # Non-calibration Mode
             else:
-                self.gradient_matrix_no_calibration = larsimDataPostProcessing.compute_eigendecomposition_gradient_matrices_no_calibration(gradient_matrix_no_calibration)
-                self.gradient_matrix_no_calibration.to_csv("/home/teo/Documents/Hiwi/Larsim-UQ/Gradient_Matrices_No_Calibration_EVW.csv")
+                self.gradient_matrix_no_calibration = larsimDataPostProcessing.compute_eigendecomposition_gradient_matrices_no_calibration(
+                    gradient_matrix_no_calibration)
+                # self.gradient_matrix_no_calibration.to_csv(
+                #     "/home/teo/Documents/Hiwi/Larsim-UQ/Gradient_Matrices_No_Calibration_EVW.csv")
+
+                EW_mean = np.mean(self.gradient_matrix_no_calibration["EW"], axis=0)
+                plot_eigenvalues(EW_mean,
+                                 dataset_name='Eigenvalues Non-Calibration mode',
+                                 title='Eigenvalues for station Mari in Non-Calibration mode',
+                                 xaxis_title='index',
+                                 yaxis_title='Eigenvalue - mean (all)')
+
+                # plot only for non-zero eigenvalues
+                EW_mean_nonzero = np.array([x for x in self.gradient_matrix_no_calibration["EW"] if x.any()])
+                EW_mean_nonzero = np.mean(EW_mean_nonzero, axis=0)
+                plot_eigenvalues(EW_mean_nonzero,
+                                 dataset_name='Eigenvalues Non-Calibration mode (non-zero)',
+                                 title='Non-zero Eigenvalues for station Mari in Non-Calibration mode',
+                                 xaxis_title='index',
+                                 yaxis_title='Eigenvalue - mean (non-zero)')
 
         self.df_simulation_result = pd.concat(list_of_single_df, ignore_index=True, sort=False, axis=0)
 
@@ -561,3 +586,13 @@ class LarsimStatistics(Statistics):
         groups = grouped.groups
 
         return samples, groups
+
+
+def plot_eigenvalues(EW, dataset_name='Eigenvalues Calibration mode',
+                     title='Eigenvalues for station Mari in Calibration mode',
+                     xaxis_title='index',
+                     yaxis_title='Eigenvalue'):
+    x = np.arange(len(EW))
+    fig = go.Figure(data=go.Scatter(x=x, y=EW, name=dataset_name, line=dict(color='firebrick', width=3)))
+    fig.update_layout(title=title, xaxis_title=xaxis_title, yaxis_title=yaxis_title)
+    fig.show()

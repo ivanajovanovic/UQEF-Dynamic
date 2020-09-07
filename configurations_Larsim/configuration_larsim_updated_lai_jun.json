@@ -14,7 +14,7 @@
       "end_minute": 0,
 
       "timestep": 5,
-      "cut_runs": "False",
+      "cut_runs": false,
       "warm_up_duration": 53
     },
   "parameters": [
@@ -158,23 +158,23 @@
     "type_of_output_measured":"Ground Truth",
     "station_calibration_postproc":"MARI",
     "station_model_runs": "all",
-    "pathsDataFormat":"False",
-    "dailyOutput": "False",
-    "calculate_GoF": "True",
+    "pathsDataFormat":false,
+    "dailyOutput": false,
+    "calculate_GoF": true,
+    "calibrationParameter" : "calculateRMSE",
     "objective_function":"all",
-    "run_and_save_simulations":"True",
-    "compute_gradients": "True",
+    "run_and_save_simulations": false,
+    "computeGradients" : true,
+    "calibrationMode" : false,
     "gradients_method" : "Central Difference",
-    "eps_gradients" : 1e-4,
-    "calibration_mode" : "True",
-    "non_calibration_mode" : "True"
+    "eps_gradients" : 1e-2
   },
   "parameters_settings":
   {
-    "addSampledValue":"False",
+    "addSampledValue":false,
     "TGB_standard":3085,
-    "roundParameters":"False",
+    "roundParameters":false,
     "roundDecimal":2,
-    "cut_limits":"False"
+    "cut_limits":false
   }
 }

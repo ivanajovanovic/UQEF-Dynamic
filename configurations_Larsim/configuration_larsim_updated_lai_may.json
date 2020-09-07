@@ -29,6 +29,17 @@
       "upper": 0.5,
       "lower_limit": 0.01,
       "upper_limit": 0.5
+    },
+    {
+      "name": "A2",
+      "type": "tape35",
+      "distribution": "Uniform",
+      "mu": 1.5,
+      "sigma": 0.75,
+      "lower": 0.5,
+      "upper": 4.0,
+      "lower_limit": 0.5 ,
+      "upper_limit": 4.0
     }
   ],
   "unused_parameters": [
@@ -246,10 +257,10 @@
     "calibrationParameter" : "calculateRMSE",
     "objective_function":"all",
     "run_and_save_simulations": false,
-    "computeGradients:" : true,
+    "computeGradients" : true,
     "calibrationMode" : false,
-    "gradients_method" : "Forward Difference",
-    "eps_gradients" : 1e-4
+    "gradients_method" : "Central Difference",
+    "eps_gradients" : 1e-2
   },
   "parameters_settings":
   {

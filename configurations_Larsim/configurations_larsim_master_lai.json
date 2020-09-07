@@ -17,28 +17,31 @@
       "cut_runs": "True",
       "warm_up_duration": 53
     },
-  "Output":
-    {
-      "type_of_output":"Abfluss Messung",
-      "type_of_output_measured":"Ground Truth",
-      "station_calibration_postproc":"MARI",
-      "station_model_runs": "all",
-      "pathsDataFormat":"False",
-      "dailyOutput": "False",
-      "calculate_GoF": "True",
-      "objective_function":"all",
-      "run_and_save_simulations":"False",
-      "compute_gredients": "False"
-    },
+    "Output":
+  {
+    "type_of_output":"Abfluss Messung",
+    "type_of_output_measured":"Ground Truth",
+    "station_calibration_postproc":"MARI",
+    "station_model_runs": "all",
+    "pathsDataFormat":false,
+    "dailyOutput": false,
+    "calculate_GoF": true,
+    "calibrationParameter" : "calculateRMSE",
+    "objective_function":"all",
+    "run_and_save_simulations": false,
+    "computeGradients" : true,
+    "calibrationMode" : false,
+    "gradients_method" : "Central Difference",
+    "eps_gradients" : 1e-2
+  },
   "parameters_settings":
-    {
-      "addSampledValue":"False",
-      "TGB_standard":3085,
-      "TGB":3085,
-      "roundParameters":"False",
-      "roundDecimal":2,
-      "cut_limits":"False"
-    },
+  {
+    "addSampledValue":false,
+    "TGB_standard":3085,
+    "roundParameters":false,
+    "roundDecimal":2,
+    "cut_limits":false
+  },  
   "parameters": [
     {
       "name": "Acker:May",
