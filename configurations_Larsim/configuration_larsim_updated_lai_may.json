@@ -15,7 +15,7 @@
       "end_minute": 0,
 
       "timestep": 5,
-      "cut_runs": "False",
+      "cut_runs": false,
       "warm_up_duration": 53
     },
   "parameters": [
@@ -29,7 +29,9 @@
       "upper": 0.5,
       "lower_limit": 0.01,
       "upper_limit": 0.5
-    },
+    }
+  ],
+  "unused_parameters": [
     {
       "name": "A2",
       "type": "tape35",
@@ -110,9 +112,7 @@
       "upper_limit": 7.5,
       "depends_on":"locker baumbest.:Apr",
       "direction":"increasing"
-    }
-  ],
-  "unused_parameters": [
+    },
     {
       "name": "BSF",
       "type": "tape35",
@@ -240,22 +240,23 @@
     "type_of_output_measured":"Ground Truth",
     "station_calibration_postproc":"MARI",
     "station_model_runs": "all",
-    "pathsDataFormat":"False",
-    "dailyOutput": "False",
-    "calculate_GoF": "True",
+    "pathsDataFormat":false,
+    "dailyOutput": false,
+    "calculate_GoF": true,
+    "calibrationParameter" : "calculateRMSE",
     "objective_function":"all",
-    "run_and_save_simulations":"False",
-    "calibration_mode" : "True",
-    "non_calibration_mode" : "True",
-    "gradients_method" : "Central Difference",
+    "run_and_save_simulations": false,
+    "computeGradients:" : true,
+    "calibrationMode" : false,
+    "gradients_method" : "Forward Difference",
     "eps_gradients" : 1e-4
   },
   "parameters_settings":
   {
-    "addSampledValue":"False",
+    "addSampledValue":false,
     "TGB_standard":3085,
-    "roundParameters":"False",
+    "roundParameters":false,
     "roundDecimal":2,
-    "cut_limits":"False"
+    "cut_limits":false
   }
 }

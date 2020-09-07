@@ -1,7 +1,6 @@
 import datetime
 import dill
 from collections import defaultdict
-from distutils.util import strtobool
 from decimal import Decimal
 import inspect
 import os
@@ -28,7 +27,7 @@ class LarsimModelSetUp():
         self.configurationObject = configurationObject
 
         #####################################
-        # Sepcification of different directories - some are machine / location dependent,
+        # Specification of different directories - some are machine / location dependent,
         # adjust path in larsimPaths moduel and configuration file/object accordingly
         #####################################
 
@@ -280,9 +279,8 @@ class LarsimModel(Model):
         except KeyError:
             self.type_of_output_of_Interest_measured = "Ground Truth"
 
-        self.cut_runs = strtobool(self.configurationObject["Timeframe"]["cut_runs"]) if "cut_runs" in \
-                                                                                        self.configurationObject[
-                                                                                            "Timeframe"] else False
+        self.cut_runs = self.configurationObject["Timeframe"]["cut_runs"] if "cut_runs" in self.configurationObject[
+            "Timeframe"] else False
 
         self.warm_up_duration = self.configurationObject["Timeframe"]["warm_up_duration"] if "warm_up_duration" in \
                                                                                              self.configurationObject[
@@ -303,35 +301,48 @@ class LarsimModel(Model):
 
         # if calibration is True some likelihood / objective functions / GoF function should be calculated from model
         # run and propagated further
-        self.calculate_GoF = strtobool(self.configurationObject["Output"]["calculate_GoF"]) if "calculate_GoF" in \
-                                                                                               self.configurationObject[
-                                                                                                   "Output"] else False
+        self.calculate_GoF = self.configurationObject["Output"]["calculate_GoF"] if "calculate_GoF" in \
+                                                                                    self.configurationObject[
+                                                                                        "Output"] else False
         if self.calculate_GoF:
             # TODO-Ivana deal with situation when self.station_for_model_runs is a list/dictionary
             self.objective_function = self.configurationObject["Output"]["objective_function"]
             self.objective_function = larsimDataPostProcessing._gof_list_to_function_names(self.objective_function)
 
+        try:
+            self.calibrationParameter = self.configurationObject["Output"]["calibrationParameter"]
+        except KeyError:
+            self.calibrationParameter = "calculateRMSE"
+
         # save the output of each simulation just in run function just in case when run_and_save_simulations in json configuration file is True
         # and no statistics calculations will be performed afterwards, otherwise the simulation results will be saved in LarsimStatistics
         self.disable_statistics = kwargs.get('disable_statistics') if 'disable_statistics' in kwargs else False
-        self.run_and_save_simulations = strtobool(
-                self.configurationObject["Output"]["run_and_save_simulations"]) if "run_and_save_simulations" in \
-                                                                                   self.configurationObject[
-                                                                                       "Output"] else False
+        self.run_and_save_simulations = self.configurationObject["Output"][
+            "run_and_save_simulations"] if "run_and_save_simulations" in self.configurationObject["Output"] else False
         # self.run_and_save_simulations = self.run_and_save_simulations and self.disable_statistics
 
         # if we want to compute the gradient (of some likelihood fun or output itself) w.r.t parameters
-        self.calibration_mode = strtobool(
-                self.configurationObject["Output"]["calibration_mode"]) if "calibration_mode" in \
-                                                                           self.configurationObject["Output"] else False
+        self.computeGradients = self.configurationObject["Output"]["computeGradients"] if "computeGradients" in \
+                                                                                          self.configurationObject[
+                                                                                              "Output"] else False
 
-        self.non_calibration_mode = strtobool(
-                self.configurationObject["Output"]["non_calibration_mode"]) if "non_calibration_mode" in \
-                                                                               self.configurationObject[
-                                                                                   "Output"] else False
+        self.calibrationMode = self.configurationObject["Output"]["calibrationMode"] if "calibrationMode" in \
+                                                                                        self.configurationObject[
+                                                                                            "Output"] else False
 
-        self.compute_gradients = self.calibration_mode or self.non_calibration_mode
-
+        if self.computeGradients:
+            if self.configurationObject["Output"]["gradients_method"] == "Central Difference":
+                self.CD = 1  # flag for using Central Differences (with 2 * num_evaluations)
+            elif self.configurationObject["Output"]["gradients_method"] == "Forward Difference":
+                self.CD = 0  # flag for using Forward Differences (with num_evaluations)
+            else:
+                raise Exception(
+                    "NUMERICAL GRADIENT EVALUATION ERROR: Only \"Central Difference\" and \"Forward Difference\" supported")
+            try:
+                self.eps_val_global = self.configurationObject["Output"][
+                    "eps_gradients"]  # difference for gradient computation
+            except KeyError:
+                self.eps_val_global = 1e-4
         #####################################
         # getting the time span for running the model from the json configuration file
         #####################################
@@ -394,7 +405,7 @@ class LarsimModel(Model):
 
             # change working directory
             os.chdir(curr_working_dir)
-                
+
             # Run Larsim
             if self.cut_runs:
                 result = self._multiple_short_larsim_runs(timeframe = self.timeframe, timestep = self.timestep,
@@ -431,17 +442,17 @@ class LarsimModel(Model):
             ### compare model predictions of this simulation with measured (ground truth) data
             ### this can be moved to Statistics - positioned here due to parallelisation
             #####################################
-            # if calibration is True some likelihood / objective functions / GoF functio should be calculated from model run and propageted further and'or saved to file
-            if self.calculate_GoF or self.compute_gradients:
+            # if calibration is True some likelihood / objective functions / GoF function should be calculated from model run and propageted further and'or saved to file
+            if self.calculate_GoF or (self.computeGradients and self.calibrationMode and not self.CD):
                 # get the DataFrame storing measurements / ground truth discharge
                 goodnessofFit_list_of_dictionaries, predicted_dataFrame_func = self.compute_GoF(result)
                 index_parameter_gof_list_of_dictionaries = []
-                func_gof_RMSE_stations = []  # stores RMSE for each station
+                func_calibration_parameter = []  # stores calibration parameter for each station (e.g., RMSE); used for forward differences
                 for single_stations_gof in goodnessofFit_list_of_dictionaries:
                     index_parameter_gof_dict = {**parameters_dict, **single_stations_gof}
                     index_parameter_gof_list_of_dictionaries.append(index_parameter_gof_dict)
-                    if self.calibration_mode:
-                        func_gof_RMSE_stations.append(single_stations_gof["calculateRMSE"])
+                    if self.calibrationMode:
+                        func_calibration_parameter.append(single_stations_gof[self.calibrationParameter])
 
                 # index_parameter_gof_DF = pd.DataFrame(goodnessofFit_list_of_dictionaries)
                 index_parameter_gof_DF = pd.DataFrame(index_parameter_gof_list_of_dictionaries)
@@ -450,18 +461,9 @@ class LarsimModel(Model):
                 # save index_run, parameter values and GoF as pd.DataFrame in a file  # optionally glue it to the results and propagate everything further for postprocessing  # index_parameter_gof_DF.to_pickle(osp.abspath(osp.join(self.working_dir, "goodness_of_fit_" + str(i) +  ".pkl")), compression="gzip")
 
             # compute gradient of the output, or some likelihood measure w.r.t parameters
-            if self.compute_gradients:
-                if self.configurationObject["Output"]["gradients_method"] == "Central Difference":
-                    length_evaluations_gradient = 2 * len(parameter)  # central differences
-                    CD = 1  # flag for using Central Differences (with 2 * num_evaluations)
-                elif self.configurationObject["Output"]["gradients_method"] == "Forward Difference":
-                    length_evaluations_gradient = len(parameter)  # forward differences
-                    CD = 0  # flag for using Forward Differences (with num_evaluations)
-                else:
-                    raise Exception(
-                        "NUMERICAL GRADIENT EVALUATION ERROR: Only \"Central Difference\" and \"Forward Difference\" supported")
-
-                eps_val_global = self.configurationObject["Output"]["eps_gradients"]  # difference for gradient computation
+            if self.computeGradients:
+                # CD = 1 central differences; CD = 0 forward differences
+                length_evaluations_gradient = 2 * len(parameter) if self.CD else len(parameter)
 
                 h_vector = []
                 gradient_matrix_calibration_bulk = defaultdict(list)
@@ -471,11 +473,11 @@ class LarsimModel(Model):
                     curr_working_dir_gradient = self.copy_files_for_gradient_computation(curr_working_dir, i, id_param)
 
                     # 2.2. Adjust configuration files (tape35 and lanu.par)
-                    if CD:
-                        eps_val = eps_val_global if id_param % 2 == 0 else -eps_val_global # used for computing f(x+-h)
+                    if self.CD:
+                        eps_val = self.eps_val_global if id_param % 2 == 0 else -self.eps_val_global  # used for computing f(x+-h)
                         param_index = int(id_param / 2)
-                    else: # FD
-                        eps_val = eps_val_global  # used for computing f(x+h)
+                    else:  # FD
+                        eps_val = self.eps_val_global  # used for computing f(x+h)
                         param_index = id_param
 
                     tape35_path = curr_working_dir_gradient + "/tape35"
@@ -486,21 +488,21 @@ class LarsimModel(Model):
                                                                                    lanu_path = lanu_path,
                                                                                    configurationObject = self.configurationObject,
                                                                                    process_id = i, eps_val = eps_val)
-                    if not(CD and (id_param % 2 == 1)):
+                    if not(self.CD and (id_param % 2 == 1)):
                         h_vector.append(h)  # update vector of h's
 
                     # 2.3. Run the simulation
                     # Run Larsim
                     if self.cut_runs:
-                        result_grd = self._multiple_short_larsim_runs(timeframe = self.timeframe,
-                                                                  timestep = self.timestep,
-                                                                  curr_working_dir = curr_working_dir_gradient,
-                                                                  index_run = i,
-                                                                  warm_up_duration = self.warm_up_duration)
+                        result_grd = self._multiple_short_larsim_runs(timeframe=self.timeframe,
+                                                                      timestep=self.timestep,
+                                                                      curr_working_dir=curr_working_dir_gradient,
+                                                                      index_run=i,
+                                                                      warm_up_duration=self.warm_up_duration)
                     else:
-                        result_grd = self._single_larsim_run(timeframe = self.timeframe,
-                                                             curr_working_dir = curr_working_dir_gradient,
-                                                             index_run = i)
+                        result_grd = self._single_larsim_run(timeframe=self.timeframe,
+                                                             curr_working_dir=curr_working_dir_gradient,
+                                                             index_run=i)
 
                     # 2.4. Preparations before computing GoF
                     result_grd = larsimDataPostProcessing.parse_df_based_on_time(result_grd,
@@ -510,23 +512,23 @@ class LarsimModel(Model):
                     # TODO-Ivana : deal with situation when self.station_for_model_runs is a list
                     if self.station_for_model_runs != "all":
                         result_grd = larsimDataPostProcessing.filterResultForStation(result_grd,
-                                                                                     station = self.station_for_model_runs)
+                                                                                     station=self.station_for_model_runs)
 
                     # 2.5. Compute goodness of fit (GoF) &
                     #       get the DataFrame storing measurements / ground truth discharge
                     goodnessofFit_list_of_dictionaries, result_grd = self.compute_GoF(result_grd)
 
                     # Processing for calibration mode
-                    if self.calibration_mode:
+                    if self.calibrationMode:
                         # 2.6. Extract GoF for each analysed station
                         for single_stations_gof in goodnessofFit_list_of_dictionaries:
                             gradient_matrix_calibration_bulk[single_stations_gof["station"]].append(
-                                    single_stations_gof["calculateRMSE"])  # TODO : for the moment, just RMSE
+                                    single_stations_gof[self.calibrationParameter])
 
                     # Processing for non-calibration mode
-                    if self.non_calibration_mode:
+                    else:
                         # result_grd contains filtered results for a particular station, implicit 'MARI'
-                        if CD: # Central Difference (CD) computation
+                        if self.CD: # Central Difference (CD) computation
                             if id_param == 0:
                                 grd_no_calib_dataFrame = result_grd
                                 grd_no_calib_dataFrame.rename(columns={'Value': '0'}, inplace=True)
@@ -556,12 +558,12 @@ class LarsimModel(Model):
 
                 # 3. Process data for generating gradient matrices
                 # Processing for calibration mode
-                if self.calibration_mode:
+                if self.calibrationMode:
                     self.grd_matrix_calibration_mode_processing(result_dict, gradient_matrix_calibration_bulk, h_vector,
-                                                                CD, func_gof_RMSE_stations)
+                                                                self.CD, func_calibration_parameter)
 
                 # Processing for non-calibration mode
-                if self.non_calibration_mode:
+                else:
                     ids_list = [str(i) for i in range(len(parameter))]
                     gradient_matrices_list = [np.outer(rows, rows) / len(i_s) for rows in grd_no_calib_dataFrame[ids_list].to_numpy()]
                     grd_no_calib_dataFrame["Gradient_Matrices"] = gradient_matrices_list
@@ -798,8 +800,8 @@ class LarsimModel(Model):
 
         return curr_working_dir_gradient
 
-    def grd_matrix_calibration_mode_processing(self, result_dict, gradient_matrix_calibration_bulk, h_vector, CD = True,
-                                               func_gof_RMSE_stations = None):
+    def grd_matrix_calibration_mode_processing(self, result_dict, gradient_matrix_calibration_bulk, h_vector, CD = 1,
+                                               func_calibration_parameter = None):
         gradient_matrix_calibration = {}  # dictionary having stations as keys and outer product of gradients as values
         # compute gradient matrix for each station as C=(\sum_{j=1} ^ N (\nabla f(x_j) \nabla f(x_j) ^ T / N)
         # TODO : currently, just RMSE implementation
@@ -811,9 +813,9 @@ class LarsimModel(Model):
                 gradient_matrix_calibration[single_station] = np.outer(gradient_vector, gradient_vector) / num_params
         else:  # Forward Difference scheme
             for single_station in gradient_matrix_calibration_bulk:
-                # func_gof_RMSE_stations is f(x)
+                # func_calibration_parameter is f(x)
                 gradient_vector = (np.array(gradient_matrix_calibration_bulk[single_station]) -
-                                   np.array(func_gof_RMSE_stations)) / np.array(h_vector)
+                                   np.array(func_calibration_parameter)) / np.array(h_vector)
                 gradient_matrix_calibration[single_station] = np.outer(gradient_vector,
                                                                        gradient_vector) / num_params
 

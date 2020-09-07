@@ -15,7 +15,6 @@ from plotly.subplots import make_subplots
 import itertools
 import os
 import string as str
-from distutils.util import strtobool
 
 import larsimDataPostProcessing
 import larsimInputOutputUtilities

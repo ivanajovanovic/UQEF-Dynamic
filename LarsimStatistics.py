@@ -11,7 +11,6 @@ from plotly.subplots import make_subplots
 import itertools
 import os
 import string as str
-from distutils.util import strtobool
 
 from uqef.stat import Statistics
 
@@ -36,15 +35,16 @@ class LarsimSamples(object):
         dailyOutput = configurationObject["Output"]["dailyOutput"] if "dailyOutput" in configurationObject["Output"] else "False"
         #
         calculate_GoF = configurationObject["Output"]["calculate_GoF"]
-        calibration_mode = configurationObject["Output"]["calibration_mode"]
-        non_calibration_mode = configurationObject["Output"]["non_calibration_mode"]
+        calibrationMode = configurationObject["Output"]["calibrationMode"]
+        computeGradients = configurationObject["Output"]["computeGradients"] if "computeGradients" in \
+                                                                                configurationObject["Output"] else False
 
         list_of_single_df = []
         list_index_parameters_dict = []
         list_of_single_index_parameter_gof_df = []
         gradient_matrix_calibration = defaultdict(list)
         gradient_matrix_no_calibration = pd.DataFrame()
-        for index_run, value in enumerate(rawSamples,): #Important that the results inside rawSamples (resulted paths) are in sorted order and correspond to the parameters order
+        for index_run, value in enumerate(rawSamples,): # Important that the results inside rawSamples (resulted paths) are in sorted order and correspond to the parameters order
             if isinstance(value, tuple):
                 df_result = value[0]
                 index_parameters_dict = value[1]
@@ -54,27 +54,28 @@ class LarsimSamples(object):
                 index_parameters_dict = value["parameters_dict"]
                 list_index_parameters_dict.append(index_parameters_dict)
                 # runtime = value["run_time"]
-                if strtobool(calculate_GoF):
+                if calculate_GoF:
                     index_parameter_gof_DF = value["gof_df"]
                     list_of_single_index_parameter_gof_df.append(index_parameter_gof_DF)
                 # Gradients Computation
-                # Calibration Mode
-                if strtobool(calibration_mode):
-                    for station_gradient in value["gradient_calibration"]:
-                        # compute the sum of the outer product of gradients for a specific station
-                        # TODO : this can be parallelised - is a sum of matrices
-                        if station_gradient in gradient_matrix_calibration:
-                            gradient_matrix_calibration[station_gradient] += value["gradient_calibration"][station_gradient]
-                        else:
-                            gradient_matrix_calibration[station_gradient] = value["gradient_calibration"][station_gradient]
-                # Non-calibration Mode
-                if strtobool(non_calibration_mode):
-                    # only one station
-                    if index_run == 0:
-                        gradient_matrix_no_calibration = value["gradient_no_calibration"]
+                if computeGradients:
+                    # Calibration Mode
+                    if calibrationMode:
+                        for station_gradient in value["gradient_calibration"]:
+                            # compute the sum of the outer product of gradients for a specific station
+                            # TODO : this can be parallelised - is a sum of big matrices
+                            if station_gradient in gradient_matrix_calibration:
+                                gradient_matrix_calibration[station_gradient] += value["gradient_calibration"][station_gradient]
+                            else:
+                                gradient_matrix_calibration[station_gradient] = value["gradient_calibration"][station_gradient]
+                    # Non-calibration Mode
                     else:
-                        gradient_matrix_no_calibration["Gradient_Matrices"] += \
-                            value["gradient_no_calibration"]["Gradient_Matrices"]
+                        # only one station
+                        if index_run == 0:
+                            gradient_matrix_no_calibration = value["gradient_no_calibration"]
+                        else:
+                            gradient_matrix_no_calibration["Gradient_Matrices"] += \
+                                value["gradient_no_calibration"]["Gradient_Matrices"]
             else:
                 df_result = value
 
@@ -90,15 +91,16 @@ class LarsimSamples(object):
             list_of_single_df.append(df_single_ergebnis)
 
         # Gradient matrices process - gradient_matrix_calibration[station_id] gives the gradient matrix per station
-        # Calibration Mode
-        if strtobool(calibration_mode):
-            # Compute the eigendecomposition of gradient matrices
-            self.gradient_matrix_calibration = larsimDataPostProcessing.compute_eigendecomposition_gradient_matrices(gradient_matrix_calibration)
-            print("\n\n ---> Eigendecomposition of C matrices: \n\n", self.gradient_matrix_calibration, "\n\n")
-        # Non-calibration Mode
-        if strtobool(non_calibration_mode):
-            self.gradient_matrix_no_calibration = larsimDataPostProcessing.compute_eigendecomposition_gradient_matrices_no_calibration(gradient_matrix_no_calibration)
-            self.gradient_matrix_no_calibration.to_csv("/home/teo/Documents/Hiwi/Larsim-UQ/Gradient_Matrices_No_Calibration_EVW.csv")
+        if computeGradients:
+            # Calibration Mode
+            if calibrationMode:
+                # Compute the eigendecomposition of gradient matrices
+                self.gradient_matrix_calibration = larsimDataPostProcessing.compute_eigendecomposition_gradient_matrices(gradient_matrix_calibration)
+                print("\n\n ---> Eigendecomposition of C matrices: \n\n", self.gradient_matrix_calibration, "\n\n")
+            # Non-calibration Mode
+            else:
+                self.gradient_matrix_no_calibration = larsimDataPostProcessing.compute_eigendecomposition_gradient_matrices_no_calibration(gradient_matrix_no_calibration)
+                self.gradient_matrix_no_calibration.to_csv("/home/teo/Documents/Hiwi/Larsim-UQ/Gradient_Matrices_No_Calibration_EVW.csv")
 
         self.df_simulation_result = pd.concat(list_of_single_df, ignore_index=True, sort=False, axis=0)
 
@@ -116,7 +118,7 @@ class LarsimSamples(object):
 
         print("LARSIM STAT INFO: Number of Unique TimeStamps (Hourly): {}".format(len(self.df_simulation_result.TimeStamp.unique())))
 
-        if strtobool(dailyOutput):
+        if dailyOutput:
             # Average over time. i.e. change column TimeStamp and Value
             self.df_simulation_result = larsimDataPostProcessing.transformToDailyResolution(self.df_simulation_result)
             print("LARSIM STAT INFO: Number of Unique TimeStamps (Daily): {}".format(len(self.df_simulation_result.TimeStamp.unique())))
@@ -172,8 +174,8 @@ class LarsimStatistics(Statistics):
         self.groundTruth_computed = False
 
         # check if simulation results were already saved in KarsimModel
-        self.run_and_save_simulations = strtobool(self.configurationObject["Output"]["run_and_save_simulations"])\
-                                        if "run_and_save_simulations" in self.configurationObject["Output"] else False
+        self.run_and_save_simulations = self.configurationObject["Output"][
+            "run_and_save_simulations"] if "run_and_save_simulations" in self.configurationObject["Output"] else False
 
         self.nodeNames = []
         for i in self.configurationObject["parameters"]:
@@ -313,14 +315,14 @@ class LarsimStatistics(Statistics):
             self.df_measured = larsimDataPostProcessing.read_process_write_discharge(df=local_measurment_file,\
                                      timeframe=timestepRange,\
                                      station=self.configurationObject["Output"]["station_calibration_postproc"],\
-                                     dailyOutput=strtobool(self.configurationObject["Output"]["dailyOutput"]),\
+                                     dailyOutput=self.configurationObject["Output"]["dailyOutput"],\
                                      compression="gzip")
         else:
             self.df_measured = larsimConfigurationSettings.extract_measured_discharge(timestepRange[0], timestepRange[1], index_run=0)
             self.df_measured = larsimDataPostProcessing.filterResultForStationAndTypeOfOutpu(self.df_measured,\
                                                        station=self.configurationObject["Output"]["station_calibration_postproc"],\
                                                        type_of_output=self.configurationObject["Output"]["type_of_output_measured"])
-            if strtobool(self.configurationObject["Output"]["dailyOutput"]):
+            if self.configurationObject["Output"]["dailyOutput"]:
                 self.df_measured = larsimDataPostProcessing.transformToDailyResolution(self.df_measured)
         self.groundTruth_computed = True
         #self.Abfluss["Ground_Truth_Measurements"] = self.measured
@@ -331,7 +333,7 @@ class LarsimStatistics(Statistics):
                              timeframe=timestepRange,\
                              type_of_output=self.configurationObject["Output"]["type_of_output"],\
                              station=self.configurationObject["Output"]["station_calibration_postproc"],\
-                             dailyOutput=strtobool(self.configurationObject["Output"]["dailyOutput"]),\
+                             dailyOutput=self.configurationObject["Output"]["dailyOutput"],\
                              compression="gzip")
         self.unalatered_computed = True
         #self.Abfluss["Unaltered"] = self.unalatered
