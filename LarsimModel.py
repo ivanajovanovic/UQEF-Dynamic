@@ -116,7 +116,7 @@ class LarsimModelSetUp():
 
         # Parse big lila files and create small ones
         larsimConfigurationSettings.master_lila_parser_based_on_time_crete_new(timeframe=self.timeframe, master_lila_paths=self.master_lila_paths, \
-                                                   new_lila_paths=self.lila_configured_paths,start_date_min_3_bool=False)
+                                                   new_lila_paths=self.lila_configured_paths)
 
         for one_lila_file in self.lila_configured_paths:
             if not osp.exists(one_lila_file):

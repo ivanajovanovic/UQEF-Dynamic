@@ -219,6 +219,7 @@ class LarsimStatistics(Statistics):
         self.station_names = samples.get_simulation_stations()
         #self.nodeNames = simulationNodes.nodeNames
 
+        #components independent on model evaluations, i.e., defined a priori, based solely on the underlying distribution
         nodes = simulationNodes.distNodes
         dist = simulationNodes.joinedDists
         weights = simulationNodes.weights
