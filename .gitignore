@@ -2,6 +2,9 @@
 model_runs/
 saves/
 __pycache__/
+.idea/
+common/
+figures/
 
 
 # Compiled source #

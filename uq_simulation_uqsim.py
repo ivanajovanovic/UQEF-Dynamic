@@ -1,42 +1,30 @@
 """
-Usage of the UQEF with a Larsim model.
+Usage of the UQEF with a (mainly) Larsim model.
 @author: Florian Kuenzner and Ivana Jovanovic
 """
 
-# plotting
-import matplotlib
-#matplotlib.use('Agg')
-
-# numerical stuff
-import uqef
-
-import LarsimModel
-import LarsimStatistics
-
-import LinearDampedOscillatorModel
-import LinearDampedOscillatorStatistics
-
-import IshigamiModel
-import IshigamiStatistics
-
-import ProductFunctionModel
-import ProductFunctionStatistics
-
 import os
 import subprocess
-import datetime
-import socket
-
-#added by IVANA
-import glob
-import pandas as pd
+import sys
 import pickle
-import numpy as np
-import time
-from tabulate import tabulate
 
-#import paths
-import larsimPaths as paths
+import uqef
+
+from larsim import LarsimModel
+from larsim import LarsimStatistics
+
+from linearDampedOscillato import LinearDampedOscillatorModel
+from linearDampedOscillato import LinearDampedOscillatorStatistics
+
+from ishigami import IshigamiModel
+from ishigami import IshigamiStatistics
+
+from productFunction import ProductFunctionModel
+from productFunction import ProductFunctionStatistics
+
+import LarsimUtilityFunctions.larsimPaths as paths
+
+sys.path.insert(0, os.getcwd())
 
 # instantiate UQsim
 uqsim = uqef.UQsim()
@@ -51,12 +39,10 @@ if local_debugging:
     uqsim.args.uq_method = "sc"
     uqsim.args.uncertain = "all"
     uqsim.args.chunksize = 1
-    uqsim.args.mc_numevaluations = 10 #50
+    uqsim.args.mc_numevaluations = 10
     uqsim.args.sc_q_order = 10
     uqsim.args.sc_p_order = 8
-    #uqsim.args.outputResultDir = os.path.abspath(os.path.join(paths.scratch_dir, 'Larsim_runs/trial_run'))
     uqsim.args.outputResultDir = os.path.abspath(os.path.join(paths.scratch_dir, 'larsim_run_lai_may'))
-    #uqsim.args.outputResultDir = os.path.abspath(os.path.join(paths.scratch_dir, 'trial_run_lai_jun_2'))
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
     uqsim.args.inputModelDir = paths.larsim_data_path
     uqsim.args.sourceDir = paths.sourceDir
