@@ -18,3 +18,20 @@ Additional Software requirements:
 ### Things to be done before each run 
 - delete all subfolders in folder `model_runs`
 - optional - delete all whm and lila files inside `../Larsim-data/WHM Regen/master_configuration`
+
+### Paths Definitions
+#### Paths Definitions from LarsimUtilityFunctions
+* home_dir
+* data_dir (the parent folder of the **Larsim-data** folder)
+* scratch_dir (folder to save the output)
+* sourceDir (folder where source code is)
+* working_dir
+* larsim_data_path
+*sim_folder*
+#### Paths Definitions from UQEF
+* inputModelDir - larsim_data_path
+* outputModelDir - outputResultDir
+* outputResultDir - scratch_dir/folder_for_current_results (save dictionary with arguments, save nodes dist, save nodes files, save statistic plot reuslts, save statistics file.)
+                  - uqsim.configuration_object["Directories"]["working_dir"] = outputResultDir/model_runs
+* sourceDir - sourceDir
+
