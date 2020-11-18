@@ -197,7 +197,7 @@
     "calculate_GoF": "True",
     "objective_function":"all",
     "run_and_save_simulations":"True",
-    "compute_gredients": "False"
+    "compute_gradients": "False"
   },
   "parameters_settings":
   {

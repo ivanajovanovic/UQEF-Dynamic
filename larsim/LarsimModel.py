@@ -13,12 +13,12 @@ import time
 
 from uqef.model import Model
 
-import larsimPaths as paths
+import LarsimUtilityFunctions.larsimPaths as paths
 
-import larsimConfigurationSettings
-import larsimDataPostProcessing
-import larsimInputOutputUtilities
-import larsimTimeUtility
+from LarsimUtilityFunctions import larsimConfigurationSettings
+from LarsimUtilityFunctions import larsimDataPostProcessing
+from LarsimUtilityFunctions import larsimInputOutputUtilities
+from LarsimUtilityFunctions import larsimTimeUtility
 
 
 class LarsimModelSetUp():
@@ -304,8 +304,8 @@ class LarsimModel(Model):
 
 
         # if we want to compute the gradient (of some likelihood fun or output itself) w.r.t parameters
-        self.compute_gredients = strtobool(self.configurationObject["Output"]["compute_gredients"])\
-                       if "compute_gredients" in self.configurationObject["Output"] else False
+        self.compute_gradients = strtobool(self.configurationObject["Output"]["compute_gradients"])\
+                       if "compute_gradients" in self.configurationObject["Output"] else False
 
         #####################################
         # getting the time span for running the model from the json configuration file
@@ -437,7 +437,7 @@ class LarsimModel(Model):
                 #index_parameter_gof_DF.to_pickle(osp.abspath(osp.join(self.working_dir, "goodness_of_fit_" + str(i) +  ".pkl")), compression="gzip")
 
             # compute gradient of the output, or some likelihood measure w.r.t parameters
-            if self.compute_gredients:
+            if self.compute_gradients:
                 gradient_matrix = []
                 if gradient_matrix:
                     result_dict["gradient"] = gradient_matrix
