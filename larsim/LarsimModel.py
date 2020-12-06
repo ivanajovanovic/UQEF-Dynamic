@@ -57,10 +57,20 @@ class LarsimModelSetUp():
         self.inputModelDir = pathlib.Path(self.inputModelDir)
         self.master_dir = pathlib.Path(self.master_dir)
         self.global_master_dir = pathlib.Path(self.global_master_dir)
-        self.master_lila_paths = pathlib.Path(self.master_lila_paths)
-        self.lila_configured_paths = pathlib.Path(self.lila_configured_paths)
         self.all_whms_path = pathlib.Path(self.all_whms_path)
         self.larsim_exe = pathlib.Path(self.larsim_exe)
+
+        for i, file in enumerate(self.master_lila_paths):
+            self.master_lila_paths[i] = pathlib.Path(file)
+        for i, file in enumerate(self.lila_configured_paths):
+            self.lila_configured_paths[i] = pathlib.Path(file)
+
+        print(self.sourceDir)
+        print(self.workingDir)
+        print(self.inputModelDir)
+        print(self.global_master_dir)
+        print(self.all_whms_path)
+        print(self.larsim_exe)
 
         #####################################
         # Specification of different variables for setting the model run and purpose of the model run
@@ -95,10 +105,11 @@ class LarsimModelSetUp():
 
         self.copy_master_folder()
         self.configure_master_folder()
-
-        self.get_measured_discharge()
-        self.run_unaltered_sim(createNewFolder=False, write_in_file=True)
-        #self._compare_measurements_and_unalteredSim()
+        #
+        # self.get_measured_discharge()
+        # self.get_Larsim_saved_simulations()
+        # self.run_unaltered_sim(createNewFolder=False, write_in_file=True)
+        # self._compare_measurements_and_unalteredSim()
 
         self.df_simulation = None
         self.df_measured = None
@@ -109,7 +120,7 @@ class LarsimModelSetUp():
     def copy_master_folder(self):
         # for safety reasons make a copy of the master_dir in the working_dir and continue working with that one
         self.master_dir.mkdir(parents=True, exist_ok=True)
-        master_dir_for_copying = self.global_master_dir / "/."
+        master_dir_for_copying = str(self.global_master_dir) + "/."
         subprocess.run(['cp', '-a', master_dir_for_copying, self.master_dir])
 
     def configure_master_folder(self):
@@ -191,7 +202,7 @@ class LarsimModelSetUp():
             if write_file_path is None:
                 write_file_path= self.workingDir / "df_measured.pkl"
             larsimInputOutputUtilities.write_dataFrame_to_file(self.df_measured,
-                                                               write_to_file= write_file_path,
+                                                               file_path = write_file_path,
                                                                compression="gzip")
 
     def get_Larsim_saved_simulations(self, filtered_timesteps_vs_station_values=True, write_in_file=True,
@@ -229,7 +240,7 @@ class LarsimModelSetUp():
             if write_file_path is None:
                 write_file_path = self.workingDir / "df_simulated.pkl"
             larsimInputOutputUtilities.write_dataFrame_to_file(self.df_simulation,
-                                                               write_to_file=write_file_path,
+                                                               file_path=write_file_path,
                                                                compression="gzip")
 
     # TODO change run_unaltered_sim such that it can as well run in cut_runs mode
@@ -240,7 +251,7 @@ class LarsimModelSetUp():
         if createNewFolder:
             dir_unaltered_run = self.workingDir / "WHM Regen 000"
             dir_unaltered_run.mkdir(parents=True, exist_ok=True)
-            master_dir_for_copying = self.master_dir / "/."
+            master_dir_for_copying = str(self.master_dir) + "/."
             subprocess.run(['cp', '-a', master_dir_for_copying, dir_unaltered_run])
         else:
             dir_unaltered_run = self.master_dir
@@ -266,7 +277,7 @@ class LarsimModelSetUp():
             if write_file_path is None:
                 write_file_path = self.workingDir / "df_unaltered_ergebnis.pkl"
             larsimInputOutputUtilities.write_dataFrame_to_file(self.df_unaltered_ergebnis,
-                                                               write_to_file=write_file_path,
+                                                               file_path=write_file_path,
                                                                compression="gzip")
 
         # delete ergebnis.lila and all other not necessary files
@@ -444,7 +455,7 @@ class LarsimModel(Model):
             curr_working_dir.mkdir(parents=True, exist_ok=True)
 
             # copy all the necessary files to the newly created directoy
-            master_dir_for_copying = self.master_dir / "/."
+            master_dir_for_copying = str(self.master_dir) + "/."
             subprocess.run(['cp', '-a', master_dir_for_copying, curr_working_dir])
             print("[LarsimModel INFO] Successfully copied all the files")
 
@@ -595,17 +606,17 @@ class LarsimModel(Model):
             print(f"[LarsimModel ERROR - None is returned after the Larsim run \n]"+str(e))
             return None
 
-        command = 'chmod 755 ' + local_tape10_adjusted_path
-        subprocess.run(command.split())
-        local_tape12 = curr_working_dir / 'tape12'
-        command = 'chmod 755 ' + local_tape12
-        subprocess.run(command.split())
-        local_tape29 = curr_working_dir / 'tape29'
-        command = 'chmod 755 ' + local_tape29
-        subprocess.run(command.split())
-        local_tape35 = curr_working_dir / 'tape35'
-        command = 'chmod 755 ' + local_tape35
-        subprocess.run(command.split())
+        # command = 'chmod 755 ' + local_tape10_adjusted_path
+        # subprocess.run(command.split())
+        # local_tape12 = curr_working_dir / 'tape12'
+        # command = 'chmod 755 ' + local_tape12
+        # subprocess.run(command.split())
+        # local_tape29 = curr_working_dir / 'tape29'
+        # command = 'chmod 755 ' + local_tape29
+        # subprocess.run(command.split())
+        # local_tape35 = curr_working_dir / 'tape35'
+        # command = 'chmod 755 ' + local_tape35
+        # subprocess.run(command.split())
 
         # log file for larsim
         local_log_file = curr_working_dir / f"run_{index_run}_{sub_index_run}.log"
