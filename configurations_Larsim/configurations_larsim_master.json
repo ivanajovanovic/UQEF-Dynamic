@@ -14,7 +14,7 @@
       "end_minute": 0,
 
       "timestep": 5,
-      "cut_runs": "True",
+      "cut_runs": "False",
       "warm_up_duration": 53
     },
   "Output":

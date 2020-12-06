@@ -7,14 +7,14 @@
       "start_hour": 0,
       "start_minute": 0,
 
-      "end_day": 15,
+      "end_day": 30,
       "end_month": 5,
       "end_year": 2013,
       "end_hour": 0,
       "end_minute": 0,
 
       "timestep": 2,
-      "cut_runs": "True",
+      "cut_runs": "False",
       "warm_up_duration": 53
     },
   "Output":
@@ -27,7 +27,7 @@
       "dailyOutput": "False",
       "calculate_GoF": "True",
       "objective_function":"all",
-      "run_and_save_simulations":"False",
+      "run_and_save_simulations":"True",
       "compute_gradients": "False"
     },
   "parameters_settings":

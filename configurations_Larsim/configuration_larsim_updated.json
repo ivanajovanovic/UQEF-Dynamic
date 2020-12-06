@@ -15,9 +15,30 @@
       "end_minute": 0,
 
       "timestep": 5,
-      "cut_runs": "True",
+      "cut_runs": "False",
       "warm_up_duration": 53
     },
+  "Output":
+  {
+    "type_of_output":"Abfluss Messung",
+    "type_of_output_measured":"Ground Truth",
+    "station_calibration_postproc":"MARI",
+    "station_model_runs": "all",
+    "pathsDataFormat":"False",
+    "dailyOutput": "False",
+    "calculate_GoF": "True",
+    "objective_function":"all",
+    "run_and_save_simulations":"True",
+    "compute_gradients": "False"
+  },
+  "parameters_settings":
+  {
+    "addSampledValue":"False",
+    "TGB_standard":3085,
+    "roundParameters":"False",
+    "roundDecimal":2,
+    "cut_limits":"False"
+  },
   "parameters": [
     {
       "name": "Acker:May",
@@ -185,26 +206,5 @@
       "lower_limit": 0.000002,
       "upper_limit": 0.1
     }
-  ],
-  "Output":
-  {
-    "type_of_output":"Abfluss Messung",
-    "type_of_output_measured":"Ground Truth",
-    "station_calibration_postproc":"MARI",
-    "station_model_runs": "all",
-    "pathsDataFormat":"False",
-    "dailyOutput": "False",
-    "calculate_GoF": "True",
-    "objective_function":"all",
-    "run_and_save_simulations":"True",
-    "compute_gradients": "False"
-  },
-  "parameters_settings":
-  {
-    "addSampledValue":"False",
-    "TGB_standard":3085,
-    "roundParameters":"False",
-    "roundDecimal":2,
-    "cut_limits":"False"
-  }
+  ]
 }
