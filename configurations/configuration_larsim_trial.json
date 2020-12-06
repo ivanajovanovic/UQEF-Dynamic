@@ -1,0 +1,32 @@
+{
+  "Timeframe":
+    {
+      "start_day": 20,
+      "start_month": 6,
+      "start_year": 2013,
+      "start_hour": 0,
+      "start_minute": 0,
+
+
+      "end_day": 20,
+      "end_month": 7,
+      "end_year": 2013,
+      "end_hour": 0,
+      "end_minute": 0,
+
+      "timestep": 10,
+      "cut_runs": "False"
+    },
+  "Output":
+  {
+    "type_of_output":"Abfluss Messung",
+    "station":"MARI",
+    "pathsDataFormat":"False",
+    "dailyOutput": "False"
+  },
+  "GaugeControlRegion":
+  {
+    "TGB":3085,
+    "addSampledValue":"False"
+  }
+}

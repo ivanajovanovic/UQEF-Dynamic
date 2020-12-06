@@ -1,13 +1,12 @@
 import datetime
 import dill
 from distutils.util import strtobool
-from decimal import Decimal
+from functools import reduce
 import inspect
 import os
 import os.path as osp
 import pandas as pd
-import pickle
-import numpy as np
+import pathlib
 import subprocess
 import time
 
@@ -17,6 +16,7 @@ import LarsimUtilityFunctions.larsimPaths as paths
 
 from LarsimUtilityFunctions import larsimConfigurationSettings
 from LarsimUtilityFunctions import larsimDataPostProcessing
+from LarsimUtilityFunctions import larsimDataPreparation
 from LarsimUtilityFunctions import larsimInputOutputUtilities
 from LarsimUtilityFunctions import larsimTimeUtility
 
@@ -32,14 +32,17 @@ class LarsimModelSetUp():
         #####################################
 
         self.current_dir = kwargs.get('sourceDir') if 'sourceDir' in kwargs and osp.isabs(kwargs.get('sourceDir')) \
-                            else osp.dirname(osp.abspath(inspect.getfile(inspect.currentframe())))
+                            else osp.dirname(pathlib.Path(__file__).resolve())
 
         self.inputModelDir = kwargs.get('inputModelDir') if 'inputModelDir' in kwargs else paths.larsim_data_path
 
-        #try:
-        self.working_dir = self.configurationObject["Directories"]["working_dir"]
-        #except KeyError:
-        #    self.working_dir = paths.working_dir  # directoy for all the larsim runs
+        if "working_dir" in kwargs:
+            self.working_dir = kwargs.get('working_dir')
+        else:
+            try:
+                self.working_dir = self.configurationObject["Directories"]["working_dir"]
+            except KeyError:
+                self.working_dir = paths.working_dir
 
         self.master_dir = osp.abspath(osp.join(self.working_dir, 'master_configuration'))
 
@@ -47,7 +50,18 @@ class LarsimModelSetUp():
         self.master_lila_paths = [osp.abspath(osp.join(self.inputModelDir,'WHM Regen', i)) for i in paths.master_lila_files]
         self.lila_configured_paths = [os.path.abspath(os.path.join(self.master_dir, i)) for i in paths.lila_files]
         self.all_whms_path = osp.abspath(osp.join(self.inputModelDir,'WHM Regen','var/WHM Regen WHMS'))
+
         self.larsim_exe = osp.abspath(osp.join(self.inputModelDir, 'Larsim-exe', 'larsim-linux-intel-1000.exe'))
+
+        self.current_dir = pathlib.Path(self.current_dir)
+        self.working_dir = pathlib.Path(self.working_dir)
+        self.inputModelDir = pathlib.Path(self.inputModelDir)
+        self.master_dir = pathlib.Path(self.master_dir)
+        self.global_master_dir = pathlib.Path(self.global_master_dir)
+        self.master_lila_paths = pathlib.Path(self.master_lila_paths)
+        self.lila_configured_paths = pathlib.Path(self.lila_configured_paths)
+        self.all_whms_path = pathlib.Path(self.all_whms_path)
+        self.larsim_exe = pathlib.Path(self.larsim_exe)
 
         #####################################
         # Sepcification of different variables for setting the model run and purpose of the model run
@@ -83,31 +97,42 @@ class LarsimModelSetUp():
         self.copy_master_folder()
         self.configure_master_folder()
 
-        self.get_measured_discharge(write_in_file=True)
+        self.get_measured_discharge()
         self.run_unaltered_sim(createNewFolder=False, write_in_file=True)
         self._compare_measurements_and_unalteredSim()
 
-        print("LarsimModelSetUp INFO: Model Initial setup is done! ")
+        print("[LarsimModelSetUp INFO:] Model Initial setup is done! ")
 
     def copy_master_folder(self):
         # for safety reasons make a copy of the master_dir in the working_dir and continue working with that one
-        if not osp.isdir(self.master_dir): subprocess.run(["mkdir", self.master_dir])
-        master_dir_for_copying = self.global_master_dir + "/."
+        # if not osp.isdir(self.master_dir): subprocess.run(["mkdir", self.master_dir])
+        # master_dir_for_copying = self.global_master_dir + "/."
+        self.master_dir.mkdir(parents=True, exist_ok=True)
+        master_dir_for_copying = self.global_master_dir / "./"
         subprocess.run(['cp', '-a', master_dir_for_copying, self.master_dir])
 
     def configure_master_folder(self):
-        #####################################
-        ### copy configuration files & do all the configurations needed for proper execution & copy initial and input data files to master folder
-        #####################################
+        """
+        Copy configuration files & do all the configurations needed for proper execution
+        & copy initial and input data files to master folder
+        :return:
+        """
         # Get the timeframe for running the simulation from the configuration file
         self.timeframe = larsimTimeUtility.parse_datetime_configuration(
             self.configurationObject)  # tuple with EREIGNISBEGINN EREIGNISENDE
 
-        if not osp.isdir(self.master_dir): raise IOError('LarsimModelSetUp Error: Please first creat the following folder: %s. %s' % (self.master_dir, IOError.strerror))
+        #if not osp.isdir(self.master_dir): raise IOError('LarsimModelSetUp Error: Please first creat the following folder: %s. %s' % (self.master_dir, IOError.strerror))
+        if not self.master_dir.is_dir():
+            raise IOError('[LarsimModelSetUp Error:] Please first create the following folder: %s. %s' % (self.master_dir, IOError.strerror))
+
 
         # Based on time settings change tape10_master file - needed for unaltered run - this will be repeted once again by each process in LarsimModel.run()
-        tape10_adjusted_path = osp.abspath(osp.join(self.master_dir, 'tape10'))
-        master_tape10_file = osp.abspath(osp.join(self.master_dir, 'tape10_master'))
+        # tape10_adjusted_path = osp.abspath(osp.join(self.master_dir, 'tape10'))
+        # master_tape10_file = osp.abspath(osp.join(self.master_dir, 'tape10_master'))
+        tape10_adjusted_path = self.master_dir / 'tape10'
+        master_tape10_file = self.master_dir / 'tape10_master'
+
+
         larsimTimeUtility.tape10_configuration(timeframe=self.timeframe, master_tape10_file=master_tape10_file, \
                                                new_path=tape10_adjusted_path, warm_up_duration=self.warm_up_duration)
 
@@ -115,83 +140,133 @@ class LarsimModelSetUp():
         larsimConfigurationSettings.copy_whm_files(timeframe=self.timeframe, all_whms_path=self.all_whms_path, new_path=self.master_dir)
 
         # Parse big lila files and create small ones
-        larsimConfigurationSettings.master_lila_parser_based_on_time_crete_new(timeframe=self.timeframe, master_lila_paths=self.master_lila_paths, \
-                                                   new_lila_paths=self.lila_configured_paths)
+        larsimConfigurationSettings.master_lila_parser_based_on_time_crete_new(timeframe=self.timeframe,
+                                                                               master_lila_paths=self.master_lila_paths,
+                                                                               new_lila_paths=self.lila_configured_paths)
 
         for one_lila_file in self.lila_configured_paths:
-            if not osp.exists(one_lila_file):
-                raise IOError('LarsimModelSetUp Error: File does not exist: %s. %s' % (one_lila_file, IOError.strerror))
+            paths._check_file(one_lila_file, f"[LarsimModelSetUp Error:] File {one_lila_file} does not exist!")
 
-        print("LarsimModelSetUp INFO: Initial configuration is done - all the files have been copied to master folder! ")
 
-    def get_measured_discharge(self, write_in_file=True):
+        print("[LarsimModelSetUp INFO:] Initial configuration is done - all the files have been copied to master folder! ")
+
+    def get_measured_discharge(self, read_file_path=None, filtered_timesteps_vs_station_values=True, write_in_file=True,
+                               write_file_path=None, *args, **kwargs):
         #####################################
         ### extract measured (ground truth) discharge values
+        ### there are multiple ways how one can do that
         #####################################
-        # station_wq.lila file containing ground truth (measured) discharges to lila file
-        local_wq_file = osp.abspath(osp.join(self.master_dir, paths.lila_files[0])) #lila_configured_paths[0]
-        self.df_measured = larsimDataPostProcessing.read_process_write_discharge(df=local_wq_file,\
-                             index_run=0,\
-                             timeframe=self.timeframe,\
-                             write_to_file=osp.abspath(osp.join(self.working_dir, "df_measured.pkl")),\
-                             compression="gzip"
-                             )
-        #self.df_measured = larsimConfigurationSettings.extract_measured_discharge(self.timeframe[0], self.timeframe[1], station=self.station_for_model_runs, index_run=0)
 
-    def get_Larsim_saved_simulations(self, write_in_file=True):
-        #TODO Make this work
-        self.df_simulation, _, mean_per_time_DF, discharge_measured = larsimDataPostProcessing.get_big_DF_with_simulated_data(sim_folder=paths.sim_folder,\
-                                               s_year=self.configurationObject["Timeframe"]["start_year"],\
-                                               s_mont=self.configurationObject["Timeframe"]["start_month"],\
-                                               s_day=self.configurationObject["Timeframe"]["start_day"],\
-                                               e_year=self.configurationObject["Timeframe"]["end_year"],\
-                                               e_mont=self.configurationObject["Timeframe"]["end_month"],\
-                                               e_day=self.configurationObject["Timeframe"]["end_day"],\
-                                               station=self.station_for_model_runs, type_of_output=self.type_of_output_of_Interest,\
-                                               one_day_simulation_run=True,\
-                                               calc_avrg=True, get_measured=True,\
-                                               plot=False, saveToFile=False)
-        self.df_simulation.drop_duplicates(subset=['TimeStamp','Stationskennung'], keep='last', inplace=True)
+        if read_file_path is None:
+            if filtered_timesteps_vs_station_values:
+                read_file_path = paths.regen_saved_data_files / 'q_2003-11-01_2018-01-01_time_and_values_filtered.pkl'
+            else:
+                read_file_path = self.master_dir / paths.lila_files[0]
 
+        if read_file_path.is_file():
+            self.df_measured = larsimDataPostProcessing.read_process_write_discharge(df=read_file_path,
+                                                                                     timeframe=self.timeframe,
+                                                                                     station=self.station_for_model_runs,
+                                                                                     )
+        else:
+            # example for this branch is when read_file_path is of type  "./q_2003-11-01_2018-01-01_time_and_values_filtered.pkl"
+            # however it might be that this file does not exists. In that case one will read and process/filter the whole dataFrame again
+            read_file_path = self.master_dir / paths.lila_files[0]
+            if read_file_path.is_file():
+                self.df_measured = larsimDataPreparation.get_filtered_df(df=read_file_path,
+                                                                         stations=self.station_for_model_runs,
+                                                                         start_date=self.timeframe[0],
+                                                                         end_date=self.timeframe[1],
+                                                                         drop_duplicates=kwargs["drop_duplicates"],
+                                                                         fill_missing_timesteps=kwargs["fill_missing_timesteps"],
+                                                                         interpolate_missing_values=kwargs["interpolate_missing_values"],
+                                                                         interpolation_method=kwargs["interpolation_method"],
+                                                                         only_time_series_values=True,
+                                                                         )
+        if write_in_file:
+            if write_file_path is None:
+                write_file_path= self.working_dir / "df_measured.pkl"
+            larsimInputOutputUtilities.write_dataFrame_to_file(self.df_measured,
+                                                               write_to_file= write_file_path,
+                                                               compression="gzip")
 
-    def run_unaltered_sim(self, createNewFolder=False, write_in_file=True):
+    def get_Larsim_saved_simulations(self, filtered_timesteps_vs_station_values=True, write_in_file=True,
+                                     write_file_path=None, *args, **kwargs):
+        list_of_df_per_station = []
+        if self.station_for_model_runs is None or self.station_for_model_runs=="all":
+            station_for_model_runs = list(larsimDataPostProcessing.get_Stations(self.df_measured))
+        if not isinstance(station_for_model_runs, list):
+            station_for_model_runs = [station_for_model_runs, ]
+        for station in station_for_model_runs:
+            df_station_sim_path = paths.regen_saved_data_files / f"larsim_output_{station}_2005_2017.pkl"
+            df_station_sim_filtered_path = paths.regen_saved_data_files / f"larsim_output_{station}_2005_2017_filtered.pkl"
+            if df_station_sim_filtered_path.is_file():
+                df_sim = larsimInputOutputUtilities.read_dataFrame_from_file(df_station_sim_filtered_path, compression="gzip")
+            elif df_station_sim_path.is_file():
+                df_sim = larsimDataPreparation.get_filtered_df(df=df_station_sim_path,
+                                                               start_date=self.timeframe[0],
+                                                               end_date=self.timeframe[1],
+                                                               drop_duplicates=kwargs["drop_duplicates"],
+                                                               fill_missing_timesteps=kwargs["fill_missing_timesteps"],
+                                                               interpolate_missing_values=kwargs["interpolate_missing_values"],
+                                                               interpolation_method=kwargs["interpolation_method"],
+                                                               only_time_series_values=filtered_timesteps_vs_station_values,
+                                                               )
+                if filtered_timesteps_vs_station_values:
+                    df_sim.rename(columns={"Value": station}, inplace=True)
+                list_of_df_per_station.append(df_sim)
+
+        if filtered_timesteps_vs_station_values:
+            self.df_simulation = reduce(lambda x, y: pd.merge(x, y, on="TimeStamp", how='outer'), list_of_df_per_station)
+        else:
+            self.df_simulation = pd.concat(list_of_df_per_station, ignore_index=True, sort=False, axis=0)
+
+        if write_in_file:
+            if write_file_path is None:
+                write_file_path = self.working_dir / "df_simulated.pkl"
+            larsimInputOutputUtilities.write_dataFrame_to_file(self.df_simulation,
+                                                               write_to_file=write_file_path,
+                                                               compression="gzip")
+
+    def run_unaltered_sim(self, createNewFolder=False, write_in_file=True, write_file_path=None):
         #####################################
         ### run unaltered simulation
         #####################################
         if createNewFolder:
-            dir_unaltered_run = osp.abspath(osp.join(self.working_dir, "WHM Regen 000"))
-            if not osp.isdir(dir_unaltered_run):
-                subprocess.run(["mkdir", dir_unaltered_run])
-            master_dir_for_copying = self.master_dir + "/."
+            dir_unaltered_run = self.working_dir / "WHM Regen 000"
+            dir_unaltered_run.mkdir(parents=True, exist_ok=True)
+            master_dir_for_copying = self.master_dir / "/."
             subprocess.run(['cp', '-a', master_dir_for_copying, dir_unaltered_run])
         else:
             dir_unaltered_run = self.master_dir
 
         os.chdir(dir_unaltered_run)
         larsimConfigurationSettings._delete_larsim_output_files(curr_directory=dir_unaltered_run)
-        local_log_file = osp.abspath(osp.join(dir_unaltered_run, "run.log"))
+        local_log_file = dir_unaltered_run / "run.log"
         subprocess.run([self.larsim_exe], stdout=open(local_log_file, 'w'))
         os.chdir(self.current_dir)
-        print("LARSIM SETUP: Unaltered Run is completed, current folder is:{}".format(self.current_dir))
+        print("[LarsimModelSetUp INFO:] Unaltered Run is completed, current folder is:{}".format(self.current_dir))
 
-        result_file_path = osp.abspath(osp.join(dir_unaltered_run, 'ergebnis.lila'))
-        self.df_unaltered_ergebnis = larsimInputOutputUtilities.ergebnis_parser_toPandas(result_file_path, index_run=0, write_in_file=False)
+        result_file_path = dir_unaltered_run / 'ergebnis.lila'
+        self.df_unaltered_ergebnis = larsimInputOutputUtilities.ergebnis_parser_toPandas(result_file_path)
 
         # filter output time-series in order to disregard warm-up time; important that these values are not take into account while computing GoF
         # However, take care that is is not done twice!
         #simulation_start_timestamp = self.timeframe[0] + datetime.timedelta(hours=self.warm_up_duration) # pd.Timestamp(result.TimeStamp.min())
         #self.df_unaltered_ergebnis = larsimDataPostProcessing.parse_df_based_on_time(self.df_unaltered_ergebnis, (simulation_start_timestamp, None))
 
-        #filter out results for a concret station if specified in configuration json file
-        if self.station_for_model_runs!="all":
+        # filter out results for a concrete station if specified in configuration json file
+        if self.station_for_model_runs is not None and self.station_for_model_runs!="all":
             self.df_unaltered_ergebnis = larsimDataPostProcessing.filterResultForStation(self.df_unaltered_ergebnis, station=self.station_for_model_runs)
 
         if write_in_file:
-            larsimInputOutputUtilities.write_dataFrame_to_file(self.df_unaltered_ergebnis, osp.abspath(osp.join(self.working_dir, "df_unaltered_ergebnis.pkl")), compression="gzip")
+            if write_file_path is None:
+                write_file_path = osp.abspath(osp.join(self.working_dir, "df_unaltered_ergebnis.pkl"))
+            larsimInputOutputUtilities.write_dataFrame_to_file(self.df_unaltered_ergebnis,
+                                                               write_to_file=write_file_path,
+                                                               compression="gzip")
 
-        #print("Data Frame with Unaltered Simulation Discharges dtypes : {}".format(self.df_unaltered_ergebnis.dtypes))
-
-        #delte ergebnis.lila and all other not necessary files
+        # delte ergebnis.lila and all other not necessary files
         if createNewFolder:
             larsimConfigurationSettings.cleanDirecory_completely(curr_directory=dir_unaltered_run)
         else:
@@ -228,7 +303,7 @@ class LarsimModel(Model):
         #####################################
 
         self.current_dir = kwargs.get('sourceDir') if 'sourceDir' in kwargs and osp.isabs(kwargs.get('sourceDir')) \
-                            else osp.dirname(osp.abspath(inspect.getfile(inspect.currentframe())))
+                            else osp.dirname(pathlib.Path(__file__).resolve())
 
         self.inputModelDir = kwargs.get('inputModelDir') if 'inputModelDir' in kwargs else paths.larsim_data_path
 
@@ -326,6 +401,18 @@ class LarsimModel(Model):
 
     def normaliseParameter(self, parameter):
         return parameter
+
+    def set_configuration_object(self, configurationObject):
+        self.configurationObject = larsimConfigurationSettings.return_configuration_object(configurationObject)
+
+    def set_timeframe(self, timeframe):
+        self.timeframe = larsimTimeUtility.timeframe_to_datetime_list(timeframe)
+        larsimConfigurationSettings.update_configurationObject_with_datetime_info(self.configurationObject, timeframe)
+        self.t = larsimTimeUtility.get_tape10_timesteps(timeframe)
+
+    def set_station_of_Interest(self, station_of_Interest):
+        larsimConfigurationSettings.update_config_dict_station_of_interest(self.configurationObject, station_of_Interest)
+        self.station_of_Interest = station_of_Interest
 
     def run(self, i_s, parameters): #i_s - index chunk; parameters - parameters chunk
 

@@ -13,8 +13,8 @@ import uqef
 from larsim import LarsimModel
 from larsim import LarsimStatistics
 
-from linearDampedOscillato import LinearDampedOscillatorModel
-from linearDampedOscillato import LinearDampedOscillatorStatistics
+from linearDampedOscillator import LinearDampedOscillatorModel
+from linearDampedOscillator import LinearDampedOscillatorStatistics
 
 from ishigami import IshigamiModel
 from ishigami import IshigamiStatistics
