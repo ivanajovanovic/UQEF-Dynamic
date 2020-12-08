@@ -42,18 +42,19 @@ if local_debugging:
     uqsim.args.mc_numevaluations = 10
     uqsim.args.sc_q_order = 10 #10
     uqsim.args.sc_p_order = 6 #8
-    uqsim.args.outputResultDir = os.path.abspath(os.path.join(paths.scratch_dir, 'larsim_run_20201205'))
+    uqsim.args.outputResultDir = os.path.abspath(os.path.join(paths.scratch_dir, "larsim_runs", 'larsim_run_lai_may_20201208'))
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
     uqsim.args.inputModelDir = paths.larsim_data_path
     uqsim.args.sourceDir = paths.sourceDir
     #uqsim.args.config_file = "/dss/dsshome1/lxc0C/ga45met2/Repositories/Larsim-UQ/configurations_Larsim/configuration_larsim_uqsim_cm2_v4.json" #"configuration_larsim_uqsim.json"
-    uqsim.args.config_file = "/home/ga45met/Repositories/Larsim/Larsim-UQ/configurations_Larsim/configurations_larsim_master_lai.json"
+    #uqsim.args.config_file = "/home/ga45met/Repositories/Larsim/Larsim-UQ/configurations_Larsim/configurations_larsim_master_lai.json"
+    uqsim.args.config_file = '/home/ga45met/mnt/linux_cluster/Larsim-UQ/configurations_Larsim/configurations_larsim_master_lai_small.json'
     #uqsim.args.config_file = "/home/ga45met/Repositories/Larsim/Larsim-UQ/configurations_Larsim/configuration_larsim_updated_lai_jun.json"
     uqsim.args.disable_statistics = True
     uqsim.args.transformToStandardDist = True
     uqsim.args.mpi = True
     uqsim.args.mpi_method = "MpiPoolSolver"
-    uqsim.args.sampling_rule = "S"# | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
+    uqsim.args.sampling_rule = "S" # | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
     uqsim.args.uqsim_store_to_file=False
 
     uqsim.setup_configuration_object()

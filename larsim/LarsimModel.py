@@ -50,7 +50,10 @@ class LarsimModelSetUp():
         self.lila_configured_paths = [os.path.abspath(os.path.join(self.master_dir, i)) for i in paths.lila_files]
         self.all_whms_path = osp.abspath(osp.join(self.inputModelDir,'WHM Regen','var/WHM Regen WHMS'))
 
-        self.larsim_exe = osp.abspath(osp.join(self.inputModelDir, 'Larsim-exe', 'larsim-linux-intel-1000.exe'))
+        try:
+            self.larsim_exe = self.configurationObject["Directories"]["larsim_exe"]
+        except KeyError:
+            self.larsim_exe = osp.abspath(osp.join(self.inputModelDir, 'Larsim-exe', 'larsim-linux-intel-1000.exe'))
 
         self.sourceDir = pathlib.Path(self.sourceDir)
         self.workingDir = pathlib.Path(self.workingDir)
@@ -101,19 +104,38 @@ class LarsimModelSetUp():
         except KeyError:
             self.warm_up_duration = 53
 
+        self.calculate_GoF = strtobool(self.configurationObject["Output"]["calculate_GoF"])\
+                       if "calculate_GoF" in self.configurationObject["Output"] else True
+        if self.calculate_GoF:
+            self.objective_function = self.configurationObject["Output"]["objective_function"] \
+                if 'objective_function' in self.configurationObject["Output"] else "all"
+            self.objective_function = larsimDataPostProcessing._gof_list_to_function_names(self.objective_function)
+
         larsimConfigurationSettings.update_configurationObject_with_parameters_info(self.configurationObject)
 
         self.copy_master_folder()
         self.configure_master_folder()
-        #
-        # self.get_measured_discharge()
-        # self.get_Larsim_saved_simulations()
-        # self.run_unaltered_sim(createNewFolder=False, write_in_file=True)
-        # self._compare_measurements_and_unalteredSim()
 
         self.df_simulation = None
         self.df_measured = None
         self.df_unaltered_ergebnis = None
+        self.df_gof_unaltered_meas = None
+        self.df_gof_sim_meas = None
+
+        self.boolean_get_measured_discharge = kwargs.get('get_measured_discharge') \
+            if 'get_measured_discharge' in kwargs else True
+        self.boolean_get_Larsim_saved_simulations = kwargs.get('get_Larsim_saved_simulations') \
+            if 'get_Larsim_saved_simulations' in kwargs else True
+        self.boolean_run_unaltered_sim = kwargs.get('run_unaltered_sim') if 'run_unaltered_sim' in kwargs else True
+
+        if self.boolean_get_measured_discharge:
+            self.get_measured_discharge(write_in_file=True)
+        if self.boolean_get_Larsim_saved_simulations:
+            self.get_Larsim_saved_simulations(write_in_file=True)
+        if self.boolean_run_unaltered_sim:
+            self.run_unaltered_sim(createNewFolder=False, write_in_file=True)
+        if self.boolean_get_measured_discharge and self.boolean_run_unaltered_sim:
+            self._compare_measurements_and_unalteredSim(get_all_possible_stations=True, write_in_file=True)
 
         print("[LarsimModelSetUp INFO] Model Initial setup is done! ")
 
@@ -182,21 +204,27 @@ class LarsimModelSetUp():
             self.df_measured = larsimDataPostProcessing.read_process_write_discharge(df=read_file_path,
                                                                                      timeframe=self.timeframe,
                                                                                      station=self.station_for_model_runs,
+                                                                                     compression="gzip"
                                                                                      )
         else:
             # example for this branch is when read_file_path is of type  "./q_2003-11-01_2018-01-01_time_and_values_filtered.pkl"
             # however it might be that this file does not exist. In that case one will read and process/filter the whole dataFrame again
+            drop_duplicates = kwargs["drop_duplicates"] if "drop_duplicates" in kwargs else True
+            fill_missing_timesteps = kwargs["fill_missing_timesteps"] if "fill_missing_timesteps" in kwargs else True
+            interpolate_missing_values = kwargs["interpolate_missing_values"] if "interpolate_missing_values" in kwargs else True
+            interpolation_method = kwargs["interpolation_method"] if "interpolation_method" in kwargs else 'time'
+
             read_file_path = self.master_dir / paths.lila_files[0]
             if read_file_path.is_file():
                 self.df_measured = larsimDataPreparation.get_filtered_df(df=read_file_path,
                                                                          stations=self.station_for_model_runs,
                                                                          start_date=self.timeframe[0],
                                                                          end_date=self.timeframe[1],
-                                                                         drop_duplicates=kwargs["drop_duplicates"],
-                                                                         fill_missing_timesteps=kwargs["fill_missing_timesteps"],
-                                                                         interpolate_missing_values=kwargs["interpolate_missing_values"],
-                                                                         interpolation_method=kwargs["interpolation_method"],
-                                                                         only_time_series_values=True,
+                                                                         drop_duplicates=drop_duplicates,
+                                                                         fill_missing_timesteps=fill_missing_timesteps,
+                                                                         interpolate_missing_values=interpolate_missing_values,
+                                                                         interpolation_method=interpolation_method,
+                                                                         only_time_series_values=filtered_timesteps_vs_station_values,
                                                                          )
         if write_in_file:
             if write_file_path is None:
@@ -217,14 +245,21 @@ class LarsimModelSetUp():
             df_station_sim_filtered_path = paths.regen_saved_data_files / f"larsim_output_{station}_2005_2017_filtered.pkl"
             if df_station_sim_filtered_path.is_file():
                 df_sim = larsimInputOutputUtilities.read_dataFrame_from_file(df_station_sim_filtered_path, compression="gzip")
+                df_sim = larsimDataPostProcessing.parse_df_based_on_time(df_sim, (self.timeframe[0], self.timeframe[1]))
             elif df_station_sim_path.is_file():
+                drop_duplicates = kwargs["drop_duplicates"] if "drop_duplicates" in kwargs else True
+                fill_missing_timesteps = kwargs[
+                    "fill_missing_timesteps"] if "fill_missing_timesteps" in kwargs else True
+                interpolate_missing_values = kwargs[
+                    "interpolate_missing_values"] if "interpolate_missing_values" in kwargs else True
+                interpolation_method = kwargs["interpolation_method"] if "interpolation_method" in kwargs else 'time'
                 df_sim = larsimDataPreparation.get_filtered_df(df=df_station_sim_path,
                                                                start_date=self.timeframe[0],
                                                                end_date=self.timeframe[1],
-                                                               drop_duplicates=kwargs["drop_duplicates"],
-                                                               fill_missing_timesteps=kwargs["fill_missing_timesteps"],
-                                                               interpolate_missing_values=kwargs["interpolate_missing_values"],
-                                                               interpolation_method=kwargs["interpolation_method"],
+                                                               drop_duplicates=drop_duplicates,
+                                                               fill_missing_timesteps=fill_missing_timesteps,
+                                                               interpolate_missing_values=interpolate_missing_values,
+                                                               interpolation_method=interpolation_method,
                                                                only_time_series_values=filtered_timesteps_vs_station_values,
                                                                )
             if filtered_timesteps_vs_station_values:
@@ -266,12 +301,17 @@ class LarsimModelSetUp():
         result_file_path = dir_unaltered_run / 'ergebnis.lila'
         self.df_unaltered_ergebnis = larsimInputOutputUtilities.ergebnis_parser_toPandas(result_file_path)
 
-        simulation_start_timestamp = self.timeframe[0] + datetime.timedelta(hours=self.warm_up_duration)
+        simulation_start_timestamp = self.timeframe[0]
+        if self.warm_up_duration is not None:
+            simulation_start_timestamp = self.timeframe[0] + datetime.timedelta(hours=self.warm_up_duration)
         self.df_unaltered_ergebnis = larsimDataPostProcessing.parse_df_based_on_time(self.df_unaltered_ergebnis, (simulation_start_timestamp, None))
 
         # filter out results for a concrete station if specified in configuration json file
         if self.station_for_model_runs is not None and self.station_for_model_runs!="all":
             self.df_unaltered_ergebnis = larsimDataPostProcessing.filterResultForStation(self.df_unaltered_ergebnis, station=self.station_for_model_runs)
+        if self.type_of_output_of_Interest is not None and self.type_of_output_of_Interest != "all":
+            self.df_unaltered_ergebnis = larsimDataPostProcessing.filterResultForTypeOfOutpu(self.df_unaltered_ergebnis,
+                                                                         type_of_output=self.type_of_output_of_Interest)
 
         if write_in_file:
             if write_file_path is None:
@@ -286,21 +326,56 @@ class LarsimModelSetUp():
         else:
             larsimConfigurationSettings._delete_larsim_output_files(curr_directory=dir_unaltered_run)
 
-    def _compare_measurements_and_unalteredSim(self):
-        pass
-        # #####################################
-        # # compare ground truth measurements and unaltered run for this simulation (compute RMSE | BIAS | NSE | logNSE)
-        # #####################################
-        # goodnessofFit_list_of_dictionaries = larsimDataPostProcessing.calculateGoodnessofFit(measuredDF=self.df_measured, predictedDF=self.df_unaltered_ergebnis,\
-        #                                                                station=self.station_of_Interest,\
-        #                                                                type_of_output_of_Interest_measured=self.type_of_output_of_Interest_measured,\
-        #                                                                type_of_output_of_Interest=self.type_of_output_of_Interest,\
-        #                                                                dailyStatisict=False, gof_list="all",\
-        #                                                                disregard_initila_timesteps=True, warm_up_duration=self.warm_up_duration)
-        # # write in a file GOF values of the unaltered model prediction
-        # self.index_parameter_gof_DF = pd.DataFrame(goodnessofFit_list_of_dictionaries)
-        # gof_file_path = osp.abspath(osp.join(self.workingDir, "GOF_Measured_vs_Unaltered.pkl"))
-        # self.index_parameter_gof_DF.to_pickle(gof_file_path, compression="gzip")
+    def _compare_measurements_and_unalteredSim(self, get_all_possible_stations=True,
+                                               write_in_file=True, write_file_path=None):
+        if self.df_measured is None or self.df_unaltered_ergebnis is None:
+            return None
+
+        stations = larsimDataPostProcessing.get_stations_intersection(self.df_measured, self.df_unaltered_ergebnis)
+        if not get_all_possible_stations and (self.station_of_Interest != "all" or self.station_of_Interest is not None):
+            if not isinstance(self.station_of_Interest, list):
+                self.station_of_Interest = [self.station_of_Interest,]
+            stations = list(set(stations).intersection(self.station_of_Interest))
+
+        gof_list_over_stations = []
+        for station in stations:
+            df_sim = larsimDataPostProcessing.filterResultForStationAndTypeOfOutpu(self.df_unaltered_ergebnis,
+                                                                                   station=station,
+                                                                                   type_of_output=self.type_of_output_of_Interest)
+            temp_gof_dict = larsimDataPostProcessing.calculateGoodnessofFit_simple(self.df_measured,
+                                                                                   df_sim,
+                                                                                   gof_list=self.objective_function,
+                                                                                   measuredDF_column_name=station,
+                                                                                   simulatedDF_column_name='Value'
+                                                                                   )
+            temp_gof_dict["station"] = station
+            gof_list_over_stations.append(temp_gof_dict)
+        self.df_gof_unaltered_meas = pd.DataFrame(gof_list_over_stations)
+
+        if self.df_simulation is not None:
+            gof_list_over_stations_sim_mes = []
+            for station in stations:
+                temp_gof_dict = larsimDataPostProcessing.calculateGoodnessofFit_simple(self.df_measured,
+                                                                                       self.df_simulation,
+                                                                                       gof_list=self.objective_function,
+                                                                                       measuredDF_column_name=station,
+                                                                                       simulatedDF_column_name=station
+                                                                                       )
+                temp_gof_dict["station"] = station
+                gof_list_over_stations_sim_mes.append(temp_gof_dict)
+            self.df_gof_sim_meas = pd.DataFrame(gof_list_over_stations_sim_mes)
+
+        if write_in_file:
+            if write_file_path is None:
+                write_file_path = self.workingDir / "gof_unaltered_meas.pkl"
+            larsimInputOutputUtilities.write_dataFrame_to_file(self.df_gof_unaltered_meas,
+                                                               file_path=write_file_path,
+                                                               compression="gzip")
+            if self.df_gof_sim_meas is not None:
+                write_file_path = write_file_path.parents[0] / "gof_past_sim_meas.pkl"
+                larsimInputOutputUtilities.write_dataFrame_to_file(self.df_gof_sim_meas,
+                                                                   file_path=write_file_path,
+                                                                   compression="gzip")
 
 
 class LarsimModel(Model):
@@ -320,7 +395,10 @@ class LarsimModel(Model):
 
         self.inputModelDir = kwargs.get('inputModelDir') if 'inputModelDir' in kwargs else paths.larsim_data_path
 
-        self.larsim_exe = osp.abspath(osp.join(self.inputModelDir, 'Larsim-exe', 'larsim-linux-intel-1000.exe'))
+        try:
+            self.larsim_exe = self.configurationObject["Directories"]["larsim_exe"]
+        except KeyError:
+            self.larsim_exe = osp.abspath(osp.join(self.inputModelDir, 'Larsim-exe', 'larsim-linux-intel-1000.exe'))
 
         # directory for the larsim runs
         if "workingDir" in kwargs:
@@ -368,8 +446,6 @@ class LarsimModel(Model):
         self.warm_up_duration = self.configurationObject["Timeframe"]["warm_up_duration"] \
                                 if "warm_up_duration" in self.configurationObject["Timeframe"] else 53
 
-        larsimConfigurationSettings.update_configurationObject_with_parameters_info(self.configurationObject)
-
         self.variable_names = []
         if "tuples_parameters_info" in self.configurationObject:
             for i in self.configurationObject["tuples_parameters_info"]:
@@ -387,9 +463,10 @@ class LarsimModel(Model):
 
         # if calibration is True some likelihood / objective functions / GoF functio should be calculated from model run and propageted further
         self.calculate_GoF = strtobool(self.configurationObject["Output"]["calculate_GoF"])\
-                       if "calculate_GoF" in self.configurationObject["Output"] else False
+                       if "calculate_GoF" in self.configurationObject["Output"] else True
         if self.calculate_GoF:
-            self.objective_function = self.configurationObject["Output"]["objective_function"]
+            self.objective_function = self.configurationObject["Output"]["objective_function"] \
+                if 'objective_function' in self.configurationObject["Output"] else "all"
             self.objective_function = larsimDataPostProcessing._gof_list_to_function_names(self.objective_function)
 
         # save the output of each simulation just in run function just in case when run_and_save_simulations in json configuration file is True
@@ -407,11 +484,19 @@ class LarsimModel(Model):
         # getting the time span for running the model from the json configuration file
         #####################################
 
-        self.timeframe = larsimTimeUtility.parse_datetime_configuration(self.configurationObject)
+        if "Timeframe" in self.configurationObject:
+            self.timeframe = larsimTimeUtility.parse_datetime_configuration(self.configurationObject)
+            # generate timesteps for plotting based on tape10 settings which are set in LarsimModelSetUp
+            self.t = larsimTimeUtility.get_tape10_timesteps(self.timeframe)
+        else:
+            raise Exception(f"[LarsimModel ERRO:] Timeframe specification is missing from the configuration object!")
+
         # how long one consecutive run should take - used later on in each Larsim run
         self.timestep = self.configurationObject["Timeframe"]["timestep"] if "timestep" in self.configurationObject["Timeframe"] else 5
-        # generate timesteps for plotting based on tape10 settings which are set in LarsimModelSetUp
-        self.t = larsimTimeUtility.get_tape10_timesteps(self.timeframe)
+
+        larsimConfigurationSettings.update_configurationObject_with_parameters_info(self.configurationObject)
+
+        print("[LarsimModel INFO] INITIALIZATION DONE]\n")
 
     def prepare(self):
         pass
@@ -433,6 +518,9 @@ class LarsimModel(Model):
     def set_station_of_Interest(self, station_of_Interest):
         larsimConfigurationSettings.update_config_dict_station_of_interest(self.configurationObject, station_of_Interest)
         self.station_of_Interest = station_of_Interest
+
+    def timesteps(self):
+        return self.t
 
     def run(self, i_s, parameters):  #i_s - index chunk; parameters - parameters chunk
 
@@ -497,51 +585,28 @@ class LarsimModel(Model):
             # filter output time-series in order to disregard warm-up time;
             # if not then at least disregard these values when calculating statistics and GoF
             # however, take care that is is not done twice!
-            simulation_start_timestamp = self.timeframe[0] + datetime.timedelta(hours=self.warm_up_duration) # pd.Timestamp(result.TimeStamp.min())
+            simulation_start_timestamp = self.timeframe[0]
+            if self.warm_up_duration is not None:
+                simulation_start_timestamp = self.timeframe[0] + datetime.timedelta(hours=self.warm_up_duration) # pd.Timestamp(result.TimeStamp.min())
             result = larsimDataPostProcessing.parse_df_based_on_time(result, (simulation_start_timestamp, None))
 
             # filter out results for a concrete station if specified in configuration json file
-            if self.station_for_model_runs != "all":
+            if self.station_for_model_runs is not None and self.station_for_model_runs != "all":
                 result = larsimDataPostProcessing.filterResultForStation(result, station=self.station_for_model_runs)
+            if self.type_of_output_of_Interest is not None and self.type_of_output_of_Interest != "all":
+                result = larsimDataPostProcessing.filterResultForTypeOfOutpu(result, type_of_output=self.type_of_output_of_Interest)
 
             end = time.time()
             runtime = end - start
 
             result_dict = {"result_time_series": result, "run_time":runtime, "parameters_dict":parameters_dict}
 
-            #####################################
-            # What comes from this point onwards is to determine what is the purpose of the LarsimModel simulation run
-            # e.g. is to just run multiple simulations and store their outputs, and/or to propaget results for calibration,
-            # and/or to propagate results for UQ analysis, and/or to calculate gradients, etc.
-            # the behaviour is determined based on a couple of configuration variables, mostly coming from json configuration file such as:
-            # calibration, run_and_save_simulations, UQ_analysis, gradient_computation
-            # These modes do not have to be mutually exclusive!
-            #####################################
-
-            #####################################
-            ### compare model predictions of this simulation with measured (ground truth) data
-            ### this can be moved to Statistics - positioned here due to parallelisation
-            #####################################
-            # if calibration is True some likelihood / objective functions / GoF functio should be calculated from model run and propageted further and'or saved to file
             if self.calculate_GoF:
-                # get the DataFrame storing measurement / ground truth discharge
-                local_measurement_file = self.workingDir / "df_measured.pkl"
-                if local_measurement_file.exists():
-                    gt_dataFrame = larsimInputOutputUtilities.read_dataFrame_from_file(local_measurement_file, compression="gzip")
-                else:
-                    gt_dataFrame = larsimConfigurationSettings.extract_measured_discharge(self.timeframe[0], self.timeframe[1], index_run=0)
-
-                goodnessofFit_list_of_dictionaries = larsimDataPostProcessing.calculateGoodnessofFit(
-                    measuredDF=gt_dataFrame, predictedDF=result, station=self.station_of_Interest,
-                    type_of_output_of_Interest_measured=self.type_of_output_of_Interest_measured,
-                    type_of_output_of_Interest=self.type_of_output_of_Interest,
-                    dailyStatisict=False, gof_list=self.objective_function, disregard_initila_timesteps=False
-                )
-                index_parameter_gof_list_of_dictionaries = []
-                for single_stations_gof in goodnessofFit_list_of_dictionaries:
-                    index_parameter_gof_dict = {**parameters_dict, **single_stations_gof}
-                    index_parameter_gof_list_of_dictionaries.append(index_parameter_gof_dict)
-                index_parameter_gof_DF = pd.DataFrame(index_parameter_gof_list_of_dictionaries)
+                index_parameter_gof_DF = self._calculate_GoF(predictedDF=result,
+                                                             parameters_dict=parameters_dict,
+                                                             get_all_possible_stations=True)
+                file_path = self.workingDir / f"goodness_of_fit_{i}.pkl"
+                index_parameter_gof_DF.to_pickle(file_path, compression="gzip")
                 result_dict["gof_df"] = index_parameter_gof_DF
 
             # compute gradient of the output, or some likelihood measure w.r.t parameters
@@ -550,10 +615,6 @@ class LarsimModel(Model):
                 if gradient_matrix:
                     result_dict["gradient"] = gradient_matrix
 
-            # distinguish between only saving results and saving and propagating further
-            # save the output of each simulation here just in case the purpose of the simulation is to run multiple Larsim runs
-            # for different parameters and to save these simulations runs and when no statistics calculations will be performed afterwards,
-            # otherwise the simulation results will be saved in LarsimStatistics
             if self.run_and_save_simulations:
                 file_path = self.workingDir / f"parameters_Larsim_run_{i}.pkl"
                 with open(file_path, 'wb') as f:
@@ -563,9 +624,6 @@ class LarsimModel(Model):
                                                                       type_of_output=self.type_of_output_of_Interest,
                                                                       station=self.station_for_model_runs,
                                                                       write_to_file=file_path, compression="gzip")
-                if self.calculate_GoF:
-                    file_path = self.workingDir / f"goodness_of_fit_{i}.pkl"
-                    index_parameter_gof_DF.to_pickle(file_path, compression="gzip")
 
             #####################################
             # Final cleaning and appending the results
@@ -588,9 +646,6 @@ class LarsimModel(Model):
             print(f"[LarsimModel INFO] I am done - solver number {i}")
 
         return results
-
-    def timesteps(self):
-        return self.t
 
     def _single_larsim_run(self, timeframe, curr_working_dir, index_run=0, sub_index_run=0, warm_up_duration=53):
         # start clean
@@ -716,3 +771,51 @@ class LarsimModel(Model):
             return df_simulation_result
         else:
             return None
+
+    def _calculate_GoF(self, predictedDF, parameters_dict, get_all_possible_stations=True):
+        local_measurement_file = self.workingDir / "df_measured.pkl"
+        if local_measurement_file.exists():
+            measuredDF = larsimInputOutputUtilities.read_dataFrame_from_file(local_measurement_file,
+                                                                              compression="gzip")
+        else:
+            local_measurement_file = self.master_dir / paths.lila_files[0]
+            measuredDF = larsimDataPostProcessing.read_process_write_discharge(df=local_measurement_file,
+                                                                               timeframe=self.timeframe,
+                                                                               station=self.station_for_model_runs,
+                                                                               compression="gzip")
+        if measuredDF is None:
+            return None
+
+        # get the structure of the  df_measured
+        filtered_timesteps_vs_station_values = False
+        measuredDF_column_name = 'Value'
+        if 'Value' not in measuredDF.columns:
+            filtered_timesteps_vs_station_values = True
+            measuredDF_column_name = 'station'
+
+        stations = larsimDataPostProcessing.get_stations_intersection(measuredDF, predictedDF)
+        if not get_all_possible_stations and (self.station_of_Interest != "all" or self.station_of_Interest is not None):
+            if not isinstance(self.station_of_Interest, list):
+                self.station_of_Interest = [self.station_of_Interest,]
+            stations = list(set(stations).intersection(self.station_of_Interest))
+
+        gof_list_over_stations = larsimDataPostProcessing.calculateGoodnessofFit(measuredDF=measuredDF,
+                                                      predictedDF=predictedDF,
+                                                      station=stations,
+                                                      gof_list=self.objective_function,
+                                                      measuredDF_column_name = measuredDF_column_name,
+                                                      simulatedDF_column_name='Value',
+                                                      type_of_output_of_Interest=self.type_of_output_of_Interest,
+                                                      dailyStatisict=False,
+                                                      disregard_initila_timesteps=False,
+                                                      warm_up_duration=self.warm_up_duration,
+                                                      keep_info_on_TimeStampas=False,
+                                                      filter_station=True,
+                                                      filter_type_of_output=True
+                                                     )
+
+        index_parameter_gof_list_of_dictionaries = []
+        for single_stations_gof in gof_list_over_stations:
+            index_parameter_gof_dict = {**parameters_dict, **single_stations_gof}
+            index_parameter_gof_list_of_dictionaries.append(index_parameter_gof_dict)
+        return pd.DataFrame(index_parameter_gof_list_of_dictionaries)
