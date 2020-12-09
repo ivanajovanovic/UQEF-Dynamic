@@ -23,7 +23,10 @@ from LarsimUtilityFunctions import larsimTimeUtility
 class LarsimModelSetUp():
     def __init__(self, configurationObject, *args, **kwargs):
 
-        self.configurationObject = larsimConfigurationSettings.return_configuration_object(configurationObject)
+        if not isinstance(configurationObject, dict):
+            self.configurationObject = larsimConfigurationSettings.return_configuration_object(configurationObject)
+        else:
+            self.configurationObject = configurationObject
 
         #####################################
         # Specification of different directories - some are machine / location dependent,
@@ -383,7 +386,10 @@ class LarsimModel(Model):
     def __init__(self, configurationObject, *args, **kwargs):
         Model.__init__(self)
 
-        self.configurationObject = larsimConfigurationSettings.return_configuration_object(configurationObject)
+        if not isinstance(configurationObject, dict):
+            self.configurationObject = larsimConfigurationSettings.return_configuration_object(configurationObject)
+        else:
+            self.configurationObject = configurationObject
 
         #####################################
         # Specification of different directories - some are machine / location dependent,
@@ -449,10 +455,11 @@ class LarsimModel(Model):
         self.variable_names = []
         if "tuples_parameters_info" in self.configurationObject:
             for i in self.configurationObject["tuples_parameters_info"]:
-                self.variable_names.append(i["parameter_name"])
+                self.variable_names.append(i["name"])
         else:
             for i in self.configurationObject["parameters"]:
                 self.variable_names.append(i["name"])
+            larsimConfigurationSettings.update_configurationObject_with_parameters_info(self.configurationObject)
 
         #####################################
         # this variable stands for the purpose of LarsimModel run
@@ -493,8 +500,6 @@ class LarsimModel(Model):
 
         # how long one consecutive run should take - used later on in each Larsim run
         self.timestep = self.configurationObject["Timeframe"]["timestep"] if "timestep" in self.configurationObject["Timeframe"] else 5
-
-        larsimConfigurationSettings.update_configurationObject_with_parameters_info(self.configurationObject)
 
         print("[LarsimModel INFO] INITIALIZATION DONE]\n")
 
@@ -605,8 +610,6 @@ class LarsimModel(Model):
                 index_parameter_gof_DF = self._calculate_GoF(predictedDF=result,
                                                              parameters_dict=parameters_dict,
                                                              get_all_possible_stations=True)
-                file_path = self.workingDir / f"goodness_of_fit_{i}.pkl"
-                index_parameter_gof_DF.to_pickle(file_path, compression="gzip")
                 result_dict["gof_df"] = index_parameter_gof_DF
 
             # compute gradient of the output, or some likelihood measure w.r.t parameters
@@ -624,6 +627,9 @@ class LarsimModel(Model):
                                                                       type_of_output=self.type_of_output_of_Interest,
                                                                       station=self.station_for_model_runs,
                                                                       write_to_file=file_path, compression="gzip")
+                if self.calculate_GoF:
+                    file_path = self.workingDir / f"goodness_of_fit_{i}.pkl"
+                    index_parameter_gof_DF.to_pickle(file_path, compression="gzip")
 
             #####################################
             # Final cleaning and appending the results

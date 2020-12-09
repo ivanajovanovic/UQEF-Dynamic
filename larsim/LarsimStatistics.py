@@ -18,46 +18,46 @@ from uqef.stat import Statistics
 
 from LarsimUtilityFunctions import larsimDataPostProcessing
 from LarsimUtilityFunctions import larsimInputOutputUtilities
+from LarsimUtilityFunctions import larsimConfigurationSettings
+import LarsimUtilityFunctions.larsimPaths as paths
+
 
 #from Larsim-UQ.common import saltelliSobolIndicesHelpingFunctions
-from ../common import saltelliSobolIndicesHelpingFunctions
-
+from common import saltelliSobolIndicesHelpingFunctions
 
 class LarsimSamples(object):
     """
      Samples is a collection of the (filtered) sampled results of a whole UQ simulation
     """
-
     #TODO write get/set methods for the attributes of the class
-
 
     def __init__(self, rawSamples, configurationObject):
 
-        station = configurationObject["Output"]["station_calibration_postproc"] if "station_calibration_postproc" in configurationObject["Output"] else "MARI"
-        type_of_output=configurationObject["Output"]["type_of_output"] if "type_of_output" in configurationObject["Output"] else "Abfluss Messung"
-        dailyOutput=configurationObject["Output"]["dailyOutput"] if "dailyOutput" in configurationObject["Output"] else "False"
-        #
+        station = configurationObject["Output"]["station_calibration_postproc"] \
+            if "station_calibration_postproc" in configurationObject["Output"] else "MARI"
+        type_of_output=configurationObject["Output"]["type_of_output"] \
+            if "type_of_output" in configurationObject["Output"] else "Abfluss Messung"
+        dailyOutput=configurationObject["Output"]["dailyOutput"] \
+            if "dailyOutput" in configurationObject["Output"] else "False"
+
         calculate_GoF=configurationObject["Output"]["calculate_GoF"]
         compute_gradients=configurationObject["Output"]["compute_gradients"]
 
         list_of_single_df = []
         list_index_parameters_dict = []
         list_of_single_index_parameter_gof_df = []
-        for index_run, value in enumerate(rawSamples,): #Important that the results inside rawSamples (resulted paths) are in sorted order and correspond to the parameters order
+        # Important that the results inside rawSamples (resulted paths) are in sorted order and correspond to the parameters order
+        for index_run, value in enumerate(rawSamples,):
             if isinstance(value, tuple):
                 df_result = value[0]
-                index_parameters_dict = value[1]
-                list_index_parameters_dict.append(index_parameters_dict)
+                list_index_parameters_dict.append(value[1])
             elif isinstance(value, dict):
                 df_result = value["result_time_series"]
-                index_parameters_dict = value["parameters_dict"]
-                list_index_parameters_dict.append(index_parameters_dict)
-                #runtime = value["run_time"]
+                list_index_parameters_dict.append(value["parameters_dict"])
                 if strtobool(calculate_GoF):
-                    index_parameter_gof_DF=value["gof_df"]
-                    list_of_single_index_parameter_gof_df.append(index_parameter_gof_DF)
+                    list_of_single_index_parameter_gof_df.append(value["gof_df"])
                 if strtobool(compute_gradients):
-                    index_parameter_gof_DF=value["gradient"]
+                    df_gradient = value["gradient"]
             else:
                 df_result = value
 
@@ -86,12 +86,13 @@ class LarsimSamples(object):
         else:
             self.df_index_parameter_gof_values = None
 
-        print("LARSIM STAT INFO: Number of Unique TimeStamps (Hourly): {}".format(len(self.df_simulation_result.TimeStamp.unique())))
+        print(f"[LARSIM STAT INFO] Number of Unique TimeStamps (Hourly): "
+              f"{len(self.df_simulation_result.TimeStamp.unique())}")
 
         if strtobool(dailyOutput):
             # Average over time. i.e. change column TimeStamp and Value
             self.df_simulation_result = larsimDataPostProcessing.transformToDailyResolution(self.df_simulation_result)
-            print("LARSIM STAT INFO: Number of Unique TimeStamps (Daily): {}".format(len(self.df_simulation_result.TimeStamp.unique())))
+            print(f"[LARSIM STAT INFO] Number of Unique TimeStamps (Daily): {len(self.df_simulation_result.TimeStamp.unique())}")
 
         self.df_time_discharges = self.df_simulation_result.groupby(["Stationskennung","TimeStamp"])["Value"].apply(lambda df: df.reset_index(drop=True)).unstack()
 
@@ -112,10 +113,10 @@ class LarsimSamples(object):
             os.path.abspath(os.path.join(file_path, "df_all_time_simulations.pkl")), compression="gzip")
 
     def get_simulation_timesteps(self):
-        return self.df_simulation_result.TimeStamp.unique()
+        return list(self.df_simulation_result.TimeStamp.unique())
 
     def get_simulation_stations(self):
-        return self.df_simulation_result.Stationskennung.unique()
+        return list(self.df_simulation_result.Stationskennung.unique())
 
 
 class LarsimStatistics(Statistics):
@@ -128,14 +129,13 @@ class LarsimStatistics(Statistics):
 
         self.configurationObject = configurationObject
 
-        # directoy for the larsim runs
-        if "working_dir" in kwargs:
-            self.working_dir = kwargs.get('working_dir')
+        if "workingDir" in kwargs:
+            self.workingDir = kwargs.get('workingDir')
         else:
             try:
-                self.working_dir = self.configurationObject["Directories"]["working_dir"]
+                self.workingDir = self.configurationObject["Directories"]["workingDir"]
             except KeyError:
-                self.working_dir = paths.working_dir
+                self.workingDir = paths.workingDir
 
         self.Abfluss = {}
 
@@ -144,34 +144,34 @@ class LarsimStatistics(Statistics):
         self.unalatered_computed = False
         self.groundTruth_computed = False
 
-        # check if simulation results were already saved in KarsimModel
+        # check if simulation results were already saved in LarsimModel
         self.run_and_save_simulations = strtobool(self.configurationObject["Output"]["run_and_save_simulations"])\
                                         if "run_and_save_simulations" in self.configurationObject["Output"] else False
 
         self.nodeNames = []
         for i in self.configurationObject["parameters"]:
             self.nodeNames.append(i["name"])
+        self.dim = len(self.nodeNames)
 
         self.uq_method = kwargs.get('uq_method') if 'uq_method' in kwargs else None
 
-    def calcStatisticsForMc(self, rawSamples, timesteps,
-                            simulationNodes, numEvaluations, order, regression, solverTimes,
+    def calcStatisticsForMc(self, rawSamples, timesteps, simulationNodes,
+                            numEvaluations, order, regression, solverTimes,
                             work_package_indexes, original_runtime_estimator):
 
         samples = LarsimSamples(rawSamples, configurationObject=self.configurationObject)
 
         # Save the DataFrame containing all the simulation results - This is really important
         if not self.run_and_save_simulations:
-            samples.save_samples_to_file(self.working_dir)
-            samples.save_index_parameter_values(self.working_dir)
-            samples.save_index_parameter_gof_values(self.working_dir)
+            samples.save_samples_to_file(self.workingDir)
+            samples.save_index_parameter_values(self.workingDir)
+            samples.save_index_parameter_gof_values(self.workingDir)
 
         self.timesteps = samples.get_simulation_timesteps()
         self.numbTimesteps = len(self.timesteps)
-        print("LARSIM STAT INFO: numbTimesteps is: {}".format(self.numbTimesteps))
+        print(f"[LARSIM STAT INFO] numbTimesteps is: {self.numbTimesteps}")
 
         self.station_names = samples.get_simulation_stations()
-        #self.nodeNames = simulationNodes.nodeNames
 
         grouped = samples.df_simulation_result.groupby(['Stationskennung','TimeStamp'])
         groups = grouped.groups
@@ -181,7 +181,7 @@ class LarsimStatistics(Statistics):
             dist = simulationNodes.joinedDists
             polynomial_expansion = cp.orth_ttr(order, dist)
 
-        for key,val_indices in groups.items():
+        for key, val_indices in groups.items():
             discharge_values = samples.df_simulation_result.loc[val_indices.values].Value.values #numpy array nx1
             #discharge_values = samples.df_simulation_result.Value.loc[val_indices].values
             self.Abfluss[key] = {}
@@ -202,7 +202,6 @@ class LarsimStatistics(Statistics):
                     self.Abfluss[key]["P10"]=self.Abfluss[key]["P10"][0]
                     self.Abfluss[key]["P90"]=self.Abfluss[key]["P90"][0]
 
-
     def calcStatisticsForSc(self, rawSamples, timesteps,
                            simulationNodes, order, regression, solverTimes,
                            work_package_indexes, original_runtime_estimator):
@@ -210,13 +209,13 @@ class LarsimStatistics(Statistics):
         samples = LarsimSamples(rawSamples, configurationObject=self.configurationObject)
 
         if not self.run_and_save_simulations:
-            samples.save_samples_to_file(self.working_dir)
-            samples.save_index_parameter_values(self.working_dir)
-            samples.save_index_parameter_gof_values(self.working_dir)
+            samples.save_samples_to_file(self.workingDir)
+            samples.save_index_parameter_values(self.workingDir)
+            samples.save_index_parameter_gof_values(self.workingDir)
 
         self.timesteps = samples.get_simulation_timesteps()
         self.numbTimesteps = len(self.timesteps)
-        print("LARSIM STAT INFO: numbTimesteps is: {}".format(self.numbTimesteps))
+        print(f"[LARSIM STAT INFO] numbTimesteps is: {self.numbTimesteps}")
 
         self.station_names = samples.get_simulation_stations()
         #self.nodeNames = simulationNodes.nodeNames
@@ -229,7 +228,7 @@ class LarsimStatistics(Statistics):
 
         grouped = samples.df_simulation_result.groupby(['Stationskennung','TimeStamp'])
         groups = grouped.groups
-        for key,val_indices in groups.items():
+        for key, val_indices in groups.items():
             discharge_values = samples.df_simulation_result.loc[val_indices.values].Value.values
             self.Abfluss[key] = {}
             self.Abfluss[key]["Q"] = discharge_values
@@ -238,7 +237,6 @@ class LarsimStatistics(Statistics):
             else:
                 self.qoi_gPCE = cp.fit_quadrature(polynomial_expansion, nodes, weights, discharge_values)
             self._calc_stats_for_gPCE(dist, key)
-
 
     def _calc_stats_for_gPCE(self, dist, key):
         #percentiles
@@ -256,7 +254,6 @@ class LarsimStatistics(Statistics):
             self.Abfluss[key]["P10"]= self.Abfluss[key]["P10"][0]
             self.Abfluss[key]["P90"] = self.Abfluss[key]["P90"][0]
 
-
     def calcStatisticsForSaltelli(self, rawSamples, timesteps,
                             simulationNodes, numEvaluations, order, regression, solverTimes,
                             work_package_indexes, original_runtime_estimator=None):
@@ -265,13 +262,13 @@ class LarsimStatistics(Statistics):
 
         # Save the DataFrame containing all the simulation results - This is really important
         if not self.run_and_save_simulations:
-            samples.save_samples_to_file(self.working_dir)
-            samples.save_index_parameter_values(self.working_dir)
-            samples.save_index_parameter_gof_values(self.working_dir)
+            samples.save_samples_to_file(self.workingDir)
+            samples.save_index_parameter_values(self.workingDir)
+            samples.save_index_parameter_gof_values(self.workingDir)
 
         self.timesteps = samples.get_simulation_timesteps()
         self.numbTimesteps = len(self.timesteps)
-        print("LARSIM STAT INFO: numbTimesteps is: {}".format(self.numbTimesteps))
+        print(f"[LARSIM STAT INFO] numbTimesteps is: {self.numbTimesteps}")
 
         self.station_names = samples.get_simulation_stations()
         #self.nodeNames = simulationNodes.nodeNames
@@ -281,13 +278,15 @@ class LarsimStatistics(Statistics):
 
         self.dim = len(simulationNodes.nodeNames)
 
-        for key,val_indices in groups.items():
+        for key, val_indices in groups.items():
             self.Abfluss[key] = {}
 
-            discharge_values = samples.df_simulation_result.loc[val_indices.values].Value.values #numpy array - for sartelli it should be n(2+d)x1
-            #extended_standard_discharge_values = discharge_values[:(2*numEvaluations)]
+            # numpy array - for sartelli it should be n(2+d)x1
+            discharge_values = samples.df_simulation_result.loc[val_indices.values].Value.values
+            # extended_standard_discharge_values = discharge_values[:(2*numEvaluations)]
             discharge_values_saltelli = discharge_values[:, np.newaxis]
-            standard_discharge_values = discharge_values_saltelli[:numEvaluations,:] #values based on which we calculate standard statistics
+            # values based on which we calculate standard statistics
+            standard_discharge_values = discharge_values_saltelli[:numEvaluations,:]
             extended_standard_discharge_values = discharge_values_saltelli[:(2*numEvaluations),:]
 
             self.Abfluss[key]["Q"] = standard_discharge_values
@@ -315,19 +314,16 @@ class LarsimStatistics(Statistics):
                 self.Abfluss[key]["P10"]=self.Abfluss[key]["P10"][0]
                 self.Abfluss[key]["P90"]=self.Abfluss[key]["P90"][0]
 
-
     def  _compute_Sobol_t(self):
         is_Sobol_t_computed = "Sobol_t" in self.Abfluss[self.keyIter[0]] #hasattr(self.Abfluss[self.keyIter[0], "Sobol_t")
         return is_Sobol_t_computed
-
 
     def  _compute_Sobol_m(self):
         is_Sobol_m_computed = "Sobol_m" in self.Abfluss[self.keyIter[0]] #hasattr(self.Abfluss[self.keyIter[0], "Sobol_m")
         return is_Sobol_m_computed
 
-
     def get_measured_discharge(self, timestepRange=None):
-        local_measurment_file = os.path.abspath(os.path.join(self.working_dir, "df_measured.pkl"))
+        local_measurment_file = os.path.abspath(os.path.join(self.workingDir, "df_measured.pkl"))
         if os.path.exists(local_measurment_file):
             self.df_measured = larsimDataPostProcessing.read_process_write_discharge(df=local_measurment_file,\
                                      timeframe=timestepRange,\
@@ -344,33 +340,38 @@ class LarsimStatistics(Statistics):
         self.groundTruth_computed = True
         #self.Abfluss["Ground_Truth_Measurements"] = self.measured
 
-
     def get_unaltered_discharge(self, timestepRange=None):
-        self.df_unalatered = larsimDataPostProcessing.read_process_write_discharge(df=os.path.abspath(os.path.join(self.working_dir, "df_unaltered_ergebnis.pkl")),\
-                             timeframe=timestepRange,\
-                             type_of_output=self.configurationObject["Output"]["type_of_output"],\
-                             station=self.configurationObject["Output"]["station_calibration_postproc"],\
-                             dailyOutput=strtobool(self.configurationObject["Output"]["dailyOutput"]),\
-                             compression="gzip")
+        self.df_unalatered = larsimDataPostProcessing.read_process_write_discharge(
+            df=os.path.abspath(os.path.join(self.workingDir, "df_unaltered_ergebnis.pkl")),
+            timeframe=timestepRange,
+            type_of_output=self.configurationObject["Output"]["type_of_output"],
+            station=self.configurationObject["Output"]["station_calibration_postproc"],
+            dailyOutput=strtobool(self.configurationObject["Output"]["dailyOutput"]),
+            compression="gzip")
         self.unalatered_computed = True
         #self.Abfluss["Unaltered"] = self.unalatered
-
 
     def plotResults(self, timestep=-1, display=False,
                     fileName="", fileNameIdent="", directory="./",
                     fileNameIdentIsFullName=False, safe=True):
 
-        fileName = self.generateFileName(fileName=fileName, fileNameIdent=".html", directory=directory, fileNameIdentIsFullName=fileNameIdentIsFullName)
+        fileName = self.generateFileName(fileName=fileName, fileNameIdent=".html",
+                                         directory=directory, fileNameIdentIsFullName=fileNameIdentIsFullName)
 
         timestepRange = (pd.Timestamp(self.timesteps.min()), pd.Timestamp(self.timesteps.max()))
         self.get_measured_discharge(timestepRange=timestepRange)
         self.get_unaltered_discharge(timestepRange=timestepRange)
 
-        self._plotStatisticsDict_plotly(unalatered=self.unalatered_computed, measured=self.groundTruth_computed, station=self.configurationObject["Output"]["station_calibration_postproc"], recalculateTimesteps=False, filename=fileName, display=display)
-        #self._plotStatisticsDict_plotter(unalatered=None, measured=None, station=self.configurationObject["Output"]["station_calibration_postproc"], recalculateTimesteps=False, filename=fileName, display=display)
+        self._plotStatisticsDict_plotly(unalatered=self.unalatered_computed, measured=self.groundTruth_computed,
+                                        station=self.configurationObject["Output"]["station_calibration_postproc"],
+                                        recalculateTimesteps=False, filename=fileName, display=display)
+        #self._plotStatisticsDict_plotter(unalatered=None, measured=None,
+        # station=self.configurationObject["Output"]["station_calibration_postproc"],
+        # recalculateTimesteps=False, filename=fileName, display=display)
 
-
-    def _plotStatisticsDict_plotly(self, unalatered=False, measured=False, station="MARI", recalculateTimesteps=False, window_title='Larsim Forward UQ & SA - MARI', filename="sim-plotly.html", display=False):
+    def _plotStatisticsDict_plotly(self, unalatered=False, measured=False, station="MARI",
+                                   recalculateTimesteps=False, window_title='Larsim Forward UQ & SA - MARI',
+                                   filename="sim-plotly.html", display=False):
 
         #TODO Access to timesteps in a different way
         #timesteps = df_measured_aligned.TimeStamp.unique()
@@ -402,10 +403,12 @@ class LarsimStatistics(Statistics):
 
         if unalatered:
             #fig.add_trace(go.Scatter(x=pdTimesteps, y=self.unalatered['Value'], name="Q (unaltered simulation)",line_color='deepskyblue'), row=1, col=1)
-            fig.add_trace(go.Scatter(x=self.df_unalatered['TimeStamp'], y=self.df_unalatered['Value'], name="Q (unaltered simulation)",line_color='deepskyblue'), row=1, col=1)
+            fig.add_trace(go.Scatter(x=self.df_unalatered['TimeStamp'], y=self.df_unalatered['Value'],
+                                     name="Q (unaltered simulation)",line_color='deepskyblue'), row=1, col=1)
         if measured:
             #fig.add_trace(go.Scatter(x=pdTimesteps, y=self.measured['Value'], name="Q (measured)",line_color='red'), row=1, col=1)
-            fig.add_trace(go.Scatter(x=self.df_measured['TimeStamp'], y=self.df_measured['Value'], name="Q (measured)",line_color='red'), row=1, col=1)
+            fig.add_trace(go.Scatter(x=self.df_measured['TimeStamp'], y=self.df_measured['Value'],
+                                     name="Q (measured)",line_color='red'), row=1, col=1)
 
 
         fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["E"] for key in self.keyIter], name='E[Q]',line_color='green', mode='lines'), row=1, col=1)
@@ -451,8 +454,9 @@ class LarsimStatistics(Statistics):
         #fig.write_image("sim-09-plotly.png")
         fig.show()
 
-
-    def _plotStatisticsDict_plotter(self, unalatered=False, measured=False, station="MARI", recalculateTimesteps=False, window_title='Larsim Forward UQ & SA - MARI', filename="sim-plotter", display=True):
+    def _plotStatisticsDict_plotter(self, unalatered=False, measured=False, station="MARI",
+                                    recalculateTimesteps=False, window_title='Larsim Forward UQ & SA - MARI',
+                                    filename="sim-plotter", display=True):
         figure = plotter.figure(1, figsize=(13, 10))
         figure.canvas.set_window_title(window_title)
 
@@ -539,17 +543,8 @@ class LarsimStatistics(Statistics):
     def saveToFile(self, fileName="statistics_dict", fileNameIdent="", directory="./",
                    fileNameIdentIsFullName=False):
 
-        #save state to a file
-
-        #fileName = self.generateFileName(fileName=fileName, fileNameIdent=fileNameIdent,\
-        # directory=self.working_dir, fileNameIdentIsFullName=fileNameIdentIsFullName)
-        #statFileName = fileName + '.pkl'
-
-        statFileName = os.path.abspath(os.path.join(self.working_dir, "statistics_dictionary.pkl"))
+        statFileName = self.workingDir / "statistics_dictionary.pkl"
 
         with open(statFileName, 'wb') as handle:
             pickle.dump(self.Abfluss, handle, protocol=pickle.HIGHEST_PROTOCOL)
-            #dill.dump(self, f)
-        #pickle_out = open(statFileName,"wb")
-        #pickle.dump(self.Abfluss, pickle_out)
-        #pickle_out.close()
+

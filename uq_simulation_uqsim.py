@@ -36,21 +36,23 @@ local_debugging = True
 if local_debugging:
     uqsim.args.model = "larsim"
     #uqsim.args.uq_method = "saltelli"
-    uqsim.args.uq_method = "saltelli" #"sc"
+    uqsim.args.uq_method = "sc" #"saltelli"
     uqsim.args.uncertain = "all"
     uqsim.args.chunksize = 1
     uqsim.args.mc_numevaluations = 10
     uqsim.args.sc_q_order = 10 #10
     uqsim.args.sc_p_order = 6 #8
-    uqsim.args.outputResultDir = os.path.abspath(os.path.join(paths.scratch_dir, "larsim_runs", 'larsim_run_lai_may_20201208'))
+    #uqsim.args.outputResultDir = os.path.abspath(os.path.join(paths.scratch_dir, "larsim_runs", 'larsim_run_lai_may_20201209'))
+    uqsim.args.outputResultDir = os.path.abspath( os.path.join(paths.scratch_dir, "Larsim_runs", 'larsim_run_lai_may_20201209'))
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
     uqsim.args.inputModelDir = paths.larsim_data_path
     uqsim.args.sourceDir = paths.sourceDir
     #uqsim.args.config_file = "/dss/dsshome1/lxc0C/ga45met2/Repositories/Larsim-UQ/configurations_Larsim/configuration_larsim_uqsim_cm2_v4.json" #"configuration_larsim_uqsim.json"
     #uqsim.args.config_file = "/home/ga45met/Repositories/Larsim/Larsim-UQ/configurations_Larsim/configurations_larsim_master_lai.json"
-    uqsim.args.config_file = '/home/ga45met/mnt/linux_cluster/Larsim-UQ/configurations_Larsim/configurations_larsim_master_lai_small.json'
+    #uqsim.args.config_file = '/home/ga45met/mnt/linux_cluster/Larsim-UQ/configurations_Larsim/configurations_larsim_master_lai_small.json'
+    uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/Larsim-UQ/configurations_Larsim/configurations_larsim_master_lai_small.json'
     #uqsim.args.config_file = "/home/ga45met/Repositories/Larsim/Larsim-UQ/configurations_Larsim/configuration_larsim_updated_lai_jun.json"
-    uqsim.args.disable_statistics = True
+    uqsim.args.disable_statistics = False
     uqsim.args.transformToStandardDist = True
     uqsim.args.mpi = True
     uqsim.args.mpi_method = "MpiPoolSolver"
@@ -71,12 +73,13 @@ if uqsim.is_master() and not uqsim.is_restored():
 try:
     uqsim.args.workingDir = os.path.abspath(os.path.join(uqsim.args.outputResultDir,uqsim.configuration_object["Directories"]["workingDir"]))
 except KeyError:
-    try:
-        uqsim.args.workingDir = os.path.abspath(os.path.join(uqsim.args.outputResultDir, "model_runs"))
-    except KeyError:
-        uqsim.configuration_object["Directories"] = {}
-        uqsim.args.workingDir = os.path.abspath(os.path.join(uqsim.args.outputResultDir, "model_runs"))
-uqsim.configuration_object["Directories"]["workingDir"] = uqsim.args.workingDir
+    uqsim.args.workingDir = os.path.abspath(os.path.join(uqsim.args.outputResultDir, "model_runs"))
+
+try:
+    uqsim.configuration_object["Directories"]["workingDir"] = uqsim.args.workingDir
+except KeyError:
+    uqsim.configuration_object["Directories"] = {}
+    uqsim.configuration_object["Directories"]["workingDir"] = uqsim.args.workingDir
 
 if uqsim.is_master() and not uqsim.is_restored():
     if not os.path.isdir(uqsim.configuration_object["Directories"]["workingDir"]):
@@ -135,9 +138,9 @@ uqsim.save_simulationNodes(fileName=simulationNodes_save_file)
 uqsim.simulate()
 
 # # statistics:
-# uqsim.calc_statistics()
-# uqsim.save_statistics()
-# uqsim.plot_statistics(display=False)
+uqsim.calc_statistics()
+uqsim.save_statistics()
+uqsim.plot_statistics(display=False)
 
 #save the dictionary with the arguments
 argsFileName = os.path.abspath(os.path.join(uqsim.args.outputResultDir, "uqsim_args.pkl"))
