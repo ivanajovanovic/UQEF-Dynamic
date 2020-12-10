@@ -32,7 +32,7 @@ uqsim = uqef.UQsim()
 #####################################
 #####################################
 # change args locally for testing and debugging
-local_debugging = False
+local_debugging = True
 if local_debugging:
     uqsim.args.model = "larsim"
     #uqsim.args.uq_method = "saltelli"

@@ -162,10 +162,9 @@ class LarsimStatistics(Statistics):
         samples = LarsimSamples(rawSamples, configurationObject=self.configurationObject)
 
         # Save the DataFrame containing all the simulation results - This is really important
-        if not self.run_and_save_simulations:
-            samples.save_samples_to_file(self.workingDir)
-            samples.save_index_parameter_values(self.workingDir)
-            samples.save_index_parameter_gof_values(self.workingDir)
+        samples.save_samples_to_file(self.workingDir)
+        samples.save_index_parameter_values(self.workingDir)
+        samples.save_index_parameter_gof_values(self.workingDir)
 
         self.timesteps = samples.get_simulation_timesteps()
         self.numbTimesteps = len(self.timesteps)
@@ -208,10 +207,9 @@ class LarsimStatistics(Statistics):
 
         samples = LarsimSamples(rawSamples, configurationObject=self.configurationObject)
 
-        if not self.run_and_save_simulations:
-            samples.save_samples_to_file(self.workingDir)
-            samples.save_index_parameter_values(self.workingDir)
-            samples.save_index_parameter_gof_values(self.workingDir)
+	samples.save_samples_to_file(self.workingDir)
+	samples.save_index_parameter_values(self.workingDir)
+	samples.save_index_parameter_gof_values(self.workingDir)
 
         self.timesteps = samples.get_simulation_timesteps()
         self.numbTimesteps = len(self.timesteps)
@@ -261,10 +259,10 @@ class LarsimStatistics(Statistics):
         samples = LarsimSamples(rawSamples, configurationObject=self.configurationObject)
 
         # Save the DataFrame containing all the simulation results - This is really important
-        if not self.run_and_save_simulations:
-            samples.save_samples_to_file(self.workingDir)
-            samples.save_index_parameter_values(self.workingDir)
-            samples.save_index_parameter_gof_values(self.workingDir)
+
+        samples.save_samples_to_file(self.workingDir)
+        samples.save_index_parameter_values(self.workingDir)
+        samples.save_index_parameter_gof_values(self.workingDir)
 
         self.timesteps = samples.get_simulation_timesteps()
         self.numbTimesteps = len(self.timesteps)

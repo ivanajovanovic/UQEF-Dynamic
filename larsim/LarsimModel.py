@@ -71,6 +71,8 @@ class LarsimModelSetUp():
         for i, file in enumerate(self.lila_configured_paths):
             self.lila_configured_paths[i] = pathlib.Path(file)
 
+        self.regen_saved_data_files = self.inputModelDir / 'WHM Regen' / 'data_files'
+
         print(self.sourceDir)
         print(self.workingDir)
         print(self.inputModelDir)
@@ -199,7 +201,7 @@ class LarsimModelSetUp():
 
         if read_file_path is None:
             if filtered_timesteps_vs_station_values:
-                read_file_path = paths.regen_saved_data_files / 'q_2003-11-01_2018-01-01_time_and_values_filtered.pkl'
+                read_file_path = self.regen_saved_data_files / 'q_2003-11-01_2018-01-01_time_and_values_filtered.pkl'
             else:
                 read_file_path = self.master_dir / paths.lila_files[0]
 
@@ -244,8 +246,8 @@ class LarsimModelSetUp():
         if not isinstance(station_for_model_runs, list):
             station_for_model_runs = [station_for_model_runs, ]
         for station in station_for_model_runs:
-            df_station_sim_path = paths.regen_saved_data_files / f"larsim_output_{station}_2005_2017.pkl"
-            df_station_sim_filtered_path = paths.regen_saved_data_files / f"larsim_output_{station}_2005_2017_filtered.pkl"
+            df_station_sim_path = self.regen_saved_data_files / f"larsim_output_{station}_2005_2017.pkl"
+            df_station_sim_filtered_path = self.regen_saved_data_files / f"larsim_output_{station}_2005_2017_filtered.pkl"
             if df_station_sim_filtered_path.is_file():
                 df_sim = larsimInputOutputUtilities.read_dataFrame_from_file(df_station_sim_filtered_path, compression="gzip")
                 df_sim = larsimDataPostProcessing.parse_df_based_on_time(df_sim, (self.timeframe[0], self.timeframe[1]))
@@ -634,7 +636,7 @@ class LarsimModel(Model):
             #####################################
             # Final cleaning and appending the results
             #####################################
-            print("[LarsimModel INFO] Process {i} returned / appended it's results")
+            print(f"[LarsimModel INFO] Process {i} returned / appended it's results")
 
             # result_dict contains at least the following entries:  "result_time_series", "run_time", "parameters_dict"
             # optionally: "gof_df", "gradient" , etc.
