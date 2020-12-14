@@ -206,10 +206,9 @@ class LarsimStatistics(Statistics):
                            work_package_indexes, original_runtime_estimator):
 
         samples = LarsimSamples(rawSamples, configurationObject=self.configurationObject)
-
-	samples.save_samples_to_file(self.workingDir)
-	samples.save_index_parameter_values(self.workingDir)
-	samples.save_index_parameter_gof_values(self.workingDir)
+        samples.save_samples_to_file(self.workingDir)
+        samples.save_index_parameter_values(self.workingDir)
+        samples.save_index_parameter_gof_values(self.workingDir)
 
         self.timesteps = samples.get_simulation_timesteps()
         self.numbTimesteps = len(self.timesteps)
@@ -545,4 +544,3 @@ class LarsimStatistics(Statistics):
 
         with open(statFileName, 'wb') as handle:
             pickle.dump(self.Abfluss, handle, protocol=pickle.HIGHEST_PROTOCOL)
-

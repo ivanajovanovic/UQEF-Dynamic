@@ -2,13 +2,13 @@
   "Timeframe":
     {
       "start_day": 1,
-      "start_month": 6,
+      "start_month": 5,
       "start_year": 2013,
       "start_hour": 0,
       "start_minute": 0,
 
-      "end_day": 30,
-      "end_month": 6,
+      "end_day": 31,
+      "end_month": 5,
       "end_year": 2013,
       "end_hour": 0,
       "end_minute": 0,
@@ -41,77 +41,48 @@
     },
   "parameters": [
     {
-      "name": "Acker:Jun",
+      "name": "Acker:May",
       "type": "lanu",
       "distribution": "Uniform",
       "lower": 0,
       "upper": 1,
-      "lower_limit": 3.0,
-      "upper_limit": 7.0,
-      "depends_on":"Acker:May",
+      "lower_limit": 0.7,
+      "upper_limit": 5.2,
+      "depends_on":"Acker:Apr",
       "direction":"increasing"
     },
     {
-      "name": "locker baumbest.:Jun",
+      "name": "locker baumbest.:May",
       "type": "lanu",
       "distribution": "Uniform",
       "lower": 0,
       "upper": 1,
-      "lower_limit": 6.5,
-      "upper_limit": 8.0,
-      "depends_on":"locker baumbest.:May",
+      "lower_limit": 5.5,
+      "upper_limit": 7.5,
+      "depends_on":"locker baumbest.:Apr",
       "direction":"increasing"
     },
     {
-      "name": "Mischwald:Jun",
+      "name": "Mischwald:May",
       "type": "lanu",
       "distribution": "Uniform",
       "lower": 0,
       "upper": 1,
-      "lower_limit": 8.0,
-      "upper_limit": 12.0,
-      "depends_on":"Mischwald:May",
+      "lower_limit": 6.0,
+      "upper_limit": 11.0,
+      "depends_on":"Mischwald:Apr",
       "direction":"increasing"
     },
     {
-      "name": "Laubwald:Jun",
+      "name": "Laubwald:May",
       "type": "lanu",
       "distribution": "Uniform",
       "lower": 0,
       "upper": 1,
-      "lower_limit": 7.0,
-      "upper_limit": 12.0,
-      "depends_on":"Laubwald:May",
+      "lower_limit": 4.0,
+      "upper_limit": 11.0,
+      "depends_on":"Laubwald:Apr",
       "direction":"increasing"
-    }
-  ],
-  "unused_parameters": [
-    {
-      "name": "EKM",
-      "type": "tape35",
-      "distribution": "Uniform",
-      "lower": 0.3,
-      "upper": 3.0,
-      "lower_limit": 0.3,
-      "upper_limit": 3.0
-    },
-    {
-      "name": "EKL",
-      "type": "tape35",
-      "distribution": "Uniform",
-      "lower": 0.3,
-      "upper": 3.0,
-      "lower_limit": 0.3,
-      "upper_limit": 3.0
-    },
-    {
-      "name": "EKR",
-      "type": "tape35",
-      "distribution": "Uniform",
-      "lower": 0.3,
-      "upper": 3.0,
-      "lower_limit": 0.3,
-      "upper_limit": 3.0
     }
   ]
 }
