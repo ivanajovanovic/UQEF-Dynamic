@@ -115,6 +115,12 @@ class LarsimSamples(object):
     def get_simulation_timesteps(self):
         return list(self.df_simulation_result.TimeStamp.unique())
 
+    def get_timesteps_min(self):
+        return self.df_simulation_result.TimeStamp.min()
+
+    def get_timesteps_max(self):
+        return self.df_simulation_result.TimeStamp.max()
+
     def get_simulation_stations(self):
         return list(self.df_simulation_result.Stationskennung.unique())
 
@@ -167,6 +173,9 @@ class LarsimStatistics(Statistics):
         samples.save_index_parameter_gof_values(self.workingDir)
 
         self.timesteps = samples.get_simulation_timesteps()
+        self.timesteps_min = samples.get_timesteps_min()
+        self.timesteps_max = samples.get_timesteps_max()
+
         self.numbTimesteps = len(self.timesteps)
         print(f"[LARSIM STAT INFO] numbTimesteps is: {self.numbTimesteps}")
 
@@ -211,6 +220,9 @@ class LarsimStatistics(Statistics):
         samples.save_index_parameter_gof_values(self.workingDir)
 
         self.timesteps = samples.get_simulation_timesteps()
+        self.timesteps_min = samples.get_timesteps_min()
+        self.timesteps_max = samples.get_timesteps_max()
+
         self.numbTimesteps = len(self.timesteps)
         print(f"[LARSIM STAT INFO] numbTimesteps is: {self.numbTimesteps}")
 
@@ -264,6 +276,9 @@ class LarsimStatistics(Statistics):
         samples.save_index_parameter_gof_values(self.workingDir)
 
         self.timesteps = samples.get_simulation_timesteps()
+        self.timesteps_min = samples.get_timesteps_min()
+        self.timesteps_max = samples.get_timesteps_max()
+
         self.numbTimesteps = len(self.timesteps)
         print(f"[LARSIM STAT INFO] numbTimesteps is: {self.numbTimesteps}")
 
@@ -355,7 +370,9 @@ class LarsimStatistics(Statistics):
         fileName = self.generateFileName(fileName=fileName, fileNameIdent=".html",
                                          directory=directory, fileNameIdentIsFullName=fileNameIdentIsFullName)
 
-        timestepRange = (pd.Timestamp(self.timesteps.min()), pd.Timestamp(self.timesteps.max()))
+        #timestepRange = (pd.Timestamp(min(self.timesteps)), pd.Timestamp(max(self.timesteps)))
+        timestepRange = (self.timesteps_min, self.timesteps_max)
+
         self.get_measured_discharge(timestepRange=timestepRange)
         self.get_unaltered_discharge(timestepRange=timestepRange)
 
@@ -399,14 +416,15 @@ class LarsimStatistics(Statistics):
         fig = make_subplots(rows=n_rows, cols=1, shared_xaxes=False)
 
         if unalatered:
+            column_to_draw = 'Value' if 'Value' in self.df_unalatered.columns else self.configurationObject["Output"]["station_calibration_postproc"]
             #fig.add_trace(go.Scatter(x=pdTimesteps, y=self.unalatered['Value'], name="Q (unaltered simulation)",line_color='deepskyblue'), row=1, col=1)
-            fig.add_trace(go.Scatter(x=self.df_unalatered['TimeStamp'], y=self.df_unalatered['Value'],
+            fig.add_trace(go.Scatter(x=self.df_unalatered['TimeStamp'], y=self.df_unalatered[column_to_draw],
                                      name="Q (unaltered simulation)",line_color='deepskyblue'), row=1, col=1)
         if measured:
+            column_to_draw = 'Value' if 'Value' in self.df_measured.columns else self.configurationObject["Output"]["station_calibration_postproc"]
             #fig.add_trace(go.Scatter(x=pdTimesteps, y=self.measured['Value'], name="Q (measured)",line_color='red'), row=1, col=1)
-            fig.add_trace(go.Scatter(x=self.df_measured['TimeStamp'], y=self.df_measured['Value'],
+            fig.add_trace(go.Scatter(x=self.df_measured['TimeStamp'], y=self.df_measured[column_to_draw],
                                      name="Q (measured)",line_color='red'), row=1, col=1)
-
 
         fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["E"] for key in self.keyIter], name='E[Q]',line_color='green', mode='lines'), row=1, col=1)
         #fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["min_q"] for key in self.keyIter], name='min_q',line_color='indianred', mode='lines'), row=1, col=1)
@@ -415,8 +433,8 @@ class LarsimStatistics(Statistics):
         fig.add_trace(go.Scatter(x=pdTimesteps, y=[(self.Abfluss[key]["E"] + self.Abfluss[key]["StdDev"]) for key in self.keyIter], name='mean + std. dev', line_color='darkviolet', mode='lines', fill='tonexty'), row=1, col=1)
 
         if self.uq_method=="saltelli":
-            fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["P10"][0] for key in self.keyIter], name='10th percentile',line_color='yellow', mode='lines'), row=1, col=1)
-            fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["P90"][0] for key in self.keyIter], name='90th percentile',line_color='yellow', mode='lines',fill='tonexty'), row=1, col=1)
+            fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["P10"] for key in self.keyIter], name='10th percentile',line_color='yellow', mode='lines'), row=1, col=1)
+            fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["P90"] for key in self.keyIter], name='90th percentile',line_color='yellow', mode='lines',fill='tonexty'), row=1, col=1)
         else:
             fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["P10"] for key in self.keyIter], name='10th percentile',line_color='yellow', mode='lines'), row=1, col=1)
             fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["P90"] for key in self.keyIter], name='90th percentile',line_color='yellow', mode='lines',fill='tonexty'), row=1, col=1)
@@ -426,13 +444,13 @@ class LarsimStatistics(Statistics):
         if is_Sobol_m_computed:
             for i in range(len(labels)):
                 if self.uq_method=="saltelli":
-                    fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["Sobol_m"][i][0] for key in self.keyIter], name=labels[i], legendgroup=labels[i], line_color=colors[i]), row=3, col=1)
+                    fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["Sobol_m"][i] for key in self.keyIter], name=labels[i], legendgroup=labels[i], line_color=colors[i]), row=3, col=1)
                 else:
                     fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["Sobol_m"][i] for key in self.keyIter], name=labels[i], legendgroup=labels[i], line_color=colors[i]), row=3, col=1)
         if is_Sobol_t_computed:
             for i in range(len(labels)):
                 if self.uq_method=="saltelli":
-                    fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["Sobol_t"][i][0] for key in self.keyIter], legendgroup=labels[i], showlegend = False, line_color=colors[i]), row=4, col=1)
+                    fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["Sobol_t"][i] for key in self.keyIter], legendgroup=labels[i], showlegend = False, line_color=colors[i]), row=4, col=1)
                 else:
                     fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["Sobol_t"][i] for key in self.keyIter], legendgroup=labels[i], showlegend = False, line_color=colors[i]), row=4, col=1)
 
@@ -480,11 +498,13 @@ class LarsimStatistics(Statistics):
         plotter.subplot(411)
 
         if unalatered:
+            column_to_draw = 'Value' if 'Value' in self.df_unalatered.columns else self.configurationObject["Output"]["station_calibration_postproc"]
             #plotter.plot(pdTimesteps, self.unalatered['Value'], label="Q (unaltered simulation)")
-            plotter.plot(self.df_unalatered['TimeStamp'], self.df_unalatered['Value'], label="Q (unaltered simulation)")
+            plotter.plot(self.df_unalatered['TimeStamp'], self.df_unalatered[column_to_draw], label="Q (unaltered simulation)")
         if measured:
+            column_to_draw = 'Value' if 'Value' in self.df_measured.columns else self.configurationObject["Output"]["station_calibration_postproc"]
             #plotter.plot(pdTimesteps, self.measured['Value'], label="Q (measured)")
-            plotter.plot(self.df_measured['TimeStamp'], self.df_measured['Value'], label="Q (measured)")
+            plotter.plot(self.df_measured['TimeStamp'], self.df_measured[column_to_draw], label="Q (measured)")
 
         self.keyIter = list(itertools.product([station,],pdTimesteps))
 
@@ -540,7 +560,6 @@ class LarsimStatistics(Statistics):
     def saveToFile(self, fileName="statistics_dict", fileNameIdent="", directory="./",
                    fileNameIdentIsFullName=False):
 
-        statFileName = self.workingDir / "statistics_dictionary.pkl"
-
+        statFileName = os.path.abspath(os.path.join(self.workingDir,"statistics_dictionary.pkl"))
         with open(statFileName, 'wb') as handle:
             pickle.dump(self.Abfluss, handle, protocol=pickle.HIGHEST_PROTOCOL)
