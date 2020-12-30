@@ -1,0 +1,29 @@
+{
+  "Parameters":
+    {
+      "a": 7.0,
+      "b": 0.1
+    },
+  "Variables": [
+     {
+      "name": "x1",
+      "distribution": "uniform",
+      "lower": -3.14159265359,
+      "upper": 3.14159265359
+    },
+    {
+      "name": "x2",
+      "distribution": "uniform",
+      "lower": -3.14159265359,
+      "upper": 3.14159265359
+    },
+    {
+      "name": "x3",
+      "distribution": "uniform",
+      "lower": -3.14159265359,
+      "upper": 3.14159265359
+    }
+  ]
+}
+
+

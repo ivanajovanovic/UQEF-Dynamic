@@ -1,0 +1,50 @@
+{
+  "Timeframe":
+    {
+      "start_day": 20,
+      "start_month": 5,
+      "start_year": 2013,
+      "start_hour": 0,
+      "start_minute": 0,
+
+
+      "end_day": 20,
+      "end_month": 6,
+      "end_year": 2013,
+      "end_hour": 0,
+      "end_minute": 0,
+
+      "timestep": 10,
+      "cut_runs": "False"
+    },
+  "Variables": [
+    {
+      "name": "      BSF",
+      "distribution": "uniform",
+      "lower_limit": 0.01,
+      "upper_limit": 0.5
+    },
+    {
+      "name": "       A2",
+      "distribution": "uniform",
+      "lower_limit": 0.5 ,
+      "upper_limit": 4.0
+    }
+  ],
+  "Output":
+  {
+    "type_of_output":"Abfluss Messung",
+    "station":"MARI",
+    "pathsDataFormat":"False",
+    "dailyOutput": "False"
+  },
+  "GaugeControlRegion":
+  {
+    "TGB":3085,
+    "addSampledValue":"False"
+  },
+  "Directories":{
+   "larsim_exe": "/home/jupyter-ivana/Larsim_data/Larsim-exe/larsim-linux-intel-1000.exe",
+   "working_dir":"/home/jupyter-ivana/Larsim_Utility_Set/trial_run_LarsimModel"
+  }
+}
