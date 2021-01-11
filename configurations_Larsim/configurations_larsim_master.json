@@ -28,7 +28,10 @@
       "calculate_GoF": "True",
       "objective_function":"all",
       "run_and_save_simulations":"True",
-      "compute_gradients": "False"
+      "compute_gradients": "False",
+      "mode": "continuous",
+      "interval": 24,
+      "QOI": "Q"
     },
   "parameters_settings":
     {
