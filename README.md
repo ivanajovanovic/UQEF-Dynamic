@@ -35,3 +35,16 @@ Additional Software requirements:
                   - uqsim.configuration_object["Directories"]["working_dir"] = outputResultDir/model_runs
 * sourceDir - sourceDir
 
+### Output files
+* outputResultDir/df_measured.pkl
+* outputResultDir/df_simulated.pkl
+* outputResultDir/df_unaltered_ergebnis.pkl
+* outputResultDir/gof_past_sim_meas.pkl
+* outputResultDir/gof_unaltered_meas.pkl
+* outputResultDir/master_configuration/
+* if LarsimModel.run_and_save_simulations is True then the following files will be saved as well:
+** df_Larsim_run_i.pkl
+** parameters_Larsim_run_i.pkl
+** goodness_of_fit_i.pkl
+*** df_Larsim_run_processed_i.pkl
+
