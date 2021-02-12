@@ -1,5 +1,7 @@
-# Set of functions to call if you want to execute some functionality of LarsimStatistics "afterwards"
-# Assumess that nodes object (dictionary) and raw results dataframe are stored
+# Set of functions to call if you want to execute some functionality of LarsimStatistics "afterward"
+# e.g., to compute statistics, to draw statistics
+# use this script to prototype the parallelization if statistics calculations
+# Assumes that nodes object (dictionary) and raw results dataframe are stored
 
 import chaospy as cp
 import dill
@@ -19,8 +21,7 @@ from distutils.util import strtobool
 
 import larsimDataPostProcessing
 import larsimInputOutputUtilities
-
-import saltelliSobolIndicesHelpingFunctions
+from common import saltelliSobolIndicesHelpingFunctions
 
 def _get_df_simulation_from_file(working_folder):
     df_all_simulations = os.path.abspath(os.path.join(working_folder,"df_all_simulations.pkl"))
@@ -30,7 +31,7 @@ def _get_df_simulation_from_file(working_folder):
 def _get_nodes_from_file(working_folder):
     nodes_dict = os.path.abspath(os.path.join(working_folder,"nodes.simnodes"))
     with open(nodes_dict, 'rb') as f:
-                nodes = dill.load(f)
+        nodes = dill.load(f)
     return nodes
 
 # TODO Add _calcStatisticsForMC and calcStatisticsForMc

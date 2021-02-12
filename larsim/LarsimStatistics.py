@@ -21,6 +21,60 @@ import LarsimUtilityFunctions.larsimPaths as paths
 #from Larsim-UQ.common import saltelliSobolIndicesHelpingFunctions
 from common import saltelliSobolIndicesHelpingFunctions
 
+COLORS = [
+    '#1f77b4',  # muted blue
+    '#ff7f0e',  # safety orange
+    '#2ca02c',  # cooked asparagus green
+    '#d62728',  # brick red
+    '#9467bd',  # muted purple
+    '#8c564b',  # chestnut brown
+    '#e377c2',  # raspberry yogurt pink
+    '#7f7f7f',  # middle gray
+    '#bcbd22',  # curry yellow-green
+    '#17becf'   # blue-teal
+]
+
+s='''
+        aliceblue, antiquewhite, aqua, aquamarine, azure,
+        beige, bisque, black, blanchedalmond, blue,
+        blueviolet, brown, burlywood, cadetblue,
+        chartreuse, chocolate, coral, cornflowerblue,
+        cornsilk, crimson, cyan, darkblue, darkcyan,
+        darkgoldenrod, darkgray, darkgrey, darkgreen,
+        darkkhaki, darkmagenta, darkolivegreen, darkorange,
+        darkorchid, darkred, darksalmon, darkseagreen,
+        darkslateblue, darkslategray, darkslategrey,
+        darkturquoise, darkviolet, deeppink, deepskyblue,
+        dimgray, dimgrey, dodgerblue, firebrick,
+        floralwhite, forestgreen, fuchsia, gainsboro,
+        ghostwhite, gold, goldenrod, gray, grey, green,
+        greenyellow, honeydew, hotpink, indianred, indigo,
+        ivory, khaki, lavender, lavenderblush, lawngreen,
+        lemonchiffon, lightblue, lightcoral, lightcyan,
+        lightgoldenrodyellow, lightgray, lightgrey,
+        lightgreen, lightpink, lightsalmon, lightseagreen,
+        lightskyblue, lightslategray, lightslategrey,
+        lightsteelblue, lightyellow, lime, limegreen,
+        linen, magenta, maroon, mediumaquamarine,
+        mediumblue, mediumorchid, mediumpurple,
+        mediumseagreen, mediumslateblue, mediumspringgreen,
+        mediumturquoise, mediumvioletred, midnightblue,
+        mintcream, mistyrose, moccasin, navajowhite, navy,
+        oldlace, olive, olivedrab, orange, orangered,
+        orchid, palegoldenrod, palegreen, paleturquoise,
+        palevioletred, papayawhip, peachpuff, peru, pink,
+        plum, powderblue, purple, red, rosybrown,
+        royalblue, saddlebrown, salmon, sandybrown,
+        seagreen, seashell, sienna, silver, skyblue,
+        slateblue, slategray, slategrey, snow, springgreen,
+        steelblue, tan, teal, thistle, tomato, turquoise,
+        violet, wheat, white, whitesmoke, yellow,
+        yellowgreen
+        '''
+COLORS_ALL= s.split(',')
+COLORS_ALL = [l.replace('\n', '') for l in COLORS_ALL]
+COLORS_ALL = [l.replace(' ', '') for l in COLORS_ALL]
+
 class LarsimSamples(object):
     """
      Samples is a collection of the (filtered) sampled results of a whole UQ simulation
@@ -150,12 +204,17 @@ class LarsimStatistics(Statistics):
         self.run_and_save_simulations = strtobool(self.configurationObject["Output"]["run_and_save_simulations"])\
                                         if "run_and_save_simulations" in self.configurationObject["Output"] else False
 
+        # Only the names of the stochastic parameters
         self.nodeNames = []
         for i in self.configurationObject["parameters"]:
-            self.nodeNames.append(i["name"])
+            if i["distribution"] != "None":
+                self.nodeNames.append(i["name"])
         self.dim = len(self.nodeNames)
 
         self.uq_method = kwargs.get('uq_method') if 'uq_method' in kwargs else None
+
+        self._is_Sobol_t_computed = False
+        self._is_Sobol_m_computed = False
 
     def calcStatisticsForMc(self, rawSamples, timesteps, simulationNodes,
                             numEvaluations, order, regression, solverTimes,
@@ -231,7 +290,10 @@ class LarsimStatistics(Statistics):
         nodes = simulationNodes.distNodes
         dist = simulationNodes.joinedDists
         weights = simulationNodes.weights
-        polynomial_expansion = cp.orth_ttr(order, dist)
+        #polynomial_expansion = cp.orth_ttr(order, dist)
+        #polynomial_expansion = cp.generate_expansion(order, dist, rule="three_terms_recurrence", normed=True)
+        polynomial_expansion = cp.generate_expansion(order, dist, rule="three_terms_recurrence", normed=False)
+        # rule = "gram_schmidt" | "cholesky" | "three_terms_recurrence"
 
         grouped = samples.df_simulation_result.groupby(['Stationskennung','TimeStamp'])
         groups = grouped.groups
@@ -251,9 +313,9 @@ class LarsimStatistics(Statistics):
         #percentiles
         numPercSamples = 10 ** 5
         self.Abfluss[key]["gPCE"] = self.qoi_gPCE
-        self.Abfluss[key]["E"] = float((cp.E(self.qoi_gPCE, dist)))
-        self.Abfluss[key]["Var"] = float((cp.Var(self.qoi_gPCE, dist)))
-        self.Abfluss[key]["StdDev"] = float((cp.Std(self.qoi_gPCE, dist)))
+        self.Abfluss[key]["E"] = float(cp.E(self.qoi_gPCE, dist))
+        self.Abfluss[key]["Var"] = float(cp.Var(self.qoi_gPCE, dist))
+        self.Abfluss[key]["StdDev"] = float(cp.Std(self.qoi_gPCE, dist))
         self.Abfluss[key]["Sobol_m"] = cp.Sens_m(self.qoi_gPCE, dist)
         self.Abfluss[key]["Sobol_m2"] = cp.Sens_m2(self.qoi_gPCE, dist)
         self.Abfluss[key]["Sobol_t"] = cp.Sens_t(self.qoi_gPCE, dist)
@@ -262,6 +324,9 @@ class LarsimStatistics(Statistics):
         if isinstance(self.Abfluss[key]["P10"], (list)) and len(self.Abfluss[key]["P10"]) == 1:
             self.Abfluss[key]["P10"]= self.Abfluss[key]["P10"][0]
             self.Abfluss[key]["P90"] = self.Abfluss[key]["P90"][0]
+
+        self._is_Sobol_t_computed = True
+        self._is_Sobol_m_computed = True
 
     def calcStatisticsForSaltelli(self, rawSamples, timesteps,
                             simulationNodes, numEvaluations, order, regression, solverTimes,
@@ -288,7 +353,8 @@ class LarsimStatistics(Statistics):
         grouped = samples.df_simulation_result.groupby(['Stationskennung','TimeStamp'])
         groups = grouped.groups
 
-        self.dim = len(simulationNodes.nodeNames)
+        #self.dim = len(simulationNodes.nodeNames)
+        self.dim = len(simulationNodes.distNodes[0])
 
         for key, val_indices in groups.items():
             self.Abfluss[key] = {}
@@ -326,16 +392,17 @@ class LarsimStatistics(Statistics):
                 self.Abfluss[key]["P10"]=self.Abfluss[key]["P10"][0]
                 self.Abfluss[key]["P90"]=self.Abfluss[key]["P90"][0]
 
+        self._is_Sobol_t_computed = True
+        self._is_Sobol_m_computed = True
+
         print(f"[LARSIM STAT INFO] calcStatisticsForSaltelli function is done!")
 
+    def check_if_Sobol_t_computed(self):
+        self._is_Sobol_t_computed = "Sobol_t" in self.Abfluss[self.keyIter[0]] #hasattr(self.Abfluss[self.keyIter[0], "Sobol_t")
 
-    def  _compute_Sobol_t(self):
-        is_Sobol_t_computed = "Sobol_t" in self.Abfluss[self.keyIter[0]] #hasattr(self.Abfluss[self.keyIter[0], "Sobol_t")
-        return is_Sobol_t_computed
-
-    def  _compute_Sobol_m(self):
-        is_Sobol_m_computed = "Sobol_m" in self.Abfluss[self.keyIter[0]] #hasattr(self.Abfluss[self.keyIter[0], "Sobol_m")
-        return is_Sobol_m_computed
+    def check_if_Sobol_m_computed(self):
+        self._is_Sobol_m_computed = "Sobol_m" in self.Abfluss[self.keyIter[0]] \
+                                    or "Sobol_m2" in self.Abfluss[self.keyIter[0]] #hasattr(self.Abfluss[self.keyIter[0], "Sobol_m")
 
     def get_measured_discharge(self, timestepRange=None):
         local_measurment_file = os.path.abspath(os.path.join(self.workingDir, "df_measured.pkl"))
@@ -408,15 +475,13 @@ class LarsimStatistics(Statistics):
 
         self.keyIter = list(itertools.product([station,],pdTimesteps))
 
-        colors = ['darkred', 'midnightblue', 'mediumseagreen', 'darkorange']
         labels = [nodeName.strip() for nodeName in self.nodeNames]
 
-        is_Sobol_t_computed = self._compute_Sobol_t()
-        is_Sobol_m_computed = self._compute_Sobol_m()
-
-        if is_Sobol_t_computed and is_Sobol_m_computed:
+        self.check_if_Sobol_t_computed()
+        self.check_if_Sobol_m_computed()
+        if self._is_Sobol_t_computed and self._is_Sobol_m_computed:
             n_rows = 4
-        elif is_Sobol_t_computed or is_Sobol_m_computed:
+        elif self._is_Sobol_t_computed or self._is_Sobol_m_computed:
             n_rows = 3
         else:
             n_rows = 2
@@ -449,26 +514,27 @@ class LarsimStatistics(Statistics):
 
         fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["StdDev"] for key in self.keyIter], name='std. dev', line_color='darkviolet'), row=2, col=1)
 
-        if is_Sobol_m_computed:
+        # TODO - This is hardcoded for 4 parameters
+        if self._is_Sobol_m_computed:
             for i in range(len(labels)):
-                if self.uq_method=="saltelli":
-                    fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["Sobol_m"][i] for key in self.keyIter], name=labels[i], legendgroup=labels[i], line_color=colors[i]), row=3, col=1)
+                if self.uq_method == "saltelli":
+                    fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["Sobol_m"][i] for key in self.keyIter], name=labels[i], legendgroup=labels[i], line_color=COLORS[i]), row=3, col=1)
                 else:
-                    fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["Sobol_m"][i] for key in self.keyIter], name=labels[i], legendgroup=labels[i], line_color=colors[i]), row=3, col=1)
-        if is_Sobol_t_computed:
+                    fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["Sobol_m"][i] for key in self.keyIter], name=labels[i], legendgroup=labels[i], line_color=COLORS[i]), row=3, col=1)
+        if self._is_Sobol_t_computed:
             for i in range(len(labels)):
-                if self.uq_method=="saltelli":
-                    fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["Sobol_t"][i] for key in self.keyIter], legendgroup=labels[i], showlegend = False, line_color=colors[i]), row=4, col=1)
+                if self.uq_method == "saltelli":
+                    fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["Sobol_t"][i] for key in self.keyIter], legendgroup=labels[i], showlegend = False, line_color=COLORS[i]), row=4, col=1)
                 else:
-                    fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["Sobol_t"][i] for key in self.keyIter], legendgroup=labels[i], showlegend = False, line_color=colors[i]), row=4, col=1)
+                    fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["Sobol_t"][i] for key in self.keyIter], legendgroup=labels[i], showlegend = False, line_color=COLORS[i]), row=4, col=1)
 
         fig.update_traces(mode='lines')
         #fig.update_xaxes(title_text="Time")
         fig.update_yaxes(title_text="Q [m^3/s]", side='left', showgrid=True, row=1, col=1)
         fig.update_yaxes(title_text="Std. Dev. [m^3/s]", side='left', showgrid=True, row=2, col=1)
-        if is_Sobol_m_computed:
+        if self._is_Sobol_m_computed:
             fig.update_yaxes(title_text="Sobol_m", side='left', showgrid=True, range=[0, 1], row=3, col=1)
-        if is_Sobol_t_computed:
+        if self._is_Sobol_t_computed:
             fig.update_yaxes(title_text="Sobol_t", side='left', showgrid=True, range=[0, 1], row=4, col=1)
         #fig.update_layout(height=1200, width=1200, title_text='Larsim Forward UQ & SA - MARI',xaxis4_rangeslider_visible=True, xaxis4_rangeslider_thickness=0.05)
         fig.update_layout(height=800, width=1200, title_text=window_title,xaxis4_rangeslider_visible=True, xaxis4_rangeslider_thickness=0.05)
@@ -497,10 +563,9 @@ class LarsimStatistics(Statistics):
         labels = [nodeName.strip() for nodeName in self.nodeNames]
         #labels = list(map(str.strip, self.nodeNames))
 
-        is_Sobol_t_computed = self._compute_Sobol_t()
-        is_Sobol_m_computed = self._compute_Sobol_m()
-
-        if is_Sobol_t_computed or is_Sobol_m_computed:
+        self.check_if_Sobol_t_computed()
+        self.check_if_Sobol_m_computed()
+        if self._is_Sobol_t_computed or self._is_Sobol_m_computed:
             n_rows = 4
         else:
             n_rows = 3
@@ -537,7 +602,7 @@ class LarsimStatistics(Statistics):
         plotter.legend()
         plotter.grid(True)
 
-        if is_Sobol_m_computed:
+        if self._is_Sobol_m_computed:
             plotter.subplot(413)
             for i in range(len(labels)):
                 plotter.plot(pdTimesteps, [self.Abfluss[key]["Sobol_m"][i][0] for key in self.keyIter],\
@@ -548,7 +613,7 @@ class LarsimStatistics(Statistics):
             plotter.legend()
             plotter.grid(True)
 
-        if is_Sobol_t_computed:
+        if self._is_Sobol_t_computed:
             plotter.subplot(414)
             for i in range(len(labels)):
                 plotter.plot(pdTimesteps, [self.Abfluss[key]["Sobol_t"][i][0] for key in self.keyIter],\

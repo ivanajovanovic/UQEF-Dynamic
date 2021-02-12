@@ -885,7 +885,7 @@ class LarsimModel(Model):
         else:
             return None
 
-    def _calculate_GoF_sliding_window(self, predictedDF: pd.DataFrame):
+    def _calculate_GoF_sliding_window_single_gof(self, predictedDF: pd.DataFrame, objective_function=None):
         """
         This function assumes that self.measuredDF is already computed by self._set_measured_df function
         and that self._is_measuredDF_computed is set to True
@@ -902,10 +902,13 @@ class LarsimModel(Model):
         elif self.measuredDF is None and self._is_measuredDF_computed:
             return None
 
+        if objective_function is None:
+            objective_function = self.objective_function
+
         list_over_objective_function = larsimDataPostProcessing.\
             calculateGoodnessofFit_simple(measuredDF=self.measuredDF,
                                           predictedDF=predictedDF,
-                                          gof_list=self.objective_function,
+                                          gof_list=objective_function,
                                           measuredDF_column_name = self.measuredDF_column_name,
                                           simulatedDF_column_name="Value",
                                           return_dict=False)

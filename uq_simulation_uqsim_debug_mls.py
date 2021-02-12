@@ -24,6 +24,13 @@ from productFunction import ProductFunctionStatistics
 
 import LarsimUtilityFunctions.larsimPaths as paths
 
+# additionally added for the debugging of the nodes
+import chaospy as cp
+import os.path as osp
+import pandas as pd
+import pathlib
+from LarsimUtilityFunctions import larsimConfigurationSettings
+
 sys.path.insert(0, os.getcwd())
 
 # instantiate UQsim
@@ -34,22 +41,27 @@ uqsim = uqef.UQsim()
 # change args locally for testing and debugging
 local_debugging = True
 if local_debugging:
+    local_debugging_nodes = True
+    exit_after_debugging_nodes = True
+
     uqsim.args.model = "larsim"
     #uqsim.args.uq_method = "saltelli"
+    # uqsim.args.uq_method = "mc"
     uqsim.args.uq_method = "sc"
     uqsim.args.uncertain = "all"
     uqsim.args.chunksize = 1
     uqsim.args.mc_numevaluations = 100
-    uqsim.args.sc_q_order = 10 #10
-    uqsim.args.sc_p_order = 6 #8
+    uqsim.args.sc_q_order = 7
+    uqsim.args.sc_p_order = 5
 
-    uqsim.args.outputResultDir = os.path.abspath(os.path.join(paths.scratch_dir, "larsim_runs", 'larsim_run_lai_may_20210110'))
+    uqsim.args.outputResultDir = os.path.abspath(os.path.join(paths.scratch_dir, "larsim_runs", 'larsim_run_siam_cse'))
     uqsim.args.inputModelDir = paths.larsim_data_path
     uqsim.args.sourceDir = paths.sourceDir
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
 
     #uqsim.args.config_file = "/home/ga45met/Repositories/Larsim/Larsim-UQ/configurations_Larsim/configurations_larsim_master_lai.json"
-    uqsim.args.config_file = '/home/ga45met/mnt/linux_cluster_2/Larsim-UQ/configurations_Larsim/configurations_larsim_master_lai_small.json'
+    uqsim.args.config_file = '/home/ga45met/mnt/linux_cluster_2/Larsim-UQ/configurations_Larsim/configurations_larsim_high_flow_small.json'
+    #uqsim.args.config_file = '/home/ga45met/mnt/linux_cluster_2/Larsim-UQ/configurations_Larsim/configurations_larsim_master_lai_small.json'
     #uqsim.args.config_file = "/home/ga45met/Repositories/Larsim/Larsim-UQ/configurations_Larsim/configuration_larsim_updated_lai_jun.json"
 
     uqsim.args.disable_statistics = True
@@ -57,7 +69,7 @@ if local_debugging:
     uqsim.args.mpi = True
     uqsim.args.mpi_method = "MpiPoolSolver"
     uqsim.args.sampling_rule = "S" # | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
-    uqsim.args.uqsim_store_to_file=False
+    uqsim.args.uqsim_store_to_file = False
 
     uqsim.setup_configuration_object()
 
@@ -86,6 +98,25 @@ if uqsim.is_master() and not uqsim.is_restored():
         subprocess.run(["mkdir", uqsim.configuration_object["Directories"]["workingDir"]])
 
 #####################################
+# one time initial model setup
+#####################################
+# put here if there is something specifically related to the model that should be done only once
+if uqsim.is_master() and not uqsim.is_restored():
+    def initialModelSetUp():
+        models = {
+            "larsim"         : (lambda: LarsimModel.LarsimModelSetUp(configurationObject=uqsim.configuration_object,
+                                                                     inputModelDir=uqsim.args.inputModelDir,
+                                                                     sourceDir=uqsim.args.sourceDir,
+                                                                     workingDir=uqsim.args.workingDir,
+                                                                     ))
+           ,"oscillator"     : (lambda: LinearDampedOscillatorModel.LinearDampedOscillatorModelSetUp(uqsim.configuration_object))
+           ,"ishigami"       : (lambda: IshigamiModel.IshigamiModelSetUp(uqsim.configuration_object))
+           ,"productFunction": (lambda: ProductFunctionModel.ProductFunctionModelSetUp(uqsim.configuration_object))
+        }
+        models[uqsim.args.model]()
+    initialModelSetUp()
+
+#####################################
 #####################################
 # register model
 uqsim.models.update({"larsim"         : (lambda: LarsimModel.LarsimModel(configurationObject = uqsim.configuration_object,
@@ -106,30 +137,56 @@ uqsim.statistics.update({"productFunction": (lambda: ProductFunctionStatistics.P
 # setup
 uqsim.setup()
 
-#####################################
-# one time initial model setup
-#####################################
-# put here if there is something specifically related to the model that should be done only once
-if uqsim.is_master() and not uqsim.is_restored():
-    def initialModelSetUp():
-        models = {
-            "larsim"         : (lambda: LarsimModel.LarsimModelSetUp(configurationObject = uqsim.configuration_object,
-                                                                     inputModelDir=uqsim.args.inputModelDir,
-                                                                     sourceDir=uqsim.args.sourceDir,
-                                                                     workingDir=uqsim.args.workingDir,
-                                                                     ))
-           ,"oscillator"     : (lambda: LinearDampedOscillatorModel.LinearDampedOscillatorModelSetUp(uqsim.configuration_object))
-           ,"ishigami"       : (lambda: IshigamiModel.IshigamiModelSetUp(uqsim.configuration_object))
-           ,"productFunction": (lambda: ProductFunctionModel.ProductFunctionModelSetUp(uqsim.configuration_object))
-        }
-        models[uqsim.args.model]()
-    initialModelSetUp()
-    # experiment by Ivana - remove
-    print(uqsim.configuration_object["tuples_parameters_info"])
-
 simulationNodes_save_file = "nodes"
 uqsim.save_simulationNodes(fileName=simulationNodes_save_file)
 
+#####################################
+# check-up
+#####################################
+if local_debugging_nodes:
+    # # experiment by Ivana - remove
+    # print(uqsim.configuration_object["tuples_parameters_info"])
+
+    # TODO
+    # play with different sampling rules...
+
+    # TODO
+    # plot position of the nodes
+    local_nodes = uqsim.simulationNodes.nodes
+    local_distNodes = uqsim.simulationNodes.distNodes
+    local_weights = uqsim.simulationNodes.weights
+    local_parameters = uqsim.simulationNodes.parameters
+    local_dist = uqsim.simulationNodes.joinedDists
+    #print(f"local_nodes are: \n {local_nodes}")
+
+    # # TODO
+    # # plot position of the final parameters
+    # list_of_parameters_dict = []
+    # local_master_dir = pathlib.Path(osp.abspath(osp.join(uqsim.configuration_object["Directories"]["workingDir"],
+    #                                                      'master_configuration')))
+    # tape35_path = local_master_dir / "tape35"
+    # lanu_path = local_master_dir / "lanu.par"
+    # for parameter in local_nodes:
+    #     ordered_dict_of_all_params = larsimConfigurationSettings.params_configurations(parameter,
+    #                                                                                    tape35_path,
+    #                                                                                    tape35_path,
+    #                                                                                    uqsim.configuration_object,
+    #                                                                                    process_id=0,
+    #                                                                                    reference_value_from_TGB=3085,
+    #                                                                                    take_direct_value=False,
+    #                                                                                    write_new_values_to_tape35=True,
+    #                                                                                    write_new_values_to_lanu=True)
+    #     list_of_parameters_dict.append(ordered_dict_of_all_params)
+    # df_with_final_parameters = pd.DataFrame(list_of_parameters_dict)
+    #
+    # # TODO
+    # # Plot polynomials
+    # # polynomial_expansion = cp.orth_ttr(order, dist)
+    # polynomial_expansion = cp.generate_expansion(uqsim.args.sc_q_order, local_dist,
+    #                                              rule="three_terms_recurrence",
+    #                                              normed=False)
+    if exit_after_debugging_nodes:
+        sys.exit()
 #####################################
 #####################################
 
