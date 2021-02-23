@@ -21,6 +21,8 @@ import LarsimUtilityFunctions.larsimPaths as paths
 #from Larsim-UQ.common import saltelliSobolIndicesHelpingFunctions
 from common import saltelliSobolIndicesHelpingFunctions
 
+#from numba import njit, prange
+
 COLORS = [
     '#1f77b4',  # muted blue
     '#ff7f0e',  # safety orange
@@ -86,7 +88,7 @@ class LarsimSamples(object):
         station = configurationObject["Output"]["station_calibration_postproc"] \
             if "station_calibration_postproc" in configurationObject["Output"] else "MARI"
         type_of_output=configurationObject["Output"]["type_of_output"] \
-            if "type_of_output" in configurationObject["Output"] else "Abfluss Messung"
+            if "type_of_output" in configurationObject["Output"] else "Abfluss Messung + Vorhersage"
         dailyOutput=configurationObject["Output"]["dailyOutput"] \
             if "dailyOutput" in configurationObject["Output"] else "False"
 
@@ -193,11 +195,11 @@ class LarsimStatistics(Statistics):
             except KeyError:
                 self.workingDir = paths.workingDir
 
-        self.Abfluss = {}
+        self.Abfluss = dict()
 
-        self.df_unalatered = None
+        self.df_unaltered = None
         self.df_measured = None
-        self.unalatered_computed = False
+        self.unaltered_computed = False
         self.groundTruth_computed = False
 
         # check if simulation results were already saved in LarsimModel
@@ -213,6 +215,8 @@ class LarsimStatistics(Statistics):
 
         self.uq_method = kwargs.get('uq_method') if 'uq_method' in kwargs else None
 
+        self._compute_Sobol_t = kwargs.get('compute_Sobol_t') if 'compute_Sobol_t' in kwargs else True
+        self._compute_Sobol_m = kwargs.get('compute_Sobol_m') if 'compute_Sobol_m' in kwargs else True
         self._is_Sobol_t_computed = False
         self._is_Sobol_m_computed = False
 
@@ -222,7 +226,6 @@ class LarsimStatistics(Statistics):
 
         samples = LarsimSamples(rawSamples, configurationObject=self.configurationObject)
 
-        # Save the DataFrame containing all the simulation results - This is really important
         samples.save_samples_to_file(self.workingDir)
         samples.save_index_parameter_values(self.workingDir)
         samples.save_index_parameter_gof_values(self.workingDir)
@@ -272,6 +275,7 @@ class LarsimStatistics(Statistics):
                            work_package_indexes, original_runtime_estimator):
 
         samples = LarsimSamples(rawSamples, configurationObject=self.configurationObject)
+
         samples.save_samples_to_file(self.workingDir)
         samples.save_index_parameter_values(self.workingDir)
         samples.save_index_parameter_gof_values(self.workingDir)
@@ -297,6 +301,8 @@ class LarsimStatistics(Statistics):
 
         grouped = samples.df_simulation_result.groupby(['Stationskennung','TimeStamp'])
         groups = grouped.groups
+
+        #@jit(nopython=True, parallel=True)
         for key, val_indices in groups.items():
             discharge_values = samples.df_simulation_result.loc[val_indices.values].Value.values
             self.Abfluss[key] = {}
@@ -310,31 +316,40 @@ class LarsimStatistics(Statistics):
         print(f"[LARSIM STAT INFO] calcStatisticsForSc function is done!")
 
     def _calc_stats_for_gPCE(self, dist, key):
-        #percentiles
         numPercSamples = 10 ** 5
         self.Abfluss[key]["gPCE"] = self.qoi_gPCE
         self.Abfluss[key]["E"] = float(cp.E(self.qoi_gPCE, dist))
         self.Abfluss[key]["Var"] = float(cp.Var(self.qoi_gPCE, dist))
         self.Abfluss[key]["StdDev"] = float(cp.Std(self.qoi_gPCE, dist))
-        self.Abfluss[key]["Sobol_m"] = cp.Sens_m(self.qoi_gPCE, dist)
-        self.Abfluss[key]["Sobol_m2"] = cp.Sens_m2(self.qoi_gPCE, dist)
-        self.Abfluss[key]["Sobol_t"] = cp.Sens_t(self.qoi_gPCE, dist)
+
+        self.Abfluss[key]["qoi_dist"] = cp.QoI_Dist(self.qoi_gPCE, dist)
+        # TODO
+        # # generate QoI dist
+        # qoi_dist = cp.QoI_Dist(self.qoi_gPCE, dist)
+        # # generate sampling values for the qoi dist (you should know the min/max values for doing this)
+        # dist_sampling_values = np.linspace(min_value, max_value, 1e4, endpoint=True)
+        # # sample the QoI dist on the generated sampling values
+        # pdf_samples = qoi_dist.pdf(dist_sampling_values)
+        # # plot it (for example with matplotlib) ...
+
+        if self._compute_Sobol_t:
+            self.Abfluss[key]["Sobol_t"] = cp.Sens_t(self.qoi_gPCE, dist)
+        if self._compute_Sobol_m:
+            self.Abfluss[key]["Sobol_m"] = cp.Sens_m(self.qoi_gPCE, dist)
+            #self.Abfluss[key]["Sobol_m2"] = cp.Sens_m2(self.qoi_gPCE, dist) # second order sensitivity indices
+
         self.Abfluss[key]["P10"] = float(cp.Perc(self.qoi_gPCE, 10, dist, numPercSamples))
         self.Abfluss[key]["P90"] = float(cp.Perc(self.qoi_gPCE, 90, dist, numPercSamples))
         if isinstance(self.Abfluss[key]["P10"], (list)) and len(self.Abfluss[key]["P10"]) == 1:
             self.Abfluss[key]["P10"]= self.Abfluss[key]["P10"][0]
             self.Abfluss[key]["P90"] = self.Abfluss[key]["P90"][0]
 
-        self._is_Sobol_t_computed = True
-        self._is_Sobol_m_computed = True
 
     def calcStatisticsForSaltelli(self, rawSamples, timesteps,
                             simulationNodes, numEvaluations, order, regression, solverTimes,
                             work_package_indexes, original_runtime_estimator=None):
 
         samples = LarsimSamples(rawSamples, configurationObject=self.configurationObject)
-
-        # Save the DataFrame containing all the simulation results - This is really important
 
         samples.save_samples_to_file(self.workingDir)
         samples.save_index_parameter_values(self.workingDir)
@@ -353,47 +368,61 @@ class LarsimStatistics(Statistics):
         grouped = samples.df_simulation_result.groupby(['Stationskennung','TimeStamp'])
         groups = grouped.groups
 
-        #self.dim = len(simulationNodes.nodeNames)
         self.dim = len(simulationNodes.distNodes[0])
 
-        for key, val_indices in groups.items():
-            self.Abfluss[key] = {}
+        #@njit(parallel=True)
+        #@jit(nopython=True, parallel=True)
+        # keys = groups.keys()
+        # val_indices = groups.values()
+        # for i in prange(len(groups)):
+        #     key = keys[i]
+        #     val_indices = val_indices[i]
+        def _internal_computation_of_stat(groups):
+            Abfluss = dict()
+            for key, val_indices in groups.items():
+                Abfluss[key] = dict()
 
-            # numpy array - for sartelli it should be n(2+d)x1
-            discharge_values = samples.df_simulation_result.loc[val_indices.values].Value.values
-            # extended_standard_discharge_values = discharge_values[:(2*numEvaluations)]
-            discharge_values_saltelli = discharge_values[:, np.newaxis]
-            # values based on which we calculate standard statistics
-            standard_discharge_values = discharge_values_saltelli[:numEvaluations,:]
-            extended_standard_discharge_values = discharge_values_saltelli[:(2*numEvaluations),:]
+                # numpy array - for sartelli it should be n(2+d)x1
+                discharge_values = samples.df_simulation_result.loc[val_indices.values].Value.values
+                # extended_standard_discharge_values = discharge_values[:(2*numEvaluations)]
+                discharge_values_saltelli = discharge_values[:, np.newaxis]
+                # values based on which we calculate standard statistics
+                standard_discharge_values = discharge_values_saltelli[:numEvaluations,:]
+                extended_standard_discharge_values = discharge_values_saltelli[:(2*numEvaluations),:]
 
-            self.Abfluss[key]["Q"] = standard_discharge_values
+                Abfluss[key]["Q"] = standard_discharge_values
 
-            #self.Abfluss[key]["min_q"] = np.amin(discharge_values) #standard_discharge_values.min()
-            #self.Abfluss[key]["max_q"] = np.amax(discharge_values) #standard_discharge_values.max()
+                #Abfluss[key]["min_q"] = np.amin(discharge_values) #standard_discharge_values.min()
+                #Abfluss[key]["max_q"] = np.amax(discharge_values) #standard_discharge_values.max()
 
-            #self.Abfluss[key]["E"] = np.sum(extended_standard_discharge_values, axis=0, dtype=np.float64) / (2*numEvaluations)
-            self.Abfluss[key]["E"] = np.mean(discharge_values[:(2*numEvaluations)], 0)
-            #self.Abfluss[key]["Var"] = float(np.sum(power(standard_discharge_values)) / numEvaluations - self.Abfluss[key]["E"] ** 2)
-            #self.Abfluss[key]["Var"] = np.sum((extended_standard_discharge_values - self.Abfluss[key]["E"]) ** 2, axis=0, dtype=np.float64) / (2*numEvaluations - 1)
-            #self.Abfluss[key]["StdDev"] = np.sqrt(self.Abfluss[key]["Var"], dtype=np.float64)
-            self.Abfluss[key]["StdDev"] = np.std(discharge_values[:(2*numEvaluations)], 0, ddof=1)
+                #Abfluss[key]["E"] = np.sum(extended_standard_discharge_values, axis=0, dtype=np.float64) / (2*numEvaluations)
+                Abfluss[key]["E"] = np.mean(discharge_values[:(2*numEvaluations)], 0)
 
-            #self.Abfluss[key]["P10"] = np.percentile(discharge_values[:numEvaluations], 10, axis=0)
-            #self.Abfluss[key]["P90"] = np.percentile(discharge_values[:numEvaluations], 90, axis=0)
-            self.Abfluss[key]["P10"] = np.percentile(discharge_values[:(2*numEvaluations)], 10, axis=0)
-            self.Abfluss[key]["P90"] = np.percentile(discharge_values[:(2*numEvaluations)], 90, axis=0)
+                #Abfluss[key]["Var"] = float(np.sum(power(standard_discharge_values)) / numEvaluations - Abfluss[key]["E"] ** 2)
+                #Abfluss[key]["Var"] = np.sum((extended_standard_discharge_values - Abfluss[key]["E"]) ** 2, axis=0, dtype=np.float64) / (2*numEvaluations - 1)
+                #Abfluss[key]["StdDev"] = np.sqrt(Abfluss[key]["Var"], dtype=np.float64)
+                Abfluss[key]["StdDev"] = np.std(discharge_values[:(2*numEvaluations)], 0, ddof=1)
 
-            self.Abfluss[key]["Sobol_m"] = saltelliSobolIndicesHelpingFunctions._Sens_m_sample_4(discharge_values_saltelli, self.dim, numEvaluations)
-            #self.Abfluss[key]["Sobol_m"] = saltelliSobolIndicesHelpingFunctions._Sens_m_sample_3(discharge_values_saltelli, self.dim, numEvaluations)
-            self.Abfluss[key]["Sobol_t"] = saltelliSobolIndicesHelpingFunctions._Sens_t_sample_4(discharge_values_saltelli, self.dim, numEvaluations)
+                #Abfluss[key]["P10"] = np.percentile(discharge_values[:numEvaluations], 10, axis=0)
+                #Abfluss[key]["P90"] = np.percentile(discharge_values[:numEvaluations], 90, axis=0)
+                Abfluss[key]["P10"] = np.percentile(discharge_values[:(2*numEvaluations)], 10, axis=0)
+                Abfluss[key]["P90"] = np.percentile(discharge_values[:(2*numEvaluations)], 90, axis=0)
 
-            if isinstance(self.Abfluss[key]["P10"], (list)) and len(self.Abfluss[key]["P10"]) == 1:
-                self.Abfluss[key]["P10"]=self.Abfluss[key]["P10"][0]
-                self.Abfluss[key]["P90"]=self.Abfluss[key]["P90"][0]
+                if self._compute_Sobol_t:
+                    Abfluss[key]["Sobol_t"] = saltelliSobolIndicesHelpingFunctions._Sens_t_sample_4(
+                        discharge_values_saltelli, self.dim, numEvaluations)
+                if self._compute_Sobol_m:
+                    Abfluss[key]["Sobol_m"] = saltelliSobolIndicesHelpingFunctions._Sens_m_sample_4(
+                        discharge_values_saltelli, self.dim, numEvaluations)
+                    # Abfluss[key]["Sobol_m"] = saltelliSobolIndicesHelpingFunctions._Sens_m_sample_3
+                    # (discharge_values_saltelli, self.dim, numEvaluations)
 
-        self._is_Sobol_t_computed = True
-        self._is_Sobol_m_computed = True
+                if isinstance(Abfluss[key]["P10"], (list)) and len(Abfluss[key]["P10"]) == 1:
+                    Abfluss[key]["P10"]=Abfluss[key]["P10"][0]
+                    Abfluss[key]["P90"]=Abfluss[key]["P90"][0]
+            return Abfluss
+
+        self.Abfluss = _internal_computation_of_stat(groups)
 
         print(f"[LARSIM STAT INFO] calcStatisticsForSaltelli function is done!")
 
@@ -423,14 +452,14 @@ class LarsimStatistics(Statistics):
         #self.Abfluss["Ground_Truth_Measurements"] = self.measured
 
     def get_unaltered_discharge(self, timestepRange=None):
-        self.df_unalatered = larsimDataPostProcessing.read_process_write_discharge(
-            df=os.path.abspath(os.path.join(self.workingDir, "df_unaltered_ergebnis.pkl")),
+        self.df_unaltered = larsimDataPostProcessing.read_process_write_discharge(
+            df=os.path.abspath(os.path.join(self.workingDir, "df_unaltered.pkl")),
             timeframe=timestepRange,
             type_of_output=self.configurationObject["Output"]["type_of_output"],
             station=self.configurationObject["Output"]["station_calibration_postproc"],
             dailyOutput=strtobool(self.configurationObject["Output"]["dailyOutput"]),
             compression="gzip")
-        self.unalatered_computed = True
+        self.unaltered_computed = True
         #self.Abfluss["Unaltered"] = self.unalatered
 
     def plotResults(self, timestep=-1, display=False,
@@ -448,7 +477,7 @@ class LarsimStatistics(Statistics):
 
         print(f"[LARSIM STAT INFO] plotResults function is called!")
 
-        self._plotStatisticsDict_plotly(unalatered=self.unalatered_computed, measured=self.groundTruth_computed,
+        self._plotStatisticsDict_plotly(unalatered=self.unaltered_computed, measured=self.groundTruth_computed,
                                         station=self.configurationObject["Output"]["station_calibration_postproc"],
                                         recalculateTimesteps=False, filename=fileName, display=display)
         #self._plotStatisticsDict_plotter(unalatered=None, measured=None,
@@ -489,10 +518,10 @@ class LarsimStatistics(Statistics):
         fig = make_subplots(rows=n_rows, cols=1, shared_xaxes=False)
 
         if unalatered:
-            column_to_draw = 'Value' if 'Value' in self.df_unalatered.columns else self.configurationObject["Output"]["station_calibration_postproc"]
+            column_to_draw = 'Value' if 'Value' in self.df_unaltered.columns else self.configurationObject["Output"]["station_calibration_postproc"]
             #fig.add_trace(go.Scatter(x=pdTimesteps, y=self.unalatered['Value'], name="Q (unaltered simulation)",line_color='deepskyblue'), row=1, col=1)
-            fig.add_trace(go.Scatter(x=self.df_unalatered['TimeStamp'], y=self.df_unalatered[column_to_draw],
-                                     name="Q (unaltered simulation)",line_color='deepskyblue'), row=1, col=1)
+            fig.add_trace(go.Scatter(x=self.df_unaltered['TimeStamp'], y=self.df_unaltered[column_to_draw],
+                                     name="Q (unaltered simulation)", line_color='deepskyblue'), row=1, col=1)
         if measured:
             column_to_draw = 'Value' if 'Value' in self.df_measured.columns else self.configurationObject["Output"]["station_calibration_postproc"]
             #fig.add_trace(go.Scatter(x=pdTimesteps, y=self.measured['Value'], name="Q (measured)",line_color='red'), row=1, col=1)
@@ -573,9 +602,9 @@ class LarsimStatistics(Statistics):
         plotter.subplot(411)
 
         if unalatered:
-            column_to_draw = 'Value' if 'Value' in self.df_unalatered.columns else self.configurationObject["Output"]["station_calibration_postproc"]
+            column_to_draw = 'Value' if 'Value' in self.df_unaltered.columns else self.configurationObject["Output"]["station_calibration_postproc"]
             #plotter.plot(pdTimesteps, self.unalatered['Value'], label="Q (unaltered simulation)")
-            plotter.plot(self.df_unalatered['TimeStamp'], self.df_unalatered[column_to_draw], label="Q (unaltered simulation)")
+            plotter.plot(self.df_unaltered['TimeStamp'], self.df_unaltered[column_to_draw], label="Q (unaltered simulation)")
         if measured:
             column_to_draw = 'Value' if 'Value' in self.df_measured.columns else self.configurationObject["Output"]["station_calibration_postproc"]
             #plotter.plot(pdTimesteps, self.measured['Value'], label="Q (measured)")

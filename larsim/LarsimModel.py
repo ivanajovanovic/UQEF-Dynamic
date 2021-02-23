@@ -98,7 +98,7 @@ class LarsimModelSetUp():
         try:
             self.type_of_output_of_Interest = self.configurationObject["Output"]["type_of_output"]
         except KeyError:
-            self.type_of_output_of_Interest = "Abfluss Messung"
+            self.type_of_output_of_Interest = "Abfluss Messung + Vorhersage"
 
         try:
             self.type_of_output_of_Interest_measured = self.configurationObject["Output"]["type_of_output_measured"]
@@ -285,7 +285,7 @@ class LarsimModelSetUp():
 
         if write_in_file:
             if write_file_path is None:
-                write_file_path = self.workingDir / "df_simulated.pkl"
+                write_file_path = self.workingDir / "df_past_simulated.pkl"
             larsimInputOutputUtilities.write_dataFrame_to_file(self.df_simulation,
                                                                file_path=write_file_path,
                                                                compression="gzip")
@@ -327,7 +327,7 @@ class LarsimModelSetUp():
 
         if write_in_file:
             if write_file_path is None:
-                write_file_path = self.workingDir / "df_unaltered_ergebnis.pkl"
+                write_file_path = self.workingDir / "df_unaltered.pkl"
             larsimInputOutputUtilities.write_dataFrame_to_file(self.df_unaltered_ergebnis,
                                                                file_path=write_file_path,
                                                                compression="gzip")
@@ -451,7 +451,7 @@ class LarsimModel(Model):
         try:
             self.type_of_output_of_Interest = self.configurationObject["Output"]["type_of_output"]
         except KeyError:
-            self.type_of_output_of_Interest = "Abfluss Messung"
+            self.type_of_output_of_Interest = "Abfluss Messung + Vorhersage"
 
         try:
             self.type_of_output_of_Interest_measured = self.configurationObject["Output"]["type_of_output_measured"]
@@ -481,27 +481,29 @@ class LarsimModel(Model):
         #####################################
         self.qoi = self.configurationObject["Output"]["QOI"] if "QOI" in self.configurationObject["Output"] else "Q"
         if self.qoi != "Q" and self.qoi != "GoF":
-            raise Exception(f"[LarsimModel ERRO:] self.qoi should either be \"Q\" or \"GoF\" ")
+            raise Exception(f"[LarsimModel ERROR:] self.qoi should either be \"Q\" or \"GoF\" ")
 
         self.mode = self.configurationObject["Output"]["mode"] \
             if "mode" in self.configurationObject["Output"] else "continuous"
-        if self.mode != "continuous" and self.mode != "sliding_window" and self.mode != "cutting":
-            raise Exception(f"[LarsimModel ERRO:] self.mode should have one of the  following values:"
-                            f" \"continuous\" or \"sliding_window\" or \"continuous\"")
+        if self.mode != "continuous" and self.mode != "sliding_window" and self.mode != "resampling":
+            raise Exception(f"[LarsimModel ERROR:] self.mode should have one of the  following values:"
+                            f" \"continuous\" or \"sliding_window\" or \"resampling\"")
 
-        if self.mode == "sliding_window" or self.mode == "cutting":
+        if self.mode == "sliding_window" or self.mode == "resampling":
             self.interval = self.configurationObject["Output"]["interval"] \
                 if "interval" in self.configurationObject["Output"] else 24
             if self.qoi == "Q":
                 self.method = self.configurationObject["Output"]["method"] \
                     if "method" in self.configurationObject["Output"] else "avg"
                 if self.method != "avg" and self.method != "max":
-                    raise Exception(f"[LarsimModel ERRO:] self.method should be either \"avg\" or \"max\" ")
+                    raise Exception(f"[LarsimModel ERROR:] self.method should be either \"avg\" or \"max\" ")
 
         # if calibration is True some likelihood / objective functions / GoF functio should be calculated from model run and propageted further
-        self.calculate_GoF = strtobool(self.configurationObject["Output"]["calculate_GoF"])\
-                       if "calculate_GoF" in self.configurationObject["Output"] else True
+        self.calculate_GoF = strtobool(self.configurationObject["Output"]["calculate_GoF"]) \
+            if "calculate_GoF" in self.configurationObject["Output"] else True
 
+        # TODO Distinguish between two types of objective_function function,
+        #  e.g., objective_function vs. objective_function_qoi
         if self.calculate_GoF or self.qoi == "GoF":
             self.objective_function = self.configurationObject["Output"]["objective_function"] \
                 if 'objective_function' in self.configurationObject["Output"] else "all"
@@ -515,15 +517,15 @@ class LarsimModel(Model):
         self.run_and_save_simulations = self.run_and_save_simulations and self.disable_statistics
 
         # if we want to compute the gradient (of some likelihood fun or output itself) w.r.t parameters
-        self.compute_gradients = strtobool(self.configurationObject["Output"]["compute_gradients"])\
-                       if "compute_gradients" in self.configurationObject["Output"] else False
+        self.compute_gradients = strtobool(self.configurationObject["Output"]["compute_gradients"]) \
+            if "compute_gradients" in self.configurationObject["Output"] else False
         if self.compute_gradients:
             if self.configurationObject["Output"]["gradients_method"] == "Central Difference":
                 self.CD = 1  # flag for using Central Differences (with 2 * num_evaluations)
             elif self.configurationObject["Output"]["gradients_method"] == "Forward Difference":
                 self.CD = 0  # flag for using Forward Differences (with num_evaluations)
             else:
-                raise Exception(f"[LarsimModel ERRO:] NUMERICAL GRADIENT EVALUATION ERROR: Only \"Central Difference\" "
+                raise Exception(f"[LarsimModel ERROR:] NUMERICAL GRADIENT EVALUATION ERROR: Only \"Central Difference\" "
                                 f"and \"Forward Difference\" supported")
             try:
                 # difference for gradient computation
@@ -540,7 +542,7 @@ class LarsimModel(Model):
             # generate timesteps for plotting based on tape10 settings which are set in LarsimModelSetUp
             self.t = larsimTimeUtility.get_tape10_timesteps(self.timeframe)
         else:
-            raise Exception(f"[LarsimModel ERRO:] Timeframe specification is missing from the configuration object!")
+            raise Exception(f"[LarsimModel ERROR:] Timeframe specification is missing from the configuration object!")
 
         # how long one consecutive run should take - used later on in each Larsim run
         self.timestep = self.configurationObject["Timeframe"]["timestep"] if "timestep" in self.configurationObject["Timeframe"] else 5
@@ -651,6 +653,9 @@ class LarsimModel(Model):
                 result = self._single_larsim_run(timeframe=self.timeframe, curr_working_dir=curr_working_dir,
                                                  index_run=i, warm_up_duration=self.warm_up_duration)
             if result is None:
+                # end = time.time()
+                # runtime = end - start
+                # results.append((None, runtime))
                 larsimConfigurationSettings.cleanDirecory_completely(curr_directory=curr_working_dir)
                 os.chdir(self.sourceDir)
                 continue
@@ -661,7 +666,7 @@ class LarsimModel(Model):
             # self.t = larsimTimeUtility.get_tape10_timesteps(self.timeframe)
 
             # filter output time-series in order to disregard warm-up time;
-            # if not then at least disregard these values when calculating statistics and GoF
+            # if not, then at least disregard these values when calculating statistics and GoF
             # however, take care that is is not done twice!
             simulation_start_timestamp = self.timeframe[0]
             if self.warm_up_duration is not None:
@@ -688,7 +693,7 @@ class LarsimModel(Model):
                     processed_result = self._process_time_series_sliding_window_q(result,
                                                                                   self.interval,
                                                                                   self.method)
-            elif self.mode == "cutting":
+            elif self.mode == "resampling":
                 if self.qoi == "GoF":
                     processed_result = self._process_time_series_cutting_gof(result,
                                                                              self.interval,
@@ -730,7 +735,7 @@ class LarsimModel(Model):
                     processed_result.to_pickle(file_path, compression="gzip")
 
                 if self.calculate_GoF:
-                    file_path = self.workingDir / f"goodness_of_fit_{i}.pkl"
+                    file_path = self.workingDir / f"gof_{i}.pkl"
                     index_parameter_gof_DF.to_pickle(file_path, compression="gzip")
 
             #####################################
@@ -885,7 +890,8 @@ class LarsimModel(Model):
         else:
             return None
 
-    def _calculate_GoF_sliding_window_single_gof(self, predictedDF: pd.DataFrame, objective_function=None):
+    def _calculate_GoF_sliding_window_single_gof_single_station(self, predictedDF, station,
+                                                                objective_function=None, return_dict=False):
         """
         This function assumes that self.measuredDF is already computed by self._set_measured_df function
         and that self._is_measuredDF_computed is set to True
@@ -896,22 +902,44 @@ class LarsimModel(Model):
         """
         # TODO: to speed-up change the functions such that the predictedDF
         # TODO is just a series with TimeStamp column as index column and one extra Value column
+        # TODO if we remove self.measuredDF, self._is_measuredDF_computed self._set_measured_df() - make it staticmethod
 
         if self.measuredDF is None and not self._is_measuredDF_computed:
             self._set_measured_df()
         elif self.measuredDF is None and self._is_measuredDF_computed:
             return None
 
+        # if self.measuredDF.empty or predictedDF.empty:
+        #     print(f"Failed in self.measuredDF.empty or predictedDF.empty")
+        # if self.measuredDF_column_name not in self.measuredDF.columns:
+        #     print(f"self.measuredDF_column_name not in self.measuredDF.columns")
+        # if "Value" not in predictedDF.columns:
+        #     print(f"Value not in predictedDF.columns")
+
+        measuredDF_temp = larsimDataPostProcessing.filterResultForStation(self.measuredDF, station=station)
+
         if objective_function is None:
             objective_function = self.objective_function
 
         list_over_objective_function = larsimDataPostProcessing.\
-            calculateGoodnessofFit_simple(measuredDF=self.measuredDF,
-                                          predictedDF=predictedDF,
-                                          gof_list=objective_function,
-                                          measuredDF_column_name = self.measuredDF_column_name,
-                                          simulatedDF_column_name="Value",
-                                          return_dict=False)
+            calculateGoodnessofFit_ForSingleStation(measuredDF=self.measuredDF,
+                                                    predictedDF=predictedDF,
+                                                    station = station,
+                                                    gof_list=objective_function,
+                                                    measuredDF_column_name=self.measuredDF_column_name,
+                                                    simulatedDF_column_name="Value",
+                                                    filter_station=True,
+                                                    filter_type_of_output=False,
+                                                    return_dict = return_dict
+                                                    )
+        # calculateGoodnessofFit_simple(measuredDF=measuredDF_temp,
+        #                               predictedDF=predictedDF,
+        #                               gof_list=objective_function,
+        #                               measuredDF_column_name=self.measuredDF_column_name,
+        #                               simulatedDF_column_name="Value",
+        #                               station=station,
+        #                               return_dict=return_dict)
+
         return list_over_objective_function
 
     def _calculate_GoF(self, predictedDF, parameters_dict=None, get_all_possible_stations=True):

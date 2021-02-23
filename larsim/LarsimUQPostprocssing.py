@@ -9,6 +9,7 @@ import numpy as np
 import pickle
 import pandas as pd
 from pandas.plotting import register_matplotlib_converters
+import pathlib
 from tabulate import tabulate
 import matplotlib.pyplot as plotter
 from plotly.offline import iplot, plot
@@ -19,8 +20,10 @@ import os
 import string as str
 from distutils.util import strtobool
 
-import larsimDataPostProcessing
-import larsimInputOutputUtilities
+from LarsimUtilityFunctions import larsimDataPostProcessing
+from LarsimUtilityFunctions import larsimInputOutputUtilities
+from LarsimUtilityFunctions import larsimPaths as paths
+
 from common import saltelliSobolIndicesHelpingFunctions
 
 def _get_df_simulation_from_file(working_folder):
@@ -29,10 +32,11 @@ def _get_df_simulation_from_file(working_folder):
     return df_all_simulations
 
 def _get_nodes_from_file(working_folder):
-    nodes_dict = os.path.abspath(os.path.join(working_folder,"nodes.simnodes"))
+    working_folder = paths.pathlib_to_from_str(working_folder, transfrom_to='Path')
+    nodes_dict = working_folder / 'nodes.simnodes'
     with open(nodes_dict, 'rb') as f:
-        nodes = dill.load(f)
-    return nodes
+        simulationNodes = dill.load(f)
+    return simulationNodes
 
 # TODO Add _calcStatisticsForMC and calcStatisticsForMc
 def _calcStatisticsForSc(df_all_simulations, simulationNodes, order=2, regression=False):
@@ -132,7 +136,7 @@ def _replot_statistics(working_folder):
     pdTimesteps = [pd.Timestamp(timestep) for timestep in timesteps]
     keyIter = list(itertools.product(["MARI",],pdTimesteps))
     colors = ['darkred', 'midnightblue', 'mediumseagreen', 'darkorange']
-    labels = [nodeName.strip() for nodeName in nodes.nodeNames]
+    labels = [nodeName.strip() for nodeName in simulationNodes.nodeNames]
     n_rows = 4
 
     fig = make_subplots(rows=n_rows, cols=1, shared_xaxes=False)
@@ -155,6 +159,7 @@ def _replot_statistics(working_folder):
     fig.update_yaxes(title_text="Sobol_t", side='left', showgrid=True, range=[0, 1], row=4, col=1)
     fig.update_layout(height=800, width=1200, title_text="Lai Mai UQ")
 
+    display = False
     plot(fig, filename=os.path.abspath(os.path.join(working_folder,"lai_mai_plotly.html")), auto_open=display)
     #fig.write_image(os.path.abspath(os.path.join(working_folder,"lai_mai.png")))
     fig.show()
