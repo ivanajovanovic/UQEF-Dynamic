@@ -36,7 +36,7 @@ COLORS = [
     '#17becf'   # blue-teal
 ]
 
-s='''
+s = '''
         aliceblue, antiquewhite, aqua, aquamarine, azure,
         beige, bisque, black, blanchedalmond, blue,
         blueviolet, brown, burlywood, cadetblue,
@@ -73,7 +73,7 @@ s='''
         violet, wheat, white, whitesmoke, yellow,
         yellowgreen
         '''
-COLORS_ALL= s.split(',')
+COLORS_ALL = s.split(',')
 COLORS_ALL = [l.replace('\n', '') for l in COLORS_ALL]
 COLORS_ALL = [l.replace(' ', '') for l in COLORS_ALL]
 
@@ -87,13 +87,18 @@ class LarsimSamples(object):
 
         station = configurationObject["Output"]["station_calibration_postproc"] \
             if "station_calibration_postproc" in configurationObject["Output"] else "MARI"
-        type_of_output=configurationObject["Output"]["type_of_output"] \
+        type_of_output = configurationObject["Output"]["type_of_output"] \
             if "type_of_output" in configurationObject["Output"] else "Abfluss Messung + Vorhersage"
-        dailyOutput=configurationObject["Output"]["dailyOutput"] \
+        dailyOutput = configurationObject["Output"]["dailyOutput"] \
             if "dailyOutput" in configurationObject["Output"] else "False"
-
-        calculate_GoF=configurationObject["Output"]["calculate_GoF"]
-        compute_gradients=configurationObject["Output"]["compute_gradients"]
+        qoi = configurationObject["Output"]["QOI"] if "QOI" in configurationObject["Output"] else "Q"
+        mode = configurationObject["Output"]["mode"] \
+            if "mode" in configurationObject["Output"] else "continuous"
+        calculate_GoF = configurationObject["Output"]["calculate_GoF"]
+        compute_gradients = configurationObject["Output"]["compute_gradients"]
+        if qoi == "GoF":
+            objective_function_qoi = configurationObject["Output"]["objective_function_qoi"]
+        #objective_function, interval, min_periods, method
 
         list_of_single_df = []
         list_index_parameters_dict = []
@@ -124,8 +129,10 @@ class LarsimSamples(object):
 
             list_of_single_df.append(df_single_ergebnis)
 
+        # TODO based on QoI check what should be self.df_simulation_result
         self.df_simulation_result = pd.concat(list_of_single_df, ignore_index=True, sort=False, axis=0)
 
+        # TODO check in babysitting if this has effect after function return
         larsimInputOutputUtilities._postProcessing_DataFrame_after_reading(self.df_simulation_result)
 
         if list_index_parameters_dict:
@@ -141,11 +148,13 @@ class LarsimSamples(object):
         print(f"[LARSIM STAT INFO] Number of Unique TimeStamps (Hourly): "
               f"{len(self.df_simulation_result.TimeStamp.unique())}")
 
+        # TODO make transformToDailyResolution more general
         if strtobool(dailyOutput):
             # Average over time. i.e. change column TimeStamp and Value
             self.df_simulation_result = larsimDataPostProcessing.transformToDailyResolution(self.df_simulation_result)
             print(f"[LARSIM STAT INFO] Number of Unique TimeStamps (Daily): {len(self.df_simulation_result.TimeStamp.unique())}")
 
+        # TODO based on QoI check what should be self.df_time_discharges
         self.df_time_discharges = self.df_simulation_result.groupby(["Stationskennung","TimeStamp"])["Value"].apply(lambda df: df.reset_index(drop=True)).unstack()
 
     def save_samples_to_file(self, file_path='./'):
@@ -245,7 +254,8 @@ class LarsimStatistics(Statistics):
         if regression:
             nodes = simulationNodes.distNodes
             dist = simulationNodes.joinedDists
-            polynomial_expansion = cp.orth_ttr(order, dist)
+            # TODO make for calcStatisticsForMc normed and rule as parameters
+            polynomial_expansion = cp.generate_expansion(order, dist, rule=three_terms_recurrence, normed=True)
 
         for key, val_indices in groups.items():
             discharge_values = samples.df_simulation_result.loc[val_indices.values].Value.values #numpy array nx1
@@ -271,7 +281,7 @@ class LarsimStatistics(Statistics):
         print(f"[LARSIM STAT INFO] calcStatisticsForMc function is done!")
 
     def calcStatisticsForSc(self, rawSamples, timesteps,
-                           simulationNodes, order, regression, solverTimes,
+                           simulationNodes, order, regression, poly_normed, poly_rule, solverTimes,
                            work_package_indexes, original_runtime_estimator):
 
         samples = LarsimSamples(rawSamples, configurationObject=self.configurationObject)
@@ -290,14 +300,11 @@ class LarsimStatistics(Statistics):
         self.station_names = samples.get_simulation_stations()
         #self.nodeNames = simulationNodes.nodeNames
 
-        #components independent on model evaluations, i.e., defined a priori, based solely on the underlying distribution
+        # components independent on model evaluations, i.e., defined a priori, based solely on the underlying distribution
         nodes = simulationNodes.distNodes
         dist = simulationNodes.joinedDists
         weights = simulationNodes.weights
-        #polynomial_expansion = cp.orth_ttr(order, dist)
-        #polynomial_expansion = cp.generate_expansion(order, dist, rule="three_terms_recurrence", normed=True)
-        polynomial_expansion = cp.generate_expansion(order, dist, rule="three_terms_recurrence", normed=False)
-        # rule = "gram_schmidt" | "cholesky" | "three_terms_recurrence"
+        polynomial_expansion = cp.generate_expansion(order, dist, rule=poly_rule, normed=poly_normed)
 
         grouped = samples.df_simulation_result.groupby(['Stationskennung','TimeStamp'])
         groups = grouped.groups
@@ -343,7 +350,6 @@ class LarsimStatistics(Statistics):
         if isinstance(self.Abfluss[key]["P10"], (list)) and len(self.Abfluss[key]["P10"]) == 1:
             self.Abfluss[key]["P10"]= self.Abfluss[key]["P10"][0]
             self.Abfluss[key]["P90"] = self.Abfluss[key]["P90"][0]
-
 
     def calcStatisticsForSaltelli(self, rawSamples, timesteps,
                             simulationNodes, numEvaluations, order, regression, solverTimes,

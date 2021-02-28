@@ -30,8 +30,11 @@
       "run_and_save_simulations":"True",
       "compute_gradients": "False",
       "mode": "continuous",
+      "QOI": "Q",
+      "objective_function_qoi":"NSE",
       "interval": 24,
-      "QOI": "Q"
+      "min_periods": 1,
+      "method": "avrg"
     },
   "parameters_settings":
     {

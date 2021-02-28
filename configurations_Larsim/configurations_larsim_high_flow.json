@@ -39,39 +39,17 @@
   "parameters_settings":
     {
       "addSampledValue":"False",
-      "TGB_standard":3085,
+      "TGB_standard": 3085,
       "TGB":"None",
       "roundParameters":"False",
-      "roundDecimal":2,
+      "roundDecimal": 2,
       "cut_limits":"False"
     },
   "parameters": [
     {
-      "name": "EQB",
-      "type": "tape35",
-      "distribution": "Uniform",
-      "lower": 5000,
-      "upper": 100000,
-      "lower_limit": 5000,
-      "upper_limit": 100000,
-      "default": 40000.0
-    },
-    {
-      "name": "EQI",
-      "type": "tape35",
-      "distribution": "Uniform",
-      "lower": 0,
-      "upper": 1,
-      "lower_limit": 200,
-      "upper_limit": 15000,
-      "depends_on":"EQB",
-      "direction":"decreasing",
-      "default": 1000.0
-    },
-    {
-      "name": "EQD",
-      "type": "tape35",
-      "distribution": "Uniform",
+      "name":"EQD",
+      "type":"tape35",
+      "distribution":"Uniform",
       "lower": 0,
       "upper": 1,
       "lower_limit": 50,
@@ -117,37 +95,6 @@
       "default": 0.3
     },
     {
-      "name": "beta",
-      "type": "tape35",
-      "distribution": "Uniform",
-      "lower": 0.000002,
-      "upper": 0.1,
-      "lower_limit": 0.000002,
-      "upper_limit": 0.1,
-      "transformation":"log",
-      "default": 0.012
-    },
-    {
-      "name": "Dmin",
-      "type": "tape35",
-      "distribution": "Uniform",
-      "lower": 0,
-      "upper": 5,
-      "lower_limit": 0,
-      "upper_limit": 5,
-      "default": 5.0
-    },
-    {
-      "name": "Dmax",
-      "type": "tape35",
-      "distribution": "Uniform",
-      "lower": 0.06,
-      "upper": 10,
-      "lower_limit": 0.06,
-      "upper_limit": 10,
-      "default": 1.0
-    },
-    {
       "name": "KG",
       "type": "tape35",
       "distribution": "Uniform",
@@ -189,6 +136,59 @@
     }
   ],
   "unused_parameters" : [
+    {
+      "name": "EQB",
+      "type": "tape35",
+      "distribution": "Uniform",
+      "lower": 5000,
+      "upper": 100000,
+      "lower_limit": 5000,
+      "upper_limit": 100000,
+      "default": 40000.0
+    },
+    {
+      "name": "EQI",
+      "type": "tape35",
+      "distribution": "Uniform",
+      "lower": 0,
+      "upper": 1,
+      "lower_limit": 200,
+      "upper_limit": 15000,
+      "depends_on":"EQB",
+      "direction":"decreasing",
+      "default": 1000.0
+    },
+    {
+      "name": "beta",
+      "type": "tape35",
+      "distribution": "Uniform",
+      "lower": 0.000002,
+      "upper": 0.1,
+      "lower_limit": 0.000002,
+      "upper_limit": 0.1,
+      "transformation":"log",
+      "default": 0.012
+    },
+    {
+      "name": "Dmin",
+      "type": "tape35",
+      "distribution": "Uniform",
+      "lower": 0,
+      "upper": 5,
+      "lower_limit": 0,
+      "upper_limit": 5,
+      "default": 5.0
+    },
+    {
+      "name": "Dmax",
+      "type": "tape35",
+      "distribution": "Uniform",
+      "lower": 0.06,
+      "upper": 10,
+      "lower_limit": 0.06,
+      "upper_limit": 10,
+      "default": 1.0
+    },
     {
       "name": "Acker:Apr",
       "type": "lanu",

@@ -42,7 +42,7 @@ uqsim = uqef.UQsim()
 local_debugging = True
 if local_debugging:
     local_debugging_nodes = True
-    exit_after_debugging_nodes = True
+    exit_after_debugging_nodes = False
     save_solver_results = True
 
     uqsim.args.model = "larsim"
@@ -51,14 +51,14 @@ if local_debugging:
     uqsim.args.chunksize = 1
 
     #uqsim.args.uq_method = "saltelli"
-    uqsim.args.uq_method = "mc"
-    #uqsim.args.uq_method = "sc"
-    uqsim.args.mc_numevaluations = 10000
-    uqsim.args.sampling_rule = "S" # | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
-    uqsim.args.sc_q_order = 7
-    uqsim.args.sc_p_order = 5
-    uqsim.args.poly_rule = "three_terms_recurrence" # "gram_schmidt" | "three_terms_recurrence" | "cholesky"
-    uqsim.args.poly_normed = False # True
+    #uqsim.args.uq_method = "mc"
+    uqsim.args.uq_method = "sc"
+    uqsim.args.mc_numevaluations = 1000
+    uqsim.args.sampling_rule = "latin_hypercube" # | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
+    uqsim.args.sc_q_order = 3 #7
+    uqsim.args.sc_p_order = 2 #5
+    uqsim.args.sc_poly_rule = "three_terms_recurrence" # "gram_schmidt" | "three_terms_recurrence" | "cholesky"
+    uqsim.args.sc_poly_normed = True # True
 
     uqsim.args.outputResultDir = os.path.abspath(os.path.join(paths.scratch_dir, "larsim_runs", 'larsim_run_siam_cse'))
     uqsim.args.inputModelDir = paths.larsim_data_path
@@ -125,7 +125,7 @@ if uqsim.is_master() and not uqsim.is_restored():
 #####################################
 #####################################
 # register model
-uqsim.models.update({"larsim"         : (lambda: LarsimModel.LarsimModel(configurationObject = uqsim.configuration_object,
+uqsim.models.update({"larsim"         : (lambda: LarsimModel.LarsimModel(configurationObject=uqsim.configuration_object,
                                                                          inputModelDir=uqsim.args.inputModelDir,
                                                                          sourceDir=uqsim.args.sourceDir,
                                                                          workingDir=uqsim.args.workingDir,
@@ -152,7 +152,7 @@ simulationNodes_save_file = "nodes"
 uqsim.save_simulationNodes(fileName=simulationNodes_save_file)
 
 # save the dictionary with the arguments
-# TODO Check if it make sence to save this before the simulation,
+# TODO Check if it makes sense to save this before the simulation,
 #  i.e., maybe uqsim.args will be updated in the Model.run()
 if uqsim.is_master():
     argsFileName = os.path.abspath(os.path.join(uqsim.args.outputResultDir, "uqsim_args.pkl"))
@@ -175,9 +175,13 @@ if uqsim.is_master():
         local_weights = uqsim.simulationNodes.weights
         print(f"Shape of simulationNodes.weights is: {local_weights.shape}")
         local_parameters = uqsim.simulationNodes.parameters.T
-        print(f"Shape of simulationNodes.parameters is: {local_parameters.shape}")
+        print(f"Shape of simulationNodes.weights is: {local_weights.shape}")
+        local_simulation_parameters = uqsim.simulation.parameters
+        print(f"Shape of simulation.parameters is: {local_parameters.shape}")
         local_dist = uqsim.simulationNodes.joinedDists
 
+        # TODO Problem with Saltelli&MC is that uqsim.simulationNodes.parameters
+        #  are different from uqsim.simulation.parameters
         # plot position of the final parameters
         if "tuples_parameters_info" not in uqsim.configuration_object:
             print(f"uqsim.configuration_object was not updated together with model.configurationObject")
@@ -186,7 +190,7 @@ if uqsim.is_master():
         local_master_dir = pathlib.Path(osp.abspath(osp.join(uqsim.args.workingDir, 'master_configuration')))
         tape35_path = local_master_dir / "tape35"
         lanu_path = local_master_dir / "lanu.par"
-        for parameter in local_parameters:
+        for parameter in local_parameters: # local_simulation_parameters
             ordered_dict_of_all_params = larsimConfigurationSettings.params_configurations(parameter,
                                                                                            tape35_path,
                                                                                            tape35_path,
@@ -204,11 +208,8 @@ if uqsim.is_master():
         # # Plot polynomials
         # # polynomial_expansion = cp.orth_ttr(order, dist)
         polynomial_expansion = cp.generate_expansion(uqsim.args.sc_q_order, local_dist,
-                                                     rule=uqsim.args.poly_rule,
-                                                     normed=uqsim.args.poly_normed)
-        polynomial_expansion_normed = cp.generate_expansion(uqsim.args.sc_q_order, local_dist,
-                                                     rule=uqsim.args.poly_rule,
-                                                     normed=uqsim.args.poly_normed)
+                                                     rule=uqsim.args.sc_poly_rule,
+                                                     normed=uqsim.args.sc_poly_normed)
         if exit_after_debugging_nodes:
             sys.exit()
 
@@ -221,7 +222,7 @@ if uqsim.is_master():
         assert uqsim.solver is uqsim.simulation.solver
         assert id(uqsim.solver) == id(uqsim.simulation.solver)
         processed_sample_results = LarsimStatistics.LarsimSamples(uqsim.solver.results,
-                                                 configurationObject=uqsim.configuration_object)
+                                                                  configurationObject=uqsim.configuration_object)
         processed_sample_results.save_samples_to_file(uqsim.args.outputResultDir)
         processed_sample_results.save_index_parameter_values(uqsim.args.outputResultDir)
         processed_sample_results.save_index_parameter_gof_values(uqsim.args.outputResultDir)

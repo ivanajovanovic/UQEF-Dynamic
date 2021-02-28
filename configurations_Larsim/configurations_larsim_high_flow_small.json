@@ -25,13 +25,16 @@
       "station_model_runs":"all",
       "pathsDataFormat":"False",
       "dailyOutput":"False",
-      "calculate_GoF":"True",
-      "objective_function":"all",
       "run_and_save_simulations":"True",
       "compute_gradients":"False",
-      "mode":"continuous",
-      "interval": 24,
-      "QOI":"Q"
+      "calculate_GoF":"True",
+      "objective_function":"all",
+      "QOI":"GoF",
+      "objective_function_qoi":"NSE",
+      "mode":"sliding_window",
+      "interval": 72,
+      "min_periods": 24,
+      "method": "avrg"
     },
   "parameters_settings":
     {
@@ -43,30 +46,6 @@
       "cut_limits":"False"
     },
   "parameters": [
-    {
-      "name":"EQD",
-      "type":"tape35",
-      "distribution":"Uniform",
-      "lower": 0,
-      "upper": 1,
-      "lower_limit": 50,
-      "upper_limit": 5000,
-      "depends_on":"EQI",
-      "direction":"decreasing",
-      "default": 450.0
-    },
-    {
-      "name": "EQD2",
-      "type": "tape35",
-      "distribution": "Uniform",
-      "lower": 0,
-      "upper": 1,
-      "lower_limit": 10,
-      "upper_limit": 1000,
-      "depends_on":"EQD",
-      "direction":"decreasing",
-      "default": 250.0
-    },
     {
       "name": "A2",
       "type": "tape35",
@@ -100,36 +79,6 @@
       "lower_limit": 0.5,
       "upper_limit": 1.2,
       "default": 0.93
-    },
-    {
-      "name": "EKM",
-      "type": "tape35",
-      "distribution": "None",
-      "lower": 0.3,
-      "upper": 3.0,
-      "lower_limit": 0.3,
-      "upper_limit": 3.0,
-      "default": 0.9
-    },
-    {
-      "name": "EKL",
-      "type": "tape35",
-      "distribution": "None",
-      "lower": 0.3,
-      "upper": 3.0,
-      "lower_limit": 0.3,
-      "upper_limit": 3.0,
-      "default": 0.9
-    },
-    {
-      "name": "EKR",
-      "type": "tape35",
-      "distribution": "None",
-      "lower": 0.3,
-      "upper": 3.0,
-      "lower_limit": 0.3,
-      "upper_limit": 3.0,
-      "default": 0.9
     }
   ],
   "unused_parameters" : [

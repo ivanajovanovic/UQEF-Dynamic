@@ -486,25 +486,29 @@ class LarsimModel(Model):
         self.mode = self.configurationObject["Output"]["mode"] \
             if "mode" in self.configurationObject["Output"] else "continuous"
         if self.mode != "continuous" and self.mode != "sliding_window" and self.mode != "resampling":
-            raise Exception(f"[LarsimModel ERROR:] self.mode should have one of the  following values:"
+            raise Exception(f"[LarsimModel ERROR:] self.mode should have one of the following values:"
                             f" \"continuous\" or \"sliding_window\" or \"resampling\"")
 
         if self.mode == "sliding_window" or self.mode == "resampling":
             self.interval = self.configurationObject["Output"]["interval"] \
                 if "interval" in self.configurationObject["Output"] else 24
+            self.min_periods = self.configurationObject["Output"]["min_periods"] \
+                if "min_periods" in self.configurationObject["Output"] else 1
             if self.qoi == "Q":
                 self.method = self.configurationObject["Output"]["method"] \
-                    if "method" in self.configurationObject["Output"] else "avg"
-                if self.method != "avg" and self.method != "max":
-                    raise Exception(f"[LarsimModel ERROR:] self.method should be either \"avg\" or \"max\" ")
+                    if "method" in self.configurationObject["Output"] else "avrg"
+                if self.method != "avrg" and self.method != "max":
+                    raise Exception(f"[LarsimModel ERROR:] self.method should be either \"avrg\" or \"max\" ")
 
         # if calibration is True some likelihood / objective functions / GoF functio should be calculated from model run and propageted further
         self.calculate_GoF = strtobool(self.configurationObject["Output"]["calculate_GoF"]) \
             if "calculate_GoF" in self.configurationObject["Output"] else True
 
-        # TODO Distinguish between two types of objective_function function,
-        #  e.g., objective_function vs. objective_function_qoi
-        if self.calculate_GoF or self.qoi == "GoF":
+        if self.qoi == "GoF":
+            self.objective_function_qoi = self.configurationObject["Output"]["objective_function_qoi"] \
+                if 'objective_function_qoi' in self.configurationObject["Output"] else "all"
+            self.objective_function_qoi = larsimDataPostProcessing._gof_list_to_function_names(self.objective_function_qoi)
+        if self.calculate_GoF:
             self.objective_function = self.configurationObject["Output"]["objective_function"] \
                 if 'objective_function' in self.configurationObject["Output"] else "all"
             self.objective_function = larsimDataPostProcessing._gof_list_to_function_names(self.objective_function)
@@ -660,11 +664,6 @@ class LarsimModel(Model):
                 os.chdir(self.sourceDir)
                 continue
 
-            # Postprocessing the timeframe
-            # self.timeframe[0], self.timeframe[1] = result["TimeStamp"].min(), result["TimeStamp"].max()
-            # larsimConfigurationSettings.update_configurationObject_with_datetime_info(self.configurationObject, self.timeframe)
-            # self.t = larsimTimeUtility.get_tape10_timesteps(self.timeframe)
-
             # filter output time-series in order to disregard warm-up time;
             # if not, then at least disregard these values when calculating statistics and GoF
             # however, take care that is is not done twice!
@@ -683,56 +682,64 @@ class LarsimModel(Model):
             runtime = end - start
             result_dict = {"run_time": runtime, "parameters_dict": parameters_dict}
 
-            processed_result = None
-            if self.mode == "sliding_window":
-                if self.qoi == "GoF":
-                    processed_result = self._process_time_series_sliding_window_gof(result,
-                                                                                    self.interval,
-                                                                                    self.objective_function)
-                else:
-                    processed_result = self._process_time_series_sliding_window_q(result,
-                                                                                  self.interval,
-                                                                                  self.method)
-            elif self.mode == "resampling":
-                if self.qoi == "GoF":
-                    processed_result = self._process_time_series_cutting_gof(result,
-                                                                             self.interval,
-                                                                             self.objective_function)
-                else:
-                    processed_result = self._process_time_series_cutting_q(result,
-                                                                           self.interval,
-                                                                           self.method)
-            if processed_result is None:
-                result_dict["result_time_series"] = result
-            else:
-                result_dict["result_time_series"] = processed_result
-                result_dict["raw_time_series"] = result
-
+            # compute (some) GoF for the whole time period
+            # TODO eventually design the code to disregard the runs with an unsatisfying value of some GoF
             if self.calculate_GoF:
                 index_parameter_gof_DF = self._calculate_GoF(predictedDF=result,
                                                              parameters_dict=parameters_dict,
+                                                             objective_function=self.objective_function,
                                                              get_all_possible_stations=True)
                 result_dict["gof_df"] = index_parameter_gof_DF
 
-            # compute gradient of the output, or some likelihood measure w.r.t parameters
+            # process result DF to compute the final GoI
+            processed_result = None
+            if self.mode == "sliding_window":
+                if self.qoi == "GoF":
+                    processed_result = self._process_time_series_sliding_window_gof(predictedDF=result,
+                                                                                    interval=self.interval,
+                                                                                    min_periods=self.min_periods,
+                                                                                    objective_function=self.objective_function_qoi,
+                                                                                    get_all_possible_stations=True)
+                else:
+                    processed_result = self._process_time_series_sliding_window_q(predictedDF=result,
+                                                                                  interval=self.interval,
+                                                                                  method=self.method)
+            elif self.mode == "resampling":
+                if self.qoi == "GoF":
+                    processed_result = self._process_time_series_cutting_gof(predictedDF=result,
+                                                                             interval=self.interval,
+                                                                             objective_function=self.objective_function_qoi)
+                else:
+                    processed_result = self._process_time_series_cutting_q(predictedDF=result,
+                                                                           interval=self.interval,
+                                                                           method=self.method)
+            # Important, from now on the result is changed
+            if processed_result is not None:
+                result = processed_result
+            result_dict["result_time_series"] = result
+
+            # Postprocessing the timeframe
+            # self.timeframe[0], self.timeframe[1] = result["TimeStamp"].min(), result["TimeStamp"].max()
+            # larsimConfigurationSettings.update_configurationObject_with_datetime_info(self.configurationObject, self.timeframe)
+            # self.t = larsimTimeUtility.get_tape10_timesteps(self.timeframe)
+
+            # compute gradient of the output/QoI, or gradient of some likelihood measure w.r.t parameters
             if self.compute_gradients:
                 # CD = 1 central differences; CD = 0 forward differences
                 gradient_matrix = []
                 if gradient_matrix:
                     result_dict["gradient"] = gradient_matrix
 
+            # save all the sub-results in case there is no LarsimStatistics run afterward
             if self.run_and_save_simulations:
+
                 file_path = self.workingDir / f"parameters_Larsim_run_{i}.pkl"
                 with open(file_path, 'wb') as f:
                     dill.dump(parameters_dict, f)
-                file_path = self.workingDir / f"df_Larsim_run_{i}.pkl"
-                larsimDataPostProcessing.read_process_write_discharge(result,
-                                                                      type_of_output=self.type_of_output_of_Interest,
-                                                                      station=self.station_for_model_runs,
-                                                                      write_to_file=file_path, compression="gzip")
-                if processed_result is not None:
-                    file_path = self.workingDir / f"df_Larsim_run_processed_{i}.pkl"
-                    processed_result.to_pickle(file_path, compression="gzip")
+
+                if result is not None:
+                    file_path = self.workingDir / f"df_Larsim_run_{i}.pkl"
+                    result.to_pickle(file_path, compression="gzip")
 
                 if self.calculate_GoF:
                     file_path = self.workingDir / f"gof_{i}.pkl"
@@ -880,7 +887,7 @@ class LarsimModel(Model):
             # concatenate it
             df_simulation_result = pd.concat(local_resultDF_list, ignore_index=True, sort=True, axis=0)
 
-            # sorting by time
+            # sorting by time_calculate_GoF_sliding_window_single_gof_single_station
             df_simulation_result.sort_values("TimeStamp", inplace=True)
 
             # clean concatenated file - dropping time duplicate values
@@ -890,8 +897,64 @@ class LarsimModel(Model):
         else:
             return None
 
+    def _process_time_series_sliding_window_gof(self, predictedDF, objective_function, interval=24, min_periods=1,
+                                                center=True, closed="neither", get_all_possible_stations=False):
+        if self.measuredDF is None and not self._is_measuredDF_computed:
+            self._set_measured_df()
+        elif self.measuredDF is None and self._is_measuredDF_computed:
+            return None
+
+        # TODO it makes sense as well to have here self.station_for_model_runs or get_all_possible_stations=True
+        stations = LarsimModel.compute_and_get_final_list_of_stations(self.measuredDF, predictedDF,
+                                                           get_all_possible_stations, self.station_of_Interest)
+
+        list_of_results_per_station = []
+        for single_station in stations:
+            predictedDF_station_subset = predictedDF.loc[predictedDF["Stationskennung"] == single_station]
+            if predictedDF_station_subset.index.name != "TimeStamp":
+                predictedDF_station_subset.set_index("TimeStamp", inplace=True)
+
+            def dataframe_roll(df, single_gof_function):
+                def compute_gof_over_window(window_series):
+                    window_df = df.loc[(df.index >= window_series.index[0]) & (df.index <= window_series.index[-1])]
+                    window_df.reset_index(inplace=True)
+                    window_df.rename(columns={window_df.index.name: 'TimeStamp'}, inplace=True)
+                    list_over_objective_function = self._calculate_GoF_sliding_window_single_gof_single_station(
+                        predictedDF=window_df, station=single_station,
+                        objective_function_qoi=single_gof_function, return_dict=True)
+                    return list_over_objective_function[single_gof_function.__name__]
+                return compute_gof_over_window
+
+            for single_gof_function in objective_function:
+                predictedDF_station_subset[single_gof_function.__name__] = predictedDF_station_subset.rolling(
+                    window=interval, min_periods=min_periods, center=center, closed=closed, win_type=None).\
+                    Value.apply(dataframe_roll(predictedDF_station_subset, single_gof_function), raw=False)
+
+            # disregard first couple of timesteps and last couple of time steps
+            start = predictedDF_station_subset.index.min() + datetime.timedelta(hours=interval+1)
+            end = predictedDF_station_subset.index.max() - datetime.timedelta(hours=interval+1)
+            predictedDF_station_subset = predictedDF_station_subset.loc[start:end]
+            predictedDF_station_subset.reset_index(inplace=True)
+
+            list_of_results_per_station.append(predictedDF_station_subset)
+
+        processed_result = pd.concat(list_of_results_per_station, ignore_index=True, sort=False, axis=0)
+        return processed_result
+
+    def _process_time_series_sliding_window_q(self, predictedDF, interval, method):
+        processed_result = None
+        return processed_result
+
+    def _process_time_series_cutting_gof(self, predictedDF, interval, objective_function):
+        processed_result = None
+        return processed_result
+
+    def _process_time_series_cutting_q(self, predictedDF, interval, method):
+        processed_result = None
+        return processed_result
+
     def _calculate_GoF_sliding_window_single_gof_single_station(self, predictedDF, station,
-                                                                objective_function=None, return_dict=False):
+                                                                objective_function_qoi=None, return_dict=False):
         """
         This function assumes that self.measuredDF is already computed by self._set_measured_df function
         and that self._is_measuredDF_computed is set to True
@@ -904,64 +967,70 @@ class LarsimModel(Model):
         # TODO is just a series with TimeStamp column as index column and one extra Value column
         # TODO if we remove self.measuredDF, self._is_measuredDF_computed self._set_measured_df() - make it staticmethod
 
-        if self.measuredDF is None and not self._is_measuredDF_computed:
-            self._set_measured_df()
-        elif self.measuredDF is None and self._is_measuredDF_computed:
-            return None
+        # if self.measuredDF is None and not self._is_measuredDF_computed:
+        #     self._set_measured_df()
+        # elif self.measuredDF is None and self._is_measuredDF_computed:
+        #     return None
 
-        # if self.measuredDF.empty or predictedDF.empty:
+        # if self.measuredDF.empty or predictedDfF.empty:
         #     print(f"Failed in self.measuredDF.empty or predictedDF.empty")
         # if self.measuredDF_column_name not in self.measuredDF.columns:
         #     print(f"self.measuredDF_column_name not in self.measuredDF.columns")
         # if "Value" not in predictedDF.columns:
         #     print(f"Value not in predictedDF.columns")
 
-        measuredDF_temp = larsimDataPostProcessing.filterResultForStation(self.measuredDF, station=station)
+        #measuredDF = self.measuredDF
+        measuredDF = self.measuredDF.copy(deep=True)
+        measuredDF = larsimDataPostProcessing.filterResultForStation(measuredDF, station=station)
 
-        if objective_function is None:
-            objective_function = self.objective_function
+        if objective_function_qoi is None:
+            objective_function_qoi = self.objective_function_qoi
+        #objective_function_qoi = larsimDataPostProcessing._gof_list_to_function_names(objective_function_qoi)
 
+        # list_over_objective_function = larsimDataPostProcessing.\
+        #     calculateGoodnessofFit_ForSingleStation(measuredDF=measuredDF,
+        #                                             predictedDF=predictedDF,
+        #                                             station=station,
+        #                                             gof_list=objective_function_qoi,
+        #                                             measuredDF_column_name=self.measuredDF_column_name,
+        #                                             simulatedDF_column_name="Value",
+        #                                             filter_station=True,
+        #                                             filter_type_of_output=False,
+        #                                             return_dict=return_dict
+        #                                             )
         list_over_objective_function = larsimDataPostProcessing.\
-            calculateGoodnessofFit_ForSingleStation(measuredDF=self.measuredDF,
-                                                    predictedDF=predictedDF,
-                                                    station = station,
-                                                    gof_list=objective_function,
-                                                    measuredDF_column_name=self.measuredDF_column_name,
-                                                    simulatedDF_column_name="Value",
-                                                    filter_station=True,
-                                                    filter_type_of_output=False,
-                                                    return_dict = return_dict
-                                                    )
-        # calculateGoodnessofFit_simple(measuredDF=measuredDF_temp,
-        #                               predictedDF=predictedDF,
-        #                               gof_list=objective_function,
-        #                               measuredDF_column_name=self.measuredDF_column_name,
-        #                               simulatedDF_column_name="Value",
-        #                               station=station,
-        #                               return_dict=return_dict)
+            calculateGoodnessofFit_simple(measuredDF=measuredDF,
+                                          predictedDF=predictedDF,
+                                          gof_list=objective_function_qoi,
+                                          measuredDF_column_name=self.measuredDF_column_name,
+                                          simulatedDF_column_name="Value",
+                                          station=station,
+                                          return_dict=return_dict)
 
         return list_over_objective_function
 
-    def _calculate_GoF(self, predictedDF, parameters_dict=None, get_all_possible_stations=True):
+    def _calculate_GoF(self, predictedDF, parameters_dict=None,
+                       objective_function=None, get_all_possible_stations=True):
         measuredDF = self._get_measured_df()
         if measuredDF is None:
             return None
 
-        # get the structure of the  df_measured
+        # get the structure of the df_measured
         measuredDF_column_name = self.measuredDF_column_name
 
-        stations = larsimDataPostProcessing.get_stations_intersection(measuredDF, predictedDF)
-        if not get_all_possible_stations and (self.station_of_Interest != "all" or self.station_of_Interest is not None):
-            if not isinstance(self.station_of_Interest, list):
-                self.station_of_Interest = [self.station_of_Interest,]
-            stations = list(set(stations).intersection(self.station_of_Interest))
+        if objective_function is None:
+            objective_function = self.objective_function
+        #objective_function = larsimDataPostProcessing._gof_list_to_function_names(objective_function)
+
+        stations = LarsimModel.compute_and_get_final_list_of_stations(measuredDF, predictedDF,
+                                                           get_all_possible_stations, self.station_of_Interest)
 
         gof_list_over_stations = larsimDataPostProcessing.\
             calculateGoodnessofFit(measuredDF=measuredDF,
                                    predictedDF=predictedDF,
                                    station=stations,
-                                   gof_list=self.objective_function,
-                                   measuredDF_column_name = measuredDF_column_name,
+                                   gof_list=objective_function,
+                                   measuredDF_column_name=measuredDF_column_name,
                                    simulatedDF_column_name='Value',
                                    type_of_output_of_Interest=self.type_of_output_of_Interest,
                                    dailyStatisict=False,
@@ -969,7 +1038,8 @@ class LarsimModel(Model):
                                    warm_up_duration=self.warm_up_duration,
                                    keep_info_on_TimeStampas=False,
                                    filter_station=True,
-                                   filter_type_of_output=True
+                                   filter_type_of_output=True,
+                                   return_dict=True
                                    )
 
         index_parameter_gof_list_of_dictionaries = []
@@ -981,20 +1051,18 @@ class LarsimModel(Model):
             index_parameter_gof_list_of_dictionaries.append(index_parameter_gof_dict)
         return pd.DataFrame(index_parameter_gof_list_of_dictionaries)
 
-    def _process_time_series_sliding_window_gof(self, result, interval, objective_function):
-        processed_result = None
-        # for each station for each GoF function
-        return processed_result
+    @staticmethod
+    def compute_and_get_final_list_of_stations(measuredDF, predictedDF, get_all_possible_stations, station_of_Interest):
+        stations = larsimDataPostProcessing.get_stations_intersection(measuredDF, predictedDF)
+        if not get_all_possible_stations and (station_of_Interest != "all" or station_of_Interest is not None):
+            if not isinstance(station_of_Interest, list):
+                station_of_Interest = [station_of_Interest,]
+            stations = list(set(stations).intersection(station_of_Interest))
+            if not stations:
+                raise Exception(
+                    f"[LarsimModel ERROR:] Error in _calculate_GoF - no intersection between "
+                    f"LarsimModel.station_of_Interest and stations in LarsimModel.measuredDF, LarsimModel.predictedDF!")
+        return stations
 
-    def _process_time_series_sliding_window_q(self, result, interval, method):
-        processed_result = None
-        return processed_result
 
-    def _process_time_series_cutting_gof(self, result, interval, objective_function):
-        processed_result = None
-        return processed_result
-
-    def _process_time_series_cutting_q(self, result, interval, method):
-        processed_result = None
-        return processed_result
 
