@@ -7,6 +7,7 @@ import os
 import subprocess
 import sys
 import pickle
+import dill
 
 import uqef
 
@@ -24,6 +25,15 @@ from productFunction import ProductFunctionStatistics
 
 import LarsimUtilityFunctions.larsimPaths as paths
 
+# additionally added for the debugging of the nodes
+import chaospy as cp
+import os.path as osp
+import pandas as pd
+import pathlib
+from LarsimUtilityFunctions import larsimConfigurationSettings
+import warnings
+pd.options.mode.chained_assignment = None
+
 sys.path.insert(0, os.getcwd())
 
 # instantiate UQsim
@@ -34,25 +44,34 @@ uqsim = uqef.UQsim()
 # change args locally for testing and debugging
 local_debugging = False
 if local_debugging:
+    save_solver_results = False
+
     uqsim.args.model = "larsim"
-    #uqsim.args.uq_method = "saltelli"
-    uqsim.args.uq_method = "sc" #"saltelli"
+
     uqsim.args.uncertain = "all"
     uqsim.args.chunksize = 1
-    uqsim.args.mc_numevaluations = 10
-    uqsim.args.sc_q_order = 10 #10
-    uqsim.args.sc_p_order = 6 #8
-    uqsim.args.outputResultDir = os.path.abspath( os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_lai_may_20201209'))
+
+    uqsim.args.uq_method = "sc"  # "saltelli" | "mc"
+    uqsim.args.mc_numevaluations = 100
+    uqsim.args.sampling_rule = "latin_hypercube" # | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
+    uqsim.args.sc_q_order = 10
+    uqsim.args.sc_p_order = 6
+    uqsim.args.sc_poly_rule = "three_terms_recurrence" # "gram_schmidt" | "three_terms_recurrence" | "cholesky"
+    uqsim.args.sc_poly_normed = True
+
+    uqsim.args.outputResultDir = os.path.abspath( os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_high_flow_Mari'))
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
     uqsim.args.inputModelDir = os.path.abspath(os.path.join('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2', 'Larsim-data'))
     uqsim.args.sourceDir = os.path.abspath(os.path.join('/dss/dsshome1/lxc0C/ga45met2','Repositories', 'Larsim-UQ'))
-    uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/Larsim-UQ/configurations_Larsim/configurations_larsim_master_lai_small.json'
+    uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/Larsim-UQ/configurations_Larsim/configurations_larsim_high_flow.json'
+
     uqsim.args.disable_statistics = False
     uqsim.args.transformToStandardDist = True
     uqsim.args.mpi = True
     uqsim.args.mpi_method = "MpiPoolSolver"
-    uqsim.args.sampling_rule = "S" # | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
     uqsim.args.uqsim_store_to_file = False
+
+    uqsim.args.num_cores = 1
 
     uqsim.setup_configuration_object()
 
@@ -93,7 +112,8 @@ uqsim.models.update({"ishigami"       : (lambda: IshigamiModel.IshigamiModel(uqs
 uqsim.models.update({"productFunction": (lambda: ProductFunctionModel.ProductFunctionModel(uqsim.configuration_object))})
 
 # register statistics
-uqsim.statistics.update({"larsim"         : (lambda: LarsimStatistics.LarsimStatistics(uqsim.configuration_object, uq_method=uqsim.args.uq_method))})
+uqsim.statistics.update({"larsim"         : (lambda: LarsimStatistics.LarsimStatistics(uqsim.configuration_object,
+                                                                                       uq_method=uqsim.args.uq_method))})
 uqsim.statistics.update({"oscillator"     : (lambda: LinearDampedOscillatorStatistics.LinearDampedOscillatorStatistics())})
 uqsim.statistics.update({"ishigami"       : (lambda: IshigamiStatistics.IshigamiStatistics(uqsim.configuration_object))})
 uqsim.statistics.update({"productFunction": (lambda: ProductFunctionStatistics.ProductFunctionStatistics(uqsim.configuration_object))})
@@ -119,8 +139,6 @@ if uqsim.is_master() and not uqsim.is_restored():
         }
         models[uqsim.args.model]()
     initialModelSetUp()
-    # experiment by Ivana - remove
-    print(uqsim.configuration_object["tuples_parameters_info"])
 
 simulationNodes_save_file = "nodes"
 uqsim.save_simulationNodes(fileName=simulationNodes_save_file)
@@ -131,15 +149,36 @@ uqsim.save_simulationNodes(fileName=simulationNodes_save_file)
 # start the simulation
 uqsim.simulate()
 
-# statistics:
-uqsim.calc_statistics()
-uqsim.save_statistics()
-uqsim.plot_statistics(display=False)
+#####################################
+#####################################
+# check-up
+if uqsim.is_master():
+    if uqsim.args.disable_statistics:
+        processed_sample_results = LarsimStatistics.LarsimSamples(uqsim.solver.results,
+                                                                  configurationObject=uqsim.configuration_object)
+        processed_sample_results.save_samples_to_file(uqsim.args.outputResultDir)
+        processed_sample_results.save_index_parameter_values(uqsim.args.outputResultDir)
+        processed_sample_results.save_index_parameter_gof_values(uqsim.args.outputResultDir)
+#####################################
+#####################################
+# save uqsim.configuration_object - problem: would this work? nodes do not work...
+if uqsim.is_master():
+    fileName = pathlib.Path(uqsim.args.outputResultDir) / "configuration_object"
+    with open(fileName, 'wb') as f:
+        dill.dump(uqsim.configuration_object, f)
 
 # save the dictionary with the arguments
-argsFileName = os.path.abspath(os.path.join(uqsim.args.outputResultDir, "uqsim_args.pkl"))
-with open(argsFileName, 'wb') as handle:
-    pickle.dump(uqsim.args, handle, protocol=pickle.HIGHEST_PROTOCOL)
+if uqsim.is_master():
+    argsFileName = os.path.abspath(os.path.join(uqsim.args.outputResultDir, "uqsim_args.pkl"))
+    with open(argsFileName, 'wb') as handle:
+        pickle.dump(uqsim.args, handle, protocol=pickle.HIGHEST_PROTOCOL)
+#####################################
+#####################################
+
+# statistics:
+uqsim.calc_statistics()
+uqsim.plot_statistics(display=False)
+uqsim.save_statistics()
 
 # uqsim.args.uqsim_file = os.path.abspath(os.path.join(uqsim.args.outputResultDir, "uqsim.saved"))
 # #uqsim.store_to_file()

@@ -30,6 +30,10 @@ import os.path as osp
 import pandas as pd
 import pathlib
 from LarsimUtilityFunctions import larsimConfigurationSettings
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
+#warnings.filterwarnings('ignore')
+pd.options.mode.chained_assignment = None
 
 sys.path.insert(0, os.getcwd())
 
@@ -51,14 +55,13 @@ if local_debugging:
     uqsim.args.chunksize = 1
 
     #uqsim.args.uq_method = "saltelli"
-    #uqsim.args.uq_method = "mc"
-    uqsim.args.uq_method = "sc"
+    uqsim.args.uq_method = "sc"  # "saltelli" | "mc"
     uqsim.args.mc_numevaluations = 1000
     uqsim.args.sampling_rule = "latin_hypercube" # | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
     uqsim.args.sc_q_order = 3 #7
     uqsim.args.sc_p_order = 2 #5
     uqsim.args.sc_poly_rule = "three_terms_recurrence" # "gram_schmidt" | "three_terms_recurrence" | "cholesky"
-    uqsim.args.sc_poly_normed = True # True
+    uqsim.args.sc_poly_normed = True
 
     uqsim.args.outputResultDir = os.path.abspath(os.path.join(paths.scratch_dir, "larsim_runs", 'larsim_run_siam_cse'))
     uqsim.args.inputModelDir = paths.larsim_data_path
@@ -151,14 +154,14 @@ uqsim.setup()
 simulationNodes_save_file = "nodes"
 uqsim.save_simulationNodes(fileName=simulationNodes_save_file)
 
-# save the dictionary with the arguments
-# TODO Check if it makes sense to save this before the simulation,
-#  i.e., maybe uqsim.args will be updated in the Model.run()
+# save the dictionary with the arguments - once before the simulation
 if uqsim.is_master():
     argsFileName = os.path.abspath(os.path.join(uqsim.args.outputResultDir, "uqsim_args.pkl"))
     with open(argsFileName, 'wb') as handle:
         pickle.dump(uqsim.args, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
+#####################################
+#####################################
 # check-up
 if uqsim.is_master():
     if local_debugging_nodes:
@@ -212,10 +215,15 @@ if uqsim.is_master():
                                                      normed=uqsim.args.sc_poly_normed)
         if exit_after_debugging_nodes:
             sys.exit()
+#####################################
+#####################################
 
 # start the simulation
 uqsim.simulate()
 
+#####################################
+#####################################
+# check-up
 if uqsim.is_master():
     if save_solver_results and uqsim.args.disable_statistics:
         # save raw results, i.e., solver results
@@ -226,6 +234,21 @@ if uqsim.is_master():
         processed_sample_results.save_samples_to_file(uqsim.args.outputResultDir)
         processed_sample_results.save_index_parameter_values(uqsim.args.outputResultDir)
         processed_sample_results.save_index_parameter_gof_values(uqsim.args.outputResultDir)
+#####################################
+#####################################
+# save uqsim.configuration_object - problem: would this work? nodes do not work...
+if uqsim.is_master():
+    fileName = pathlib.Path(uqsim.args.outputResultDir) / "configuration_object"
+    with open(fileName, 'wb') as f:
+        dill.dump(uqsim.configuration_object, f)
+
+# save the dictionary with the arguments
+if uqsim.is_master():
+    argsFileName = os.path.abspath(os.path.join(uqsim.args.outputResultDir, "uqsim_args.pkl"))
+    with open(argsFileName, 'wb') as handle:
+        pickle.dump(uqsim.args, handle, protocol=pickle.HIGHEST_PROTOCOL)
+#####################################
+#####################################
 
 # statistics:
 uqsim.calc_statistics()

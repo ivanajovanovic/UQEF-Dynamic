@@ -1,14 +1,14 @@
 {
   "Timeframe":
     {
-      "start_day": 1,
-      "start_month": 6,
+      "start_day": 15,
+      "start_month": 5,
       "start_year": 2013,
       "start_hour": 0,
       "start_minute": 0,
 
-      "end_day": 10,
-      "end_month": 6,
+      "end_day": 30,
+      "end_month": 5,
       "end_year": 2013,
       "end_hour": 0,
       "end_minute": 0,
@@ -28,12 +28,12 @@
       "run_and_save_simulations":"True",
       "compute_gradients":"False",
       "calculate_GoF":"True",
-      "objective_function":"all",
-      "QOI":"GoF",
-      "objective_function_qoi":"NSE",
-      "mode":"sliding_window",
-      "interval": 72,
-      "min_periods": 24,
+      "objective_function":["NSE", "RMSE"],
+      "QOI":"Q",
+      "objective_function_qoi":["NSE", "RMSE"],
+      "mode":"continuous",
+      "interval": 24,
+      "min_periods": 6,
       "method": "avrg"
     },
   "parameters_settings":
@@ -103,7 +103,9 @@
       "lower_limit": 0.5,
       "upper_limit": 1.2,
       "default": 0.93
-    },
+    }
+  ],
+  "unused_parameters" : [
     {
       "name": "EKM",
       "type": "tape35",
@@ -133,9 +135,7 @@
       "lower_limit": 0.3,
       "upper_limit": 3.0,
       "default": 0.9
-    }
-  ],
-  "unused_parameters" : [
+    },
     {
       "name": "EQB",
       "type": "tape35",

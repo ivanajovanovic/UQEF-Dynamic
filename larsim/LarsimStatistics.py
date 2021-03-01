@@ -80,10 +80,9 @@ COLORS_ALL = [l.replace(' ', '') for l in COLORS_ALL]
 class LarsimSamples(object):
     """
      Samples is a collection of the (filtered) sampled results of a whole UQ simulation
+     Prepares results from Model to Statistics
     """
-    #TODO write get/set methods for the attributes of the class
-
-    def __init__(self, rawSamples, configurationObject):
+    def __init__(self, rawSamples, configurationObject, QoI="Value"):
 
         station = configurationObject["Output"]["station_calibration_postproc"] \
             if "station_calibration_postproc" in configurationObject["Output"] else "MARI"
@@ -91,13 +90,21 @@ class LarsimSamples(object):
             if "type_of_output" in configurationObject["Output"] else "Abfluss Messung + Vorhersage"
         dailyOutput = configurationObject["Output"]["dailyOutput"] \
             if "dailyOutput" in configurationObject["Output"] else "False"
+
         qoi = configurationObject["Output"]["QOI"] if "QOI" in configurationObject["Output"] else "Q"
         mode = configurationObject["Output"]["mode"] \
             if "mode" in configurationObject["Output"] else "continuous"
         calculate_GoF = configurationObject["Output"]["calculate_GoF"]
         compute_gradients = configurationObject["Output"]["compute_gradients"]
+
+        # TODO SHOULD VALUE Always be among QoI columns!?
+        self.qoi_columns = ["Value",]
         if qoi == "GoF":
             objective_function_qoi = configurationObject["Output"]["objective_function_qoi"]
+            if isinstance(objective_function_qoi,list):
+                self.qoi_columns = self.qoi_columns + [single_gof.__name__ for single_gof in objective_function_qoi]
+            else:
+                self.qoi_columns = self.qoi_columns + [objective_function_qoi.__name__,]
         #objective_function, interval, min_periods, method
 
         list_of_single_df = []
@@ -129,10 +136,8 @@ class LarsimSamples(object):
 
             list_of_single_df.append(df_single_ergebnis)
 
-        # TODO based on QoI check what should be self.df_simulation_result
         self.df_simulation_result = pd.concat(list_of_single_df, ignore_index=True, sort=False, axis=0)
 
-        # TODO check in babysitting if this has effect after function return
         larsimInputOutputUtilities._postProcessing_DataFrame_after_reading(self.df_simulation_result)
 
         if list_index_parameters_dict:
@@ -148,13 +153,23 @@ class LarsimSamples(object):
         print(f"[LARSIM STAT INFO] Number of Unique TimeStamps (Hourly): "
               f"{len(self.df_simulation_result.TimeStamp.unique())}")
 
-        # TODO make transformToDailyResolution more general
+        # TODO remove/refactor transformToDailyResolution
         if strtobool(dailyOutput):
-            # Average over time. i.e. change column TimeStamp and Value
-            self.df_simulation_result = larsimDataPostProcessing.transformToDailyResolution(self.df_simulation_result)
-            print(f"[LARSIM STAT INFO] Number of Unique TimeStamps (Daily): {len(self.df_simulation_result.TimeStamp.unique())}")
+            self.transform_dict = dict()
+            for one_qoi_column in self.qoi_columns:
+                self.transform_dict[one_qoi_column] = 'mean'
+            self.df_simulation_result = larsimDataPostProcessing.transformToDailyResolution(self.df_simulation_result,
+                                                                                            transform_dict=self.transform_dict,
+                                                                                            groupby_some_columns=True,
+                                                                                            columns_to_groupby=[
+                                                                                                "Stationskennung",
+                                                                                                "Type", "Index_run"],
+                                                                                            time_column="TimeStamp",
+                                                                                            resample_freq="D"
+                                                                                            )
+            print(f"[LARSIM STAT INFO] Number of Unique TimeStamps (Daily): {self.df_simulation_result.TimeStamp.nunique()}")
 
-        # TODO based on QoI check what should be self.df_time_discharges
+        # save only the real values, independent on QoI
         self.df_time_discharges = self.df_simulation_result.groupby(["Stationskennung","TimeStamp"])["Value"].apply(lambda df: df.reset_index(drop=True)).unstack()
 
     def save_samples_to_file(self, file_path='./'):
@@ -185,10 +200,14 @@ class LarsimSamples(object):
     def get_simulation_stations(self):
         return list(self.df_simulation_result.Stationskennung.unique())
 
+    def get_list_of_qoi_column_names(self):
+        return self.qoi_columns
+
 
 class LarsimStatistics(Statistics):
     """
        LarsimStatistics calculates the statistics for the LarsimModel
+       One LarsimStatistics Object should compute statistics for a multiple station and single QoI
     """
 
     def __init__(self, configurationObject, *args, **kwargs):
@@ -204,6 +223,15 @@ class LarsimStatistics(Statistics):
             except KeyError:
                 self.workingDir = paths.workingDir
 
+        self.qoi_column = kwargs.get('qoi_column') if "qoi_column" in kwargs else "Value"
+        self.qoi = configurationObject["Output"]["QOI"] if "QOI" in configurationObject["Output"] else "Q"
+        if self.qoi == "GoF":
+            objective_function_qoi = configurationObject["Output"]["objective_function_qoi"]
+            if isinstance(objective_function_qoi,list):
+                self.qoi_column = objective_function_qoi[0].__name__
+            else:
+                self.qoi_column = objective_function_qoi.__name__
+
         self.Abfluss = dict()
 
         self.df_unaltered = None
@@ -211,9 +239,13 @@ class LarsimStatistics(Statistics):
         self.unaltered_computed = False
         self.groundTruth_computed = False
 
-        # check if simulation results were already saved in LarsimModel
+        # check if simulation results were already saved in LarsimModel - currently not used
         self.run_and_save_simulations = strtobool(self.configurationObject["Output"]["run_and_save_simulations"])\
                                         if "run_and_save_simulations" in self.configurationObject["Output"] else False
+
+        self.station_of_Interest = self.configurationObject["Output"]["station_calibration_postproc"]
+        if not isinstance(self.station_of_Interest, list):
+            self.station_of_Interest = [self.station_of_Interest,]
 
         # Only the names of the stochastic parameters
         self.nodeNames = []
@@ -246,7 +278,11 @@ class LarsimStatistics(Statistics):
         self.numbTimesteps = len(self.timesteps)
         print(f"[LARSIM STAT INFO] numbTimesteps is: {self.numbTimesteps}")
 
-        self.station_names = samples.get_simulation_stations()
+        self.samples_station_names = samples.get_simulation_stations()
+        # self.samples_qoi_columns = samples.get_list_of_qoi_column_names()
+        self.station_of_Interest = list(set(self.samples_station_names).intersection(self.station_of_Interest))
+        if not self.station_of_Interest:
+            self.station_of_Interest = self.samples_station_names
 
         grouped = samples.df_simulation_result.groupby(['Stationskennung','TimeStamp'])
         groups = grouped.groups
@@ -258,9 +294,9 @@ class LarsimStatistics(Statistics):
             polynomial_expansion = cp.generate_expansion(order, dist, rule=three_terms_recurrence, normed=True)
 
         for key, val_indices in groups.items():
-            discharge_values = samples.df_simulation_result.loc[val_indices.values].Value.values #numpy array nx1
+            discharge_values = samples.df_simulation_result.loc[val_indices.values][self.qoi_column].values #numpy array nx1
             #discharge_values = samples.df_simulation_result.Value.loc[val_indices].values
-            self.Abfluss[key] = {}
+            self.Abfluss[key] = dict()
             self.Abfluss[key]["Q"] = discharge_values
             if regression:
                 self.qoi_gPCE = cp.fit_regression(polynomial_expansion, nodes, discharge_values)
@@ -274,7 +310,7 @@ class LarsimStatistics(Statistics):
                 self.Abfluss[key]["StdDev_numpy"] = np.std(discharge_values, 0, ddof=1)  #TODO!!!
                 self.Abfluss[key]["P10"] = np.percentile(discharge_values, 10, axis=0)
                 self.Abfluss[key]["P90"] = np.percentile(discharge_values, 90, axis=0)
-                if isinstance(self.Abfluss[key]["P10"], (list)) and len(self.Abfluss[key]["P10"]) == 1:
+                if isinstance(self.Abfluss[key]["P10"], list) and len(self.Abfluss[key]["P10"]) == 1:
                     self.Abfluss[key]["P10"]=self.Abfluss[key]["P10"][0]
                     self.Abfluss[key]["P90"]=self.Abfluss[key]["P90"][0]
 
@@ -297,8 +333,12 @@ class LarsimStatistics(Statistics):
         self.numbTimesteps = len(self.timesteps)
         print(f"[LARSIM STAT INFO] numbTimesteps is: {self.numbTimesteps}")
 
-        self.station_names = samples.get_simulation_stations()
+        self.samples_station_names = samples.get_simulation_stations()
+        # self.samples_qoi_columns = samples.get_list_of_qoi_column_names()
         #self.nodeNames = simulationNodes.nodeNames
+        self.station_of_Interest = list(set(self.samples_station_names).intersection(self.station_of_Interest))
+        if not self.station_of_Interest:
+            self.station_of_Interest = self.samples_station_names
 
         # components independent on model evaluations, i.e., defined a priori, based solely on the underlying distribution
         nodes = simulationNodes.distNodes
@@ -311,8 +351,8 @@ class LarsimStatistics(Statistics):
 
         #@jit(nopython=True, parallel=True)
         for key, val_indices in groups.items():
-            discharge_values = samples.df_simulation_result.loc[val_indices.values].Value.values
-            self.Abfluss[key] = {}
+            discharge_values = samples.df_simulation_result.loc[val_indices.values][self.qoi_column].values
+            self.Abfluss[key] = dict()
             self.Abfluss[key]["Q"] = discharge_values
             if regression:
                 self.qoi_gPCE = cp.fit_regression(polynomial_expansion, nodes, discharge_values)
@@ -330,7 +370,7 @@ class LarsimStatistics(Statistics):
         self.Abfluss[key]["StdDev"] = float(cp.Std(self.qoi_gPCE, dist))
 
         self.Abfluss[key]["qoi_dist"] = cp.QoI_Dist(self.qoi_gPCE, dist)
-        # TODO
+
         # # generate QoI dist
         # qoi_dist = cp.QoI_Dist(self.qoi_gPCE, dist)
         # # generate sampling values for the qoi dist (you should know the min/max values for doing this)
@@ -347,7 +387,7 @@ class LarsimStatistics(Statistics):
 
         self.Abfluss[key]["P10"] = float(cp.Perc(self.qoi_gPCE, 10, dist, numPercSamples))
         self.Abfluss[key]["P90"] = float(cp.Perc(self.qoi_gPCE, 90, dist, numPercSamples))
-        if isinstance(self.Abfluss[key]["P10"], (list)) and len(self.Abfluss[key]["P10"]) == 1:
+        if isinstance(self.Abfluss[key]["P10"], list) and len(self.Abfluss[key]["P10"]) == 1:
             self.Abfluss[key]["P10"]= self.Abfluss[key]["P10"][0]
             self.Abfluss[key]["P90"] = self.Abfluss[key]["P90"][0]
 
@@ -368,8 +408,12 @@ class LarsimStatistics(Statistics):
         self.numbTimesteps = len(self.timesteps)
         print(f"[LARSIM STAT INFO] numbTimesteps is: {self.numbTimesteps}")
 
-        self.station_names = samples.get_simulation_stations()
+        self.samples_station_names = samples.get_simulation_stations()
+        # self.samples_qoi_columns = samples.get_list_of_qoi_column_names()
         #self.nodeNames = simulationNodes.nodeNames
+        self.station_of_Interest = list(set(self.samples_station_names).intersection(self.station_of_Interest))
+        if not self.station_of_Interest:
+            self.station_of_Interest = self.samples_station_names
 
         grouped = samples.df_simulation_result.groupby(['Stationskennung','TimeStamp'])
         groups = grouped.groups
@@ -389,7 +433,7 @@ class LarsimStatistics(Statistics):
                 Abfluss[key] = dict()
 
                 # numpy array - for sartelli it should be n(2+d)x1
-                discharge_values = samples.df_simulation_result.loc[val_indices.values].Value.values
+                discharge_values = samples.df_simulation_result.loc[val_indices.values][self.qoi_column].values
                 # extended_standard_discharge_values = discharge_values[:(2*numEvaluations)]
                 discharge_values_saltelli = discharge_values[:, np.newaxis]
                 # values based on which we calculate standard statistics
@@ -423,7 +467,7 @@ class LarsimStatistics(Statistics):
                     # Abfluss[key]["Sobol_m"] = saltelliSobolIndicesHelpingFunctions._Sens_m_sample_3
                     # (discharge_values_saltelli, self.dim, numEvaluations)
 
-                if isinstance(Abfluss[key]["P10"], (list)) and len(Abfluss[key]["P10"]) == 1:
+                if isinstance(Abfluss[key]["P10"], list) and len(Abfluss[key]["P10"]) == 1:
                     Abfluss[key]["P10"]=Abfluss[key]["P10"][0]
                     Abfluss[key]["P90"]=Abfluss[key]["P90"][0]
             return Abfluss
@@ -444,16 +488,24 @@ class LarsimStatistics(Statistics):
         if os.path.exists(local_measurment_file):
             self.df_measured = larsimDataPostProcessing.read_process_write_discharge(df=local_measurment_file,\
                                      timeframe=timestepRange,\
-                                     station=self.configurationObject["Output"]["station_calibration_postproc"],\
+                                     station=self.station_of_Interest,\
                                      dailyOutput=strtobool(self.configurationObject["Output"]["dailyOutput"]),\
                                      compression="gzip")
         else:
             self.df_measured = larsimConfigurationSettings.extract_measured_discharge(timestepRange[0], timestepRange[1], index_run=0)
             self.df_measured = larsimDataPostProcessing.filterResultForStationAndTypeOfOutpu(self.df_measured,\
-                                                       station=self.configurationObject["Output"]["station_calibration_postproc"],\
+                                                       station=self.station_of_Interest,\
                                                        type_of_output=self.configurationObject["Output"]["type_of_output_measured"])
             if strtobool(self.configurationObject["Output"]["dailyOutput"]):
-                self.df_measured = larsimDataPostProcessing.transformToDailyResolution(self.df_measured)
+                # TODO transformToDailyResolution was refactored
+                self.df_measured = larsimDataPostProcessing.transformToDailyResolution(self.df_measured,
+                                                                                       transform_dict={
+                                                                                           "Value": 'mean',},
+                                                                                       groupby_some_columns=True,
+                                                                                       columns_to_groupby=None,
+                                                                                       time_column="TimeStamp",
+                                                                                       resample_freq="D"
+                                                                                       )
         self.groundTruth_computed = True
         #self.Abfluss["Ground_Truth_Measurements"] = self.measured
 
@@ -462,7 +514,7 @@ class LarsimStatistics(Statistics):
             df=os.path.abspath(os.path.join(self.workingDir, "df_unaltered.pkl")),
             timeframe=timestepRange,
             type_of_output=self.configurationObject["Output"]["type_of_output"],
-            station=self.configurationObject["Output"]["station_calibration_postproc"],
+            station=self.station_of_Interest,
             dailyOutput=strtobool(self.configurationObject["Output"]["dailyOutput"]),
             compression="gzip")
         self.unaltered_computed = True
@@ -472,9 +524,6 @@ class LarsimStatistics(Statistics):
                     fileName="", fileNameIdent="", directory="./",
                     fileNameIdentIsFullName=False, safe=True):
 
-        fileName = self.generateFileName(fileName=fileName, fileNameIdent=".html",
-                                         directory=directory, fileNameIdentIsFullName=fileNameIdentIsFullName)
-
         #timestepRange = (pd.Timestamp(min(self.timesteps)), pd.Timestamp(max(self.timesteps)))
         timestepRange = (self.timesteps_min, self.timesteps_max)
 
@@ -483,16 +532,20 @@ class LarsimStatistics(Statistics):
 
         print(f"[LARSIM STAT INFO] plotResults function is called!")
 
-        self._plotStatisticsDict_plotly(unalatered=self.unaltered_computed, measured=self.groundTruth_computed,
-                                        station=self.configurationObject["Output"]["station_calibration_postproc"],
-                                        recalculateTimesteps=False, filename=fileName, display=display)
-        #self._plotStatisticsDict_plotter(unalatered=None, measured=None,
-        # station=self.configurationObject["Output"]["station_calibration_postproc"],
-        # recalculateTimesteps=False, filename=fileName, display=display)
+        for single_station in self.station_of_Interest:
+            fileName = single_station
+            single_fileName = self.generateFileName(fileName=fileName, fileNameIdent=".html",
+                                             directory=directory, fileNameIdentIsFullName=fileNameIdentIsFullName)
+            self._plotStatisticsDict_plotly(unalatered=self.unaltered_computed, measured=self.groundTruth_computed,
+                                            station=single_station,
+                                            recalculateTimesteps=False, filename=single_fileName, display=display)
+            #self._plotStatisticsDict_plotter(unalatered=None, measured=None,
+            # station=single_station,
+            # recalculateTimesteps=False, filename=single_fileName, display=display)
         print(f"[LARSIM STAT INFO] plotResults function is done!")
 
     def _plotStatisticsDict_plotly(self, unalatered=False, measured=False, station="MARI",
-                                   recalculateTimesteps=False, window_title='Larsim Forward UQ & SA - MARI',
+                                   recalculateTimesteps=False, window_title='Larsim Forward UQ & SA',
                                    filename="sim-plotly.html", display=False):
 
         print(f"[LARSIM STAT INFO] _plotStatisticsDict_plotly function is called!")
@@ -508,7 +561,7 @@ class LarsimStatistics(Statistics):
         else:
             pdTimesteps = [pd.Timestamp(timestep) for timestep in self.timesteps]
 
-        self.keyIter = list(itertools.product([station,],pdTimesteps))
+        self.keyIter = list(itertools.product([station,], pdTimesteps))
 
         labels = [nodeName.strip() for nodeName in self.nodeNames]
 
@@ -524,12 +577,19 @@ class LarsimStatistics(Statistics):
         fig = make_subplots(rows=n_rows, cols=1, shared_xaxes=False)
 
         if unalatered:
-            column_to_draw = 'Value' if 'Value' in self.df_unaltered.columns else self.configurationObject["Output"]["station_calibration_postproc"]
+            # if 'Value' in self.df_unaltered.columns:
+            #     df_unaltered = self.df_unaltered.loc[self.df_unaltered['Stationskennung'] == station]['Value']
+            # elif station in self.df_unaltered.columns:
+            #     df_unaltered = self.df_unaltered[station]
+            # else:
+            #     raise Exception(f"[LARSIM STAT ERROR:] in _plotStatisticsDict_plotly when extracting unalatered")
+
+            column_to_draw = 'Value' if 'Value' in self.df_unaltered.columns else station
             #fig.add_trace(go.Scatter(x=pdTimesteps, y=self.unalatered['Value'], name="Q (unaltered simulation)",line_color='deepskyblue'), row=1, col=1)
             fig.add_trace(go.Scatter(x=self.df_unaltered['TimeStamp'], y=self.df_unaltered[column_to_draw],
                                      name="Q (unaltered simulation)", line_color='deepskyblue'), row=1, col=1)
         if measured:
-            column_to_draw = 'Value' if 'Value' in self.df_measured.columns else self.configurationObject["Output"]["station_calibration_postproc"]
+            column_to_draw = 'Value' if 'Value' in self.df_measured.columns else station
             #fig.add_trace(go.Scatter(x=pdTimesteps, y=self.measured['Value'], name="Q (measured)",line_color='red'), row=1, col=1)
             fig.add_trace(go.Scatter(x=self.df_measured['TimeStamp'], y=self.df_measured[column_to_draw],
                                      name="Q (measured)",line_color='red'), row=1, col=1)
@@ -571,6 +631,8 @@ class LarsimStatistics(Statistics):
             fig.update_yaxes(title_text="Sobol_m", side='left', showgrid=True, range=[0, 1], row=3, col=1)
         if self._is_Sobol_t_computed:
             fig.update_yaxes(title_text="Sobol_t", side='left', showgrid=True, range=[0, 1], row=4, col=1)
+
+        window_title = window_title + station
         #fig.update_layout(height=1200, width=1200, title_text='Larsim Forward UQ & SA - MARI',xaxis4_rangeslider_visible=True, xaxis4_rangeslider_thickness=0.05)
         fig.update_layout(height=800, width=1200, title_text=window_title,xaxis4_rangeslider_visible=True, xaxis4_rangeslider_thickness=0.05)
 
@@ -608,11 +670,11 @@ class LarsimStatistics(Statistics):
         plotter.subplot(411)
 
         if unalatered:
-            column_to_draw = 'Value' if 'Value' in self.df_unaltered.columns else self.configurationObject["Output"]["station_calibration_postproc"]
+            column_to_draw = 'Value' if 'Value' in self.df_unaltered.columns else station
             #plotter.plot(pdTimesteps, self.unalatered['Value'], label="Q (unaltered simulation)")
             plotter.plot(self.df_unaltered['TimeStamp'], self.df_unaltered[column_to_draw], label="Q (unaltered simulation)")
         if measured:
-            column_to_draw = 'Value' if 'Value' in self.df_measured.columns else self.configurationObject["Output"]["station_calibration_postproc"]
+            column_to_draw = 'Value' if 'Value' in self.df_measured.columns else station
             #plotter.plot(pdTimesteps, self.measured['Value'], label="Q (measured)")
             plotter.plot(self.df_measured['TimeStamp'], self.df_measured[column_to_draw], label="Q (measured)")
 

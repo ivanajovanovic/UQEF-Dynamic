@@ -1,14 +1,14 @@
 {
   "Timeframe":
     {
-      "start_day": 1,
-      "start_month": 6,
+      "start_day": 15,
+      "start_month": 5,
       "start_year": 2013,
       "start_hour": 0,
       "start_minute": 0,
 
-      "end_day": 10,
-      "end_month": 6,
+      "end_day": 30,
+      "end_month": 5,
       "end_year": 2013,
       "end_hour": 0,
       "end_minute": 0,
@@ -21,7 +21,7 @@
     {
       "type_of_output":"Abfluss Messung + Vorhersage",
       "type_of_output_measured":"Ground Truth",
-      "station_calibration_postproc":"MARI",
+      "station_calibration_postproc":"CHAM",
       "station_model_runs":"all",
       "pathsDataFormat":"False",
       "dailyOutput":"False",
@@ -30,17 +30,17 @@
       "calculate_GoF":"True",
       "objective_function":"all",
       "QOI":"GoF",
-      "objective_function_qoi":"NSE",
+      "objective_function_qoi":["RMSE", "NSE"],
       "mode":"sliding_window",
-      "interval": 72,
-      "min_periods": 24,
+      "interval": 24,
+      "min_periods": 6,
       "method": "avrg"
     },
   "parameters_settings":
     {
       "addSampledValue":"False",
       "TGB_standard": 3085,
-      "TGB":"None",
+      "TGB": "None",
       "roundParameters":"False",
       "roundDecimal": 2,
       "cut_limits":"False"

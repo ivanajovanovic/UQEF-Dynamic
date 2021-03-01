@@ -2,6 +2,7 @@ import datetime
 import dill
 from distutils.util import strtobool
 from functools import reduce
+import math
 import numpy as np
 import os
 import os.path as osp
@@ -108,7 +109,7 @@ class LarsimModelSetUp():
         try:
             self.warm_up_duration = self.configurationObject["Timeframe"]["warm_up_duration"]
         except KeyError:
-            self.warm_up_duration = 53
+            self.warm_up_duration = None#53
 
         self.calculate_GoF = strtobool(self.configurationObject["Output"]["calculate_GoF"])\
                        if "calculate_GoF" in self.configurationObject["Output"] else True
@@ -462,7 +463,7 @@ class LarsimModel(Model):
                        if "cut_runs" in self.configurationObject["Timeframe"] else False
 
         self.warm_up_duration = self.configurationObject["Timeframe"]["warm_up_duration"] \
-                                if "warm_up_duration" in self.configurationObject["Timeframe"] else 53
+                                if "warm_up_duration" in self.configurationObject["Timeframe"] else None # 53
 
         self.variable_names = []
         if "tuples_parameters_info" in self.configurationObject:
@@ -492,13 +493,18 @@ class LarsimModel(Model):
         if self.mode == "sliding_window" or self.mode == "resampling":
             self.interval = self.configurationObject["Output"]["interval"] \
                 if "interval" in self.configurationObject["Output"] else 24
+            if self.interval == "whole":
+                self.configurationObject["Output"]["dailyOutput"] = "True"
             self.min_periods = self.configurationObject["Output"]["min_periods"] \
                 if "min_periods" in self.configurationObject["Output"] else 1
             if self.qoi == "Q":
                 self.method = self.configurationObject["Output"]["method"] \
                     if "method" in self.configurationObject["Output"] else "avrg"
-                if self.method != "avrg" and self.method != "max":
-                    raise Exception(f"[LarsimModel ERROR:] self.method should be either \"avrg\" or \"max\" ")
+                if self.method != "avrg" and self.method != "max" and self.method != "min":
+                    raise Exception(f"[LarsimModel ERROR:] self.method should be either \"avrg\" or \"max\" or \"min\"")
+
+        if self.mode == "resampling":
+            raise Exception(f"[LarsimModel ERROR:] resampling mode is still not implemented")
 
         # if calibration is True some likelihood / objective functions / GoF functio should be calculated from model run and propageted further
         self.calculate_GoF = strtobool(self.configurationObject["Output"]["calculate_GoF"]) \
@@ -608,7 +614,7 @@ class LarsimModel(Model):
 
     def run(self, i_s=[0,], parameters=None):  # i_s - index chunk; parameters - parameters chunk
 
-        print(f"[LarsimModel INFO] {i_s} paramater: {parameters}")
+        print(f"[LarsimModel INFO] {i_s} parameter: {parameters}")
 
         results = []
         for ip in range(0, len(i_s)): # for each peace of work
@@ -688,31 +694,37 @@ class LarsimModel(Model):
                 index_parameter_gof_DF = self._calculate_GoF(predictedDF=result,
                                                              parameters_dict=parameters_dict,
                                                              objective_function=self.objective_function,
-                                                             get_all_possible_stations=True)
+                                                             get_all_possible_stations=False)
                 result_dict["gof_df"] = index_parameter_gof_DF
 
             # process result DF to compute the final GoI
             processed_result = None
+            change_original_result_and_keep_it = True
             if self.mode == "sliding_window":
                 if self.qoi == "GoF":
                     processed_result = self._process_time_series_sliding_window_gof(predictedDF=result,
                                                                                     interval=self.interval,
                                                                                     min_periods=self.min_periods,
                                                                                     objective_function=self.objective_function_qoi,
-                                                                                    get_all_possible_stations=True)
+                                                                                    get_all_possible_stations=False)
                 else:
                     processed_result = self._process_time_series_sliding_window_q(predictedDF=result,
                                                                                   interval=self.interval,
+                                                                                  min_periods=self.min_periods,
                                                                                   method=self.method)
-            elif self.mode == "resampling":
-                if self.qoi == "GoF":
-                    processed_result = self._process_time_series_cutting_gof(predictedDF=result,
-                                                                             interval=self.interval,
-                                                                             objective_function=self.objective_function_qoi)
-                else:
-                    processed_result = self._process_time_series_cutting_q(predictedDF=result,
-                                                                           interval=self.interval,
-                                                                           method=self.method)
+            # elif self.mode == "resampling":
+            #     # resampling can happen in Statistics as well
+            #     if self.qoi == "GoF":
+            #         processed_result = self._process_time_series_resampling_gof(predictedDF=result,
+            #                                                                     interval=self.interval,
+            #                                                                     min_periods=self.min_periods,
+            #                                                                     objective_function=self.objective_function_qoi,
+            #                                                                     get_all_possible_stations=True)
+            #     else:
+            #         processed_result = self._process_time_series_resampling_q(predictedDF=result,
+            #                                                                   interval=self.interval,
+            #                                                                   min_periods=self.min_periods,
+            #                                                                   method=self.method)
             # Important, from now on the result is changed
             if processed_result is not None:
                 result = processed_result
@@ -769,7 +781,10 @@ class LarsimModel(Model):
 
     def _single_larsim_run(self, timeframe, curr_working_dir, index_run=0, sub_index_run=0, warm_up_duration=None):
 
-        if warm_up_duration is None: warm_up_duration = self.warm_up_duration
+        if warm_up_duration is None:
+            warm_up_duration = self.warm_up_duration
+        if warm_up_duration is None:
+            warm_up_duration = 0
         # start clean
         larsimConfigurationSettings._delete_larsim_output_files(curr_directory=curr_working_dir)
 
@@ -815,7 +830,10 @@ class LarsimModel(Model):
     # TODO Change _multiple_short_larsim_runs such that local_timestep/timestep are set in hours
     def _multiple_short_larsim_runs(self, timeframe, timestep, curr_working_dir, index_run=0, warm_up_duration=None):
 
-        if warm_up_duration is None: warm_up_duration = self.warm_up_duration
+        if warm_up_duration is None:
+            warm_up_duration = self.warm_up_duration
+        if warm_up_duration is None:
+            warm_up_duration = 0
 
         # if you want to cut execution into shorter runs...
         local_timestep = timestep
@@ -899,10 +917,21 @@ class LarsimModel(Model):
 
     def _process_time_series_sliding_window_gof(self, predictedDF, objective_function, interval=24, min_periods=1,
                                                 center=True, closed="neither", get_all_possible_stations=False):
+        """
+         if center=False the result is set to the right edge of the window
+        """
+
+        # center=True can not work with datetimelike
+        # if not isinstance(interval, str) or (isinstance(interval, str) and not interval.endswith(('H', 'h'))):
+        #     interval = f"{interval}H"
+
         if self.measuredDF is None and not self._is_measuredDF_computed:
             self._set_measured_df()
         elif self.measuredDF is None and self._is_measuredDF_computed:
             return None
+
+        if interval == "whole":
+            interval = predictedDF.TimeStamp.nunique()
 
         # TODO it makes sense as well to have here self.station_for_model_runs or get_all_possible_stations=True
         stations = LarsimModel.compute_and_get_final_list_of_stations(self.measuredDF, predictedDF,
@@ -931,9 +960,14 @@ class LarsimModel(Model):
                     Value.apply(dataframe_roll(predictedDF_station_subset, single_gof_function), raw=False)
 
             # disregard first couple of timesteps and last couple of time steps
-            start = predictedDF_station_subset.index.min() + datetime.timedelta(hours=interval+1)
-            end = predictedDF_station_subset.index.max() - datetime.timedelta(hours=interval+1)
+            start = predictedDF_station_subset.index.min() + datetime.timedelta(hours=math.floor(interval/2)-1)
+            end = predictedDF_station_subset.index.max() - datetime.timedelta(hours=math.floor(interval/2)-1)
             predictedDF_station_subset = predictedDF_station_subset.loc[start:end]
+            # TODO Think about this, what if predictedDF_station_subset is empty at the end, implement differently
+            if predictedDF_station_subset.empty or predictedDF_station_subset.dropna().empty:
+                raise Exception(
+                    f"[LarsimModel ERROR:] _process_time_series_sliding_window_gof: return empty DF "
+                    f"for station:{single_station}!")
             predictedDF_station_subset.reset_index(inplace=True)
 
             list_of_results_per_station.append(predictedDF_station_subset)
@@ -941,15 +975,38 @@ class LarsimModel(Model):
         processed_result = pd.concat(list_of_results_per_station, ignore_index=True, sort=False, axis=0)
         return processed_result
 
-    def _process_time_series_sliding_window_q(self, predictedDF, interval, method):
+    def _process_time_series_sliding_window_q(self, predictedDF, interval=24, method="avrg",
+                                              min_periods=1, center=True):
+        # if not isinstance(interval, str) or (isinstance(interval, str) and not interval.endswith(('H', 'h'))):
+        #     interval = f"{interval}H"
+        processed_result = predictedDF.copy(deep=True)
+        if processed_result.index.name != "TimeStamp":
+            processed_result.set_index("TimeStamp", inplace=True)
+
+        if method == "avrg":
+            processed_result = processed_result.groupby(["Stationskennung","Index_run","Type"]).\
+                rolling(window=interval, min_periods=min_periods, center=center,
+                        win_type=None).Value.mean().dropna().reset_index()
+        elif method == "min":
+            processed_result = processed_result.groupby(["Stationskennung","Index_run","Type"]).\
+                rolling(window=interval, min_periods=min_periods, center=center,
+                        win_type=None).Value.min().dropna().reset_index()
+        elif method == "max":
+            processed_result = processed_result.groupby(["Stationskennung","Index_run","Type"]). \
+                rolling(window=interval, min_periods=min_periods, center=center,
+                        win_type=None).Value.max().dropna().reset_index()
+        else:
+            raise Exception(
+                f"[LarsimModel ERROR:] Error in _process_time_series_sliding_window_q - no correct method specified!")
+        #processed_result.reset_index(inplace=True)
+        return processed_result
+
+    def _process_time_series_resampling_gof(self, predictedDF, interval, min_periods,
+                                         objective_function, get_all_possible_stations=False):
         processed_result = None
         return processed_result
 
-    def _process_time_series_cutting_gof(self, predictedDF, interval, objective_function):
-        processed_result = None
-        return processed_result
-
-    def _process_time_series_cutting_q(self, predictedDF, interval, method):
+    def _process_time_series_resampling_q(self, predictedDF, interval, method):
         processed_result = None
         return processed_result
 

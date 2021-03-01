@@ -1,34 +1,40 @@
 {
   "Timeframe":
     {
-      "start_day": 1,
+      "start_day": 10,
       "start_month": 6,
-      "start_year": 2013,
+      "start_year": 2014,
       "start_hour": 0,
       "start_minute": 0,
 
-      "end_day": 15,
+      "end_day": 20,
       "end_month": 6,
-      "end_year": 2013,
+      "end_year": 2014,
       "end_hour": 0,
       "end_minute": 0,
 
-      "timestep": 1,
-      "cut_runs": "True",
-      "warm_up_duration": 6
+      "timestep": 10,
+      "cut_runs": "False",
+      "warm_up_duration": 53
     },
   "Output":
     {
-      "type_of_output":"Abfluss Messung",
+      "type_of_output":"Abfluss Messung + Vorhersage",
       "type_of_output_measured":"Ground Truth",
-      "station_calibration_postproc":"MARI",
-      "station_model_runs": "all",
+      "station_calibration_postproc":"CHAM",
+      "station_model_runs":"all",
       "pathsDataFormat":"False",
-      "dailyOutput": "False",
-      "calculate_GoF": "True",
+      "dailyOutput":"False",
+      "run_and_save_simulations":"True",
+      "compute_gradients":"False",
+      "calculate_GoF":"True",
       "objective_function":"all",
-      "run_and_save_simulations":"False",
-      "compute_gradients": "False"
+      "QOI":"GoF",
+      "objective_function_qoi":["RMSE", "NSE"],
+      "mode":"sliding_window",
+      "interval": "whole",
+      "min_periods": 1,
+      "method": "avrg"
     },
   "parameters_settings":
     {
@@ -61,7 +67,9 @@
       "upper_limit": 8.0,
       "depends_on":"locker baumbest.:May",
       "direction":"increasing"
-    },
+    }
+  ],
+  "unused_parameters": [
     {
       "name": "Mischwald:Jun",
       "type": "lanu",
@@ -83,9 +91,7 @@
       "upper_limit": 12.0,
       "depends_on":"Laubwald:May",
       "direction":"increasing"
-    }
-  ],
-  "unused_parameters": [
+    },
     {
       "name": "Acker:Apr",
       "type": "lanu",
