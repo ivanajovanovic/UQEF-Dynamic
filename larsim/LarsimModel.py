@@ -493,8 +493,8 @@ class LarsimModel(Model):
         if self.mode == "sliding_window" or self.mode == "resampling":
             self.interval = self.configurationObject["Output"]["interval"] \
                 if "interval" in self.configurationObject["Output"] else 24
-            if self.interval == "whole":
-                self.configurationObject["Output"]["dailyOutput"] = "True"
+            # if self.interval == "whole":
+            #     self.configurationObject["Output"]["dailyOutput"] = "True"
             self.min_periods = self.configurationObject["Output"]["min_periods"] \
                 if "min_periods" in self.configurationObject["Output"] else 1
             if self.qoi == "Q":
@@ -690,6 +690,7 @@ class LarsimModel(Model):
 
             # compute (some) GoF for the whole time period
             # TODO eventually design the code to disregard the runs with an unsatisfying value of some GoF
+            #  or to identify those which break
             if self.calculate_GoF:
                 index_parameter_gof_DF = self._calculate_GoF(predictedDF=result,
                                                              parameters_dict=parameters_dict,
@@ -932,6 +933,7 @@ class LarsimModel(Model):
 
         if interval == "whole":
             interval = predictedDF.TimeStamp.nunique()
+            min_periods = 1
 
         # TODO it makes sense as well to have here self.station_for_model_runs or get_all_possible_stations=True
         stations = LarsimModel.compute_and_get_final_list_of_stations(self.measuredDF, predictedDF,

@@ -46,8 +46,8 @@ uqsim = uqef.UQsim()
 local_debugging = True
 if local_debugging:
     local_debugging_nodes = True
-    exit_after_debugging_nodes = False
-    save_solver_results = True
+    exit_after_debugging_nodes = True
+    save_solver_results = False
 
     uqsim.args.model = "larsim"
 
@@ -58,10 +58,11 @@ if local_debugging:
     uqsim.args.uq_method = "sc"  # "saltelli" | "mc"
     uqsim.args.mc_numevaluations = 1000
     uqsim.args.sampling_rule = "latin_hypercube" # | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
-    uqsim.args.sc_q_order = 3 #7
-    uqsim.args.sc_p_order = 2 #5
+    uqsim.args.sc_q_order = 10 #7
+    uqsim.args.sc_p_order = 6 #5
     uqsim.args.sc_poly_rule = "three_terms_recurrence" # "gram_schmidt" | "three_terms_recurrence" | "cholesky"
     uqsim.args.sc_poly_normed = True
+    uqsim.args.sc_sparse_quadrature = True
 
     uqsim.args.outputResultDir = os.path.abspath(os.path.join(paths.scratch_dir, "larsim_runs", 'larsim_run_siam_cse'))
     uqsim.args.inputModelDir = paths.larsim_data_path
@@ -69,7 +70,7 @@ if local_debugging:
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
 
     #uqsim.args.config_file = "/home/ga45met/Repositories/Larsim/Larsim-UQ/configurations_Larsim/configurations_larsim_master_lai.json"
-    uqsim.args.config_file = '/home/ga45met/mnt/linux_cluster_2/Larsim-UQ/configurations_Larsim/configurations_larsim_high_flow_small.json'
+    uqsim.args.config_file = '/home/ga45met/mnt/linux_cluster_2/Larsim-UQ/configurations_Larsim/configurations_larsim_high_flow.json'
     #uqsim.args.config_file = '/home/ga45met/mnt/linux_cluster_2/Larsim-UQ/configurations_Larsim/configurations_larsim_master_lai_small.json'
     #uqsim.args.config_file = "/home/ga45met/Repositories/Larsim/Larsim-UQ/configurations_Larsim/configuration_larsim_updated_lai_jun.json"
 

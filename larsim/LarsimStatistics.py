@@ -21,7 +21,7 @@ import LarsimUtilityFunctions.larsimPaths as paths
 #from Larsim-UQ.common import saltelliSobolIndicesHelpingFunctions
 from common import saltelliSobolIndicesHelpingFunctions
 
-#from numba import njit, prange
+from numba import jit, prange
 
 COLORS = [
     '#1f77b4',  # muted blue
@@ -155,6 +155,7 @@ class LarsimSamples(object):
 
         # TODO remove/refactor transformToDailyResolution
         if strtobool(dailyOutput):
+            print(f"[LarsimSamples INFO] Transformation to daily output")
             self.transform_dict = dict()
             for one_qoi_column in self.qoi_columns:
                 self.transform_dict[one_qoi_column] = 'mean'
@@ -167,10 +168,15 @@ class LarsimSamples(object):
                                                                                             time_column="TimeStamp",
                                                                                             resample_freq="D"
                                                                                             )
+            ##### Debugging - remove afterwards
+            # print(self.df_simulation_result)
+            # temp = os.path.abspath( os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_siam_cse_v4','model_runs'))
+            # self.save_samples_to_file(temp)
             print(f"[LARSIM STAT INFO] Number of Unique TimeStamps (Daily): {self.df_simulation_result.TimeStamp.nunique()}")
 
         # save only the real values, independent on QoI
-        self.df_time_discharges = self.df_simulation_result.groupby(["Stationskennung","TimeStamp"])["Value"].apply(lambda df: df.reset_index(drop=True)).unstack()
+        # TODO Does not work when only one time step!!!
+        # self.df_time_discharges = self.df_simulation_result.groupby(["Stationskennung","TimeStamp"])["Value"].apply(lambda df: df.reset_index(drop=True)).unstack()
 
     def save_samples_to_file(self, file_path='./'):
         self.df_simulation_result.to_pickle(
@@ -223,6 +229,7 @@ class LarsimStatistics(Statistics):
             except KeyError:
                 self.workingDir = paths.workingDir
 
+        # for not this is hardcoded tha only single self.qoi_column is supported
         self.qoi_column = kwargs.get('qoi_column') if "qoi_column" in kwargs else "Value"
         self.qoi = configurationObject["Output"]["QOI"] if "QOI" in configurationObject["Output"] else "Q"
         if self.qoi == "GoF":
@@ -291,10 +298,10 @@ class LarsimStatistics(Statistics):
             nodes = simulationNodes.distNodes
             dist = simulationNodes.joinedDists
             # TODO make for calcStatisticsForMc normed and rule as parameters
-            polynomial_expansion = cp.generate_expansion(order, dist, rule=three_terms_recurrence, normed=True)
+            polynomial_expansion = cp.generate_expansion(order, dist, rule="three_terms_recurrence", normed=True)
 
         for key, val_indices in groups.items():
-            discharge_values = samples.df_simulation_result.loc[val_indices.values][self.qoi_column].values #numpy array nx1
+            discharge_values = samples.df_simulation_result.loc[val_indices.sort_values().values][self.qoi_column].values #numpy array nx1
             #discharge_values = samples.df_simulation_result.Value.loc[val_indices].values
             self.Abfluss[key] = dict()
             self.Abfluss[key]["Q"] = discharge_values
@@ -349,16 +356,52 @@ class LarsimStatistics(Statistics):
         grouped = samples.df_simulation_result.groupby(['Stationskennung','TimeStamp'])
         groups = grouped.groups
 
-        #@jit(nopython=True, parallel=True)
-        for key, val_indices in groups.items():
-            discharge_values = samples.df_simulation_result.loc[val_indices.values][self.qoi_column].values
-            self.Abfluss[key] = dict()
-            self.Abfluss[key]["Q"] = discharge_values
-            if regression:
-                self.qoi_gPCE = cp.fit_regression(polynomial_expansion, nodes, discharge_values)
-            else:
-                self.qoi_gPCE = cp.fit_quadrature(polynomial_expansion, nodes, weights, discharge_values)
-            self._calc_stats_for_gPCE(dist, key)
+        list_of_unique_timesteps = [pd.Timestamp(timestep) for timestep in self.timesteps]
+        keyIter = list(itertools.product(self.station_of_Interest, list_of_unique_timesteps))
+
+        @jit(nopython=True, parallel=True)
+        def my_parallel_statistic_func(qoi_column, compute_Sobol_t, compute_Sobol_m):
+            Abfluss = dict()
+            for i in prange(len(keyIter)):
+                key = keyIter[i]
+                Abfluss[key] = dict()
+                discharge_values = samples.df_simulation_result.loc[groups[key].sort_values().values][qoi_column].values
+                Abfluss[key]["Q"] = discharge_values
+                if regression:
+                    qoi_gPCE = cp.fit_regression(polynomial_expansion, nodes, discharge_values)
+                else:
+                    qoi_gPCE = cp.fit_quadrature(polynomial_expansion, nodes, weights, discharge_values)
+                #self._calc_stats_for_gPCE(dist, key)
+                numPercSamples = 10 ** 5
+                Abfluss[key]["gPCE"] = qoi_gPCE
+                Abfluss[key]["E"] = float(cp.E(qoi_gPCE, dist))
+                Abfluss[key]["Var"] = float(cp.Var(qoi_gPCE, dist))
+                Abfluss[key]["StdDev"] = float(cp.Std(qoi_gPCE, dist))
+                Abfluss[key]["qoi_dist"] = cp.QoI_Dist(qoi_gPCE, dist)
+                if compute_Sobol_t:
+                    Abfluss[key]["Sobol_t"] = cp.Sens_t(qoi_gPCE, dist)
+                if compute_Sobol_m:
+                    Abfluss[key]["Sobol_m"] = cp.Sens_m(qoi_gPCE, dist)
+                    # Abfluss[key]["Sobol_m2"] = cp.Sens_m2(qoi_gPCE, dist) # second order sensitivity indices
+
+                Abfluss[key]["P10"] = float(cp.Perc(qoi_gPCE, 10, dist, numPercSamples))
+                Abfluss[key]["P90"] = float(cp.Perc(qoi_gPCE, 90, dist, numPercSamples))
+                if isinstance(Abfluss[key]["P10"], list) and len(Abfluss[key]["P10"]) == 1:
+                    Abfluss[key]["P10"] = Abfluss[key]["P10"][0]
+                    Abfluss[key]["P90"] = Abfluss[key]["P90"][0]
+            return Abfluss
+        self.Abfluss = my_parallel_statistic_func(self.qoi_column, self._compute_Sobol_t, self._compute_Sobol_m)
+
+        # for key, val_indices in groups.items():
+        #     # make come coupling of these values and nodes through the index
+        #     discharge_values = samples.df_simulation_result.loc[val_indices.sort_values().values][self.qoi_column].values
+        #     self.Abfluss[key] = dict()
+        #     self.Abfluss[key]["Q"] = discharge_values
+        #     if regression:
+        #         self.qoi_gPCE = cp.fit_regression(polynomial_expansion, nodes, discharge_values)
+        #     else:
+        #         self.qoi_gPCE = cp.fit_quadrature(polynomial_expansion, nodes, weights, discharge_values)
+        #     self._calc_stats_for_gPCE(dist, key)
 
         print(f"[LARSIM STAT INFO] calcStatisticsForSc function is done!")
 
@@ -420,102 +463,115 @@ class LarsimStatistics(Statistics):
 
         self.dim = len(simulationNodes.distNodes[0])
 
-        #@njit(parallel=True)
-        #@jit(nopython=True, parallel=True)
-        # keys = groups.keys()
-        # val_indices = groups.values()
-        # for i in prange(len(groups)):
-        #     key = keys[i]
-        #     val_indices = val_indices[i]
-        def _internal_computation_of_stat(groups):
-            Abfluss = dict()
-            for key, val_indices in groups.items():
-                Abfluss[key] = dict()
+        list_of_unique_timesteps = [pd.Timestamp(timestep) for timestep in self.timesteps]
+        keyIter = list(itertools.product(self.station_of_Interest, list_of_unique_timesteps))
 
+        @jit(nopython=True, parallel=True)
+        def my_parallel_statistic_func(numEvaluations, qoi_column, dim, compute_Sobol_t, compute_Sobol_m):
+            Abfluss = dict()
+            for i in prange(len(keyIter)):
+                key = keyIter[i]
+                Abfluss[key] = dict()
                 # numpy array - for sartelli it should be n(2+d)x1
-                discharge_values = samples.df_simulation_result.loc[val_indices.values][self.qoi_column].values
+                discharge_values = samples.df_simulation_result.\
+                    loc[groups[key].sort_values().values][qoi_column].values
                 # extended_standard_discharge_values = discharge_values[:(2*numEvaluations)]
                 discharge_values_saltelli = discharge_values[:, np.newaxis]
                 # values based on which we calculate standard statistics
-                standard_discharge_values = discharge_values_saltelli[:numEvaluations,:]
-                extended_standard_discharge_values = discharge_values_saltelli[:(2*numEvaluations),:]
+                standard_discharge_values = discharge_values_saltelli[:numEvaluations, :]
+                extended_standard_discharge_values = discharge_values_saltelli[:(2 * numEvaluations), :]
 
                 Abfluss[key]["Q"] = standard_discharge_values
 
-                #Abfluss[key]["min_q"] = np.amin(discharge_values) #standard_discharge_values.min()
-                #Abfluss[key]["max_q"] = np.amax(discharge_values) #standard_discharge_values.max()
+                # Abfluss[key]["min_q"] = np.amin(discharge_values) #standard_discharge_values.min()
+                # Abfluss[key]["max_q"] = np.amax(discharge_values) #standard_discharge_values.max()
 
-                #Abfluss[key]["E"] = np.sum(extended_standard_discharge_values, axis=0, dtype=np.float64) / (2*numEvaluations)
-                Abfluss[key]["E"] = np.mean(discharge_values[:(2*numEvaluations)], 0)
+                # Abfluss[key]["E"] = np.sum(extended_standard_discharge_values, axis=0, dtype=np.float64) / (2*numEvaluations)
+                Abfluss[key]["E"] = np.mean(discharge_values[:(2 * numEvaluations)], 0)
 
-                #Abfluss[key]["Var"] = float(np.sum(power(standard_discharge_values)) / numEvaluations - Abfluss[key]["E"] ** 2)
-                #Abfluss[key]["Var"] = np.sum((extended_standard_discharge_values - Abfluss[key]["E"]) ** 2, axis=0, dtype=np.float64) / (2*numEvaluations - 1)
-                #Abfluss[key]["StdDev"] = np.sqrt(Abfluss[key]["Var"], dtype=np.float64)
-                Abfluss[key]["StdDev"] = np.std(discharge_values[:(2*numEvaluations)], 0, ddof=1)
+                # Abfluss[key]["Var"] = float(np.sum(power(standard_discharge_values)) / numEvaluations - Abfluss[key]["E"] ** 2)
+                # Abfluss[key]["Var"] = np.sum((extended_standard_discharge_values - Abfluss[key]["E"]) ** 2, axis=0, dtype=np.float64) / (2*numEvaluations - 1)
+                # Abfluss[key]["StdDev"] = np.sqrt(Abfluss[key]["Var"], dtype=np.float64)
+                Abfluss[key]["StdDev"] = np.std(discharge_values[:(2 * numEvaluations)], 0, ddof=1)
 
-                #Abfluss[key]["P10"] = np.percentile(discharge_values[:numEvaluations], 10, axis=0)
-                #Abfluss[key]["P90"] = np.percentile(discharge_values[:numEvaluations], 90, axis=0)
-                Abfluss[key]["P10"] = np.percentile(discharge_values[:(2*numEvaluations)], 10, axis=0)
-                Abfluss[key]["P90"] = np.percentile(discharge_values[:(2*numEvaluations)], 90, axis=0)
+                # Abfluss[key]["P10"] = np.percentile(discharge_values[:numEvaluations], 10, axis=0)
+                # Abfluss[key]["P90"] = np.percentile(discharge_values[:numEvaluations], 90, axis=0)
+                Abfluss[key]["P10"] = np.percentile(discharge_values[:(2 * numEvaluations)], 10, axis=0)
+                Abfluss[key]["P90"] = np.percentile(discharge_values[:(2 * numEvaluations)], 90, axis=0)
 
-                if self._compute_Sobol_t:
+                if compute_Sobol_t:
                     Abfluss[key]["Sobol_t"] = saltelliSobolIndicesHelpingFunctions._Sens_t_sample_4(
-                        discharge_values_saltelli, self.dim, numEvaluations)
-                if self._compute_Sobol_m:
+                        discharge_values_saltelli, dim, numEvaluations)
+                if compute_Sobol_m:
                     Abfluss[key]["Sobol_m"] = saltelliSobolIndicesHelpingFunctions._Sens_m_sample_4(
-                        discharge_values_saltelli, self.dim, numEvaluations)
+                        discharge_values_saltelli, dim, numEvaluations)
                     # Abfluss[key]["Sobol_m"] = saltelliSobolIndicesHelpingFunctions._Sens_m_sample_3
                     # (discharge_values_saltelli, self.dim, numEvaluations)
 
                 if isinstance(Abfluss[key]["P10"], list) and len(Abfluss[key]["P10"]) == 1:
-                    Abfluss[key]["P10"]=Abfluss[key]["P10"][0]
-                    Abfluss[key]["P90"]=Abfluss[key]["P90"][0]
+                    Abfluss[key]["P10"] = Abfluss[key]["P10"][0]
+                    Abfluss[key]["P90"] = Abfluss[key]["P90"][0]
             return Abfluss
 
-        self.Abfluss = _internal_computation_of_stat(groups)
+        self.Abfluss = my_parallel_statistic_func(numEvaluations, self.qoi_column, self.dim,
+                                                  self._compute_Sobol_t, self._compute_Sobol_m)
 
         print(f"[LARSIM STAT INFO] calcStatisticsForSaltelli function is done!")
 
-    def check_if_Sobol_t_computed(self):
-        self._is_Sobol_t_computed = "Sobol_t" in self.Abfluss[self.keyIter[0]] #hasattr(self.Abfluss[self.keyIter[0], "Sobol_t")
+    def check_if_Sobol_t_computed(self, keyIter):
+        self._is_Sobol_t_computed = "Sobol_t" in self.Abfluss[keyIter[0]] #hasattr(self.Abfluss[keyIter[0], "Sobol_t")
 
-    def check_if_Sobol_m_computed(self):
-        self._is_Sobol_m_computed = "Sobol_m" in self.Abfluss[self.keyIter[0]] \
-                                    or "Sobol_m2" in self.Abfluss[self.keyIter[0]] #hasattr(self.Abfluss[self.keyIter[0], "Sobol_m")
+    def check_if_Sobol_m_computed(self, keyIter):
+        self._is_Sobol_m_computed = "Sobol_m" in self.Abfluss[keyIter[0]] \
+                                    or "Sobol_m2" in self.Abfluss[keyIter[0]] #hasattr(self.Abfluss[keyIter[0], "Sobol_m")
 
+    # TODO timestepRange calculated based on whole Time-series
     def get_measured_discharge(self, timestepRange=None):
+        transform_measured_to_daily = False
+        if strtobool(self.configurationObject["Output"]["dailyOutput"]) and self.qoi_column == "Value":
+            transform_measured_to_daily = False
+
         local_measurment_file = os.path.abspath(os.path.join(self.workingDir, "df_measured.pkl"))
         if os.path.exists(local_measurment_file):
             self.df_measured = larsimDataPostProcessing.read_process_write_discharge(df=local_measurment_file,\
                                      timeframe=timestepRange,\
                                      station=self.station_of_Interest,\
-                                     dailyOutput=strtobool(self.configurationObject["Output"]["dailyOutput"]),\
+                                     dailyOutput=transform_measured_to_daily,\
                                      compression="gzip")
         else:
             self.df_measured = larsimConfigurationSettings.extract_measured_discharge(timestepRange[0], timestepRange[1], index_run=0)
             self.df_measured = larsimDataPostProcessing.filterResultForStationAndTypeOfOutpu(self.df_measured,\
                                                        station=self.station_of_Interest,\
                                                        type_of_output=self.configurationObject["Output"]["type_of_output_measured"])
-            if strtobool(self.configurationObject["Output"]["dailyOutput"]):
+            if transform_measured_to_daily:
                 # TODO transformToDailyResolution was refactored
+                if "Value" in self.df_measured.columns:
+                    transform_dict = {"Value": 'mean', }
+                else:
+                    transform_dict = dict()
+                    for single_station in self.station_of_Interest:
+                        transform_dict[single_station] = 'mean'
                 self.df_measured = larsimDataPostProcessing.transformToDailyResolution(self.df_measured,
-                                                                                       transform_dict={
-                                                                                           "Value": 'mean',},
+                                                                                       transform_dict=transform_dict,
                                                                                        groupby_some_columns=True,
-                                                                                       columns_to_groupby=None,
+                                                                                       columns_to_groupby=["Stationskennung",],
                                                                                        time_column="TimeStamp",
                                                                                        resample_freq="D"
                                                                                        )
         self.groundTruth_computed = True
         #self.Abfluss["Ground_Truth_Measurements"] = self.measured
 
+    # TODO timestepRange calculated based on whole Time-series
     def get_unaltered_discharge(self, timestepRange=None):
+        transform_unaltered_to_daily = False
+        if strtobool(self.configurationObject["Output"]["dailyOutput"]) and self.qoi_column == "Value":
+            transform_unaltered_to_daily = False
         self.df_unaltered = larsimDataPostProcessing.read_process_write_discharge(
             df=os.path.abspath(os.path.join(self.workingDir, "df_unaltered.pkl")),
             timeframe=timestepRange,
             type_of_output=self.configurationObject["Output"]["type_of_output"],
             station=self.station_of_Interest,
-            dailyOutput=strtobool(self.configurationObject["Output"]["dailyOutput"]),
+            dailyOutput=transform_unaltered_to_daily,
             compression="gzip")
         self.unaltered_computed = True
         #self.Abfluss["Unaltered"] = self.unalatered
@@ -527,6 +583,7 @@ class LarsimStatistics(Statistics):
         #timestepRange = (pd.Timestamp(min(self.timesteps)), pd.Timestamp(max(self.timesteps)))
         timestepRange = (self.timesteps_min, self.timesteps_max)
 
+        # TODO timestepRange calculated based on whole Time-series
         self.get_measured_discharge(timestepRange=timestepRange)
         self.get_unaltered_discharge(timestepRange=timestepRange)
 
@@ -550,7 +607,7 @@ class LarsimStatistics(Statistics):
 
         print(f"[LARSIM STAT INFO] _plotStatisticsDict_plotly function is called!")
 
-        #TODO Access to timesteps in a different way
+        #TODO Access to timesteps in a two different ways, e.g. one for QoI one for Q
         #timesteps = df_measured_aligned.TimeStamp.unique()
         #pdTimesteps = [pd.Timestamp(timestep) for timestep in timesteps]
         if recalculateTimesteps:
@@ -561,18 +618,25 @@ class LarsimStatistics(Statistics):
         else:
             pdTimesteps = [pd.Timestamp(timestep) for timestep in self.timesteps]
 
-        self.keyIter = list(itertools.product([station,], pdTimesteps))
+        keyIter = list(itertools.product([station,], pdTimesteps))
 
         labels = [nodeName.strip() for nodeName in self.nodeNames]
 
-        self.check_if_Sobol_t_computed()
-        self.check_if_Sobol_m_computed()
+        self.check_if_Sobol_t_computed(keyIter)
+        self.check_if_Sobol_m_computed(keyIter)
+
         if self._is_Sobol_t_computed and self._is_Sobol_m_computed:
             n_rows = 4
         elif self._is_Sobol_t_computed or self._is_Sobol_m_computed:
             n_rows = 3
         else:
             n_rows = 2
+
+        if self.qoi_column == "Value":
+            starting_row = 1
+        else:
+            n_rows = n_rows+1
+            starting_row = 2
 
         fig = make_subplots(rows=n_rows, cols=1, shared_xaxes=False)
 
@@ -594,47 +658,59 @@ class LarsimStatistics(Statistics):
             fig.add_trace(go.Scatter(x=self.df_measured['TimeStamp'], y=self.df_measured[column_to_draw],
                                      name="Q (measured)",line_color='red'), row=1, col=1)
 
-        fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["E"] for key in self.keyIter], name='E[Q]',line_color='green', mode='lines'), row=1, col=1)
-        #fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["min_q"] for key in self.keyIter], name='min_q',line_color='indianred', mode='lines'), row=1, col=1)
-        #fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["max_q"] for key in self.keyIter], name='max_q',line_color='yellow', mode='lines'), row=1, col=1)
-        fig.add_trace(go.Scatter(x=pdTimesteps, y=[(self.Abfluss[key]["E"] - self.Abfluss[key]["StdDev"]) for key in self.keyIter], name='mean - std. dev', line_color='darkviolet', mode='lines'), row=1, col=1)
-        fig.add_trace(go.Scatter(x=pdTimesteps, y=[(self.Abfluss[key]["E"] + self.Abfluss[key]["StdDev"]) for key in self.keyIter], name='mean + std. dev', line_color='darkviolet', mode='lines', fill='tonexty'), row=1, col=1)
+        fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["E"] for key in keyIter], name='E[Q]',line_color='green', mode='lines'), row=starting_row, col=1)
+        #fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["min_q"] for key in keyIter], name='min_q',line_color='indianred', mode='lines'), row=starting_row, col=1)
+        #fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["max_q"] for key in keyIter], name='max_q',line_color='yellow', mode='lines'), row=starting_row, col=1)
+        fig.add_trace(go.Scatter(x=pdTimesteps, y=[(self.Abfluss[key]["E"] - self.Abfluss[key]["StdDev"]) for key in keyIter], name='mean - std. dev', line_color='darkviolet', mode='lines'), row=starting_row, col=1)
+        fig.add_trace(go.Scatter(x=pdTimesteps, y=[(self.Abfluss[key]["E"] + self.Abfluss[key]["StdDev"]) for key in keyIter], name='mean + std. dev', line_color='darkviolet', mode='lines', fill='tonexty'), row=starting_row, col=1)
 
         if self.uq_method=="saltelli":
-            fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["P10"] for key in self.keyIter], name='10th percentile',line_color='yellow', mode='lines'), row=1, col=1)
-            fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["P90"] for key in self.keyIter], name='90th percentile',line_color='yellow', mode='lines',fill='tonexty'), row=1, col=1)
+            fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["P10"] for key in keyIter], name='10th percentile',line_color='yellow', mode='lines'), row=starting_row, col=1)
+            fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["P90"] for key in keyIter], name='90th percentile',line_color='yellow', mode='lines',fill='tonexty'), row=starting_row, col=1)
         else:
-            fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["P10"] for key in self.keyIter], name='10th percentile',line_color='yellow', mode='lines'), row=1, col=1)
-            fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["P90"] for key in self.keyIter], name='90th percentile',line_color='yellow', mode='lines',fill='tonexty'), row=1, col=1)
+            fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["P10"] for key in keyIter], name='10th percentile',line_color='yellow', mode='lines'), row=starting_row, col=1)
+            fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["P90"] for key in keyIter], name='90th percentile',line_color='yellow', mode='lines',fill='tonexty'), row=starting_row, col=1)
 
-        fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["StdDev"] for key in self.keyIter], name='std. dev', line_color='darkviolet'), row=2, col=1)
+        fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["StdDev"] for key in keyIter], name='std. dev', line_color='darkviolet'), row=starting_row+1, col=1)
 
-        # TODO - This is hardcoded for 4 parameters
+        # TODO - Make additional plots - each parameter independently with color + normalized Q measured
         if self._is_Sobol_m_computed:
             for i in range(len(labels)):
                 if self.uq_method == "saltelli":
-                    fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["Sobol_m"][i] for key in self.keyIter], name=labels[i], legendgroup=labels[i], line_color=COLORS[i]), row=3, col=1)
+                    fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["Sobol_m"][i] for key in keyIter],
+                                             name=labels[i], legendgroup=labels[i], line_color=COLORS[i]), row=starting_row+2, col=1)
                 else:
-                    fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["Sobol_m"][i] for key in self.keyIter], name=labels[i], legendgroup=labels[i], line_color=COLORS[i]), row=3, col=1)
+                    fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["Sobol_m"][i] for key in keyIter],
+                                             name=labels[i], legendgroup=labels[i], line_color=COLORS[i]), row=starting_row+2, col=1)
         if self._is_Sobol_t_computed:
             for i in range(len(labels)):
                 if self.uq_method == "saltelli":
-                    fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["Sobol_t"][i] for key in self.keyIter], legendgroup=labels[i], showlegend = False, line_color=COLORS[i]), row=4, col=1)
+                    fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["Sobol_t"][i] for key in keyIter],
+                                             legendgroup=labels[i], showlegend = False, line_color=COLORS[i]), row=starting_row+3, col=1)
                 else:
-                    fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["Sobol_t"][i] for key in self.keyIter], legendgroup=labels[i], showlegend = False, line_color=COLORS[i]), row=4, col=1)
+                    fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["Sobol_t"][i] for key in keyIter],
+                                             legendgroup=labels[i], showlegend = False, line_color=COLORS[i]), row=starting_row+3, col=1)
 
         fig.update_traces(mode='lines')
         #fig.update_xaxes(title_text="Time")
         fig.update_yaxes(title_text="Q [m^3/s]", side='left', showgrid=True, row=1, col=1)
-        fig.update_yaxes(title_text="Std. Dev. [m^3/s]", side='left', showgrid=True, row=2, col=1)
+
+        if self.qoi_column == "Value":
+            fig.update_yaxes(title_text="Std. Dev. [m^3/s]", side='left', showgrid=True, row=2, col=1)
+        else:
+            fig.update_yaxes(title_text=self.qoi_column, side='left', showgrid=True, row=starting_row, col=1)
+            fig.update_yaxes(title_text="Std. Dev. [QoI]", side='left', showgrid=True, row=starting_row+1, col=1)
+
         if self._is_Sobol_m_computed:
-            fig.update_yaxes(title_text="Sobol_m", side='left', showgrid=True, range=[0, 1], row=3, col=1)
+            fig.update_yaxes(title_text="Sobol_m", side='left', showgrid=True, range=[0, 1], row=starting_row+2, col=1)
         if self._is_Sobol_t_computed:
-            fig.update_yaxes(title_text="Sobol_t", side='left', showgrid=True, range=[0, 1], row=4, col=1)
+            fig.update_yaxes(title_text="Sobol_t", side='left', showgrid=True, range=[0, 1], row=starting_row+3, col=1)
 
         window_title = window_title + station
-        #fig.update_layout(height=1200, width=1200, title_text='Larsim Forward UQ & SA - MARI',xaxis4_rangeslider_visible=True, xaxis4_rangeslider_thickness=0.05)
-        fig.update_layout(height=800, width=1200, title_text=window_title,xaxis4_rangeslider_visible=True, xaxis4_rangeslider_thickness=0.05)
+        #fig.update_layout(height=1200, width=1200,
+        # title_text='Larsim Forward UQ & SA - MARI', xaxis4_rangeslider_visible=True, xaxis4_rangeslider_thickness=0.05)
+        fig.update_layout(height=800, width=1200, title_text=window_title)
+        #xaxis4_rangeslider_visible=True, xaxis4_rangeslider_thickness=0.05)
 
         print(f"[LARSIM STAT INFO] _plotStatisticsDict_plotly function is almost over!")
 
@@ -656,12 +732,14 @@ class LarsimStatistics(Statistics):
         else:
             pdTimesteps = [pd.Timestamp(timestep) for timestep in self.timesteps]
 
+        keyIter = list(itertools.product([station,], pdTimesteps))
+
         #sobol_labels = ["BSF", "A2", "EQD", "EQD2"]
         labels = [nodeName.strip() for nodeName in self.nodeNames]
         #labels = list(map(str.strip, self.nodeNames))
 
-        self.check_if_Sobol_t_computed()
-        self.check_if_Sobol_m_computed()
+        self.check_if_Sobol_t_computed(keyIter)
+        self.check_if_Sobol_m_computed(keyIter)
         if self._is_Sobol_t_computed or self._is_Sobol_m_computed:
             n_rows = 4
         else:
@@ -678,19 +756,17 @@ class LarsimStatistics(Statistics):
             #plotter.plot(pdTimesteps, self.measured['Value'], label="Q (measured)")
             plotter.plot(self.df_measured['TimeStamp'], self.df_measured[column_to_draw], label="Q (measured)")
 
-        self.keyIter = list(itertools.product([station,],pdTimesteps))
-
-        #plotter.plot(pdTimesteps, [Abfluss[key]["E"] for key in self.keyIter], '-r', label='E[Q_sim]')
-        plotter.fill_between(pdTimesteps, [self.Abfluss[key]["P10"] for key in self.keyIter], [self.Abfluss[key]["P90"] for key in self.keyIter], facecolor='#5dcec6')
-        plotter.plot(pdTimesteps, [self.Abfluss[key]["P10"] for key in self.keyIter], label='10th percentile')
-        plotter.plot(pdTimesteps,[self.Abfluss[key]["P90"] for key in self.keyIter], label='90th percentile')
+        #plotter.plot(pdTimesteps, [Abfluss[key]["E"] for key in keyIter], '-r', label='E[Q_sim]')
+        plotter.fill_between(pdTimesteps, [self.Abfluss[key]["P10"] for key in keyIter], [self.Abfluss[key]["P90"] for key in keyIter], facecolor='#5dcec6')
+        plotter.plot(pdTimesteps, [self.Abfluss[key]["P10"] for key in keyIter], label='10th percentile')
+        plotter.plot(pdTimesteps,[self.Abfluss[key]["P90"] for key in keyIter], label='90th percentile')
         plotter.xlabel('time', fontsize=13)
         plotter.ylabel('Q [m^3/s]', fontsize=13)
         #plotter.xticks(rotation=45)plotter.legend()
         plotter.grid(True)
 
         plotter.subplot(412)
-        plotter.plot(pdTimesteps, [self.Abfluss[key]["StdDev"] for key in self.keyIter], label='std. dev. of the simulations')
+        plotter.plot(pdTimesteps, [self.Abfluss[key]["StdDev"] for key in keyIter], label='std. dev. of the simulations')
         plotter.xlabel('time', fontsize=13)
         plotter.ylabel('Std. Dev. [m^3/s]', fontsize=13)
         #plotter.xlim(0, 200)
@@ -702,7 +778,7 @@ class LarsimStatistics(Statistics):
         if self._is_Sobol_m_computed:
             plotter.subplot(413)
             for i in range(len(labels)):
-                plotter.plot(pdTimesteps, [self.Abfluss[key]["Sobol_m"][i][0] for key in self.keyIter],\
+                plotter.plot(pdTimesteps, [self.Abfluss[key]["Sobol_m"][i][0] for key in keyIter],\
                 label=labels[i])
             plotter.xlabel('time', fontsize=13)
             plotter.ylabel('First O. Sobol Indices', fontsize=13)
@@ -713,7 +789,7 @@ class LarsimStatistics(Statistics):
         if self._is_Sobol_t_computed:
             plotter.subplot(414)
             for i in range(len(labels)):
-                plotter.plot(pdTimesteps, [self.Abfluss[key]["Sobol_t"][i][0] for key in self.keyIter],\
+                plotter.plot(pdTimesteps, [self.Abfluss[key]["Sobol_t"][i][0] for key in keyIter],\
                 label=labels[i])
             plotter.xlabel('time', fontsize=13)
             plotter.ylabel('Total Sobol Indices', fontsize=13)

@@ -56,20 +56,20 @@ if local_debugging:
     uqsim.args.uq_method = "sc"  # "saltelli" | "mc"
     uqsim.args.mc_numevaluations = 100
     uqsim.args.sampling_rule = "latin_hypercube" # | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
-    uqsim.args.sc_q_order = 7 #10 3
-    uqsim.args.sc_p_order = 6 #8 6
+    uqsim.args.sc_q_order = 4 #7 #10 3
+    uqsim.args.sc_p_order = 3 #6 #8 6
     uqsim.args.sc_poly_rule = "three_terms_recurrence" # "gram_schmidt" | "three_terms_recurrence" | "cholesky"
     uqsim.args.sc_poly_normed = True
 
-    uqsim.args.outputResultDir = os.path.abspath( os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_siam_cse_v4'))
+    uqsim.args.outputResultDir = os.path.abspath( os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_siam_cse_v5'))
     uqsim.args.inputModelDir = os.path.abspath(os.path.join('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2', 'Larsim-data'))
     uqsim.args.sourceDir = os.path.abspath(os.path.join('/dss/dsshome1/lxc0C/ga45met2', 'Repositories', 'Larsim-UQ'))
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
     #uqsim.args.config_file = "/dss/dsshome1/lxc0C/ga45met2/Repositories/Larsim-UQ/configurations_Larsim/configuration_larsim_uqsim_cm2_v4.json" #"configuration_larsim_uqsim.json"
     #uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/Larsim-UQ/configurations_Larsim/configurations_larsim_master_lai_small.json'
-    uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/Larsim-UQ/configurations_Larsim/configurations_larsim_master_lai_jun.json'
+    uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/Larsim-UQ/configurations_Larsim/configurations_larsim_high_flow_small.json'
 
-    uqsim.args.disable_statistics = False #True
+    uqsim.args.disable_statistics = False
     uqsim.args.transformToStandardDist = True
     uqsim.args.mpi = True
     uqsim.args.mpi_method = "MpiPoolSolver" #"LinearSolver"

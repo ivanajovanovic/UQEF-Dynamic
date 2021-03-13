@@ -21,7 +21,7 @@
     {
       "type_of_output":"Abfluss Messung + Vorhersage",
       "type_of_output_measured":"Ground Truth",
-      "station_calibration_postproc":"CHAM",
+      "station_calibration_postproc":["MARI","CHAM"],
       "station_model_runs":"all",
       "pathsDataFormat":"False",
       "dailyOutput":"False",
@@ -29,9 +29,9 @@
       "compute_gradients":"False",
       "calculate_GoF":"True",
       "objective_function":"all",
-      "QOI":"GoF",
+      "QOI":"Q",
       "objective_function_qoi":["RMSE", "NSE"],
-      "mode":"sliding_window",
+      "mode":"continuous",
       "interval": 24,
       "min_periods": 6,
       "method": "avrg"

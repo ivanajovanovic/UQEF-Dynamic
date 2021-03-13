@@ -1,14 +1,14 @@
 {
   "Timeframe":
     {
-      "start_day": 10,
-      "start_month": 6,
+      "start_day": 1,
+      "start_month": 5,
       "start_year": 2014,
       "start_hour": 0,
       "start_minute": 0,
 
-      "end_day": 20,
-      "end_month": 6,
+      "end_day": 30,
+      "end_month": 5,
       "end_year": 2014,
       "end_hour": 0,
       "end_minute": 0,
@@ -32,7 +32,7 @@
       "QOI":"GoF",
       "objective_function_qoi":["RMSE", "NSE"],
       "mode":"sliding_window",
-      "interval": "whole",
+      "interval": 10,
       "min_periods": 1,
       "method": "avrg"
     },
@@ -46,6 +46,44 @@
       "cut_limits":"False"
     },
   "parameters": [
+    {
+      "name": "Acker:May",
+      "type": "lanu",
+      "distribution": "Uniform",
+      "lower": 0.7,
+      "upper": 5.2,
+      "lower_limit": 0.7,
+      "upper_limit": 5.2
+    },
+    {
+      "name": "Mischwald:May",
+      "type": "lanu",
+      "distribution": "Uniform",
+      "lower": 6.0,
+      "upper": 11.0,
+      "lower_limit": 6.0,
+      "upper_limit": 11.0
+    },
+    {
+      "name": "locker baumbest.:May",
+      "type": "lanu",
+      "distribution": "Uniform",
+      "lower": 0,
+      "upper": 1,
+      "lower_limit": 5.5,
+      "upper_limit": 7.5
+    },
+    {
+      "name": "Laubwald:May",
+      "type": "lanu",
+      "distribution": "Uniform",
+      "lower": 0,
+      "upper": 1,
+      "lower_limit": 4.0,
+      "upper_limit": 11.0
+    }
+  ],
+  "unused_parameters": [
     {
       "name": "Acker:Jun",
       "type": "lanu",
@@ -67,9 +105,7 @@
       "upper_limit": 8.0,
       "depends_on":"locker baumbest.:May",
       "direction":"increasing"
-    }
-  ],
-  "unused_parameters": [
+    },
     {
       "name": "Mischwald:Jun",
       "type": "lanu",
