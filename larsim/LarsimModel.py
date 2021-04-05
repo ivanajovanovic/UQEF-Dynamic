@@ -196,7 +196,7 @@ class LarsimModelSetUp():
                                                                                new_lila_paths=self.lila_configured_paths)
 
         for one_lila_file in self.lila_configured_paths:
-            paths._check_if_file_exists(one_lila_file, f"[LarsimModelSetUp Error] File {one_lila_file} does not exist!")
+            paths.check_if_file_exists(one_lila_file, f"[LarsimModelSetUp Error] File {one_lila_file} does not exist!")
 
         print("[LarsimModelSetUp INFO] Initial configuration is done - all the files have been copied to master folder!")
 
