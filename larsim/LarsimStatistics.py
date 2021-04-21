@@ -101,16 +101,17 @@ class LarsimSamples(object):
         self.qoi_columns = ["Value",]
         if qoi == "GoF":
             objective_function_qoi = configurationObject["Output"]["objective_function_qoi"]
-            if isinstance(objective_function_qoi,list):
+            if isinstance(objective_function_qoi, list):
                 self.qoi_columns = self.qoi_columns + [single_gof.__name__ for single_gof in objective_function_qoi]
             else:
-                self.qoi_columns = self.qoi_columns + [objective_function_qoi.__name__,]
+                self.qoi_columns = self.qoi_columns + [objective_function_qoi.__name__, ]
         #objective_function, interval, min_periods, method
 
         list_of_single_df = []
         list_index_parameters_dict = []
         list_of_single_index_parameter_gof_df = []
-        # Important that the results inside rawSamples (resulted paths) are in sorted order and correspond to the parameters order
+        # Important that the results inside rawSamples (resulted paths)
+        # are sorted in order which corresponds to the parameters order
         for index_run, value in enumerate(rawSamples,):
             if isinstance(value, tuple):
                 df_result = value[0]
@@ -229,12 +230,12 @@ class LarsimStatistics(Statistics):
             except KeyError:
                 self.workingDir = paths.workingDir
 
-        # for not this is hardcoded tha only single self.qoi_column is supported
+        # TODO for now this is hardcoded such that only a single self.qoi_column is supported
         self.qoi_column = kwargs.get('qoi_column') if "qoi_column" in kwargs else "Value"
         self.qoi = configurationObject["Output"]["QOI"] if "QOI" in configurationObject["Output"] else "Q"
         if self.qoi == "GoF":
             objective_function_qoi = configurationObject["Output"]["objective_function_qoi"]
-            if isinstance(objective_function_qoi,list):
+            if isinstance(objective_function_qoi, list):
                 self.qoi_column = objective_function_qoi[0].__name__
             else:
                 self.qoi_column = objective_function_qoi.__name__

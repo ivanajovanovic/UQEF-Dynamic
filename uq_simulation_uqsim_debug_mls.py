@@ -46,8 +46,8 @@ uqsim = uqef.UQsim()
 local_debugging = True
 if local_debugging:
     local_debugging_nodes = True
-    exit_after_debugging_nodes = True
-    save_solver_results = False
+    exit_after_debugging_nodes = False
+    save_solver_results = True
 
     uqsim.args.model = "larsim"
 
@@ -58,23 +58,23 @@ if local_debugging:
     uqsim.args.uq_method = "sc"  # "saltelli" | "mc"
     uqsim.args.mc_numevaluations = 1000
     uqsim.args.sampling_rule = "latin_hypercube" # | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
-    uqsim.args.sc_q_order = 10 #7
-    uqsim.args.sc_p_order = 6 #5
+    uqsim.args.sc_q_order = 2 #10 #7
+    uqsim.args.sc_p_order = 1 #6 #5
     uqsim.args.sc_poly_rule = "three_terms_recurrence" # "gram_schmidt" | "three_terms_recurrence" | "cholesky"
     uqsim.args.sc_poly_normed = True
     uqsim.args.sc_sparse_quadrature = True
 
-    uqsim.args.outputResultDir = os.path.abspath(os.path.join(paths.scratch_dir, "larsim_runs", 'larsim_run_siam_cse'))
+    uqsim.args.outputResultDir = os.path.abspath(os.path.join(paths.scratch_dir, "larsim_runs", 'larsim_run_parallel'))
     uqsim.args.inputModelDir = paths.larsim_data_path
     uqsim.args.sourceDir = paths.sourceDir
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
 
     #uqsim.args.config_file = "/home/ga45met/Repositories/Larsim/Larsim-UQ/configurations_Larsim/configurations_larsim_master_lai.json"
-    uqsim.args.config_file = '/home/ga45met/mnt/linux_cluster_2/Larsim-UQ/configurations_Larsim/configurations_larsim_high_flow.json'
+    uqsim.args.config_file = '/work/ga45met/mnt/linux_cluster_2/Larsim-UQ/configurations_Larsim/configurations_larsim_high_flow_small.json'
     #uqsim.args.config_file = '/home/ga45met/mnt/linux_cluster_2/Larsim-UQ/configurations_Larsim/configurations_larsim_master_lai_small.json'
     #uqsim.args.config_file = "/home/ga45met/Repositories/Larsim/Larsim-UQ/configurations_Larsim/configuration_larsim_updated_lai_jun.json"
 
-    uqsim.args.disable_statistics = True
+    uqsim.args.disable_statistics = False
     uqsim.args.transformToStandardDist = True
     uqsim.args.mpi = True
     uqsim.args.mpi_method = "MpiPoolSolver"
@@ -179,9 +179,9 @@ if uqsim.is_master():
         local_weights = uqsim.simulationNodes.weights
         print(f"Shape of simulationNodes.weights is: {local_weights.shape}")
         local_parameters = uqsim.simulationNodes.parameters.T
-        print(f"Shape of simulationNodes.weights is: {local_weights.shape}")
+        print(f"Shape of simulationNodes.weights is: {local_parameters.shape}")
         local_simulation_parameters = uqsim.simulation.parameters
-        print(f"Shape of simulation.parameters is: {local_parameters.shape}")
+        print(f"Shape of simulation.parameters is: {local_simulation_parameters.shape}")
         local_dist = uqsim.simulationNodes.joinedDists
 
         # TODO Problem with Saltelli&MC is that uqsim.simulationNodes.parameters
@@ -214,8 +214,16 @@ if uqsim.is_master():
         polynomial_expansion = cp.generate_expansion(uqsim.args.sc_q_order, local_dist,
                                                      rule=uqsim.args.sc_poly_rule,
                                                      normed=uqsim.args.sc_poly_normed)
+
+        # plotting simulation nodes
+        uqsim.simulationNodes.plotDists(fileName=uqsim.args.outputResultDir + "/dists", fileNameIdentIsFullName=True)
+        uqsim.simulationNodes.plotDistsSetup(fileName=uqsim.args.outputResultDir + "/distsSetup.pdf",
+                                             numCollocationPointsPerDim=10)
+        # uqsim.plot_nodes()
+
         if exit_after_debugging_nodes:
             sys.exit()
+
 #####################################
 #####################################
 
@@ -235,6 +243,7 @@ if uqsim.is_master():
         processed_sample_results.save_samples_to_file(uqsim.args.outputResultDir)
         processed_sample_results.save_index_parameter_values(uqsim.args.outputResultDir)
         processed_sample_results.save_index_parameter_gof_values(uqsim.args.outputResultDir)
+
 #####################################
 #####################################
 # save uqsim.configuration_object - problem: would this work? nodes do not work...
@@ -243,11 +252,11 @@ if uqsim.is_master():
     with open(fileName, 'wb') as f:
         dill.dump(uqsim.configuration_object, f)
 
-# save the dictionary with the arguments
-if uqsim.is_master():
-    argsFileName = os.path.abspath(os.path.join(uqsim.args.outputResultDir, "uqsim_args.pkl"))
-    with open(argsFileName, 'wb') as handle:
-        pickle.dump(uqsim.args, handle, protocol=pickle.HIGHEST_PROTOCOL)
+# # save the dictionary with the arguments
+# if uqsim.is_master():
+#     argsFileName = os.path.abspath(os.path.join(uqsim.args.outputResultDir, "uqsim_args.pkl"))
+#     with open(argsFileName, 'wb') as handle:
+#         pickle.dump(uqsim.args, handle, protocol=pickle.HIGHEST_PROTOCOL)
 #####################################
 #####################################
 

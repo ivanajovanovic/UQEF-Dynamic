@@ -69,7 +69,9 @@
       "lower_limit": 0.01,
       "upper_limit": 0.5,
       "default": 0.3
-    },
+    }
+  ],
+  "unused_parameters" : [
     {
       "name": "KG",
       "type": "tape35",
@@ -79,9 +81,7 @@
       "lower_limit": 0.5,
       "upper_limit": 1.2,
       "default": 0.93
-    }
-  ],
-  "unused_parameters" : [
+    },
     {
       "name": "EQB",
       "type": "tape35",
