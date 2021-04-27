@@ -1,15 +1,18 @@
 import chaospy as cp
+from distutils.util import strtobool
+import itertools
+import matplotlib.pyplot as plotter
+import more_itertools
+from mpi4py import MPI
+import mpi4py.futures as futures
 import numpy as np
-import pickle
+import os
 import pandas as pd
 from pandas.plotting import register_matplotlib_converters
-import matplotlib.pyplot as plotter
+import pickle
 from plotly.offline import iplot, plot
 import plotly.graph_objs as go
 from plotly.subplots import make_subplots
-import itertools
-import os
-from distutils.util import strtobool
 
 from uqef.stat import Statistics
 
@@ -269,6 +272,11 @@ class LarsimStatistics(Statistics):
         self._is_Sobol_t_computed = False
         self._is_Sobol_m_computed = False
 
+        self.size = MPI.COMM_WORLD.Get_size()
+        self.rank = MPI.COMM_WORLD.Get_rank()
+        self.name = MPI.Get_processor_name()
+        self.version = MPI.Get_library_version()
+
     def calcStatisticsForMc(self, rawSamples, timesteps, simulationNodes,
                             numEvaluations, order, regression, solverTimes,
                             work_package_indexes, original_runtime_estimator):
@@ -326,13 +334,14 @@ class LarsimStatistics(Statistics):
 
     def calcStatisticsForSc(self, rawSamples, timesteps,
                            simulationNodes, order, regression, poly_normed, poly_rule, solverTimes,
-                           work_package_indexes, original_runtime_estimator):
+                           work_package_indexes, original_runtime_estimator, chunksize=1, unordered=False):
 
-        samples = LarsimSamples(rawSamples, configurationObject=self.configurationObject)
+        if self.rank == 0:
+            samples = LarsimSamples(rawSamples, configurationObject=self.configurationObject)
 
-        samples.save_samples_to_file(self.workingDir)
-        samples.save_index_parameter_values(self.workingDir)
-        samples.save_index_parameter_gof_values(self.workingDir)
+            samples.save_samples_to_file(self.workingDir)
+            samples.save_index_parameter_values(self.workingDir)
+            samples.save_index_parameter_gof_values(self.workingDir)
 
         self.timesteps = samples.get_simulation_timesteps()
         self.timesteps_min = samples.get_timesteps_min()
@@ -357,41 +366,57 @@ class LarsimStatistics(Statistics):
         grouped = samples.df_simulation_result.groupby(['Stationskennung','TimeStamp'])
         groups = grouped.groups
 
-        list_of_unique_timesteps = [pd.Timestamp(timestep) for timestep in self.timesteps]
-        keyIter = list(itertools.product(self.station_of_Interest, list_of_unique_timesteps))
+        # self.Abfluss = my_parallel_statistic_func(self.qoi_column, self._compute_Sobol_t, self._compute_Sobol_m)
 
-        @jit(nopython=True, parallel=True)
-        def my_parallel_statistic_func(qoi_column, compute_Sobol_t, compute_Sobol_m):
-            Abfluss = dict()
-            for i in prange(len(keyIter)):
-                key = keyIter[i]
-                Abfluss[key] = dict()
-                discharge_values = samples.df_simulation_result.loc[groups[key].sort_values().values][qoi_column].values
-                Abfluss[key]["Q"] = discharge_values
+        def _my_parallel_statistic_func_sc(keyIter_chunk):
+            results = []
+            for ip in range(0, len(keyIter_chunk)): # for each peace of work
+                key = keyIter_chunk[ip]
+                local_result_dict = dict()
+                discharge_values = samples.df_simulation_result.\
+                    loc[groups[key].sort_values().values][self.qoi_column].values
+                local_result_dict["Q"] = discharge_values
                 if regression:
                     qoi_gPCE = cp.fit_regression(polynomial_expansion, nodes, discharge_values)
                 else:
                     qoi_gPCE = cp.fit_quadrature(polynomial_expansion, nodes, weights, discharge_values)
-                #self._calc_stats_for_gPCE(dist, key)
                 numPercSamples = 10 ** 5
-                Abfluss[key]["gPCE"] = qoi_gPCE
-                Abfluss[key]["E"] = float(cp.E(qoi_gPCE, dist))
-                Abfluss[key]["Var"] = float(cp.Var(qoi_gPCE, dist))
-                Abfluss[key]["StdDev"] = float(cp.Std(qoi_gPCE, dist))
-                Abfluss[key]["qoi_dist"] = cp.QoI_Dist(qoi_gPCE, dist)
-                if compute_Sobol_t:
-                    Abfluss[key]["Sobol_t"] = cp.Sens_t(qoi_gPCE, dist)
-                if compute_Sobol_m:
-                    Abfluss[key]["Sobol_m"] = cp.Sens_m(qoi_gPCE, dist)
-                    # Abfluss[key]["Sobol_m2"] = cp.Sens_m2(qoi_gPCE, dist) # second order sensitivity indices
+                local_result_dict["gPCE"] = qoi_gPCE
+                local_result_dict["E"] = float(cp.E(qoi_gPCE, dist))
+                local_result_dict["Var"] = float(cp.Var(qoi_gPCE, dist))
+                local_result_dict["StdDev"] = float(cp.Std(qoi_gPCE, dist))
+                local_result_dict["qoi_dist"] = cp.QoI_Dist(qoi_gPCE, dist)
+                if self._compute_Sobol_t:
+                    local_result_dict["Sobol_t"] = cp.Sens_t(qoi_gPCE, dist)
+                if self._compute_Sobol_m:
+                    local_result_dict["Sobol_m"] = cp.Sens_m(qoi_gPCE, dist)
+                    # local_result_dict["Sobol_m2"] = cp.Sens_m2(qoi_gPCE, dist) # second order sensitivity indices
+                local_result_dict["P10"] = float(cp.Perc(qoi_gPCE, 10, dist, numPercSamples))
+                local_result_dict["P90"] = float(cp.Perc(qoi_gPCE, 90, dist, numPercSamples))
+                if isinstance(local_result_dict["P10"], list) and len(local_result_dict["P10"]) == 1:
+                    local_result_dict["P10"] = local_result_dict["P10"][0]
+                    local_result_dict["P90"] = local_result_dict["P90"][0]
+                results.append((key, local_result_dict))
+            return results
 
-                Abfluss[key]["P10"] = float(cp.Perc(qoi_gPCE, 10, dist, numPercSamples))
-                Abfluss[key]["P90"] = float(cp.Perc(qoi_gPCE, 90, dist, numPercSamples))
-                if isinstance(Abfluss[key]["P10"], list) and len(Abfluss[key]["P10"]) == 1:
-                    Abfluss[key]["P10"] = Abfluss[key]["P10"][0]
-                    Abfluss[key]["P90"] = Abfluss[key]["P90"][0]
-            return Abfluss
-        self.Abfluss = my_parallel_statistic_func(self.qoi_column, self._compute_Sobol_t, self._compute_Sobol_m)
+        # list_of_unique_timesteps = [pd.Timestamp(timestep) for timestep in self.timesteps]
+        # keyIter = list(itertools.product(self.station_of_Interest, list_of_unique_timesteps)) #list(groups.keys())
+        keyIter = list(groups.keys()) #key, val_indices in groups.items()
+        keyIter_chunk = list(more_itertools.chunked(keyIter, chunksize))
+        with futures.MPICommExecutor(MPI.COMM_WORLD, root=0) as executor:
+            if executor is not None:
+                chunk_results_it = executor.map(_my_parallel_statistic_func_sc,
+                                             keyIter_chunk,
+                                             chunksize=chunksize,
+                                             unordered=unordered)
+                executor.shutdown(wait=True)
+                chunk_results = list(chunk_results_it)
+                self.Abfluss = dict()
+                results = []
+                for chunk_result in chunk_results:
+                    for result in chunk_result:
+                        self.Abfluss[result[0]] = result[1]
+
 
         # for key, val_indices in groups.items():
         #     # make come coupling of these values and nodes through the index
@@ -406,14 +431,15 @@ class LarsimStatistics(Statistics):
 
         print(f"[LARSIM STAT INFO] calcStatisticsForSc function is done!")
 
-    def _calc_stats_for_gPCE(self, dist, key):
+    def _calc_stats_for_gPCE(self, dist, key, qoi_gPCE=None):
+        if qoi_gPCE is None:
+            qoi_gPCE = self.qoi_gPCE
         numPercSamples = 10 ** 5
-        self.Abfluss[key]["gPCE"] = self.qoi_gPCE
-        self.Abfluss[key]["E"] = float(cp.E(self.qoi_gPCE, dist))
-        self.Abfluss[key]["Var"] = float(cp.Var(self.qoi_gPCE, dist))
-        self.Abfluss[key]["StdDev"] = float(cp.Std(self.qoi_gPCE, dist))
-
-        self.Abfluss[key]["qoi_dist"] = cp.QoI_Dist(self.qoi_gPCE, dist)
+        self.Abfluss[key]["gPCE"] = qoi_gPCE
+        self.Abfluss[key]["E"] = float(cp.E(qoi_gPCE, dist))
+        self.Abfluss[key]["Var"] = float(cp.Var(qoi_gPCE, dist))
+        self.Abfluss[key]["StdDev"] = float(cp.Std(qoi_gPCE, dist))
+        self.Abfluss[key]["qoi_dist"] = cp.QoI_Dist(qoi_gPCE, dist)
 
         # # generate QoI dist
         # qoi_dist = cp.QoI_Dist(self.qoi_gPCE, dist)
@@ -424,13 +450,13 @@ class LarsimStatistics(Statistics):
         # # plot it (for example with matplotlib) ...
 
         if self._compute_Sobol_t:
-            self.Abfluss[key]["Sobol_t"] = cp.Sens_t(self.qoi_gPCE, dist)
+            self.Abfluss[key]["Sobol_t"] = cp.Sens_t(qoi_gPCE, dist)
         if self._compute_Sobol_m:
-            self.Abfluss[key]["Sobol_m"] = cp.Sens_m(self.qoi_gPCE, dist)
+            self.Abfluss[key]["Sobol_m"] = cp.Sens_m(qoi_gPCE, dist)
             #self.Abfluss[key]["Sobol_m2"] = cp.Sens_m2(self.qoi_gPCE, dist) # second order sensitivity indices
 
-        self.Abfluss[key]["P10"] = float(cp.Perc(self.qoi_gPCE, 10, dist, numPercSamples))
-        self.Abfluss[key]["P90"] = float(cp.Perc(self.qoi_gPCE, 90, dist, numPercSamples))
+        self.Abfluss[key]["P10"] = float(cp.Perc(qoi_gPCE, 10, dist, numPercSamples))
+        self.Abfluss[key]["P90"] = float(cp.Perc(qoi_gPCE, 90, dist, numPercSamples))
         if isinstance(self.Abfluss[key]["P10"], list) and len(self.Abfluss[key]["P10"]) == 1:
             self.Abfluss[key]["P10"]= self.Abfluss[key]["P10"][0]
             self.Abfluss[key]["P90"] = self.Abfluss[key]["P90"][0]
@@ -519,10 +545,10 @@ class LarsimStatistics(Statistics):
 
         print(f"[LARSIM STAT INFO] calcStatisticsForSaltelli function is done!")
 
-    def check_if_Sobol_t_computed(self, keyIter):
+    def _check_if_Sobol_t_computed(self, keyIter):
         self._is_Sobol_t_computed = "Sobol_t" in self.Abfluss[keyIter[0]] #hasattr(self.Abfluss[keyIter[0], "Sobol_t")
 
-    def check_if_Sobol_m_computed(self, keyIter):
+    def _check_if_Sobol_m_computed(self, keyIter):
         self._is_Sobol_m_computed = "Sobol_m" in self.Abfluss[keyIter[0]] \
                                     or "Sobol_m2" in self.Abfluss[keyIter[0]] #hasattr(self.Abfluss[keyIter[0], "Sobol_m")
 
@@ -623,8 +649,8 @@ class LarsimStatistics(Statistics):
 
         labels = [nodeName.strip() for nodeName in self.nodeNames]
 
-        self.check_if_Sobol_t_computed(keyIter)
-        self.check_if_Sobol_m_computed(keyIter)
+        self._check_if_Sobol_t_computed(keyIter)
+        self._check_if_Sobol_m_computed(keyIter)
 
         if self._is_Sobol_t_computed and self._is_Sobol_m_computed:
             n_rows = 4
@@ -659,7 +685,7 @@ class LarsimStatistics(Statistics):
             fig.add_trace(go.Scatter(x=self.df_measured['TimeStamp'], y=self.df_measured[column_to_draw],
                                      name="Q (measured)",line_color='red'), row=1, col=1)
 
-        fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["E"] for key in keyIter], name='E[Q]',line_color='green', mode='lines'), row=starting_row, col=1)
+        fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["E"] for key in keyIter], name='E[QoI]',line_color='green', mode='lines'), row=starting_row, col=1)
         #fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["min_q"] for key in keyIter], name='min_q',line_color='indianred', mode='lines'), row=starting_row, col=1)
         #fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.Abfluss[key]["max_q"] for key in keyIter], name='max_q',line_color='yellow', mode='lines'), row=starting_row, col=1)
         fig.add_trace(go.Scatter(x=pdTimesteps, y=[(self.Abfluss[key]["E"] - self.Abfluss[key]["StdDev"]) for key in keyIter], name='mean - std. dev', line_color='darkviolet', mode='lines'), row=starting_row, col=1)
@@ -739,8 +765,8 @@ class LarsimStatistics(Statistics):
         labels = [nodeName.strip() for nodeName in self.nodeNames]
         #labels = list(map(str.strip, self.nodeNames))
 
-        self.check_if_Sobol_t_computed(keyIter)
-        self.check_if_Sobol_m_computed(keyIter)
+        self._check_if_Sobol_t_computed(keyIter)
+        self._check_if_Sobol_m_computed(keyIter)
         if self._is_Sobol_t_computed or self._is_Sobol_m_computed:
             n_rows = 4
         else:

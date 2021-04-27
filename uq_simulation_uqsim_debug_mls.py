@@ -2,7 +2,7 @@
 Usage of the UQEF with a (mainly) Larsim model.
 @author: Florian Kuenzner and Ivana Jovanovic
 """
-
+import dill
 import os
 import subprocess
 import sys
@@ -85,7 +85,6 @@ if local_debugging:
 #####################################
 # additional path settings:
 #####################################
-
 if uqsim.is_master() and not uqsim.is_restored():
     if not os.path.isdir(uqsim.args.outputResultDir): subprocess.run(["mkdir", "-p", uqsim.args.outputResultDir])
     print("outputResultDir: {}".format(uqsim.args.outputResultDir))
@@ -152,8 +151,16 @@ uqsim.statistics.update({"productFunction": (lambda: ProductFunctionStatistics.P
 # setup
 uqsim.setup()
 
+# save simulation nodes
 simulationNodes_save_file = "nodes"
 uqsim.save_simulationNodes(fileName=simulationNodes_save_file)
+
+# print the dictionary with the arguments
+if uqsim.is_master():
+    uqsim_args_temp_dict = vars(uqsim.args)
+    print(f"UQSIM.ARGS")
+    for key, value in uqsim_args_temp_dict.items():
+        print(f"{key}: {value}")
 
 # save the dictionary with the arguments - once before the simulation
 if uqsim.is_master():

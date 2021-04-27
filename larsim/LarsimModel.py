@@ -1,3 +1,4 @@
+import copy
 import datetime
 import dill
 from distutils.util import strtobool
@@ -75,12 +76,12 @@ class LarsimModelSetUp():
 
         self.regen_saved_data_files = self.inputModelDir / 'WHM Regen' / 'data_files'
 
-        print(self.sourceDir)
-        print(self.workingDir)
-        print(self.inputModelDir)
-        print(self.global_master_dir)
-        print(self.all_whms_path)
-        print(self.larsim_exe)
+        print(f"LarsimModelSetUp.sourceDir = {self.sourceDir}")
+        print(f"LarsimModelSetUp.workingDir = {self.workingDir}")
+        print(f"LarsimModelSetUp.inputModelDir = {self.inputModelDir}")
+        print(f"LarsimModelSetUp.global_master_dir = {self.global_master_dir}")
+        print(f"LarsimModelSetUp.all_whms_path = {self.all_whms_path}")
+        print(f"LarsimModelSetUp.larsim_exe = {self.larsim_exe}")
 
         #####################################
         # Specification of different variables for setting the model run and purpose of the model run
@@ -399,7 +400,7 @@ class LarsimModel(Model):
         if not isinstance(configurationObject, dict):
             self.configurationObject = larsimConfigurationSettings.return_configuration_object(configurationObject)
         else:
-            self.configurationObject = configurationObject
+            self.configurationObject = copy.deepcopy(configurationObject)
 
         #####################################
         # Specification of different directories - some are machine / location dependent,
@@ -457,7 +458,7 @@ class LarsimModel(Model):
         try:
             self.type_of_output_of_Interest_measured = self.configurationObject["Output"]["type_of_output_measured"]
         except KeyError:
-            self.type_of_output_of_Interest_measured  = "Ground Truth"
+            self.type_of_output_of_Interest_measured = "Ground Truth"
 
         self.cut_runs = strtobool(self.configurationObject["Timeframe"]["cut_runs"])\
                        if "cut_runs" in self.configurationObject["Timeframe"] else False
@@ -472,7 +473,7 @@ class LarsimModel(Model):
         else:
             for i in self.configurationObject["parameters"]:
                 self.variable_names.append(i["name"])
-            larsimConfigurationSettings.update_configurationObject_with_parameters_info(self.configurationObject)
+            #larsimConfigurationSettings.update_configurationObject_with_parameters_info(self.configurationObject)
 
         #####################################
         # this variable stands for the purpose of LarsimModel run
