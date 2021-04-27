@@ -327,8 +327,8 @@ class LarsimStatistics(Statistics):
                 self.Abfluss[key]["P10"] = np.percentile(discharge_values, 10, axis=0)
                 self.Abfluss[key]["P90"] = np.percentile(discharge_values, 90, axis=0)
                 if isinstance(self.Abfluss[key]["P10"], list) and len(self.Abfluss[key]["P10"]) == 1:
-                    self.Abfluss[key]["P10"]=self.Abfluss[key]["P10"][0]
-                    self.Abfluss[key]["P90"]=self.Abfluss[key]["P90"][0]
+                    self.Abfluss[key]["P10"] = self.Abfluss[key]["P10"][0]
+                    self.Abfluss[key]["P90"] = self.Abfluss[key]["P90"][0]
 
         print(f"[LARSIM STAT INFO] calcStatisticsForMc function is done!")
 

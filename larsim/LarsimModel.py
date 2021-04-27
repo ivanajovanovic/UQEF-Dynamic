@@ -3,7 +3,9 @@ import datetime
 import dill
 from distutils.util import strtobool
 from functools import reduce
+import gc
 import math
+from mpi4py import MPI
 import numpy as np
 import os
 import os.path as osp
@@ -561,12 +563,13 @@ class LarsimModel(Model):
         self.measuredDF = None
         self._is_measuredDF_computed = False
         self.measuredDF_column_name = 'Value'
-        self._set_measured_df()
+        #self._set_measured_df()
 
         print("[LarsimModel INFO] INITIALIZATION DONE]\n")
 
     def prepare(self):
-        pass
+        #pass
+        self._set_measured_df()
 
     def assertParameter(self, parameter):
         pass
