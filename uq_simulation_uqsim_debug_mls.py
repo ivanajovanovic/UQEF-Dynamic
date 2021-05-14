@@ -62,9 +62,9 @@ if local_debugging:
     uqsim.args.sc_p_order = 1 #6 #5
     uqsim.args.sc_poly_rule = "three_terms_recurrence" # "gram_schmidt" | "three_terms_recurrence" | "cholesky"
     uqsim.args.sc_poly_normed = True
-    uqsim.args.sc_sparse_quadrature = True
+    uqsim.args.sc_sparse_quadrature = False #True
 
-    uqsim.args.outputResultDir = os.path.abspath(os.path.join(paths.scratch_dir, "larsim_runs", 'larsim_run_parallel'))
+    uqsim.args.outputResultDir = os.path.abspath(os.path.join(paths.scratch_dir, "larsim_runs", 'larsim_run_parallel_v2'))
     uqsim.args.inputModelDir = paths.larsim_data_path
     uqsim.args.sourceDir = paths.sourceDir
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
@@ -74,11 +74,15 @@ if local_debugging:
     #uqsim.args.config_file = '/home/ga45met/mnt/linux_cluster_2/Larsim-UQ/configurations_Larsim/configurations_larsim_master_lai_small.json'
     #uqsim.args.config_file = "/home/ga45met/Repositories/Larsim/Larsim-UQ/configurations_Larsim/configuration_larsim_updated_lai_jun.json"
 
-    uqsim.args.disable_statistics = False
     uqsim.args.transformToStandardDist = True
     uqsim.args.mpi = True
     uqsim.args.mpi_method = "MpiPoolSolver"
     uqsim.args.uqsim_store_to_file = False
+
+    uqsim.args.disable_statistics = False
+    uqsim.args.parallel_statistics = True
+    uqsim.args.compute_Sobol_t = True
+    uqsim.args.compute_Sobol_m = False
 
     uqsim.setup_configuration_object()
 
@@ -140,9 +144,12 @@ uqsim.models.update({"productFunction": (lambda: ProductFunctionModel.ProductFun
 
 # register statistics
 uqsim.statistics.update({"larsim"         : (lambda: LarsimStatistics.LarsimStatistics(uqsim.configuration_object,
+                                                                                       parallel_statistics=uqsim.args.parallel_statistics,
+                                                                                       mpi_chunksize=uqsim.args.mpi_chunksize,
+                                                                                       unordered=False,
                                                                                        uq_method=uqsim.args.uq_method,
-                                                                                       compute_Sobol_t=True,
-                                                                                       compute_Sobol_m=False
+                                                                                       compute_Sobol_t=uqsim.args.compute_Sobol_t,
+                                                                                       compute_Sobol_m=uqsim.args.compute_Sobol_m
                                                                                        ))})
 uqsim.statistics.update({"oscillator"     : (lambda: LinearDampedOscillatorStatistics.LinearDampedOscillatorStatistics())})
 uqsim.statistics.update({"ishigami"       : (lambda: IshigamiStatistics.IshigamiStatistics(uqsim.configuration_object))})
@@ -180,13 +187,13 @@ if uqsim.is_master():
 
         # plot position of the nodes
         local_nodes = uqsim.simulationNodes.nodes.T
-        print(f"Shape of simulationNodes.nodes is: {local_nodes.shape}")
+        print(f"Shape of simulationNodes.nodes.T is: {local_nodes.shape}")
         local_distNodes = uqsim.simulationNodes.distNodes.T
-        print(f"Shape of simulationNodes.distNodes is: {local_distNodes.shape}")
+        print(f"Shape of simulationNodes.distNodes.T is: {local_distNodes.shape}")
         local_weights = uqsim.simulationNodes.weights
         print(f"Shape of simulationNodes.weights is: {local_weights.shape}")
         local_parameters = uqsim.simulationNodes.parameters.T
-        print(f"Shape of simulationNodes.weights is: {local_parameters.shape}")
+        print(f"Shape of simulationNodes.parameters.T is: {local_parameters.shape}")
         local_simulation_parameters = uqsim.simulation.parameters
         print(f"Shape of simulation.parameters is: {local_simulation_parameters.shape}")
         local_dist = uqsim.simulationNodes.joinedDists
@@ -270,7 +277,7 @@ if uqsim.is_master():
 # statistics:
 uqsim.calc_statistics()
 uqsim.save_statistics()
-uqsim.plot_statistics(display=False)
+# uqsim.plot_statistics(display=False)
 
 # uqsim.args.uqsim_file = os.path.abspath(os.path.join(uqsim.args.outputResultDir, "uqsim.saved"))
 # uqsim.store_to_file()
