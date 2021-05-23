@@ -1,14 +1,14 @@
 {
   "Timeframe":
     {
-      "start_day": 15,
-      "start_month": 5,
+      "start_day": 1,
+      "start_month": 6,
       "start_year": 2013,
       "start_hour": 0,
       "start_minute": 0,
 
-      "end_day": 30,
-      "end_month": 5,
+      "end_day": 15,
+      "end_month": 6,
       "end_year": 2013,
       "end_hour": 0,
       "end_minute": 0,
@@ -23,6 +23,7 @@
       "type_of_output_measured":"Ground Truth",
       "station_calibration_postproc":"MARI",
       "station_model_runs":"all",
+      "post_processing_for_all_stations":"False",
       "pathsDataFormat":"False",
       "dailyOutput":"False",
       "run_and_save_simulations":"True",

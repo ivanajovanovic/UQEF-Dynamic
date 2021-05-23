@@ -462,11 +462,11 @@ class LarsimModel(Model):
         except KeyError:
             self.type_of_output_of_Interest_measured = "Ground Truth"
 
-        self.cut_runs = strtobool(self.configurationObject["Timeframe"]["cut_runs"])\
-                       if "cut_runs" in self.configurationObject["Timeframe"] else False
+        self.cut_runs = strtobool(self.configurationObject["Timeframe"]["cut_runs"]) \
+            if "cut_runs" in self.configurationObject["Timeframe"] else False
 
         self.warm_up_duration = self.configurationObject["Timeframe"]["warm_up_duration"] \
-                                if "warm_up_duration" in self.configurationObject["Timeframe"] else None # 53
+            if "warm_up_duration" in self.configurationObject["Timeframe"] else None  # 53
 
         self.variable_names = []
         if "tuples_parameters_info" in self.configurationObject:
@@ -529,6 +529,9 @@ class LarsimModel(Model):
                                         if "run_and_save_simulations" in self.configurationObject["Output"] else False
         self.run_and_save_simulations = self.run_and_save_simulations and self.disable_statistics
 
+        self.always_save_original_model_runs = strtobool(self.configurationObject["Output"]["always_save_original_model_runs"]) \
+            if "always_save_original_model_runs" in self.configurationObject["Output"] else False
+
         # if we want to compute the gradient (of some likelihood fun or output itself) w.r.t parameters
         self.compute_gradients = strtobool(self.configurationObject["Output"]["compute_gradients"]) \
             if "compute_gradients" in self.configurationObject["Output"] else False
@@ -546,6 +549,10 @@ class LarsimModel(Model):
             except KeyError:
                 self.eps_val_global = 1e-4
 
+        # this variable controls if post-processing of the result time series should be done for
+        # only self.station_of_Interest (False) or all self.station_for_model_runs (True)
+        self.get_all_possible_stations = strtobool(self.configurationObject["Output"]["post_processing_for_all_stations"]) \
+            if "post_processing_for_all_stations" in self.configurationObject["Output"] else True
         #####################################
         # getting the time span for running the model from the json configuration file
         #####################################
@@ -699,7 +706,7 @@ class LarsimModel(Model):
                 index_parameter_gof_DF = self._calculate_GoF(predictedDF=result,
                                                              parameters_dict=parameters_dict,
                                                              objective_function=self.objective_function,
-                                                             get_all_possible_stations=False)
+                                                             get_all_possible_stations=self.get_all_possible_stations)
                 result_dict["gof_df"] = index_parameter_gof_DF
 
             # process result DF to compute the final GoI
@@ -711,7 +718,7 @@ class LarsimModel(Model):
                                                                                     interval=self.interval,
                                                                                     min_periods=self.min_periods,
                                                                                     objective_function=self.objective_function_qoi,
-                                                                                    get_all_possible_stations=False)
+                                                                                    get_all_possible_stations=self.get_all_possible_stations)
                 else:
                     processed_result = self._process_time_series_sliding_window_q(predictedDF=result,
                                                                                   interval=self.interval,
@@ -724,7 +731,7 @@ class LarsimModel(Model):
             #                                                                     interval=self.interval,
             #                                                                     min_periods=self.min_periods,
             #                                                                     objective_function=self.objective_function_qoi,
-            #                                                                     get_all_possible_stations=True)
+            #                                                                     get_all_possible_stations=self.get_all_possible_stations)
             #     else:
             #         processed_result = self._process_time_series_resampling_q(predictedDF=result,
             #                                                                   interval=self.interval,
@@ -732,6 +739,10 @@ class LarsimModel(Model):
             #                                                                   method=self.method)
             # Important, from now on the result is changed
             if processed_result is not None:
+                # before one overwrites result - check if the raw model output should be saved as well
+                if self.run_and_save_simulations and self.always_save_original_model_runs:
+                    file_path = self.workingDir / f"df_Larsim_raw_run_{i}.pkl"
+                    result.to_pickle(file_path, compression="gzip")
                 result = processed_result
             result_dict["result_time_series"] = result
 
@@ -749,7 +760,6 @@ class LarsimModel(Model):
 
             # save all the sub-results in case there is no LarsimStatistics run afterward
             if self.run_and_save_simulations:
-
                 file_path = self.workingDir / f"parameters_Larsim_run_{i}.pkl"
                 with open(file_path, 'wb') as f:
                     dill.dump(parameters_dict, f)
@@ -1115,9 +1125,10 @@ class LarsimModel(Model):
         return pd.DataFrame(index_parameter_gof_list_of_dictionaries)
 
     @staticmethod
-    def compute_and_get_final_list_of_stations(measuredDF, predictedDF, get_all_possible_stations, station_of_Interest):
+    def compute_and_get_final_list_of_stations(measuredDF, predictedDF,
+                                               get_all_possible_stations=True, station_of_Interest="all"):
         stations = larsimDataPostProcessing.get_stations_intersection(measuredDF, predictedDF)
-        if not get_all_possible_stations and (station_of_Interest != "all" or station_of_Interest is not None):
+        if not get_all_possible_stations and station_of_Interest != "all" and station_of_Interest is not None:
             if not isinstance(station_of_Interest, list):
                 station_of_Interest = [station_of_Interest,]
             stations = list(set(stations).intersection(station_of_Interest))

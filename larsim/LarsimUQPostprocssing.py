@@ -5,6 +5,7 @@
 
 import chaospy as cp
 import dill
+import json
 import numpy as np
 import pickle
 import pandas as pd
@@ -26,10 +27,32 @@ from LarsimUtilityFunctions import larsimPaths as paths
 
 from common import saltelliSobolIndicesHelpingFunctions
 
+def read_configu(configurationObject, element=None):
+    """
+    element can be, e.g., "Output", "parameters", "Timeframe", "parameters_settings"
+    """
+    with open(configurationObject) as f:
+        configuration_object = json.load(f)
+    if element is None:
+        return configuration_object
+    else:
+        return configuration_object[element]
+
+
+def read_and_print_uqsim_args_file(file):
+    with open(file, 'rb') as f:
+        uqsim_args = pickle.load(f)
+    uqsim_args_temp_dict = vars(uqsim_args)
+    print(f"UQSIM.ARGS")
+    for key, value in uqsim_args_temp_dict.items():
+        print(f"{key}: {value}")
+
+
 def _get_df_simulation_from_file(working_folder):
     df_all_simulations = os.path.abspath(os.path.join(working_folder,"df_all_simulations.pkl"))
     df_all_simulations = pd.read_pickle(df_all_simulations, compression='gzip')
     return df_all_simulations
+
 
 def _get_nodes_from_file(working_folder):
     working_folder = paths.pathlib_to_from_str(working_folder, transfrom_to='Path')
@@ -37,6 +60,7 @@ def _get_nodes_from_file(working_folder):
     with open(nodes_dict, 'rb') as f:
         simulationNodes = dill.load(f)
     return simulationNodes
+
 
 # TODO Add _calcStatisticsForMC and calcStatisticsForMc
 def _calcStatisticsForSc(df_all_simulations, simulationNodes, order=2, regression=False):
@@ -75,6 +99,7 @@ def _calcStatisticsForSc(df_all_simulations, simulationNodes, order=2, regressio
             Abfluss[key]["P10"]= Abfluss[key]["P10"][0]
             Abfluss[key]["P90"] = Abfluss[key]["P90"][0]
     return Abfluss
+
 
 def _calcStatisticsForSaltelli(df_all_simulations, simulationNodes, numEvaluations, order, regression):
     timesteps = df_all_simulations.TimeStamp.unique()
@@ -125,6 +150,7 @@ def _calcStatisticsForSaltelli(df_all_simulations, simulationNodes, numEvaluatio
         if isinstance(Abfluss[key]["P10"], (list)) and len(Abfluss[key]["P10"]) == 1:
             Abfluss[key]["P10"]=Abfluss[key]["P10"][0]
             Abfluss[key]["P90"]=Abfluss[key]["P90"][0]
+
 
 # TODO Add sub-options for calcStatisticsForSaltelli
 def _replot_statistics(working_folder):

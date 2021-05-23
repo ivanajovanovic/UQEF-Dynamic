@@ -32,6 +32,8 @@ import pandas as pd
 import pathlib
 from LarsimUtilityFunctions import larsimConfigurationSettings
 import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
+#warnings.filterwarnings('ignore')
 pd.options.mode.chained_assignment = None
 
 sys.path.insert(0, os.getcwd())
@@ -51,29 +53,35 @@ if local_debugging:
     uqsim.args.model = "larsim"
 
     uqsim.args.uncertain = "all"
-    uqsim.args.chunksize = 1
+    uqsim.args.chunksize = 10
 
     uqsim.args.uq_method = "sc"  # "saltelli" | "mc"
-    uqsim.args.mc_numevaluations = 100
+    uqsim.args.mc_numevaluations = 1000
     uqsim.args.sampling_rule = "latin_hypercube" # | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
-    uqsim.args.sc_q_order = 4 #7 #10 3
-    uqsim.args.sc_p_order = 3 #6 #8 6
+    uqsim.args.sc_q_order = 7 #7 #10 3
+    uqsim.args.sc_p_order = 6 #6 #8 6
     uqsim.args.sc_poly_rule = "three_terms_recurrence" # "gram_schmidt" | "three_terms_recurrence" | "cholesky"
     uqsim.args.sc_poly_normed = True
+    uqsim.args.sc_sparse_quadrature = False  # True
+    uqsim.args.regression = False
 
-    uqsim.args.outputResultDir = os.path.abspath( os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_siam_cse_v5'))
-    uqsim.args.inputModelDir = os.path.abspath(os.path.join('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2', 'Larsim-data'))
+    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_18_05_parallel_v3'))
+    uqsim.args.inputModelDir = os.path.abspath(os.path.join('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2','Larsim-data'))
     uqsim.args.sourceDir = os.path.abspath(os.path.join('/dss/dsshome1/lxc0C/ga45met2', 'Repositories', 'Larsim-UQ'))
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
     #uqsim.args.config_file = "/dss/dsshome1/lxc0C/ga45met2/Repositories/Larsim-UQ/configurations_Larsim/configuration_larsim_uqsim_cm2_v4.json" #"configuration_larsim_uqsim.json"
     #uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/Larsim-UQ/configurations_Larsim/configurations_larsim_master_lai_small.json'
     uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/Larsim-UQ/configurations_Larsim/configurations_larsim_high_flow_small.json'
 
-    uqsim.args.disable_statistics = False
     uqsim.args.transformToStandardDist = True
     uqsim.args.mpi = True
     uqsim.args.mpi_method = "MpiPoolSolver" #"LinearSolver"
     uqsim.args.uqsim_store_to_file = False
+
+    uqsim.args.disable_statistics = False
+    uqsim.args.parallel_statistics = True  # False
+    uqsim.args.compute_Sobol_t = True
+    uqsim.args.compute_Sobol_m = True
 
     uqsim.args.num_cores = 1
 
@@ -89,7 +97,8 @@ if uqsim.is_master() and not uqsim.is_restored():
 
 # Set the working folder where all the model runs related output and files will be written
 try:
-    uqsim.args.workingDir = os.path.abspath(os.path.join(uqsim.args.outputResultDir,uqsim.configuration_object["Directories"]["workingDir"]))
+    uqsim.args.workingDir = os.path.abspath(os.path.join(uqsim.args.outputResultDir,
+                                                         uqsim.configuration_object["Directories"]["workingDir"]))
 except KeyError:
     uqsim.args.workingDir = os.path.abspath(os.path.join(uqsim.args.outputResultDir, "model_runs"))
 
@@ -102,29 +111,6 @@ except KeyError:
 if uqsim.is_master() and not uqsim.is_restored():
     if not os.path.isdir(uqsim.configuration_object["Directories"]["workingDir"]):
         subprocess.run(["mkdir", uqsim.configuration_object["Directories"]["workingDir"]])
-
-#####################################
-#####################################
-# register model
-uqsim.models.update({"larsim"         : (lambda: LarsimModel.LarsimModel(configurationObject = uqsim.configuration_object,
-                                                                         inputModelDir=uqsim.args.inputModelDir,
-                                                                         sourceDir=uqsim.args.sourceDir,
-                                                                         workingDir=uqsim.args.workingDir,
-                                                                         disable_statistics=uqsim.args.disable_statistics
-                                                                         ))})
-uqsim.models.update({"oscillator"     : (lambda: LinearDampedOscillatorModel.LinearDampedOscillatorModel(uqsim.configuration_object))})
-uqsim.models.update({"ishigami"       : (lambda: IshigamiModel.IshigamiModel(uqsim.configuration_object))})
-uqsim.models.update({"productFunction": (lambda: ProductFunctionModel.ProductFunctionModel(uqsim.configuration_object))})
-
-# register statistics
-uqsim.statistics.update({"larsim"         : (lambda: LarsimStatistics.LarsimStatistics(uqsim.configuration_object,
-                                                                                       uq_method=uqsim.args.uq_method))})
-uqsim.statistics.update({"oscillator"     : (lambda: LinearDampedOscillatorStatistics.LinearDampedOscillatorStatistics())})
-uqsim.statistics.update({"ishigami"       : (lambda: IshigamiStatistics.IshigamiStatistics(uqsim.configuration_object))})
-uqsim.statistics.update({"productFunction": (lambda: ProductFunctionStatistics.ProductFunctionStatistics(uqsim.configuration_object))})
-
-# setup
-uqsim.setup()
 
 #####################################
 # one time initial model setup
@@ -145,13 +131,54 @@ if uqsim.is_master() and not uqsim.is_restored():
         models[uqsim.args.model]()
     initialModelSetUp()
 
+#####################################
+#####################################
+# register model
+uqsim.models.update({"larsim"         : (lambda: LarsimModel.LarsimModel(configurationObject=uqsim.configuration_object,
+                                                                         inputModelDir=uqsim.args.inputModelDir,
+                                                                         sourceDir=uqsim.args.sourceDir,
+                                                                         workingDir=uqsim.args.workingDir,
+                                                                         disable_statistics=uqsim.args.disable_statistics
+                                                                         ))})
+uqsim.models.update({"oscillator"     : (lambda: LinearDampedOscillatorModel.LinearDampedOscillatorModel(uqsim.configuration_object))})
+uqsim.models.update({"ishigami"       : (lambda: IshigamiModel.IshigamiModel(uqsim.configuration_object))})
+uqsim.models.update({"productFunction": (lambda: ProductFunctionModel.ProductFunctionModel(uqsim.configuration_object))})
+
+# register statistics
+uqsim.statistics.update({"larsim"         : (lambda: LarsimStatistics.LarsimStatistics(uqsim.configuration_object,
+                                                                                       parallel_statistics=uqsim.args.parallel_statistics,
+                                                                                       mpi_chunksize=uqsim.args.mpi_chunksize,
+                                                                                       unordered=False,
+                                                                                       uq_method=uqsim.args.uq_method,
+                                                                                       compute_Sobol_t=uqsim.args.compute_Sobol_t,
+                                                                                       compute_Sobol_m=uqsim.args.compute_Sobol_m
+                                                                                       ))})
+uqsim.statistics.update({"oscillator"     : (lambda: LinearDampedOscillatorStatistics.LinearDampedOscillatorStatistics())})
+uqsim.statistics.update({"ishigami"       : (lambda: IshigamiStatistics.IshigamiStatistics(uqsim.configuration_object))})
+uqsim.statistics.update({"productFunction": (lambda: ProductFunctionStatistics.ProductFunctionStatistics(uqsim.configuration_object))})
+
+#####################################
+#####################################
+# setup
+uqsim.setup()
+
+
+# save simulation nodes
 simulationNodes_save_file = "nodes"
 uqsim.save_simulationNodes(fileName=simulationNodes_save_file)
 
-# # save the dictionary with the arguments - once before the simulation
-# argsFileName = os.path.abspath(os.path.join(uqsim.args.outputResultDir, "uqsim_args.pkl"))
-# with open(argsFileName, 'wb') as handle:
-#     pickle.dump(uqsim.args, handle, protocol=pickle.HIGHEST_PROTOCOL)
+# print the dictionary with the arguments
+if uqsim.is_master():
+    uqsim_args_temp_dict = vars(uqsim.args)
+    print(f"UQSIM.ARGS")
+    for key, value in uqsim_args_temp_dict.items():
+        print(f"{key}: {value}")
+
+# save the dictionary with the arguments - once before the simulation
+if uqsim.is_master():
+    argsFileName = os.path.abspath(os.path.join(uqsim.args.outputResultDir, "uqsim_args.pkl"))
+    with open(argsFileName, 'wb') as handle:
+        pickle.dump(uqsim.args, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 #####################################
 #####################################
@@ -165,15 +192,15 @@ if uqsim.is_master():
 
         # plot position of the nodes
         local_nodes = uqsim.simulationNodes.nodes.T
-        print(f"Shape of simulationNodes.nodes is: {local_nodes.shape}")
+        print(f"Shape of simulationNodes.nodes.T is: {local_nodes.shape}")
         local_distNodes = uqsim.simulationNodes.distNodes.T
-        print(f"Shape of simulationNodes.distNodes is: {local_distNodes.shape}")
+        print(f"Shape of simulationNodes.distNodes.T is: {local_distNodes.shape}")
         local_weights = uqsim.simulationNodes.weights
         print(f"Shape of simulationNodes.weights is: {local_weights.shape}")
         local_parameters = uqsim.simulationNodes.parameters.T
-        print(f"Shape of simulationNodes.weights is: {local_weights.shape}")
+        print(f"Shape of simulationNodes.parameters.T is: {local_parameters.shape}")
         local_simulation_parameters = uqsim.simulation.parameters
-        print(f"Shape of simulation.parameters is: {local_parameters.shape}")
+        print(f"Shape of simulation.parameters is: {local_simulation_parameters.shape}")
         local_dist = uqsim.simulationNodes.joinedDists
 
         # TODO Problem with Saltelli&MC is that uqsim.simulationNodes.parameters
@@ -206,11 +233,15 @@ if uqsim.is_master():
         polynomial_expansion = cp.generate_expansion(uqsim.args.sc_q_order, local_dist,
                                                      rule=uqsim.args.sc_poly_rule,
                                                      normed=uqsim.args.sc_poly_normed)
+        # plotting simulation nodes
+        uqsim.simulationNodes.plotDists(fileName=uqsim.args.outputResultDir + "/dists", fileNameIdentIsFullName=True)
+        uqsim.simulationNodes.plotDistsSetup(fileName=uqsim.args.outputResultDir + "/distsSetup.pdf",
+                                             numCollocationPointsPerDim=10)
+        # uqsim.plot_nodes()
         if exit_after_debugging_nodes:
             sys.exit()
 #####################################
 #####################################
-
 # start the simulation
 uqsim.simulate()
 
@@ -232,18 +263,12 @@ if uqsim.is_master():
     with open(fileName, 'wb') as f:
         dill.dump(uqsim.configuration_object, f)
 
-# save the dictionary with the arguments
-if uqsim.is_master():
-    argsFileName = os.path.abspath(os.path.join(uqsim.args.outputResultDir, "uqsim_args.pkl"))
-    with open(argsFileName, 'wb') as handle:
-        pickle.dump(uqsim.args, handle, protocol=pickle.HIGHEST_PROTOCOL)
 #####################################
 #####################################
-
 # statistics:
 uqsim.calc_statistics()
-uqsim.plot_statistics(display=False)
 uqsim.save_statistics()
+# uqsim.plot_statistics(display=False, plot_measured_timeseries=True, plot_unalteres_timeseries=True)
 
 # uqsim.args.uqsim_file = os.path.abspath(os.path.join(uqsim.args.outputResultDir, "uqsim.saved"))
 # #uqsim.store_to_file()

@@ -23,6 +23,7 @@
       "type_of_output_measured":"Ground Truth",
       "station_calibration_postproc":"MARI",
       "station_model_runs":"all",
+      "post_processing_for_all_stations":"False",
       "pathsDataFormat":"False",
       "dailyOutput":"False",
       "run_and_save_simulations":"True",

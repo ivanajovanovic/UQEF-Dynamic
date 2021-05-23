@@ -47,12 +47,12 @@ local_debugging = True
 if local_debugging:
     local_debugging_nodes = True
     exit_after_debugging_nodes = False
-    save_solver_results = True
+    save_solver_results = False
 
     uqsim.args.model = "larsim"
 
     uqsim.args.uncertain = "all"
-    uqsim.args.chunksize = 1
+    uqsim.args.chunksize = 10
 
     #uqsim.args.uq_method = "saltelli"
     uqsim.args.uq_method = "sc"  # "saltelli" | "mc"
@@ -63,8 +63,9 @@ if local_debugging:
     uqsim.args.sc_poly_rule = "three_terms_recurrence" # "gram_schmidt" | "three_terms_recurrence" | "cholesky"
     uqsim.args.sc_poly_normed = True
     uqsim.args.sc_sparse_quadrature = False #True
+    uqsim.args.regression = False
 
-    uqsim.args.outputResultDir = os.path.abspath(os.path.join(paths.scratch_dir, "larsim_runs", 'larsim_run_parallel_v2'))
+    uqsim.args.outputResultDir = os.path.abspath(os.path.join(paths.scratch_dir, "larsim_runs", 'larsim_run_18_05_v1'))
     uqsim.args.inputModelDir = paths.larsim_data_path
     uqsim.args.sourceDir = paths.sourceDir
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
@@ -80,8 +81,8 @@ if local_debugging:
     uqsim.args.uqsim_store_to_file = False
 
     uqsim.args.disable_statistics = False
-    uqsim.args.parallel_statistics = True
-    uqsim.args.compute_Sobol_t = True
+    uqsim.args.parallel_statistics = True #False
+    uqsim.args.compute_Sobol_t = False
     uqsim.args.compute_Sobol_m = False
 
     uqsim.setup_configuration_object()
@@ -155,6 +156,8 @@ uqsim.statistics.update({"oscillator"     : (lambda: LinearDampedOscillatorStati
 uqsim.statistics.update({"ishigami"       : (lambda: IshigamiStatistics.IshigamiStatistics(uqsim.configuration_object))})
 uqsim.statistics.update({"productFunction": (lambda: ProductFunctionStatistics.ProductFunctionStatistics(uqsim.configuration_object))})
 
+#####################################
+#####################################
 # setup
 uqsim.setup()
 
@@ -240,7 +243,6 @@ if uqsim.is_master():
 
 #####################################
 #####################################
-
 # start the simulation
 uqsim.simulate()
 
@@ -250,8 +252,8 @@ uqsim.simulate()
 if uqsim.is_master():
     if save_solver_results and uqsim.args.disable_statistics:
         # save raw results, i.e., solver results
-        assert uqsim.solver is uqsim.simulation.solver
-        assert id(uqsim.solver) == id(uqsim.simulation.solver)
+        # assert uqsim.solver is uqsim.simulation.solver
+        # assert id(uqsim.solver) == id(uqsim.simulation.solver)
         processed_sample_results = LarsimStatistics.LarsimSamples(uqsim.solver.results,
                                                                   configurationObject=uqsim.configuration_object)
         processed_sample_results.save_samples_to_file(uqsim.args.outputResultDir)
@@ -266,18 +268,12 @@ if uqsim.is_master():
     with open(fileName, 'wb') as f:
         dill.dump(uqsim.configuration_object, f)
 
-# # save the dictionary with the arguments
-# if uqsim.is_master():
-#     argsFileName = os.path.abspath(os.path.join(uqsim.args.outputResultDir, "uqsim_args.pkl"))
-#     with open(argsFileName, 'wb') as handle:
-#         pickle.dump(uqsim.args, handle, protocol=pickle.HIGHEST_PROTOCOL)
 #####################################
 #####################################
-
 # statistics:
 uqsim.calc_statistics()
 uqsim.save_statistics()
-# uqsim.plot_statistics(display=False)
+# uqsim.plot_statistics(display=False, plot_measured_timeseries=True, plot_unalteres_timeseries=True)
 
 # uqsim.args.uqsim_file = os.path.abspath(os.path.join(uqsim.args.outputResultDir, "uqsim.saved"))
 # uqsim.store_to_file()
