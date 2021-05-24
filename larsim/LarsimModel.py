@@ -1,4 +1,5 @@
 import copy
+from collections import defaultdict
 import datetime
 import dill
 from distutils.util import strtobool
@@ -513,7 +514,7 @@ class LarsimModel(Model):
         self.calculate_GoF = strtobool(self.configurationObject["Output"]["calculate_GoF"]) \
             if "calculate_GoF" in self.configurationObject["Output"] else True
 
-        if self.qoi == "GoF":
+        if self.qoi == "GoF" or self.compute_gradients:
             self.objective_function_qoi = self.configurationObject["Output"]["objective_function_qoi"] \
                 if 'objective_function_qoi' in self.configurationObject["Output"] else "all"
             self.objective_function_qoi = larsimDataPostProcessing._gof_list_to_function_names(self.objective_function_qoi)
@@ -699,15 +700,20 @@ class LarsimModel(Model):
             runtime = end - start
             result_dict = {"run_time": runtime, "parameters_dict": parameters_dict}
 
+            ######################################################################################################
+
             # compute (some) GoF for the whole time period
             # TODO eventually design the code to disregard the runs with an unsatisfying value of some GoF
             #  or to identify those which break
+            index_parameter_gof_DF = None
             if self.calculate_GoF:
                 index_parameter_gof_DF = self._calculate_GoF(predictedDF=result,
                                                              parameters_dict=parameters_dict,
                                                              objective_function=self.objective_function,
                                                              get_all_possible_stations=self.get_all_possible_stations)
                 result_dict["gof_df"] = index_parameter_gof_DF
+
+            ######################################################################################################
 
             # process result DF to compute the final GoI
             processed_result = None
@@ -737,6 +743,7 @@ class LarsimModel(Model):
             #                                                                   interval=self.interval,
             #                                                                   min_periods=self.min_periods,
             #                                                                   method=self.method)
+
             # Important, from now on the result is changed
             if processed_result is not None:
                 # before one overwrites result - check if the raw model output should be saved as well
@@ -744,19 +751,165 @@ class LarsimModel(Model):
                     file_path = self.workingDir / f"df_Larsim_raw_run_{i}.pkl"
                     result.to_pickle(file_path, compression="gzip")
                 result = processed_result
+
             result_dict["result_time_series"] = result
+
+            ######################################################################################################
 
             # Postprocessing the timeframe
             # self.timeframe[0], self.timeframe[1] = result["TimeStamp"].min(), result["TimeStamp"].max()
             # larsimConfigurationSettings.update_configurationObject_with_datetime_info(self.configurationObject, self.timeframe)
             # self.t = larsimTimeUtility.get_tape10_timesteps(self.timeframe)
 
+            ######################################################################################################
+
             # compute gradient of the output/QoI, or gradient of some likelihood measure w.r.t parameters
+            # for now f is only evaluation of some GoF, this makes sense only when:
+            # self.mode=="continuous", self.qoi="Q", self.calculate_GoF=True
+            # self.mode="resampling", self.qoi="GoF"
             if self.compute_gradients:
+                # compute different GoFs (those in self.objective_function_qoi)
+                # only for stations in self.station_of_Interest, for main result to use it as a baseline
+                if index_parameter_gof_DF is None:
+                    index_parameter_gof_DF = self._calculate_GoF(predictedDF=result,
+                                                                 parameters_dict=parameters_dict,
+                                                                 objective_function=self.objective_function_qoi,
+                                                                 get_all_possible_stations=False)
+
+                if not isinstance(self.station_of_Interest, list):
+                    list_of_stations = [self.station_of_Interest, ]
+                else:
+                    list_of_stations = self.station_of_Interest
+                list_of_gof = self.objective_function_qoi
+                list_of_gof = [single_gof.__name__ if callable(single_gof) else single_gof for single_gof in list_of_gof]
+
+                h_vector = []
+                gradient_vectors_dict = defaultdict(list)
+                parameter_names = []
+                gradient_vectors_param_dict = defaultdict(list)
+
                 # CD = 1 central differences; CD = 0 forward differences
-                gradient_matrix = []
-                if gradient_matrix:
-                    result_dict["gradient"] = gradient_matrix
+                # Assumption: parameter is a list, not a dictionary
+                length_evaluations_gradient = 2 * len(parameter) if self.CD else len(parameter)
+
+                for id_param in range(length_evaluations_gradient):
+                    # 2.1. For every uncertain parameter, create a new folder where 1 parameter is changed, copy the set-up
+                    curr_working_dir_gradient = self._copy_files_for_gradient_computation(curr_working_dir, i, id_param)
+
+                    # 2.2. Adjust configuration files (tape35 and lanu.par)
+                    if self.CD:
+                        eps_val = self.eps_val_global if id_param % 2 == 0 else -self.eps_val_global  # used for computing f(x+-h)
+                        param_index = int(id_param / 2)
+                    else:  # FD
+                        eps_val = self.eps_val_global  # used for computing f(x+h)
+                        param_index = id_param
+
+                    tape35_path = curr_working_dir_gradient / "tape35"
+                    lanu_path = curr_working_dir_gradient / "lanu.par"
+                    parameter_dict = larsimConfigurationSettings.params_configurations(parameters=parameter,
+                                                                                       tape35_path=tape35_path,
+                                                                                       lanu_path=lanu_path,
+                                                                                       configurationObject=self.configurationObject,
+                                                                                       process_id=i,
+                                                                                       write_new_values_to_tape35=True,
+                                                                                       write_new_values_to_lanu=True,
+                                                                                       perturb_single_param_around_nominal=True,
+                                                                                       parameter_index_to_perturb=param_index,
+                                                                                       eps_val=eps_val)
+                    current_param_name = list(parameter_dict.keys())[0]
+                    h = parameter_dict[current_param_name][1]
+
+                    if not self.CD:
+                        h_vector.append(h)  # update vector of h's
+                        parameter_names.append(current_param_name)
+                    elif self.CD and (id_param % 2 == 0):
+                        h_vector.append(2 * h)
+                        parameter_names.append(current_param_name)
+
+                    # 2.3. Run the simulation
+                    # Run Larsim
+                    if self.cut_runs:
+                        result_grd = self._multiple_short_larsim_runs(timeframe=self.timeframe, timestep=self.timestep,
+                                                                  curr_working_dir=curr_working_dir_gradient,
+                                                                  index_run=i, warm_up_duration=self.warm_up_duration)
+                    else:
+                        result_grd = self._single_larsim_run(timeframe=self.timeframe,
+                                                         curr_working_dir=curr_working_dir_gradient,
+                                                         index_run=i, warm_up_duration=self.warm_up_duration)
+
+                    # 2.4. Preparations before computing GoF
+                    result_grd = larsimDataPostProcessing.parse_df_based_on_time(result_grd,
+                                                                                 (simulation_start_timestamp, None))
+                    # filter out results
+                    result_grd = larsimDataPostProcessing.filterResultForStation(result_grd,
+                                                                                 station=self.station_of_Interest)
+                    result_grd = larsimDataPostProcessing.filterResultForTypeOfOutpu(result_grd,
+                                                                                     type_of_output=self.type_of_output_of_Interest)
+
+                    # 2.5. Compute goodness of fit (GoF) &
+                    result_grd_gof_DF = self._calculate_GoF(predictedDF=result_grd,
+                                                            objective_function=self.objective_function_qoi,
+                                                            get_all_possible_stations=False)
+
+
+                    # 2.6. Extract subset of data for each analysed station and each analysed GoF
+                    for single_station in list_of_stations:
+                        for single_gof in list_of_gof:
+                            grad_estimation = np.nan
+                            if self.CD:  # Central Difference (CD) computation
+                                if id_param % 2 == 0:
+                                    f_x_ij_p_h = result_grd_gof_DF.loc[(result_grd_gof_DF["station"] == single_station)][single_gof].values[0]
+                                    gradient_vectors_dict[(single_station, single_gof)].append(f_x_ij_p_h)
+                                    gradient_vectors_param_dict[(single_station, single_gof, current_param_name)].append(f_x_ij_p_h)
+                                else:
+                                    f_x_ij_m_h = result_grd_gof_DF.loc[(result_grd_gof_DF["station"] == single_station)][single_gof].values[0]
+                                    gradient_vectors_dict[(single_station, single_gof)].append(f_x_ij_m_h)
+                                    gradient_vectors_param_dict[(single_station, single_gof, current_param_name)].append(f_x_ij_m_h)
+                                    gradient_vectors_param_dict[(single_station, single_gof, current_param_name)].append(2 * h)
+                            else:  # Forward Difference (FD) computation
+                                f_x_ij_p_h = result_grd_gof_DF.loc[(result_grd_gof_DF["station"] == single_station)][single_gof].values[0]
+                                f_x_ij = index_parameter_gof_DF.loc[(index_parameter_gof_DF["station"] == single_station)][single_gof].values[0]
+                                gradient_vectors_dict[(single_station, single_gof)].append(f_x_ij_p_h)
+                                gradient_vectors_dict[(single_station, single_gof)].append(f_x_ij)
+                                gradient_vectors_param_dict[(single_station, single_gof, current_param_name)].append(f_x_ij_p_h)
+                                gradient_vectors_param_dict[(single_station, single_gof, current_param_name)].append(f_x_ij)
+                                gradient_vectors_param_dict[(single_station, single_gof, current_param_name)].append(h)
+
+                    # Delete everything except .log and .csv files
+                    larsimConfigurationSettings.cleanDirectory_completely(curr_directory=curr_working_dir_gradient)
+
+                    # change back to starting directory of all the processes
+                    os.chdir(self.curr_working_dir)
+
+                    # Delete local working folder
+                    subprocess.run(["rm", "-r", curr_working_dir_gradient])
+
+                # 3. Process data for generating gradient matrices
+                gradient_matrix_dict = dict()
+                for single_station in list_of_stations:
+                    for single_gof in list_of_gof:
+                        if self.CD:  # Central Difference (CD) computation
+                            f_x_ij_p_h_array = np.array(gradient_vectors_dict[(single_station, single_gof)][0::2], dtype=np.float32)
+                            f_x_ij_m_h_array = np.array(gradient_vectors_dict[(single_station, single_gof)][1::2], dtype=np.float32)
+                            grad_estimation = (f_x_ij_p_h_array - f_x_ij_m_h_array) / np.array(h_vector)
+                        else:  # Forward Difference (FD) computation
+                            f_x_ij_p_h_array = np.array(gradient_vectors_dict[(single_station, single_gof)][0::2], dtype=np.float32)
+                            f_x_ij_array = np.array(gradient_vectors_dict[(single_station, single_gof)][1::2], dtype=np.float32)
+                            grad_estimation = (f_x_ij_p_h_array - f_x_ij_array) / np.array(h_vector)
+
+                        gradient_matrix_dict[(single_station, single_gof)] = np.outer(grad_estimation, grad_estimation)
+
+                # finally, add gradient estimated to index_parameter_gof_DF
+                for current_param_name in parameter_names:
+                    for single_gof in list_of_gof:
+                        new_column_name = "d_" + single_gof + "_d_" + current_param_name
+                        index_parameter_gof_DF[new_column_name] = \
+                            index_parameter_gof_DF["station"].apply(lambda x: \
+                                                                        gradient_vectors_param_dict.get((x, single_gof, current_param_name), np.nan))
+
+                result_dict["gradient_matrix_dict"] = gradient_matrix_dict
+
+            ######################################################################################################
 
             # save all the sub-results in case there is no LarsimStatistics run afterward
             if self.run_and_save_simulations:
@@ -772,9 +925,13 @@ class LarsimModel(Model):
                     file_path = self.workingDir / f"gof_{i}.pkl"
                     index_parameter_gof_DF.to_pickle(file_path, compression="gzip")
 
-            #####################################
+                if self.compute_gradients:
+                    file_path = self.workingDir / f"gradients_matrices_{i}.npy"
+                    np.save(file_path, gradient_matrix_dict)
+
+            ######################################################################################################
             # Final cleaning and appending the results
-            #####################################
+            ######################################################################################################
             print(f"[LarsimModel INFO] Process {i} returned / appended it's results")
 
             # result_dict contains at least the following entries:  "result_time_series", "run_time", "parameters_dict"
@@ -1137,6 +1294,27 @@ class LarsimModel(Model):
                     f"[LarsimModel ERROR:] Error in _calculate_GoF - no intersection between "
                     f"LarsimModel.station_of_Interest and stations in LarsimModel.measuredDF, LarsimModel.predictedDF!")
         return stations
+
+    def _copy_files_for_gradient_computation(self, curr_working_dir, i, id_param):
+        os.chdir(curr_working_dir)
+        working_folder_name = "compute_gradient_" + str(i) + "_" + str(id_param)
+        curr_working_dir_gradient = pathlib.Path(curr_working_dir/working_folder_name)
+        curr_working_dir_gradient.mkdir(parents=True, exist_ok=True)
+
+        # copy all the necessary files to the newly created directory
+        # master_dir_for_copying = self.master_dir + "/."
+        # subprocess.run(['cp', '-a', master_dir_for_copying, curr_working_dir_gradient])
+        curr_working_dir_for_copying = curr_working_dir + "/."
+        subprocess.run(['cp', '-a', curr_working_dir_for_copying, curr_working_dir_gradient])
+
+        subprocess.run(['cp', 'lanu.par', curr_working_dir_gradient])
+        subprocess.run(['cp', 'tape35', curr_working_dir_gradient])
+        print("[LarsimModel INFO] Successfully copied all the files for gradient computation")
+        # change working directory
+        os.chdir(curr_working_dir_gradient)
+
+        return curr_working_dir_gradient
+
 
 
 

@@ -48,16 +48,14 @@
     },
   "parameters": [
     {
-      "name": "A2",
+      "name": "Dmax",
       "type": "tape35",
       "distribution": "Uniform",
-      "mu": 1.5,
-      "sigma": 0.75,
-      "lower": 0.5,
-      "upper": 4.0,
-      "lower_limit": 0.5,
-      "upper_limit": 4.0,
-      "default": 1.5
+      "lower": 0.06,
+      "upper": 10,
+      "lower_limit": 0.06,
+      "upper_limit": 10,
+      "default": 1.0
     },
     {
       "name": "BSF",
@@ -73,6 +71,18 @@
     }
   ],
   "unused_parameters" : [
+    {
+      "name": "A2",
+      "type": "tape35",
+      "distribution": "Uniform",
+      "mu": 1.5,
+      "sigma": 0.75,
+      "lower": 0.5,
+      "upper": 4.0,
+      "lower_limit": 0.5,
+      "upper_limit": 4.0,
+      "default": 1.5
+    },
     {
       "name": "KG",
       "type": "tape35",
@@ -125,16 +135,6 @@
       "lower_limit": 0,
       "upper_limit": 5,
       "default": 5.0
-    },
-    {
-      "name": "Dmax",
-      "type": "tape35",
-      "distribution": "Uniform",
-      "lower": 0.06,
-      "upper": 10,
-      "lower_limit": 0.06,
-      "upper_limit": 10,
-      "default": 1.0
     },
     {
       "name": "Acker:Apr",

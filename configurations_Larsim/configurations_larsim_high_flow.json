@@ -1,14 +1,14 @@
 {
   "Timeframe":
     {
-      "start_day": 15,
-      "start_month": 5,
+      "start_day": 1,
+      "start_month": 6,
       "start_year": 2013,
       "start_hour": 0,
       "start_minute": 0,
 
-      "end_day": 30,
-      "end_month": 5,
+      "end_day": 15,
+      "end_month": 6,
       "end_year": 2013,
       "end_hour": 0,
       "end_minute": 0,
@@ -23,6 +23,7 @@
       "type_of_output_measured":"Ground Truth",
       "station_calibration_postproc":"MARI",
       "station_model_runs":"all",
+      "post_processing_for_all_stations":"False",
       "pathsDataFormat":"False",
       "dailyOutput":"False",
       "run_and_save_simulations":"True",
@@ -95,6 +96,18 @@
       "default": 0.3
     },
     {
+      "name": "Dmax",
+      "type": "tape35",
+      "distribution": "Uniform",
+      "lower": 0.06,
+      "upper": 10,
+      "lower_limit": 0.06,
+      "upper_limit": 10,
+      "default": 1.0
+    }
+  ],
+  "unused_parameters" : [
+    {
       "name": "KG",
       "type": "tape35",
       "distribution": "Uniform",
@@ -103,9 +116,7 @@
       "lower_limit": 0.5,
       "upper_limit": 1.2,
       "default": 0.93
-    }
-  ],
-  "unused_parameters" : [
+    },
     {
       "name": "EKM",
       "type": "tape35",

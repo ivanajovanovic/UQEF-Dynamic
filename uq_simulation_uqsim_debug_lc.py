@@ -65,7 +65,7 @@ if local_debugging:
     uqsim.args.sc_sparse_quadrature = False  # True
     uqsim.args.regression = False
 
-    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_18_05_parallel_v3'))
+    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_24_05_parallel'))
     uqsim.args.inputModelDir = os.path.abspath(os.path.join('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2','Larsim-data'))
     uqsim.args.sourceDir = os.path.abspath(os.path.join('/dss/dsshome1/lxc0C/ga45met2', 'Repositories', 'Larsim-UQ'))
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
@@ -268,7 +268,7 @@ if uqsim.is_master():
 # statistics:
 uqsim.calc_statistics()
 uqsim.save_statistics()
-# uqsim.plot_statistics(display=False, plot_measured_timeseries=True, plot_unalteres_timeseries=True)
+uqsim.plot_statistics(display=False, plot_measured_timeseries=True, plot_unalteres_timeseries=True)
 
 # uqsim.args.uqsim_file = os.path.abspath(os.path.join(uqsim.args.outputResultDir, "uqsim.saved"))
 # #uqsim.store_to_file()

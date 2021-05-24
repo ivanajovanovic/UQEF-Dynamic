@@ -154,7 +154,8 @@ class LarsimSamples(object):
             self.df_index_parameter_values = None
 
         if list_of_single_index_parameter_gof_df:
-            self.df_index_parameter_gof_values = pd.concat(list_of_single_index_parameter_gof_df, ignore_index=True, sort=False, axis=0)
+            self.df_index_parameter_gof_values = pd.concat(list_of_single_index_parameter_gof_df,
+                                                           ignore_index=True, sort=False, axis=0)
         else:
             self.df_index_parameter_gof_values = None
 
@@ -184,7 +185,8 @@ class LarsimSamples(object):
 
         # save only the real values, independent on QoI
         # TODO Does not work when only one time step!!!
-        # self.df_time_discharges = self.df_simulation_result.groupby(["Stationskennung","TimeStamp"])["Value"].apply(lambda df: df.reset_index(drop=True)).unstack()
+        # self.df_time_discharges = self.df_simulation_result.groupby(["Stationskennung","TimeStamp"])["Value"].apply(
+        # lambda df: df.reset_index(drop=True)).unstack()
 
     def save_samples_to_file(self, file_path='./'):
         self.df_simulation_result.to_pickle(
@@ -218,6 +220,8 @@ class LarsimSamples(object):
         return self.qoi_columns
 
 ########################################################################################################################
+
+
 def _my_parallel_calc_stats_for_MC(keyIter_chunk, discharge_values_chunk, numEvaluations,
                                    store_qoi_data_in_stat_dict=False):
     results = []
@@ -230,10 +234,8 @@ def _my_parallel_calc_stats_for_MC(keyIter_chunk, discharge_values_chunk, numEva
 
         local_result_dict["E"] = np.sum(discharge_values, axis=0, dtype=np.float64) / numEvaluations
         local_result_dict["E_numpy"] = np.mean(discharge_values, 0)
-
         local_result_dict["Var"] = np.sum((discharge_values - local_result_dict["E"]) ** 2, axis=0,
-                                              dtype=np.float64) / (numEvaluations - 1)
-
+                                          dtype=np.float64) / (numEvaluations - 1)
         local_result_dict["StdDev"] = np.sqrt(local_result_dict[key]["Var"], dtype=np.float64)
         local_result_dict["StdDev_numpy"] = np.std(discharge_values, 0, ddof=1)
 
@@ -245,6 +247,13 @@ def _my_parallel_calc_stats_for_MC(keyIter_chunk, discharge_values_chunk, numEva
 
         results.append((key, local_result_dict))
     return results
+
+
+def _my_parallel_calc_stats_for_SC(keyIter_chunk, discharge_values_chunk,
+                                   dist, polynomial_expansion, nodes,
+                                   compute_Sobol_t=False, compute_Sobol_m=False,
+                                   store_qoi_data_in_stat_dict=False):
+    pass
 
 
 def _my_parallel_calc_stats_for_gPCE(keyIter_chunk, discharge_values_chunk,
@@ -270,21 +279,57 @@ def _my_parallel_calc_stats_for_gPCE(keyIter_chunk, discharge_values_chunk,
         local_result_dict["StdDev"] = float(cp.Std(qoi_gPCE, dist))
         #local_result_dict["qoi_dist"] = cp.QoI_Dist(qoi_gPCE, dist)
 
-        if compute_Sobol_t:
-            local_result_dict["Sobol_t"] = cp.Sens_t(qoi_gPCE, dist)
-        if compute_Sobol_m:
-            local_result_dict["Sobol_m"] = cp.Sens_m(qoi_gPCE, dist)
-            #local_result_dict["Sobol_m2"] = cp.Sens_m2(qoi_gPCE, dist) # second order sensitivity indices
-
         local_result_dict["P10"] = float(cp.Perc(qoi_gPCE, 10, dist, numPercSamples))
         local_result_dict["P90"] = float(cp.Perc(qoi_gPCE, 90, dist, numPercSamples))
         if isinstance(local_result_dict["P10"], list) and len(local_result_dict["P10"]) == 1:
             local_result_dict["P10"] = local_result_dict["P10"][0]
             local_result_dict["P90"] = local_result_dict["P90"][0]
 
+        if compute_Sobol_t:
+            local_result_dict["Sobol_t"] = cp.Sens_t(qoi_gPCE, dist)
+        if compute_Sobol_m:
+            local_result_dict["Sobol_m"] = cp.Sens_m(qoi_gPCE, dist)
+            #local_result_dict["Sobol_m2"] = cp.Sens_m2(qoi_gPCE, dist) # second order sensitivity indices
+
         results.append((key, local_result_dict))
     return results
 
+
+def _my_parallel_calc_stats_for_mc_saltelli(keyIter_chunk, discharge_values_chunk, numEvaluations, dim,
+                                             compute_Sobol_t=False, compute_Sobol_m=False,
+                                             store_qoi_data_in_stat_dict=False):
+    results = []
+    for ip in range(0, len(keyIter_chunk)):  # for each peace of work
+        key = keyIter_chunk[ip]
+        discharge_values = discharge_values_chunk[ip]
+        local_result_dict = dict()
+
+        discharge_values_saltelli = discharge_values[:, np.newaxis]
+        standard_discharge_values = discharge_values_saltelli[:numEvaluations, :]
+        extended_standard_discharge_values = discharge_values_saltelli[:(2 * numEvaluations), :]
+
+        if store_qoi_data_in_stat_dict:
+            local_result_dict["Q"] = standard_discharge_values
+
+        local_result_dict["E"] = np.mean(discharge_values[:(2 * numEvaluations)], 0)
+        local_result_dict["Var"] = np.sum((extended_standard_discharge_values - local_result_dict["E"]) ** 2,
+                                          axis=0, dtype=np.float64) / (2 * numEvaluations - 1)
+        local_result_dict["StdDev"] = np.std(discharge_values[:(2 * numEvaluations)], 0, ddof=1)
+        local_result_dict["P10"] = np.percentile(discharge_values[:(2 * numEvaluations)], 10, axis=0)
+        local_result_dict["P90"] = np.percentile(discharge_values[:(2 * numEvaluations)], 90, axis=0)
+        if isinstance(local_result_dict["P10"], list) and len(local_result_dict["P10"]) == 1:
+            local_result_dict["P10"] = local_result_dict["P10"][0]
+            local_result_dict["P90"] = local_result_dict["P90"][0]
+
+        if compute_Sobol_t:
+            local_result_dict["Sobol_t"] = saltelliSobolIndicesHelpingFunctions._Sens_t_sample_4(
+                discharge_values_saltelli, dim, numEvaluations)
+        if compute_Sobol_m:
+            local_result_dict["Sobol_m"] = saltelliSobolIndicesHelpingFunctions._Sens_m_sample_4(
+                discharge_values_saltelli, dim, numEvaluations)
+
+        results.append((key, local_result_dict))
+    return results
 ########################################################################################################################
 
 
@@ -414,25 +459,23 @@ class LarsimStatistics(Statistics):
         if not self.station_of_Interest:
             self.station_of_Interest = self.samples_station_names
 
-    def preparePolyExpanForMc(self, simulationNodes, numEvaluations, regression, order, poly_normed, poly_rule, *args, **kwargs):
+    def preparePolyExpanForMc(self, simulationNodes, numEvaluations, regression=None, order=None,
+                              poly_normed=None, poly_rule=None, *args, **kwargs):
         self.numEvaluations = numEvaluations
         if regression:
             self.nodes = simulationNodes.distNodes
             self.weights = None
-            self.dim = len(simulationNodes.distNodes[0])
             self.dist = simulationNodes.joinedDists
             self.polynomial_expansion = cp.generate_expansion(order, self.dist, rule=poly_rule, normed=poly_normed)
 
     def preparePolyExpanForSc(self, simulationNodes, order, poly_normed, poly_rule, *args, **kwargs):
-        # components independent on model evaluations, i.e., defined apriori, based solely on the underlying distribution
         self.nodes = simulationNodes.distNodes
-        self.dim = len(simulationNodes.distNodes[0])
         self.dist = simulationNodes.joinedDists
         self.weights = simulationNodes.weights
-        #self.nodeNames = simulationNodes.nodeNames
         self.polynomial_expansion = cp.generate_expansion(order, self.dist, rule=poly_rule, normed=poly_normed)
 
-    def preparePolyExpanForSaltelli(self, simulationNodes, numEvaluations, regression, order, poly_normed, poly_rule, *args, **kwargs):
+    def preparePolyExpanForSaltelli(self, simulationNodes, numEvaluations=None, regression=None, order=None,
+                                    poly_normed=None, poly_rule=None, *args, **kwargs):
         pass
 
     def calcStatisticsForMcParallel(self, chunksize=1, regression=False, *args, **kwargs):
@@ -440,8 +483,6 @@ class LarsimStatistics(Statistics):
             grouped = self.samples.df_simulation_result.groupby(['Stationskennung', 'TimeStamp'])
             groups = grouped.groups
 
-            # list_of_unique_timesteps = [pd.Timestamp(timestep) for timestep in self.timesteps]
-            # keyIter = list(itertools.product(self.station_of_Interest, list_of_unique_timesteps))
             keyIter = list(groups.keys())
             list_of_simulations_df = [
                 self.samples.df_simulation_result.loc[groups[key].values][self.qoi_column].values
@@ -451,19 +492,19 @@ class LarsimStatistics(Statistics):
             keyIter_chunk = list(more_itertools.chunked(keyIter, chunksize))
             list_of_simulations_df_chunk = list(more_itertools.chunked(list_of_simulations_df, chunksize))
 
-            # generate work packages (i.e., generate Chunks)
             numEvaluations_chunk = [self.numEvaluations] * len(keyIter_chunk)
+
+            regressionChunks = [regression] * len(keyIter_chunk)
+            compute_Sobol_t_Chunks = [self._compute_Sobol_t] * len(keyIter_chunk)
+            compute_Sobol_m_Chunks = [self._compute_Sobol_m] * len(keyIter_chunk)
+            store_qoi_data_in_stat_dict_Chunks = [self.store_qoi_data_in_stat_dict] * len(keyIter_chunk)
+
             if regression:
                 nodesChunks = [self.nodes] * len(keyIter_chunk)
-                weightsChunks = [None] * len(keyIter_chunk)
+                weightsChunks = [self.weights] * len(keyIter_chunk)
                 distChunks = [self.dist] * len(keyIter_chunk)
                 dimChunks = [self.dim] * len(keyIter_chunk)
                 polynomial_expansionChunks = [self.polynomial_expansion] * len(keyIter_chunk)
-
-                regressionChunks = [regression] * len(keyIter_chunk)
-                compute_Sobol_t_Chunks = [self._compute_Sobol_t] * len(keyIter_chunk)
-                compute_Sobol_m_Chunks = [self._compute_Sobol_m] * len(keyIter_chunk)
-                store_qoi_data_in_stat_dict_Chunks = [self.store_qoi_data_in_stat_dict] * len(keyIter_chunk)
 
         with futures.MPICommExecutor(MPI.COMM_WORLD, root=0) as executor:
             if executor is not None:  # master process
@@ -511,8 +552,6 @@ class LarsimStatistics(Statistics):
             grouped = self.samples.df_simulation_result.groupby(['Stationskennung', 'TimeStamp'])
             groups = grouped.groups
 
-            # list_of_unique_timesteps = [pd.Timestamp(timestep) for timestep in self.timesteps]
-            # keyIter = list(itertools.product(self.station_of_Interest, list_of_unique_timesteps))
             keyIter = list(groups.keys())
             list_of_simulations_df = [
                 self.samples.df_simulation_result.loc[groups[key].values][self.qoi_column].values
@@ -522,7 +561,6 @@ class LarsimStatistics(Statistics):
             keyIter_chunk = list(more_itertools.chunked(keyIter, chunksize))
             list_of_simulations_df_chunk = list(more_itertools.chunked(list_of_simulations_df, chunksize))
 
-            # generate work packages (i.e., generate Chunks)
             nodesChunks = [self.nodes] * len(keyIter_chunk)
             distChunks = [self.dist] * len(keyIter_chunk)
             weightsChunks = [self.weights] * len(keyIter_chunk)
@@ -560,7 +598,7 @@ class LarsimStatistics(Statistics):
                 print(f"solver_time: {solver_time}")
 
                 chunk_results = list(chunk_results_it)
-                self.Abfluss = dict()  # TODO: Would each process store its own copy of the whole Abfluss?
+                self.Abfluss = dict()
                 for chunk_result in chunk_results:
                     for result in chunk_result:
                         self.Abfluss[result[0]] = result[1]
@@ -570,8 +608,6 @@ class LarsimStatistics(Statistics):
             grouped = self.samples.df_simulation_result.groupby(['Stationskennung', 'TimeStamp'])
             groups = grouped.groups
 
-            # list_of_unique_timesteps = [pd.Timestamp(timestep) for timestep in self.timesteps]
-            # keyIter = list(itertools.product(self.station_of_Interest, list_of_unique_timesteps))
             keyIter = list(groups.keys())
             list_of_simulations_df = [
                 self.samples.df_simulation_result.loc[groups[key].values][self.qoi_column].values
@@ -581,16 +617,42 @@ class LarsimStatistics(Statistics):
             keyIter_chunk = list(more_itertools.chunked(keyIter, chunksize))
             list_of_simulations_df_chunk = list(more_itertools.chunked(list_of_simulations_df, chunksize))
 
-            # generate work packages (i.e., generate Chunks)
-            if regression:
-                nodesChunks = [self.nodes] * len(keyIter_chunk)
-                distChunks = [self.dist] * len(keyIter_chunk)
-                dimChunks = [self.dim] * len(keyIter_chunk)
-                polynomial_expansionChunks = [self.polynomial_expansion] * len(keyIter_chunk)
+            numEvaluations_chunk = [self.numEvaluations] * len(keyIter_chunk)
+            dimChunks = [self.dim] * len(keyIter_chunk)
 
-            regressionChunks = [regression] * len(keyIter_chunk)
             compute_Sobol_t_Chunks = [self._compute_Sobol_t] * len(keyIter_chunk)
             compute_Sobol_m_Chunks = [self._compute_Sobol_m] * len(keyIter_chunk)
+            store_qoi_data_in_stat_dict_Chunks = [self.store_qoi_data_in_stat_dict] * len(keyIter_chunk)
+
+        with futures.MPICommExecutor(MPI.COMM_WORLD, root=0) as executor:
+            if executor is not None:  # master process
+                solver_time_start = time.time()
+                chunk_results_it = executor.map(_my_parallel_calc_stats_for_mc_saltelli,
+                                                keyIter_chunk,
+                                                list_of_simulations_df_chunk,
+                                                numEvaluations_chunk,
+                                                dimChunks,
+                                                compute_Sobol_t_Chunks,
+                                                compute_Sobol_m_Chunks,
+                                                store_qoi_data_in_stat_dict_Chunks,
+                                                chunksize=self.mpi_chunksize,
+                                                unordered=self.unordered)
+                print(f"{self.rank}: waits for shutdown...")
+                sys.stdout.flush()
+                executor.shutdown(wait=True)
+                print(f"{self.rank}: shutted down...")
+                sys.stdout.flush()
+
+                solver_time_end = time.time()
+                solver_time = solver_time_end - solver_time_start
+                print(f"solver_time: {solver_time}")
+
+                chunk_results = list(chunk_results_it)
+                self.Abfluss = dict()
+                for chunk_result in chunk_results:
+                    for result in chunk_result:
+                        self.Abfluss[result[0]] = result[1]
+
     ###################################################################################################################
 
     def calcStatisticsForMc(self, rawSamples, timesteps, simulationNodes,
@@ -634,12 +696,13 @@ class LarsimStatistics(Statistics):
                 self.qoi_gPCE = cp.fit_regression(polynomial_expansion, nodes, discharge_values)
                 self._calc_stats_for_gPCE(dist, key)
             else:
-                self.Abfluss[key]["E"] = np.sum(discharge_values, axis=0, dtype=np.float64)/ numEvaluations
-                self.Abfluss[key]["E_numpy"] = np.mean(discharge_values, 0)  # TODO!!!
+                # self.Abfluss[key]["E"] = np.sum(discharge_values, axis=0, dtype=np.float64)/ numEvaluations
+                self.Abfluss[key]["E"] = np.mean(discharge_values, 0)
                 #self.Abfluss[key]["Var"] = float(np.sum(power(discharge_values)) / numEvaluations - self.Abfluss[key]["E"]**2)
-                self.Abfluss[key]["Var"] = np.sum((discharge_values - self.Abfluss[key]["E"]) ** 2, axis=0, dtype=np.float64) / (numEvaluations - 1)
-                self.Abfluss[key]["StdDev"] = np.sqrt(self.Abfluss[key]["Var"], dtype=np.float64)
-                self.Abfluss[key]["StdDev_numpy"] = np.std(discharge_values, 0, ddof=1)  # TODO!!!
+                self.Abfluss[key]["Var"] = np.sum((discharge_values - self.Abfluss[key]["E"]) ** 2,
+                                                  axis=0, dtype=np.float64) / (numEvaluations - 1)
+                # self.Abfluss[key]["StdDev"] = np.sqrt(self.Abfluss[key]["Var"], dtype=np.float64)
+                self.Abfluss[key]["StdDev"] = np.std(discharge_values, 0, ddof=1)
                 self.Abfluss[key]["P10"] = np.percentile(discharge_values, 10, axis=0)
                 self.Abfluss[key]["P90"] = np.percentile(discharge_values, 90, axis=0)
                 if isinstance(self.Abfluss[key]["P10"], list) and len(self.Abfluss[key]["P10"]) == 1:
@@ -681,7 +744,6 @@ class LarsimStatistics(Statistics):
         grouped = self.samples.df_simulation_result.groupby(['Stationskennung','TimeStamp'])
         groups = grouped.groups
 
-        #@jit(nopython=True, parallel=True)
         for key, val_indices in groups.items():
             discharge_values = self.samples.df_simulation_result.loc[val_indices.values][self.qoi_column].values
             self.Abfluss[key] = dict()
@@ -713,17 +775,17 @@ class LarsimStatistics(Statistics):
         # pdf_samples = qoi_dist.pdf(dist_sampling_values)
         # # plot it (for example with matplotlib) ...
 
-        if self._compute_Sobol_t:
-            self.Abfluss[key]["Sobol_t"] = cp.Sens_t(qoi_gPCE, dist)
-        if self._compute_Sobol_m:
-            self.Abfluss[key]["Sobol_m"] = cp.Sens_m(qoi_gPCE, dist)
-            #self.Abfluss[key]["Sobol_m2"] = cp.Sens_m2(qoi_gPCE, dist) # second order sensitivity indices
-
         self.Abfluss[key]["P10"] = float(cp.Perc(qoi_gPCE, 10, dist, numPercSamples))
         self.Abfluss[key]["P90"] = float(cp.Perc(qoi_gPCE, 90, dist, numPercSamples))
         if isinstance(self.Abfluss[key]["P10"], list) and len(self.Abfluss[key]["P10"]) == 1:
             self.Abfluss[key]["P10"]= self.Abfluss[key]["P10"][0]
             self.Abfluss[key]["P90"] = self.Abfluss[key]["P90"][0]
+
+        if self._compute_Sobol_t:
+            self.Abfluss[key]["Sobol_t"] = cp.Sens_t(qoi_gPCE, dist)
+        if self._compute_Sobol_m:
+            self.Abfluss[key]["Sobol_m"] = cp.Sens_m(qoi_gPCE, dist)
+            #self.Abfluss[key]["Sobol_m2"] = cp.Sens_m2(qoi_gPCE, dist) # second order sensitivity indices
 
     def calcStatisticsForSaltelli(self, rawSamples, timesteps,
                             simulationNodes, numEvaluations, order, regression, poly_normed, poly_rule, solverTimes,
@@ -744,7 +806,6 @@ class LarsimStatistics(Statistics):
 
         self.samples_station_names = self.samples.get_simulation_stations()
         # self.samples_qoi_columns = self.samples.get_list_of_qoi_column_names()
-        #self.nodeNames = simulationNodes.nodeNames
         self.station_of_Interest = list(set(self.samples_station_names).intersection(self.station_of_Interest))
         if not self.station_of_Interest:
             self.station_of_Interest = self.samples_station_names
@@ -762,8 +823,8 @@ class LarsimStatistics(Statistics):
             # extended_standard_discharge_values = discharge_values[:(2*numEvaluations)]
             discharge_values_saltelli = discharge_values[:, np.newaxis]
             # values based on which we calculate standard statistics
-            standard_discharge_values = discharge_values_saltelli[:numEvaluations,:]
-            extended_standard_discharge_values = discharge_values_saltelli[:(2*numEvaluations),:]
+            standard_discharge_values = discharge_values_saltelli[:numEvaluations, :]
+            extended_standard_discharge_values = discharge_values_saltelli[:(2*numEvaluations), :]
             if self.store_qoi_data_in_stat_dict:
                 self.Abfluss[key]["Q"] = standard_discharge_values
 
@@ -772,9 +833,9 @@ class LarsimStatistics(Statistics):
 
             #self.Abfluss[key]["E"] = np.sum(extended_standard_discharge_values, axis=0, dtype=np.float64) / (2*numEvaluations)
             self.Abfluss[key]["E"] = np.mean(discharge_values[:(2*numEvaluations)], 0)
-
             #self.Abfluss[key]["Var"] = float(np.sum(power(standard_discharge_values)) / numEvaluations - self.Abfluss[key]["E"] ** 2)
-            #self.Abfluss[key]["Var"] = np.sum((extended_standard_discharge_values - self.Abfluss[key]["E"]) ** 2, axis=0, dtype=np.float64) / (2*numEvaluations - 1)
+            self.Abfluss[key]["Var"] = np.sum((extended_standard_discharge_values - self.Abfluss[key]["E"]) ** 2,
+                                              axis=0, dtype=np.float64) / (2*numEvaluations - 1)
             #self.Abfluss[key]["StdDev"] = np.sqrt(self.Abfluss[key]["Var"], dtype=np.float64)
             self.Abfluss[key]["StdDev"] = np.std(discharge_values[:(2*numEvaluations)], 0, ddof=1)
 
@@ -782,6 +843,9 @@ class LarsimStatistics(Statistics):
             #self.Abfluss[key]["P90"] = np.percentile(discharge_values[:numEvaluations], 90, axis=0)
             self.Abfluss[key]["P10"] = np.percentile(discharge_values[:(2*numEvaluations)], 10, axis=0)
             self.Abfluss[key]["P90"] = np.percentile(discharge_values[:(2*numEvaluations)], 90, axis=0)
+            if isinstance(self.Abfluss[key]["P10"], list) and len(self.Abfluss[key]["P10"]) == 1:
+                self.Abfluss[key]["P10"] = self.Abfluss[key]["P10"][0]
+                self.Abfluss[key]["P90"] = self.Abfluss[key]["P90"][0]
 
             if self._compute_Sobol_t:
                 self.Abfluss[key]["Sobol_t"] = saltelliSobolIndicesHelpingFunctions._Sens_t_sample_4(
@@ -791,10 +855,6 @@ class LarsimStatistics(Statistics):
                     discharge_values_saltelli, self.dim, numEvaluations)
                 # self.Abfluss[key]["Sobol_m"] = saltelliSobolIndicesHelpingFunctions._Sens_m_sample_3
                 # (discharge_values_saltelli, self.dim, numEvaluations)
-
-            if isinstance(self.Abfluss[key]["P10"], list) and len(self.Abfluss[key]["P10"]) == 1:
-                self.Abfluss[key]["P10"] = self.Abfluss[key]["P10"][0]
-                self.Abfluss[key]["P90"] = self.Abfluss[key]["P90"][0]
 
         print(f"[LARSIM STAT INFO] calcStatisticsForSaltelli function is done!")
 
