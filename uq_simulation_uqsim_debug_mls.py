@@ -228,9 +228,10 @@ if uqsim.is_master():
 
         # # Plot polynomials
         # # polynomial_expansion = cp.orth_ttr(order, dist)
-        polynomial_expansion = cp.generate_expansion(uqsim.args.sc_q_order, local_dist,
-                                                     rule=uqsim.args.sc_poly_rule,
-                                                     normed=uqsim.args.sc_poly_normed)
+        if uqsim.args.uq_method == "sc":
+            polynomial_expansion = cp.generate_expansion(uqsim.args.sc_q_order, local_dist,
+                                                         rule=uqsim.args.sc_poly_rule,
+                                                         normed=uqsim.args.sc_poly_normed)
 
         # plotting simulation nodes
         uqsim.simulationNodes.plotDists(fileName=uqsim.args.outputResultDir + "/dists", fileNameIdentIsFullName=True)

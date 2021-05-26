@@ -103,7 +103,7 @@ class LarsimModelSetUp():
         try:
             self.type_of_output_of_Interest = self.configurationObject["Output"]["type_of_output"]
         except KeyError:
-            self.type_of_output_of_Interest = "Abfluss Messung + Vorhersage"
+            self.type_of_output_of_Interest = "result_dict Messung + Vorhersage"
 
         try:
             self.type_of_output_of_Interest_measured = self.configurationObject["Output"]["type_of_output_measured"]
@@ -456,7 +456,7 @@ class LarsimModel(Model):
         try:
             self.type_of_output_of_Interest = self.configurationObject["Output"]["type_of_output"]
         except KeyError:
-            self.type_of_output_of_Interest = "Abfluss Messung + Vorhersage"
+            self.type_of_output_of_Interest = "result_dict Messung + Vorhersage"
 
         try:
             self.type_of_output_of_Interest_measured = self.configurationObject["Output"]["type_of_output_measured"]
@@ -514,6 +514,23 @@ class LarsimModel(Model):
         self.calculate_GoF = strtobool(self.configurationObject["Output"]["calculate_GoF"]) \
             if "calculate_GoF" in self.configurationObject["Output"] else True
 
+        # if we want to compute the gradient (of some likelihood fun or output itself) w.r.t parameters
+        self.compute_gradients = strtobool(self.configurationObject["Output"]["compute_gradients"]) \
+            if "compute_gradients" in self.configurationObject["Output"] else False
+        if self.compute_gradients:
+            if self.configurationObject["Output"]["gradients_method"] == "Central Difference":
+                self.CD = 1  # flag for using Central Differences (with 2 * num_evaluations)
+            elif self.configurationObject["Output"]["gradients_method"] == "Forward Difference":
+                self.CD = 0  # flag for using Forward Differences (with num_evaluations)
+            else:
+                raise Exception(f"[LarsimModel ERROR:] NUMERICAL GRADIENT EVALUATION ERROR: Only \"Central Difference\" "
+                                f"and \"Forward Difference\" supported")
+            try:
+                # difference for gradient computation
+                self.eps_val_global = self.configurationObject["Output"]["eps_gradients"]
+            except KeyError:
+                self.eps_val_global = 1e-4
+                
         if self.qoi == "GoF" or self.compute_gradients:
             self.objective_function_qoi = self.configurationObject["Output"]["objective_function_qoi"] \
                 if 'objective_function_qoi' in self.configurationObject["Output"] else "all"
@@ -532,23 +549,6 @@ class LarsimModel(Model):
 
         self.always_save_original_model_runs = strtobool(self.configurationObject["Output"]["always_save_original_model_runs"]) \
             if "always_save_original_model_runs" in self.configurationObject["Output"] else False
-
-        # if we want to compute the gradient (of some likelihood fun or output itself) w.r.t parameters
-        self.compute_gradients = strtobool(self.configurationObject["Output"]["compute_gradients"]) \
-            if "compute_gradients" in self.configurationObject["Output"] else False
-        if self.compute_gradients:
-            if self.configurationObject["Output"]["gradients_method"] == "Central Difference":
-                self.CD = 1  # flag for using Central Differences (with 2 * num_evaluations)
-            elif self.configurationObject["Output"]["gradients_method"] == "Forward Difference":
-                self.CD = 0  # flag for using Forward Differences (with num_evaluations)
-            else:
-                raise Exception(f"[LarsimModel ERROR:] NUMERICAL GRADIENT EVALUATION ERROR: Only \"Central Difference\" "
-                                f"and \"Forward Difference\" supported")
-            try:
-                # difference for gradient computation
-                self.eps_val_global = self.configurationObject["Output"]["eps_gradients"]
-            except KeyError:
-                self.eps_val_global = 1e-4
 
         # this variable controls if post-processing of the result time series should be done for
         # only self.station_of_Interest (False) or all self.station_for_model_runs (True)
@@ -704,7 +704,7 @@ class LarsimModel(Model):
 
             # compute (some) GoF for the whole time period
             # TODO eventually design the code to disregard the runs with an unsatisfying value of some GoF
-            #  or to identify those which break
+            #  when uq_method is mc or saltelli, or to identify those runs that break
             index_parameter_gof_DF = None
             if self.calculate_GoF:
                 index_parameter_gof_DF = self._calculate_GoF(predictedDF=result,

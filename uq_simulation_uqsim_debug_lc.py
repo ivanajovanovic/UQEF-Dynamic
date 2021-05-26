@@ -65,7 +65,7 @@ if local_debugging:
     uqsim.args.sc_sparse_quadrature = False  # True
     uqsim.args.regression = False
 
-    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_24_05_parallel'))
+    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_26_05_parallel'))
     uqsim.args.inputModelDir = os.path.abspath(os.path.join('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2','Larsim-data'))
     uqsim.args.sourceDir = os.path.abspath(os.path.join('/dss/dsshome1/lxc0C/ga45met2', 'Repositories', 'Larsim-UQ'))
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
@@ -162,10 +162,10 @@ uqsim.statistics.update({"productFunction": (lambda: ProductFunctionStatistics.P
 # setup
 uqsim.setup()
 
-
 # save simulation nodes
-simulationNodes_save_file = "nodes"
-uqsim.save_simulationNodes(fileName=simulationNodes_save_file)
+# simulationNodes_save_file = "nodes"
+# if uqsim.is_master():
+#     uqsim.save_simulationNodes(fileName=simulationNodes_save_file)
 
 # print the dictionary with the arguments
 if uqsim.is_master():
@@ -230,9 +230,10 @@ if uqsim.is_master():
 
         # # Plot polynomials
         # # polynomial_expansion = cp.orth_ttr(order, dist)
-        polynomial_expansion = cp.generate_expansion(uqsim.args.sc_q_order, local_dist,
-                                                     rule=uqsim.args.sc_poly_rule,
-                                                     normed=uqsim.args.sc_poly_normed)
+        if uqsim.args.uq_method == "sc":
+            polynomial_expansion = cp.generate_expansion(uqsim.args.sc_q_order, local_dist,
+                                                         rule=uqsim.args.sc_poly_rule,
+                                                         normed=uqsim.args.sc_poly_normed)
         # plotting simulation nodes
         uqsim.simulationNodes.plotDists(fileName=uqsim.args.outputResultDir + "/dists", fileNameIdentIsFullName=True)
         uqsim.simulationNodes.plotDistsSetup(fileName=uqsim.args.outputResultDir + "/distsSetup.pdf",
@@ -255,6 +256,7 @@ if uqsim.is_master():
         processed_sample_results.save_samples_to_file(uqsim.args.outputResultDir)
         processed_sample_results.save_index_parameter_values(uqsim.args.outputResultDir)
         processed_sample_results.save_index_parameter_gof_values(uqsim.args.outputResultDir)
+
 #####################################
 #####################################
 # save uqsim.configuration_object - problem: would this work? nodes do not work...

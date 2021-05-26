@@ -41,7 +41,7 @@
     {
       "addSampledValue":"False",
       "TGB_standard": 3085,
-      "TGB": "None",
+      "TGB": 3085,
       "roundParameters":"False",
       "roundDecimal": 2,
       "cut_limits":"False"
