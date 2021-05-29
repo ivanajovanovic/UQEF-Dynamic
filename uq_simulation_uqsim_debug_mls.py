@@ -7,6 +7,9 @@ import os
 import subprocess
 import sys
 import pickle
+import dill
+from distutils.util import strtobool
+
 
 import uqef
 
@@ -52,20 +55,20 @@ if local_debugging:
     uqsim.args.model = "larsim"
 
     uqsim.args.uncertain = "all"
-    uqsim.args.chunksize = 10
+    uqsim.args.chunksize = 1
 
     #uqsim.args.uq_method = "saltelli"
-    uqsim.args.uq_method = "sc"  # "saltelli" | "mc"
-    uqsim.args.mc_numevaluations = 1000
-    uqsim.args.sampling_rule = "latin_hypercube" # | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
-    uqsim.args.sc_q_order = 2 #10 #7
-    uqsim.args.sc_p_order = 1 #6 #5
-    uqsim.args.sc_poly_rule = "three_terms_recurrence" # "gram_schmidt" | "three_terms_recurrence" | "cholesky"
+    uqsim.args.uq_method = "mc"  # "saltelli" | "mc"
+    uqsim.args.mc_numevaluations = 50
+    uqsim.args.sampling_rule = "halton"  # | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
+    uqsim.args.sc_q_order = 2  # 10 #7
+    uqsim.args.sc_p_order = 1  # 6 #5
+    uqsim.args.sc_poly_rule = "three_terms_recurrence"  # "gram_schmidt" | "three_terms_recurrence" | "cholesky"
     uqsim.args.sc_poly_normed = True
-    uqsim.args.sc_sparse_quadrature = False #True
+    uqsim.args.sc_sparse_quadrature = False  # True
     uqsim.args.regression = False
 
-    uqsim.args.outputResultDir = os.path.abspath(os.path.join(paths.scratch_dir, "larsim_runs", 'larsim_run_18_05_v1'))
+    uqsim.args.outputResultDir = os.path.abspath(os.path.join(paths.scratch_dir, "larsim_runs", 'larsim_run_29_05_mc'))
     uqsim.args.inputModelDir = paths.larsim_data_path
     uqsim.args.sourceDir = paths.sourceDir
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
@@ -137,7 +140,10 @@ uqsim.models.update({"larsim"         : (lambda: LarsimModel.LarsimModel(configu
                                                                          inputModelDir=uqsim.args.inputModelDir,
                                                                          sourceDir=uqsim.args.sourceDir,
                                                                          workingDir=uqsim.args.workingDir,
-                                                                         disable_statistics=uqsim.args.disable_statistics
+                                                                         disable_statistics=uqsim.args.disable_statistics,
+                                                                         raise_exception_on_model_break=False,
+                                                                         uq_method=uqsim.args.uq_method,
+                                                                         max_retries=10
                                                                          ))})
 uqsim.models.update({"oscillator"     : (lambda: LinearDampedOscillatorModel.LinearDampedOscillatorModel(uqsim.configuration_object))})
 uqsim.models.update({"ishigami"       : (lambda: IshigamiModel.IshigamiModel(uqsim.configuration_object))})
@@ -150,7 +156,8 @@ uqsim.statistics.update({"larsim"         : (lambda: LarsimStatistics.LarsimStat
                                                                                        unordered=False,
                                                                                        uq_method=uqsim.args.uq_method,
                                                                                        compute_Sobol_t=uqsim.args.compute_Sobol_t,
-                                                                                       compute_Sobol_m=uqsim.args.compute_Sobol_m
+                                                                                       compute_Sobol_m=uqsim.args.compute_Sobol_m,
+                                                                                       store_qoi_data_in_stat_dict=False
                                                                                        ))})
 uqsim.statistics.update({"oscillator"     : (lambda: LinearDampedOscillatorStatistics.LinearDampedOscillatorStatistics())})
 uqsim.statistics.update({"ishigami"       : (lambda: IshigamiStatistics.IshigamiStatistics(uqsim.configuration_object))})
@@ -260,6 +267,9 @@ if uqsim.is_master():
         processed_sample_results.save_samples_to_file(uqsim.args.outputResultDir)
         processed_sample_results.save_index_parameter_values(uqsim.args.outputResultDir)
         processed_sample_results.save_index_parameter_gof_values(uqsim.args.outputResultDir)
+        if strtobool(uqsim.configuration_object["Output"]["compute_gradients"]) :
+            processed_sample_results.save_dict_of_approx_matrix_c(uqsim.args.outputResultDir)
+            processed_sample_results.save_dict_of_matrix_c_eigen_decomposition(uqsim.args.outputResultDir)
 
 #####################################
 #####################################
@@ -274,7 +284,7 @@ if uqsim.is_master():
 # statistics:
 uqsim.calc_statistics()
 uqsim.save_statistics()
-# uqsim.plot_statistics(display=False, plot_measured_timeseries=True, plot_unalteres_timeseries=True)
+uqsim.plot_statistics(display=False, plot_measured_timeseries=True, plot_unalteres_timeseries=True)
 
 # uqsim.args.uqsim_file = os.path.abspath(os.path.join(uqsim.args.outputResultDir, "uqsim.saved"))
 # uqsim.store_to_file()

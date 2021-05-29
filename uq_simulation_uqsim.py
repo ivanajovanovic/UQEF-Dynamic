@@ -8,6 +8,7 @@ import subprocess
 import sys
 import pickle
 import dill
+from distutils.util import strtobool
 
 import uqef
 
@@ -134,7 +135,10 @@ uqsim.models.update({"larsim"         : (lambda: LarsimModel.LarsimModel(configu
                                                                          inputModelDir=uqsim.args.inputModelDir,
                                                                          sourceDir=uqsim.args.sourceDir,
                                                                          workingDir=uqsim.args.workingDir,
-                                                                         disable_statistics=uqsim.args.disable_statistics
+                                                                         disable_statistics=uqsim.args.disable_statistics,
+                                                                         raise_exception_on_model_break=False,
+                                                                         uq_method=uqsim.args.uq_method,
+                                                                         max_retries=10
                                                                          ))})
 uqsim.models.update({"oscillator"     : (lambda: LinearDampedOscillatorModel.LinearDampedOscillatorModel(uqsim.configuration_object))})
 uqsim.models.update({"ishigami"       : (lambda: IshigamiModel.IshigamiModel(uqsim.configuration_object))})
@@ -147,7 +151,8 @@ uqsim.statistics.update({"larsim"         : (lambda: LarsimStatistics.LarsimStat
                                                                                        unordered=False,
                                                                                        uq_method=uqsim.args.uq_method,
                                                                                        compute_Sobol_t=uqsim.args.compute_Sobol_t,
-                                                                                       compute_Sobol_m=uqsim.args.compute_Sobol_m
+                                                                                       compute_Sobol_m=uqsim.args.compute_Sobol_m,
+                                                                                       store_qoi_data_in_stat_dict=False
                                                                                        ))})
 uqsim.statistics.update({"oscillator"     : (lambda: LinearDampedOscillatorStatistics.LinearDampedOscillatorStatistics())})
 uqsim.statistics.update({"ishigami"       : (lambda: IshigamiStatistics.IshigamiStatistics(uqsim.configuration_object))})
@@ -159,9 +164,8 @@ uqsim.statistics.update({"productFunction": (lambda: ProductFunctionStatistics.P
 uqsim.setup()
 
 # save simulation nodes
-# simulationNodes_save_file = "nodes"
-# if uqsim.is_master():
-#     uqsim.save_simulationNodes(fileName=simulationNodes_save_file)
+simulationNodes_save_file = "nodes"
+uqsim.save_simulationNodes(fileName=simulationNodes_save_file)
 
 # save the dictionary with the arguments - once before the simulation
 if uqsim.is_master():
@@ -184,6 +188,10 @@ if uqsim.is_master():
         processed_sample_results.save_samples_to_file(uqsim.args.outputResultDir)
         processed_sample_results.save_index_parameter_values(uqsim.args.outputResultDir)
         processed_sample_results.save_index_parameter_gof_values(uqsim.args.outputResultDir)
+        if strtobool(uqsim.configuration_object["Output"]["compute_gradients"]) :
+            processed_sample_results.save_dict_of_approx_matrix_c(uqsim.args.outputResultDir)
+            processed_sample_results.save_dict_of_matrix_c_eigen_decomposition(uqsim.args.outputResultDir)
+
 
 #####################################
 #####################################

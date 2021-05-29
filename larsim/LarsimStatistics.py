@@ -1,4 +1,5 @@
 import chaospy as cp
+from collections import defaultdict
 from distutils.util import strtobool
 from functools import reduce
 import itertools
@@ -105,32 +106,49 @@ class LarsimSamples(object):
         calculate_GoF = configurationObject["Output"]["calculate_GoF"]
         compute_gradients = configurationObject["Output"]["compute_gradients"]
 
-        # TODO SHOULD VALUE Always be among QoI columns!?
-        self.qoi_columns = ["Value",]
-        if qoi == "GoF":
+        self.qoi_columns = ["Value", ]
+
+        if qoi == "GoF" or strtobool(compute_gradients):
             objective_function_qoi = configurationObject["Output"]["objective_function_qoi"]
             if isinstance(objective_function_qoi, list):
-                self.qoi_columns = self.qoi_columns + [single_gof.__name__ for single_gof in objective_function_qoi]
+                self.list_objective_function_qoi = [single_gof.__name__ if callable(single_gof) else single_gof
+                                                    for single_gof in objective_function_qoi]
             else:
-                self.qoi_columns = self.qoi_columns + [objective_function_qoi.__name__, ]
+                if callable(objective_function_qoi):
+                    self.list_objective_function_qoi = [objective_function_qoi.__name__, ]
+                else:
+                    self.list_objective_function_qoi = [objective_function_qoi, ]
+            self.qoi_columns = self.qoi_columns + self.list_objective_function_qoi
+
         #objective_function, interval, min_periods, method
 
         list_of_single_df = []
         list_index_parameters_dict = []
         list_of_single_index_parameter_gof_df = []
+        list_of_gradient_matrix_dict = []
         # Important that the results inside rawSamples (resulted paths)
         # are sorted in order which corresponds to the parameters order
         for index_run, value in enumerate(rawSamples,):
+            if value is None:
+                # TODO write in some log file runs which have returned None, in case of sc break!
+                continue
             if isinstance(value, tuple):
                 df_result = value[0]
                 list_index_parameters_dict.append(value[1])
             elif isinstance(value, dict):
-                df_result = value["result_time_series"]
-                list_index_parameters_dict.append(value["parameters_dict"])
-                if strtobool(calculate_GoF):
+                if "result_time_series" in value:
+                    df_result = value["result_time_series"]
+                else:
+                    df_result = None
+                if "parameters_dict" in value:
+                    list_index_parameters_dict.append(value["parameters_dict"])
+                if "gof_df" in value and strtobool(calculate_GoF):
                     list_of_single_index_parameter_gof_df.append(value["gof_df"])
-                if strtobool(compute_gradients):
-                    df_gradient = value["gradient"]
+                if "gradient_matrix_dict" in value and strtobool(compute_gradients):
+                    gradient_matrix_dict = value["gradient_matrix_dict"]
+                    if gradient_matrix_dict is not None:
+                        # TODO Extract only entry for station and oneor multiple gofs
+                        list_of_gradient_matrix_dict.append(gradient_matrix_dict)
             else:
                 df_result = value
 
@@ -143,11 +161,44 @@ class LarsimSamples(object):
             #simulation_start_timestamp = pd.Timestamp(df_single_ergebnis.TimeStamp.min()) + datetime.timedelta(hours=self.warm_up_duration)
             #df_single_ergebnis = larsimDataPostProcessing.parse_df_based_on_time(df_single_ergebnis, (simulation_start_timestamp, None))
 
-            list_of_single_df.append(df_single_ergebnis)
+            if df_single_ergebnis is not None:
+                list_of_single_df.append(df_single_ergebnis)
 
-        self.df_simulation_result = pd.concat(list_of_single_df, ignore_index=True, sort=False, axis=0)
+        if list_of_single_df:
+            self.df_simulation_result = pd.concat(list_of_single_df, ignore_index=True, sort=False, axis=0)
+            larsimInputOutputUtilities._postProcessing_DataFrame_after_reading(self.df_simulation_result)
+            print(f"[LARSIM STAT INFO] Number of Unique TimeStamps (Hourly): "
+                  f"{len(self.df_simulation_result.TimeStamp.unique())}")
+            # TODO remove/refactor resample_time_series_df
+            if strtobool(dailyOutput):
+                print(f"[LarsimSamples INFO] Transformation to daily output")
+                self.transform_dict = dict()
+                for one_qoi_column in self.qoi_columns:
+                    self.transform_dict[one_qoi_column] = 'mean'
+                self.df_simulation_result = larsimDataPostProcessing.resample_time_series_df(self.df_simulation_result,
+                                                                                             transform_dict=self.transform_dict,
+                                                                                             groupby_some_columns=True,
+                                                                                             columns_to_groupby=[
+                                                                                                 "Stationskennung",
+                                                                                                 "Type", "Index_run"],
+                                                                                             time_column="TimeStamp",
+                                                                                             resample_freq="D"
+                                                                                             )
+                ##### Debugging - remove afterwards
+                # print(self.df_simulation_result)
+                # temp = os.path.abspath( os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_siam_cse_v4','model_runs'))
+                # self.save_samples_to_file(temp)
+                print(
+                    f"[LARSIM STAT INFO] Number of Unique TimeStamps (Daily): {self.df_simulation_result.TimeStamp.nunique()}")
 
-        larsimInputOutputUtilities._postProcessing_DataFrame_after_reading(self.df_simulation_result)
+            # save only the real values, independent on QoI
+            # TODO Does not work when only one time step!!!
+            # self.df_time_discharges = self.df_simulation_result.groupby(["Stationskennung","TimeStamp"])["Value"].apply(
+            # lambda df: df.reset_index(drop=True)).unstack()
+            self.df_time_discharges = None
+        else:
+            self.df_simulation_result = None
+            self.df_time_discharges = None
 
         if list_index_parameters_dict:
             self.df_index_parameter_values = pd.DataFrame(list_index_parameters_dict)
@@ -160,62 +211,84 @@ class LarsimSamples(object):
         else:
             self.df_index_parameter_gof_values = None
 
-        print(f"[LARSIM STAT INFO] Number of Unique TimeStamps (Hourly): "
-              f"{len(self.df_simulation_result.TimeStamp.unique())}")
+        if list_of_gradient_matrix_dict:
+            # self.list_of_gradient_matrix_dict = list_of_gradient_matrix_dict
+            gradient_matrix_dict = defaultdict(list)
+            self.dict_of_approx_matrix_c = defaultdict(list)
+            self.dict_of_matrix_c_eigen_decomposition = defaultdict(list)
 
-        # TODO remove/refactor resample_time_series_df
-        if strtobool(dailyOutput):
-            print(f"[LarsimSamples INFO] Transformation to daily output")
-            self.transform_dict = dict()
-            for one_qoi_column in self.qoi_columns:
-                self.transform_dict[one_qoi_column] = 'mean'
-            self.df_simulation_result = larsimDataPostProcessing.resample_time_series_df(self.df_simulation_result,
-                                                                                         transform_dict=self.transform_dict,
-                                                                                         groupby_some_columns=True,
-                                                                                         columns_to_groupby=[
-                                                                                                "Stationskennung",
-                                                                                                "Type", "Index_run"],
-                                                                                         time_column="TimeStamp",
-                                                                                         resample_freq="D"
-                                                                                         )
-            ##### Debugging - remove afterwards
-            # print(self.df_simulation_result)
-            # temp = os.path.abspath( os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_siam_cse_v4','model_runs'))
-            # self.save_samples_to_file(temp)
-            print(f"[LARSIM STAT INFO] Number of Unique TimeStamps (Daily): {self.df_simulation_result.TimeStamp.nunique()}")
+            for single_gradient_matrix_dict in list_of_gradient_matrix_dict:
+                for key, value in single_gradient_matrix_dict.items():
+                    gradient_matrix_dict[key].append(np.array(value))
 
-        # save only the real values, independent on QoI
-        # TODO Does not work when only one time step!!!
-        # self.df_time_discharges = self.df_simulation_result.groupby(["Stationskennung","TimeStamp"])["Value"].apply(
-        # lambda df: df.reset_index(drop=True)).unstack()
+            for key in gradient_matrix_dict.keys():
+                # for single_objective_function in self.list_objective_function_qoi:
+                self.dict_of_approx_matrix_c[key] = \
+                    sum(gradient_matrix_dict[key]) / len(gradient_matrix_dict[key])
+                self.dict_of_matrix_c_eigen_decomposition[key] = \
+                    np.linalg.eig(self.dict_of_approx_matrix_c[key])
+        else:
+            self.dict_of_approx_matrix_c = None
+            self.dict_of_matrix_c_eigen_decomposition = None
 
     def save_samples_to_file(self, file_path='./'):
-        self.df_simulation_result.to_pickle(
-            os.path.abspath(os.path.join(file_path, "df_all_simulations.pkl")), compression="gzip")
+        if self.df_simulation_result is not None:
+            self.df_simulation_result.to_pickle(
+                os.path.abspath(os.path.join(file_path, "df_all_simulations.pkl")), compression="gzip")
 
     def save_index_parameter_values(self, file_path='./'):
-        self.df_index_parameter_values.to_pickle(
-            os.path.abspath(os.path.join(file_path, "df_all_index_parameter_values.pkl")), compression="gzip")
+        if self.df_index_parameter_values is not None:
+            self.df_index_parameter_values.to_pickle(
+                os.path.abspath(os.path.join(file_path, "df_all_index_parameter_values.pkl")), compression="gzip")
 
     def save_index_parameter_gof_values(self, file_path='./'):
-        self.df_index_parameter_gof_values.to_pickle(
-            os.path.abspath(os.path.join(file_path, "df_all_index_parameter_gof_values.pkl")), compression="gzip")
+        if self.df_index_parameter_gof_values is not None:
+            self.df_index_parameter_gof_values.to_pickle(
+                os.path.abspath(os.path.join(file_path, "df_all_index_parameter_gof_values.pkl")), compression="gzip")
 
     def save_time_samples_to_file(self, file_path='./'):
-        self.df_time_discharges.to_pickle(
-            os.path.abspath(os.path.join(file_path, "df_all_time_simulations.pkl")), compression="gzip")
+        if self.df_time_discharges is not None:
+            self.df_time_discharges.to_pickle(
+                os.path.abspath(os.path.join(file_path, "df_all_time_simulations.pkl")), compression="gzip")
+
+    def save_dict_of_approx_matrix_c(self, file_path='./'):
+        if self.dict_of_matrix_c_eigen_decomposition is not None:
+            fileName = os.path.abspath(os.path.join(file_path, "dict_of_approx_matrix_c.pkl"))
+            with open(fileName, 'wb') as handle:
+                pickle.dump(self.dict_of_approx_matrix_c, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+    def save_dict_of_matrix_c_eigen_decomposition(self, file_path='./'):
+        if self.dict_of_matrix_c_eigen_decomposition is not None:
+            fileName = os.path.abspath(os.path.join(file_path, "dict_of_matrix_c_eigen_decomposition.pkl"))
+            with open(fileName, 'wb') as handle:
+                pickle.dump(self.dict_of_matrix_c_eigen_decomposition, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+    def get_number_of_runs(self):
+        return self.df_simulation_result.Index_run.nunique()
 
     def get_simulation_timesteps(self):
-        return list(self.df_simulation_result.TimeStamp.unique())
+        if self.df_simulation_result is not None:
+            return list(self.df_simulation_result.TimeStamp.unique())
+        else:
+            return None
 
     def get_timesteps_min(self):
-        return self.df_simulation_result.TimeStamp.min()
+        if self.df_simulation_result is not None:
+            return self.df_simulation_result.TimeStamp.min()
+        else:
+            return None
 
     def get_timesteps_max(self):
-        return self.df_simulation_result.TimeStamp.max()
+        if self.df_simulation_result is not None:
+            return self.df_simulation_result.TimeStamp.max()
+        else:
+            return None
 
     def get_simulation_stations(self):
-        return list(self.df_simulation_result.Stationskennung.unique())
+        if self.df_simulation_result is not None:
+            return list(self.df_simulation_result.Stationskennung.unique())
+        else:
+            return None
 
     def get_list_of_qoi_column_names(self):
         return self.qoi_columns
@@ -233,12 +306,12 @@ def _my_parallel_calc_stats_for_MC(keyIter_chunk, discharge_values_chunk, numEva
         if store_qoi_data_in_stat_dict:
             local_result_dict["Q"] = discharge_values
 
-        local_result_dict["E"] = np.sum(discharge_values, axis=0, dtype=np.float64) / numEvaluations
-        local_result_dict["E_numpy"] = np.mean(discharge_values, 0)
+        # local_result_dict["E"] = np.sum(discharge_values, axis=0, dtype=np.float64) / numEvaluations
+        local_result_dict["E"] = np.mean(discharge_values, 0)
         local_result_dict["Var"] = np.sum((discharge_values - local_result_dict["E"]) ** 2, axis=0,
                                           dtype=np.float64) / (numEvaluations - 1)
-        local_result_dict["StdDev"] = np.sqrt(local_result_dict[key]["Var"], dtype=np.float64)
-        local_result_dict["StdDev_numpy"] = np.std(discharge_values, 0, ddof=1)
+        # local_result_dict["StdDev"] = np.sqrt(local_result_dict["Var"], dtype=np.float64)
+        local_result_dict["StdDev"] = np.std(discharge_values, 0, ddof=1)
 
         local_result_dict["P10"] = np.percentile(discharge_values, 10, axis=0)
         local_result_dict["P90"] = np.percentile(discharge_values, 90, axis=0)
@@ -337,7 +410,8 @@ def _my_parallel_calc_stats_for_mc_saltelli(keyIter_chunk, discharge_values_chun
 class LarsimStatistics(Statistics):
     """
        LarsimStatistics calculates the statistics for the LarsimModel
-       One LarsimStatistics Object should compute statistics for a multiple station and single QoI
+       One LarsimStatistics Object should compute statistics for a multiple station and single QoI!
+       TODO The problem is that LarsimSamples currently supports vice versa logic - single stations and multiple Qoi/GoFs
     """
 
     def __init__(self, configurationObject, *args, **kwargs):
@@ -354,14 +428,26 @@ class LarsimStatistics(Statistics):
                 self.workingDir = paths.workingDir
 
         # TODO for now this is hardcoded such that only a single self.qoi_column is supported
-        self.qoi_column = kwargs.get('qoi_column') if "qoi_column" in kwargs else "Value"
         self.qoi = configurationObject["Output"]["QOI"] if "QOI" in configurationObject["Output"] else "Q"
-        if self.qoi == "GoF":
+
+        self.compute_gradients = strtobool(configurationObject["Output"]["compute_gradients"])
+
+        if "qoi_column" in kwargs:
+            self.qoi_column = kwargs.get('qoi_column')
+        elif self.qoi == "GoF":
             objective_function_qoi = configurationObject["Output"]["objective_function_qoi"]
             if isinstance(objective_function_qoi, list):
-                self.qoi_column = objective_function_qoi[0].__name__
+                if callable(objective_function_qoi[0]):
+                    self.qoi_column = objective_function_qoi[0].__name__
+                else:
+                    self.qoi_column = objective_function_qoi[0]
             else:
-                self.qoi_column = objective_function_qoi.__name__
+                if callable(objective_function_qoi):
+                    self.qoi_column = objective_function_qoi.__name__
+                else:
+                    self.qoi_column = objective_function_qoi
+        else:
+            self.qoi_column = "Value"
 
         self.result_dict = dict()
 
@@ -388,16 +474,21 @@ class LarsimStatistics(Statistics):
 
         self.uq_method = kwargs.get('uq_method') if 'uq_method' in kwargs else None
 
+        self.save_samples = kwargs.get('save_samples') if 'save_samples' in kwargs else True
+
         self._compute_Sobol_t = kwargs.get('compute_Sobol_t') if 'compute_Sobol_t' in kwargs else True
         self._compute_Sobol_m = kwargs.get('compute_Sobol_m') if 'compute_Sobol_m' in kwargs else True
+        self._compute_Sobol_m2 = kwargs.get('compute_Sobol_m2') if 'compute_Sobol_m2' in kwargs else False
         self._is_Sobol_t_computed = False
         self._is_Sobol_m_computed = False
+        self._is_Sobol_m2_computed = False
 
         self.timesteps_min = None
         self.timesteps_max = None
         self.numbTimesteps = None
         self.timesteps = None
-
+        self.number_of_unique_index_runs = None
+        self.numEvaluations = None
         self.samples = None
         self.result_dict = None
 
@@ -454,14 +545,19 @@ class LarsimStatistics(Statistics):
         self.work_package_indexes = kwargs.get('work_package_indexes') if 'work_package_indexes' in kwargs else None
 
         self.samples = LarsimSamples(rawSamples, configurationObject=self.configurationObject)
-        self.samples.save_samples_to_file(self.workingDir)
-        self.samples.save_index_parameter_values(self.workingDir)
-        self.samples.save_index_parameter_gof_values(self.workingDir)
+        if self.save_samples:
+            self.samples.save_samples_to_file(self.workingDir)
+            self.samples.save_index_parameter_values(self.workingDir)
+            self.samples.save_index_parameter_gof_values(self.workingDir)
+            if self.compute_gradients:
+                self.samples.save_dict_of_approx_matrix_c(self.workingDir)
+                self.samples.save_dict_of_matrix_c_eigen_decomposition(self.workingDir)
 
         self.timesteps = self.samples.get_simulation_timesteps()
         self.timesteps_min = self.samples.get_timesteps_min()
         self.timesteps_max = self.samples.get_timesteps_max()
         self.pdTimesteps = [pd.Timestamp(timestep) for timestep in self.timesteps]
+        self.number_of_unique_index_runs = self.samples.get_number_of_runs()
 
         self.numbTimesteps = len(self.timesteps)
 
@@ -474,6 +570,8 @@ class LarsimStatistics(Statistics):
     def preparePolyExpanForMc(self, simulationNodes, numEvaluations, regression=None, order=None,
                               poly_normed=None, poly_rule=None, *args, **kwargs):
         self.numEvaluations = numEvaluations
+        # TODO Think about this, tricky for saltelli, makes sense for mc
+        # self.numEvaluations = self.number_of_unique_index_runs
         if regression:
             self.nodes = simulationNodes.distNodes
             self.weights = None
@@ -488,7 +586,8 @@ class LarsimStatistics(Statistics):
 
     def preparePolyExpanForSaltelli(self, simulationNodes, numEvaluations=None, regression=None, order=None,
                                     poly_normed=None, poly_rule=None, *args, **kwargs):
-        pass
+        self.preparePolyExpanForMc(simulationNodes, numEvaluations, regression, order, poly_normed, poly_rule,
+                                   *args, **kwargs)
 
     def calcStatisticsForMcParallel(self, chunksize=1, regression=False, *args, **kwargs):
         if self.rank == 0:
@@ -672,14 +771,23 @@ class LarsimStatistics(Statistics):
                             work_package_indexes, original_runtime_estimator, **kwargs):
 
         self.samples = LarsimSamples(rawSamples, configurationObject=self.configurationObject)
-        self.samples.save_samples_to_file(self.workingDir)
-        self.samples.save_index_parameter_values(self.workingDir)
-        self.samples.save_index_parameter_gof_values(self.workingDir)
+        if self.save_samples:
+            self.samples.save_samples_to_file(self.workingDir)
+            self.samples.save_index_parameter_values(self.workingDir)
+            self.samples.save_index_parameter_gof_values(self.workingDir)
+            if self.compute_gradients:
+                self.samples.save_dict_of_approx_matrix_c(self.workingDir)
+                self.samples.save_dict_of_matrix_c_eigen_decomposition(self.workingDir)
 
         self.timesteps = self.samples.get_simulation_timesteps()
         self.timesteps_min = self.samples.get_timesteps_min()
         self.timesteps_max = self.samples.get_timesteps_max()
         self.pdTimesteps = [pd.Timestamp(timestep) for timestep in self.timesteps]
+        self.number_of_unique_index_runs = self.samples.get_number_of_runs()
+
+        self.numEvaluations = numEvaluations
+        # TODO Think about this, tricky for saltelli, makes sense for mc
+        # self.numEvaluations = self.number_of_unique_index_runs
 
         self.numbTimesteps = len(self.timesteps)
         print(f"[LARSIM STAT INFO] numbTimesteps is: {self.numbTimesteps}")
@@ -728,14 +836,19 @@ class LarsimStatistics(Statistics):
                            work_package_indexes, original_runtime_estimator, **kwargs):
 
         self.samples = LarsimSamples(rawSamples, configurationObject=self.configurationObject)
-        self.samples.save_samples_to_file(self.workingDir)
-        self.samples.save_index_parameter_values(self.workingDir)
-        self.samples.save_index_parameter_gof_values(self.workingDir)
+        if self.save_samples:
+            self.samples.save_samples_to_file(self.workingDir)
+            self.samples.save_index_parameter_values(self.workingDir)
+            self.samples.save_index_parameter_gof_values(self.workingDir)
+            if self.compute_gradients:
+                self.samples.save_dict_of_approx_matrix_c(self.workingDir)
+                self.samples.save_dict_of_matrix_c_eigen_decomposition(self.workingDir)
 
         self.timesteps = self.samples.get_simulation_timesteps()
         self.timesteps_min = self.samples.get_timesteps_min()
         self.timesteps_max = self.samples.get_timesteps_max()
         self.pdTimesteps = [pd.Timestamp(timestep) for timestep in self.timesteps]
+        self.number_of_unique_index_runs = self.samples.get_number_of_runs()
 
         self.numbTimesteps = len(self.timesteps)
         print(f"[LARSIM STAT INFO] numbTimesteps is: {self.numbTimesteps}")
@@ -797,21 +910,31 @@ class LarsimStatistics(Statistics):
             self.result_dict[key]["Sobol_t"] = cp.Sens_t(qoi_gPCE, dist)
         if self._compute_Sobol_m:
             self.result_dict[key]["Sobol_m"] = cp.Sens_m(qoi_gPCE, dist)
-            #self.result_dict[key]["Sobol_m2"] = cp.Sens_m2(qoi_gPCE, dist) # second order sensitivity indices
+        if self._compute_Sobol_m2:
+            self.result_dict[key]["Sobol_m2"] = cp.Sens_m2(qoi_gPCE, dist) # second order sensitivity indices
 
     def calcStatisticsForSaltelli(self, rawSamples, timesteps,
                             simulationNodes, numEvaluations, order, regression, poly_normed, poly_rule, solverTimes,
                             work_package_indexes, original_runtime_estimator=None, **kwargs):
 
         self.samples = LarsimSamples(rawSamples, configurationObject=self.configurationObject)
-        self.samples.save_samples_to_file(self.workingDir)
-        self.samples.save_index_parameter_values(self.workingDir)
-        self.samples.save_index_parameter_gof_values(self.workingDir)
+        if self.save_samples:
+            self.samples.save_samples_to_file(self.workingDir)
+            self.samples.save_index_parameter_values(self.workingDir)
+            self.samples.save_index_parameter_gof_values(self.workingDir)
+            if self.compute_gradients:
+                self.samples.save_dict_of_approx_matrix_c(self.workingDir)
+                self.samples.save_dict_of_matrix_c_eigen_decomposition(self.workingDir)
 
         self.timesteps = self.samples.get_simulation_timesteps()
         self.timesteps_min = self.samples.get_timesteps_min()
         self.timesteps_max = self.samples.get_timesteps_max()
         self.pdTimesteps = [pd.Timestamp(timestep) for timestep in self.timesteps]
+        self.number_of_unique_index_runs = self.samples.get_number_of_runs()
+
+        self.numEvaluations = numEvaluations
+        # TODO Think about this, tricky for saltelli, makes sense for mc
+        # self.numEvaluations = self.number_of_unique_index_runs
 
         self.numbTimesteps = len(self.timesteps)
         print(f"[LARSIM STAT INFO] numbTimesteps is: {self.numbTimesteps}")
@@ -876,8 +999,10 @@ class LarsimStatistics(Statistics):
         self._is_Sobol_t_computed = "Sobol_t" in self.result_dict[keyIter[0]] #hasattr(self.result_dict[keyIter[0], "Sobol_t")
 
     def _check_if_Sobol_m_computed(self, keyIter):
-        self._is_Sobol_m_computed = "Sobol_m" in self.result_dict[keyIter[0]] \
-                                    or "Sobol_m2" in self.result_dict[keyIter[0]] #hasattr(self.result_dict[keyIter[0], "Sobol_m")
+        self._is_Sobol_m_computed = "Sobol_m" in self.result_dict[keyIter[0]]
+
+    def _check_if_Sobol_m2_computed(self, keyIter):
+        self._is_Sobol_m2_computed = "Sobol_m2" in self.result_dict[keyIter[0]]
 
     # TODO timestepRange calculated based on whole Time-series
     def get_measured_discharge(self, timestepRange=None):
@@ -961,7 +1086,7 @@ class LarsimStatistics(Statistics):
         print(f"[LARSIM STAT INFO] plotResults function is called!")
 
         for single_station in self.station_of_Interest:
-            fileName = single_station
+            fileName = single_station + "_" + self.qoi_column
             single_fileName = self.generateFileName(fileName=fileName, fileNameIdent=".html",
                                              directory=directory, fileNameIdentIsFullName=fileNameIdentIsFullName)
             self._plotStatisticsDict_plotly(unalatered=self.unaltered_computed, measured=self.groundTruth_computed,
@@ -973,9 +1098,15 @@ class LarsimStatistics(Statistics):
 
     def _plotStatisticsDict_plotly(self, unalatered=False, measured=False, station="MARI",
                                    recalculateTimesteps=False, window_title='Larsim Forward UQ & SA',
-                                   filename="sim-plotly.html", display=False):
+                                   filename="sim-plotly.html", display=False, uq_method=None):
 
         print(f"[LARSIM STAT INFO] _plotStatisticsDict_plotly function is called!")
+
+        if uq_method is None:
+            if self.uq_method is None:
+                raise Exception("_plotStatisticsDict_plotly - Please specify uq_method argument!")
+            else:
+                uq_method = self.uq_method
 
         #TODO Access to timesteps in a two different ways, e.g. one for QoI one for Q
         if recalculateTimesteps:
@@ -996,18 +1127,7 @@ class LarsimStatistics(Statistics):
         else:
             starting_row = 2
 
-        if self._is_Sobol_t_computed and self._is_Sobol_m_computed:
-            n_rows = 4
-            sobol_m_row = starting_row+2
-            sobol_t_row = starting_row+3
-        elif self._is_Sobol_t_computed:
-            n_rows = 3
-            sobol_t_row = starting_row+2
-        elif self._is_Sobol_m_computed:
-            n_rows = 3
-            sobol_m_row = starting_row+2
-        else:
-            n_rows = 2
+        n_rows, sobol_t_row, sobol_m_row = self._compute_number_of_rows_for_plotting(starting_row)
 
         if self.qoi_column != "Value":
             n_rows = n_rows+1
@@ -1054,15 +1174,25 @@ class LarsimStatistics(Statistics):
         if self._is_Sobol_m_computed:
             for i in range(len(self.labels)):
                 name = self.labels[i] + "_S_m"
-                fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.result_dict[key]["Sobol_m"][i] for key in keyIter],
-                                         name=name, legendgroup=self.labels[i], line_color=COLORS[i]),
-                              row=sobol_m_row, col=1)
+                if uq_method == "saltelli":
+                    fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.result_dict[key]["Sobol_m"][i][0] for key in keyIter],
+                                             name=name, legendgroup=self.labels[i], line_color=COLORS[i]),
+                                  row=sobol_m_row, col=1)
+                else:
+                    fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.result_dict[key]["Sobol_m"][i] for key in keyIter],
+                                             name=name, legendgroup=self.labels[i], line_color=COLORS[i]),
+                                  row=sobol_m_row, col=1)
         if self._is_Sobol_t_computed:
             for i in range(len(self.labels)):
                 name = self.labels[i] + "_S_t"
-                fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.result_dict[key]["Sobol_t"][i] for key in keyIter],
-                                         name=name, legendgroup=self.labels[i], line_color=COLORS[i]),
-                              row=sobol_t_row, col=1)
+                if uq_method == "saltelli":
+                    fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.result_dict[key]["Sobol_t"][i][0] for key in keyIter],
+                                             name=name, legendgroup=self.labels[i], line_color=COLORS[i]),
+                                  row=sobol_t_row, col=1)
+                else:
+                    fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.result_dict[key]["Sobol_t"][i] for key in keyIter],
+                                             name=name, legendgroup=self.labels[i], line_color=COLORS[i]),
+                                  row=sobol_t_row, col=1)
 
         # TODO - Make additional plots - each parameter independently with color + normalized Q measured
 
@@ -1091,6 +1221,22 @@ class LarsimStatistics(Statistics):
         #fig.write_image(filename)
         fig.show()
 
+    def _compute_number_of_rows_for_plotting(self, starting_row):
+        sobol_t_row = sobol_m_row = None
+        if self._is_Sobol_t_computed and self._is_Sobol_m_computed:
+            n_rows = 5
+            sobol_m_row = starting_row+2
+            sobol_t_row = starting_row+3
+        elif self._is_Sobol_t_computed:
+            n_rows = 3
+            sobol_t_row = starting_row+2
+        elif self._is_Sobol_m_computed:
+            n_rows = 3
+            sobol_m_row = starting_row+2
+        else:
+            n_rows = 2
+        return n_rows, sobol_t_row, sobol_m_row,
+
     def _plotStatisticsDict_plotter(self, unalatered=False, measured=False, station="MARI",
                                     recalculateTimesteps=False, window_title='Larsim Forward UQ & SA - MARI',
                                     filename="sim-plotter", display=True):
@@ -1100,7 +1246,8 @@ class LarsimStatistics(Statistics):
     def saveToFile(self, fileName="statistics_dict", fileNameIdent="", directory="./",
                    fileNameIdentIsFullName=False):
 
-        statFileName = os.path.abspath(os.path.join(self.workingDir,"statistics_dictionary.pkl"))
+        fileName = "statistics_dictionary_qoi_" + self.qoi_column + ".pkl"
+        statFileName = os.path.abspath(os.path.join(self.workingDir, fileName))
         with open(statFileName, 'wb') as handle:
             pickle.dump(self.result_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
@@ -1143,12 +1290,8 @@ class LarsimStatistics(Statistics):
     # It makes sense that the function below are executed for one input station
     ###################################################################################################################
 
-    def create_df_from_statistics_data_singe_station(self, station=None):
-        if station is None:
-            if not isinstance(self.station_of_Interest, list):
-                station = self.station_of_Interest
-            else:
-                station = self.station_of_Interest[0]
+    def create_df_from_statistics_data_singe_station(self, station=None, uq_method="sc"):
+        station = self._check_station_argument(station)
         keyIter = list(itertools.product([station, ], self.pdTimesteps))
         mean_time_series = [self.result_dict[key]["E"] for key in keyIter]
         std_time_series = [self.result_dict[key]["StdDev"] for key in keyIter]
@@ -1162,13 +1305,19 @@ class LarsimStatistics(Statistics):
 
         if self._is_Sobol_m_computed:
             for i in range(len(self.labels)):
-                sobol_m_time_series = [self.result_dict[key]["Sobol_m"][i] for key in keyIter]
+                if uq_method == "saltelli":
+                    sobol_m_time_series = [self.result_dict[key]["Sobol_m"][i][0] for key in keyIter]
+                else:
+                    sobol_m_time_series = [self.result_dict[key]["Sobol_m"][i] for key in keyIter]
                 list_of_columns.append(sobol_m_time_series)
                 temp = "sobol_m_" + self.labels[i]
                 list_of_columns_names.append(temp)
         if self._is_Sobol_t_computed:
             for i in range(len(self.labels)):
-                sobol_t_time_series = [self.result_dict[key]["Sobol_t"][i] for key in keyIter]
+                if uq_method == "saltelli":
+                    sobol_t_time_series = [self.result_dict[key]["Sobol_t"][i][0] for key in keyIter]
+                else:
+                    sobol_t_time_series = [self.result_dict[key]["Sobol_t"][i] for key in keyIter]
                 list_of_columns.append(sobol_t_time_series)
                 temp = "sobol_t_" + self.labels[i]
                 list_of_columns_names.append(temp)
@@ -1184,6 +1333,12 @@ class LarsimStatistics(Statistics):
                                                           on="TimeStamp", how='outer', fill_method="ffill")
             df_statistics_station.rename(columns={column_to_extract: "measured", }, inplace=True)
 
+            #  df_statistics_station['measured_standardized'] =
+            #  (df_statistics_station.measured-df_statistics_station.measured.mean())/df_statistics_station.measured.std()
+            df_statistics_station['measured_norm'] = \
+                (df_statistics_station.measured - df_statistics_station.measured.min()) / \
+                (df_statistics_station.measured.max() - df_statistics_station.measured.min())
+
         if self.unaltered_computed:
             temp = larsimDataPostProcessing.filterResultForStation(self.df_unaltered,
                                                                    station=station)
@@ -1193,22 +1348,12 @@ class LarsimStatistics(Statistics):
                                                           on="TimeStamp", how='outer', fill_method="ffill")
             df_statistics_station.rename(columns={column_to_extract: "unaltered", }, inplace=True)
 
-        #  df_statistics_station['measured_standardized'] =
-        #  (df_statistics_station.measured-df_statistics_station.measured.mean())/df_statistics_station.measured.std()
-        df_statistics_station['measured_norm'] = \
-            (df_statistics_station.measured - df_statistics_station.measured.min()) / \
-            (df_statistics_station.measured.max() - df_statistics_station.measured.min())
-
         df_statistics_station["E_minus_std"] = df_statistics_station['E'] - df_statistics_station['Std']
         df_statistics_station["E_plus_std"] = df_statistics_station['E'] + df_statistics_station['Std']
         return df_statistics_station
 
     def compute_gof_over_different_time_series(self, objective_function, station=None):
-        if station is None:
-            if not isinstance(self.station_of_Interest, list):
-                station = self.station_of_Interest
-            else:
-                station = self.station_of_Interest[0]
+        station = self._check_station_argument(station)
         df_statistics_station = self.create_df_from_statistics_data_singe_station(station)
         if df_statistics_station is None:
             return
@@ -1239,101 +1384,89 @@ class LarsimStatistics(Statistics):
               f"gof_meas_mean_m_std:{gof_meas_mean_m_std} \ngof_meas_mean_p_std:{gof_meas_mean_p_std} \n"
               f"gof_meas_p10:{gof_meas_p10} \ngof_meas_p90:{gof_meas_p90} \n")
 
-    def create_df_from_sensitivity_total_indices_for_singe_station(self, station=None):
-        if not self._is_Sobol_t_computed:
+    def create_df_from_sensitivity_indices_for_singe_station(self, station=None, si_type="Sobol_t", uq_method="sc"):
+        """
+        si_type should be: Sobol_t, Sobol_m or Sobol_m2
+        """
+        if si_type == "Sobol_t" and not self._is_Sobol_t_computed:
             raise Exception("Sobol Total Order Indices are not computed")
+        elif si_type == "Sobol_m" and not self._is_Sobol_m_computed:
+            raise Exception("Sobol Main Order Indices are not computed")
+        elif si_type == "Sobol_m2" and not self._is_Sobol_m2_computed:
+            raise Exception("Sobol Second Order Indices are not computed")
 
-        if station is None:
-            if not isinstance(self.station_of_Interest, list):
-                station = self.station_of_Interest
-            else:
-                station = self.station_of_Interest[0]
-
-        keyIter = list(itertools.product([station, ], self.pdTimesteps))
-
-        list_of_df_over_parameters = []
-        for i in range(len(self.labels)):
-            si_t_single_param = [self.result_dict[key]["Sobol_t"][i] for key in keyIter]
-            df_temp = pd.DataFrame(list(zip(si_t_single_param, self.pdTimesteps)),
-                                   columns=[self.labels[i] + "_si_t", 'TimeStamp'])
-            list_of_df_over_parameters.append(df_temp)
-        si_t_df = reduce(lambda left, right: pd.merge(left, right, on="TimeStamp", how='outer'),
-                              list_of_df_over_parameters)
-
-        if self.groundTruth_computed:
-            temp = larsimDataPostProcessing.filterResultForStation(self.df_measured, station=station)
-            column_to_extract = 'Value' if 'Value' in self.df_measured.columns else station
-            si_t_df = pd.merge_ordered(si_t_df, temp[[column_to_extract, "TimeStamp"]], on="TimeStamp",
-                                            how='outer', fill_method="ffill")
-            si_t_df.rename(columns={column_to_extract: "measured", }, inplace=True)
-
-        si_t_df.set_index("TimeStamp", inplace=True)
-        return si_t_df
-
-    def create_df_from_sensitivity_first_indices_for_singe_station(self, station=None):
-        if not self._is_Sobol_m_computed:
-            raise Exception("Sobol First Order Indices are not computed")
-
-        if station is None:
-            if not isinstance(self.station_of_Interest, list):
-                station = self.station_of_Interest
-            else:
-                station = self.station_of_Interest[0]
+        station = self._check_station_argument(station)
 
         keyIter = list(itertools.product([station, ], self.pdTimesteps))
 
         list_of_df_over_parameters = []
         for i in range(len(self.labels)):
-            si_t_single_param = [self.result_dict[key]["Sobol_m"][i] for key in keyIter]
-            df_temp = pd.DataFrame(list(zip(si_t_single_param, self.pdTimesteps)),
-                                   columns=[self.labels[i] + "_si_t", 'TimeStamp'])
+            if uq_method == "saltelli":
+                si_single_param = [self.result_dict[key][si_type][i][0] for key in keyIter]
+            else:
+                si_single_param = [self.result_dict[key][si_type][i] for key in keyIter]
+            df_temp = pd.DataFrame(list(zip(si_single_param, self.pdTimesteps)),
+                                   columns=[si_type + "_" + self.labels[i], 'TimeStamp'])
             list_of_df_over_parameters.append(df_temp)
-        si_m_df = reduce(lambda left, right: pd.merge(left, right, on="TimeStamp", how='outer'),
+        si_df = reduce(lambda left, right: pd.merge(left, right, on="TimeStamp", how='outer'),
                               list_of_df_over_parameters)
 
         if self.groundTruth_computed:
             temp = larsimDataPostProcessing.filterResultForStation(self.df_measured, station=station)
             column_to_extract = 'Value' if 'Value' in self.df_measured.columns else station
-            si_m_df = pd.merge_ordered(si_m_df, temp[[column_to_extract, "TimeStamp"]], on="TimeStamp",
-                                            how='outer', fill_method="ffill")
-            si_m_df.rename(columns={column_to_extract: "measured", }, inplace=True)
+            si_df = pd.merge_ordered(si_df, temp[[column_to_extract, "TimeStamp"]], on="TimeStamp",
+                                     how='outer', fill_method="ffill")
+            si_df.rename(columns={column_to_extract: "measured", }, inplace=True)
 
-        si_m_df.set_index("TimeStamp", inplace=True)
+        si_df.set_index("TimeStamp", inplace=True)
+        return si_df
 
-    # def plot_heatmap_si_t(self):
-    #     si_t_columns = [x for x in si_t_df.columns.tolist() if x != 'measured']
-    #     fig = px.imshow(si_t_df[si_t_columns].T, labels=dict(y='Parameter'))
-    #     return fig
-    #
-    # def plot_heatmap_si_m(self):
-    #     si_m_columns = [x for x in si_m_df.columns.tolist() if x != 'measured']
-    #     fig = px.imshow(si_m_df[si_m_columns].T, labels=dict(y='Parameter'))
-    #     return fig
-    #
-    # def plot_si_t_and_normalized_measured_time_signal(self, station=None):
-    #     if station is None:
-    #         if not isinstance(self.station_of_Interest, list):
-    #             station = self.station_of_Interest
-    #         else:
-    #             station = self.station_of_Interest[0]
-    #
-    #     si_t_columns = [x for x in si_t_df.columns.tolist() if x != 'measured']
-    #     fig = go.Figure()
-    #     if si_t_df is not None:
-    #         fig = px.line(si_t_df, x=si_t_df.index, y=si_t_columns)
-    #     else:
-    #         keyIter = list(itertools.product([station, ], self.pdTimesteps))
-    #         for i in range(len(self.labels)):
-    #             fig.add_trace(go.Scatter(x=self.pdTimesteps,
-    #                                      y=[self.result_dict[key]["Sobol_t"][i] for key in keyIter],
-    #                                      name=self.labels[i], legendgroup=self.labels[i],
-    #                                      line_color=COLORS[i])
-    #                           )
-    #     if df_statistics_station is not None:
-    #         fig.add_trace(go.Scatter(x=df_statistics_station['TimeStamp'],
-    #                                  y=df_statistics_station['measured_norm'],
-    #                                  fill='tozeroy'))
-    #     return fig
+    def plot_heatmap_si_for_single_station(self, si_df=None, station=None, si_type="Sobol_t", uq_method="sc"):
+        if si_df is None:
+            si_df = self.create_df_from_sensitivity_indices_for_singe_station(station, si_type, uq_method)
+        si_columns = [x for x in si_df.columns.tolist() if x != 'measured']
+        fig = px.imshow(si_df[si_columns].T, labels=dict(y='Parameter'))
+        return fig
+
+    def plot_si_indices_over_time(self, station=None, si_type="Sobol_t", uq_method="sc"):
+        fig = go.Figure()
+        station = self._check_station_argument(station)
+        keyIter = list(itertools.product([station, ], self.pdTimesteps))
+        for i in range(len(self.labels)):
+            if uq_method == "saltelli":
+                fig.add_trace(
+                    go.Scatter(x=self.pdTimesteps, y=[self.result_dict[key][si_type][i][0] for key in keyIter],
+                               name=self.labels[i], legendgroup=self.labels[i], line_color=COLORS[i]))
+            else:
+                fig.add_trace(
+                    go.Scatter(x=self.pdTimesteps, y=[self.result_dict[key][si_type][i] for key in keyIter],
+                               name=self.labels[i], legendgroup=self.labels[i], line_color=COLORS[i]))
+
+        return fig
+
+    def plot_si_and_normalized_measured_time_signal(self, si_df=None,
+                                                    df_statistics_station=None, station=None, si_type="Sobol_t",
+                                                    measured_norm_columns_name="measured_norm", uq_method="sc"):
+        station = self._check_station_argument(station)
+        si_columns = [x for x in si_df.columns.tolist() if x != 'measured']
+
+        if si_df is None:
+            si_df = self.create_df_from_sensitivity_indices_for_singe_station(station, si_type, uq_method)
+        if df_statistics_station is None:
+            df_statistics_station = self.create_df_from_statistics_data_singe_station(station, uq_method)
+        fig = px.line(si_df, x=si_df.index, y=si_columns)
+        fig.add_trace(go.Scatter(x=df_statistics_station['TimeStamp'],
+                                 y=df_statistics_station[measured_norm_columns_name],
+                                 fill='tozeroy', name="Normalized Q[m^3/s]"))
+        return fig
+
+    def _check_station_argument(self, station=None):
+        if station is None:
+            if not isinstance(self.station_of_Interest, list):
+                station = self.station_of_Interest
+            else:
+                station = self.station_of_Interest[0]
+        return station
 
     def calculate_p_and_r_factors(self):
         pass

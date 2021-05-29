@@ -339,7 +339,7 @@ class LarsimModelSetUp():
 
         # delete ergebnis.lila and all other not necessary files
         if createNewFolder:
-            larsimConfigurationSettings.cleanDirecory_completely(curr_directory=dir_unaltered_run)
+            larsimConfigurationSettings.cleanDirectory_completely(curr_directory=dir_unaltered_run)
         else:
             larsimConfigurationSettings._delete_larsim_output_files(curr_directory=dir_unaltered_run)
 
@@ -440,9 +440,24 @@ class LarsimModel(Model):
         self.local_measurement_file = self.workingDir / "df_measured.pkl"
         if not self.local_measurement_file.exists():
             self.local_measurement_file = self.master_dir / paths.lila_files[0]
+
         #####################################
         # Specification of different variables for setting the model run and purpose of the model run
         #####################################
+        # Set of config variables propagated via UQsim.args
+
+        self.raise_exception_on_model_break = kwargs.get('raise_exception_on_model_break') \
+            if 'raise_exception_on_model_break' in kwargs else True
+        self.max_retries = kwargs.get('max_retries') if 'max_retries' in kwargs else None
+        self.uq_method = kwargs.get('uq_method') if 'uq_method' in kwargs else None
+        if self.uq_method is not None and self.uq_method == "sc":  # always break when running gPCE simulation
+            self.raise_exception_on_model_break = True
+
+        self.disable_statistics = kwargs.get('disable_statistics') if 'disable_statistics' in kwargs else False
+
+        #####################################
+        # Set of config variables propagated via config file
+
         try:
             self.station_of_Interest = self.configurationObject["Output"]["station_calibration_postproc"]
         except KeyError:
@@ -542,7 +557,7 @@ class LarsimModel(Model):
 
         # save the output of each simulation just in run function just in case when run_and_save_simulations in json configuration file is True
         # and no statistics calculations will be performed afterwards, otherwise the simulation results will be saved in LarsimStatistics
-        self.disable_statistics = kwargs.get('disable_statistics') if 'disable_statistics' in kwargs else False
+
         self.run_and_save_simulations = strtobool(self.configurationObject["Output"]["run_and_save_simulations"])\
                                         if "run_and_save_simulations" in self.configurationObject["Output"] else False
         self.run_and_save_simulations = self.run_and_save_simulations and self.disable_statistics
@@ -624,11 +639,15 @@ class LarsimModel(Model):
             self._set_measured_df()
         return self.measuredDF
 
-    def run(self, i_s=[0,], parameters=None):  # i_s - index chunk; parameters - parameters chunk
+    def run(self, i_s=[0,], parameters=None, raise_exception_on_model_break=None, *args, **kwargs):  # i_s - index chunk; parameters - parameters chunk
 
         print(f"[LarsimModel INFO] {i_s} parameter: {parameters}")
 
-        results = []
+        if raise_exception_on_model_break is None:
+            raise_exception_on_model_break = self.raise_exception_on_model_break
+        max_retries = kwargs.get("max_retries") if "max_retries" in kwargs else self.max_retries
+
+        results_array = []
         for ip in range(0, len(i_s)): # for each peace of work
             i = i_s[ip]  # i is unique index run
 
@@ -670,17 +689,25 @@ class LarsimModel(Model):
             if self.cut_runs:
                 result = self._multiple_short_larsim_runs(timeframe=self.timeframe, timestep=self.timestep,
                                                           curr_working_dir=curr_working_dir, index_run=i,
-                                                          warm_up_duration=self.warm_up_duration)
+                                                          warm_up_duration=self.warm_up_duration,
+                                                          raise_exception_on_model_break=raise_exception_on_model_break,
+                                                          max_retries=max_retries)
             else:
                 result = self._single_larsim_run(timeframe=self.timeframe, curr_working_dir=curr_working_dir,
-                                                 index_run=i, warm_up_duration=self.warm_up_duration)
+                                                 index_run=i, warm_up_duration=self.warm_up_duration,
+                                                 raise_exception_on_model_break=raise_exception_on_model_break,
+                                                 max_retries=max_retries)
             if result is None:
-                # end = time.time()
-                # runtime = end - start
-                # results.append((None, runtime))
-                larsimConfigurationSettings.cleanDirecory_completely(curr_directory=curr_working_dir)
+                larsimConfigurationSettings.cleanDirectory_completely(curr_directory=curr_working_dir)
                 os.chdir(self.sourceDir)
-                continue
+                if raise_exception_on_model_break:
+                    raise Exception(f"[LarsimModel ERROR] Process {i}: Larsim run was unsuccessful!")
+                else:
+                    # TODO write in some log file runs which have returned None
+                    end = time.time()
+                    runtime = end - start
+                    results_array.append((None, runtime))
+                    continue
 
             # filter output time-series in order to disregard warm-up time;
             # if not, then at least disregard these values when calculating statistics and GoF
@@ -768,8 +795,12 @@ class LarsimModel(Model):
             # self.mode=="continuous", self.qoi="Q", self.calculate_GoF=True
             # self.mode="resampling", self.qoi="GoF"
             if self.compute_gradients:
+
+                # self.configurationObject["parameters_settings"]["cut_limits"] = "True"
+
                 # compute different GoFs (those in self.objective_function_qoi)
                 # only for stations in self.station_of_Interest, for main result to use it as a baseline
+                # and only when self.uq_method != "sc"
                 if index_parameter_gof_DF is None:
                     index_parameter_gof_DF = self._calculate_GoF(predictedDF=result,
                                                                  parameters_dict=parameters_dict,
@@ -830,12 +861,29 @@ class LarsimModel(Model):
                     # Run Larsim
                     if self.cut_runs:
                         result_grd = self._multiple_short_larsim_runs(timeframe=self.timeframe, timestep=self.timestep,
-                                                                  curr_working_dir=curr_working_dir_gradient,
-                                                                  index_run=i, warm_up_duration=self.warm_up_duration)
+                                                                      curr_working_dir=curr_working_dir_gradient,
+                                                                      index_run=i, warm_up_duration=self.warm_up_duration,
+                                                                      raise_exception_on_model_break=raise_exception_on_model_break,
+                                                                      max_retries=max_retries)
                     else:
                         result_grd = self._single_larsim_run(timeframe=self.timeframe,
-                                                         curr_working_dir=curr_working_dir_gradient,
-                                                         index_run=i, warm_up_duration=self.warm_up_duration)
+                                                             curr_working_dir=curr_working_dir_gradient,
+                                                             index_run=i, warm_up_duration=self.warm_up_duration,
+                                                             raise_exception_on_model_break=raise_exception_on_model_break,
+                                                             max_retries=max_retries)
+
+                    if result_grd is None:
+                        larsimConfigurationSettings.cleanDirectory_completely(curr_directory=curr_working_dir_gradient)
+                        os.chdir(curr_working_dir)
+                        if raise_exception_on_model_break:
+                            raise Exception(f"[LarsimModel ERROR] Process {i} - "
+                                            f"computing gradient param_index:{param_index}, eps_val:{eps_val}: "
+                                            f"Larsim run was unsuccessful!")
+                        else:
+                            # TODO write in some log file runs which have returned None
+                            gradient_vectors_param_dict = dict()
+                            gradient_vectors_dict = dict()
+                            break
 
                     # 2.4. Preparations before computing GoF
                     result_grd = larsimDataPostProcessing.parse_df_based_on_time(result_grd,
@@ -879,36 +927,40 @@ class LarsimModel(Model):
                     larsimConfigurationSettings.cleanDirectory_completely(curr_directory=curr_working_dir_gradient)
 
                     # change back to starting directory of all the processes
-                    os.chdir(self.curr_working_dir)
+                    os.chdir(curr_working_dir)
 
                     # Delete local working folder
                     subprocess.run(["rm", "-r", curr_working_dir_gradient])
 
                 # 3. Process data for generating gradient matrices
                 gradient_matrix_dict = dict()
-                for single_station in list_of_stations:
-                    for single_gof in list_of_gof:
-                        if self.CD:  # Central Difference (CD) computation
-                            f_x_ij_p_h_array = np.array(gradient_vectors_dict[(single_station, single_gof)][0::2], dtype=np.float32)
-                            f_x_ij_m_h_array = np.array(gradient_vectors_dict[(single_station, single_gof)][1::2], dtype=np.float32)
-                            grad_estimation = (f_x_ij_p_h_array - f_x_ij_m_h_array) / np.array(h_vector)
-                        else:  # Forward Difference (FD) computation
-                            f_x_ij_p_h_array = np.array(gradient_vectors_dict[(single_station, single_gof)][0::2], dtype=np.float32)
-                            f_x_ij_array = np.array(gradient_vectors_dict[(single_station, single_gof)][1::2], dtype=np.float32)
-                            grad_estimation = (f_x_ij_p_h_array - f_x_ij_array) / np.array(h_vector)
+                if gradient_vectors_dict:
+                    for single_station in list_of_stations:
+                        for single_gof in list_of_gof:
+                            if self.CD:  # Central Difference (CD) computation
+                                f_x_ij_p_h_array = np.array(gradient_vectors_dict[(single_station, single_gof)][0::2], dtype=np.float32)
+                                f_x_ij_m_h_array = np.array(gradient_vectors_dict[(single_station, single_gof)][1::2], dtype=np.float32)
+                                grad_estimation = (f_x_ij_p_h_array - f_x_ij_m_h_array) / np.array(h_vector)
+                            else:  # Forward Difference (FD) computation
+                                f_x_ij_p_h_array = np.array(gradient_vectors_dict[(single_station, single_gof)][0::2], dtype=np.float32)
+                                f_x_ij_array = np.array(gradient_vectors_dict[(single_station, single_gof)][1::2], dtype=np.float32)
+                                grad_estimation = (f_x_ij_p_h_array - f_x_ij_array) / np.array(h_vector)
 
-                        gradient_matrix_dict[(single_station, single_gof)] = np.outer(grad_estimation, grad_estimation)
+                            gradient_matrix_dict[(single_station, single_gof)] = np.outer(grad_estimation, grad_estimation)
 
                 # finally, add gradient estimated to index_parameter_gof_DF
-                for current_param_name in parameter_names:
-                    for single_gof in list_of_gof:
-                        new_column_name = "d_" + single_gof + "_d_" + current_param_name
-                        index_parameter_gof_DF[new_column_name] = \
-                            index_parameter_gof_DF["station"].apply(lambda x: \
-                                                                        gradient_vectors_param_dict.get((x, single_gof, current_param_name), np.nan))
+                if gradient_vectors_param_dict:
+                    for current_param_name in parameter_names:
+                        for single_gof in list_of_gof:
+                            new_column_name = "d_" + single_gof + "_d_" + current_param_name
+                            index_parameter_gof_DF[new_column_name] = \
+                                index_parameter_gof_DF["station"].apply(lambda x: \
+                                                                            gradient_vectors_param_dict.get((x, single_gof, current_param_name), np.nan))
 
-                result_dict["gradient_matrix_dict"] = gradient_matrix_dict
-
+                if gradient_matrix_dict:
+                    result_dict["gradient_matrix_dict"] = gradient_matrix_dict
+                else:
+                    result_dict["gradient_matrix_dict"] = None
             ######################################################################################################
 
             # save all the sub-results in case there is no LarsimStatistics run afterward
@@ -925,7 +977,7 @@ class LarsimModel(Model):
                     file_path = self.workingDir / f"gof_{i}.pkl"
                     index_parameter_gof_DF.to_pickle(file_path, compression="gzip")
 
-                if self.compute_gradients:
+                if self.compute_gradients and gradient_matrix_dict:
                     file_path = self.workingDir / f"gradients_matrices_{i}.npy"
                     np.save(file_path, gradient_matrix_dict)
 
@@ -936,10 +988,10 @@ class LarsimModel(Model):
 
             # result_dict contains at least the following entries:  "result_time_series", "run_time", "parameters_dict"
             # optionally: "gof_df", "gradient" , etc.
-            results.append((result_dict, runtime))
+            results_array.append((result_dict, runtime))
 
             # Delete everything except .log and .csv files
-            larsimConfigurationSettings.cleanDirecory_completely(curr_directory=curr_working_dir)
+            larsimConfigurationSettings.cleanDirectory_completely(curr_directory=curr_working_dir)
 
             # change back to starting directory of all the processes
             os.chdir(self.sourceDir)
@@ -949,14 +1001,20 @@ class LarsimModel(Model):
 
             print(f"[LarsimModel INFO] I am done - solver number {i}")
 
-        return results
+        return results_array
 
-    def _single_larsim_run(self, timeframe, curr_working_dir, index_run=0, sub_index_run=0, warm_up_duration=None):
+    def _single_larsim_run(self, timeframe, curr_working_dir, index_run=0, sub_index_run=0, warm_up_duration=None,
+                           **kwargs):
 
         if warm_up_duration is None:
             warm_up_duration = self.warm_up_duration
         if warm_up_duration is None:
             warm_up_duration = 0
+
+        raise_exception_on_model_break = kwargs.get('raise_exception_on_model_break') \
+            if 'raise_exception_on_model_break' in kwargs else True
+        max_retries = kwargs.get('max_retries') if 'max_retries' in kwargs else None
+
         # start clean
         larsimConfigurationSettings._delete_larsim_output_files(curr_directory=curr_working_dir)
 
@@ -989,23 +1047,35 @@ class LarsimModel(Model):
         print(f"[LarsimModel INFO] I am done with LARSIM Execution {index_run}")
 
         # check if larsim.ok exist - Larsim execution was successful
-        larsimConfigurationSettings.check_larsim_ok_file(curr_working_dir=curr_working_dir)
+        ok_found = larsimConfigurationSettings.check_larsim_ok_file(curr_working_dir=curr_working_dir,
+                                                                    max_retries=max_retries)
+        if not ok_found and raise_exception_on_model_break:
+            raise Exception(f"[LarsimModel ERROR] Process {index_run}: Larsim run was unsuccessful!")
+        elif not ok_found and not raise_exception_on_model_break:
+            return None
+
         result_file_path = curr_working_dir / 'ergebnis.lila'
         try:
             df_single_ergebnis = larsimInputOutputUtilities.ergebnis_parser_toPandas(result_file_path, index_run)
             return df_single_ergebnis
         except paths.FileError as e:
             print(str(e))
-            print(f"[LarsimModel ERROR] Process {index_run}: The following Ergebnis file was not found - {result_file_path}")
+            print(f"[LarsimModel ERROR] Process {index_run}: The following Ergebnis file was not found "
+                  f"- {result_file_path}. None was returned")
             raise
 
     # TODO Change _multiple_short_larsim_runs such that local_timestep/timestep are set in hours
-    def _multiple_short_larsim_runs(self, timeframe, timestep, curr_working_dir, index_run=0, warm_up_duration=None):
+    def _multiple_short_larsim_runs(self, timeframe, timestep, curr_working_dir, index_run=0, warm_up_duration=None,
+                                    **kwargs):
 
         if warm_up_duration is None:
             warm_up_duration = self.warm_up_duration
         if warm_up_duration is None:
             warm_up_duration = 0
+
+        raise_exception_on_model_break = kwargs.get('raise_exception_on_model_break') \
+            if 'raise_exception_on_model_break' in kwargs else True
+        max_retries = kwargs.get('max_retries') if 'max_retries' in kwargs else None
 
         # if you want to cut execution into shorter runs...
         local_timestep = timestep
@@ -1053,10 +1123,15 @@ class LarsimModel(Model):
             single_run_timeframe = (local_start_date, local_end_date)
 
             # run larsim for this shorter period and returned already parsed 'small' ergebnis
-            local_resultDF = self._single_larsim_run(timeframe=single_run_timeframe, curr_working_dir=curr_working_dir,
-                                                     index_run=index_run, sub_index_run=i, warm_up_duration=warm_up_duration)
+            local_resultDF = self._single_larsim_run(timeframe=single_run_timeframe,
+                                                     curr_working_dir=curr_working_dir,
+                                                     index_run=index_run, sub_index_run=i,
+                                                     warm_up_duration=warm_up_duration,
+                                                     raise_exception_on_model_break=raise_exception_on_model_break,
+                                                     max_retries=max_retries)
 
             if local_resultDF is None:
+                local_resultDF_list = []
                 break
 
             # postprocessing of time variables
@@ -1084,8 +1159,11 @@ class LarsimModel(Model):
             df_simulation_result.drop_duplicates(subset=['TimeStamp', 'Stationskennung', 'Type'], keep='first', inplace=True)
 
             return df_simulation_result
-        else:
+        elif not raise_exception_on_model_break:
             return None
+        else:
+            raise Exception(f"[LarsimModel ERROR] Process {index_run}: Larsim run was unsuccessful!")
+
 
     def _process_time_series_sliding_window_gof(self, predictedDF, objective_function, interval=24, min_periods=1,
                                                 center=True, closed="neither", get_all_possible_stations=False):
@@ -1297,18 +1375,22 @@ class LarsimModel(Model):
 
     def _copy_files_for_gradient_computation(self, curr_working_dir, i, id_param):
         os.chdir(curr_working_dir)
-        working_folder_name = "compute_gradient_" + str(i) + "_" + str(id_param)
-        curr_working_dir_gradient = pathlib.Path(curr_working_dir/working_folder_name)
+        # working_folder_name = "compute_gradient_" + str(i) + "_" + str(id_param)
+        working_folder_name = f"compute_gradient_{i}_{id_param}"
+        curr_working_dir_gradient = curr_working_dir / working_folder_name
         curr_working_dir_gradient.mkdir(parents=True, exist_ok=True)
 
         # copy all the necessary files to the newly created directory
         # master_dir_for_copying = self.master_dir + "/."
         # subprocess.run(['cp', '-a', master_dir_for_copying, curr_working_dir_gradient])
-        curr_working_dir_for_copying = curr_working_dir + "/."
-        subprocess.run(['cp', '-a', curr_working_dir_for_copying, curr_working_dir_gradient])
+        curr_working_dir_for_copying = str(curr_working_dir) + "/."
+        master_dir_for_copying = str(self.master_dir) + "/."
+        subprocess.run(['cp', '-a', master_dir_for_copying, curr_working_dir_gradient])
 
-        subprocess.run(['cp', 'lanu.par', curr_working_dir_gradient])
-        subprocess.run(['cp', 'tape35', curr_working_dir_gradient])
+        tape35_path = curr_working_dir / "tape35"
+        lanu_path = curr_working_dir / "lanu.par"
+        subprocess.run(['cp', tape35_path, curr_working_dir_gradient])
+        subprocess.run(['cp', lanu_path, curr_working_dir_gradient])
         print("[LarsimModel INFO] Successfully copied all the files for gradient computation")
         # change working directory
         os.chdir(curr_working_dir_gradient)
