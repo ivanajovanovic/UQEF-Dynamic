@@ -103,13 +103,23 @@ def _get_statistics_dict(working_folder):
 
 
 def _get_parameter_columns_df_index_parameter_gof(df_index_parameter_gof):
-    return [x for x in df_index_parameter_gof.columns.tolist()
-            if not x.startswith("calculate") and x not in ["index_run","station"]]
+    def check_if_column_stores_parameter(x):
+        if isinstance(x, tuple):
+            x = x[0]
+        return not x.startswith("calculate") and not x.startswith("d_calculate") and x not in ["index_run", "station"]
+    return [x for x in df_index_parameter_gof.columns.tolist() if check_if_column_stores_parameter(x)]
 
 
 def _get_gof_columns_df_index_parameter_gof(df_index_parameter_gof):
-    return [x for x in df_index_parameter_gof.columns.tolist()
-            if x.startswith("calculate") and x not in ["index_run","station"]]
+    def check_if_column_stores_gof(x):
+        if isinstance(x, tuple):
+            x = x[0]
+        return x.startswith("calculate") and x not in ["index_run", "station"]
+    return [x for x in df_index_parameter_gof.columns.tolist() if check_if_column_stores_gof(x)]
+
+
+def _get_grad_columns_df_index_parameter_gof(df_index_parameter_gof):
+    return [x for x in df_index_parameter_gof.columns.tolist() if x.startswith("d_calculate")]
 
 
 def plot_hist_of_gof_values_from_df(df_index_parameter_gof, name_of_gof_column="calculateNSE"):
@@ -120,7 +130,18 @@ def plot_subplot_params_hist_from_df(df_index_parameter_gof):
     columns_with_parameters = _get_parameter_columns_df_index_parameter_gof(df_index_parameter_gof)
     fig = make_subplots(rows=1, cols=len(columns_with_parameters))
     for i in range(len(columns_with_parameters)):
-        fig.append_trace(go.Histogram(x=df_index_parameter_gof[columns_with_parameters[i]]), row=1, col=i + 1)
+        if isinstance(columns_with_parameters[i], tuple):
+            fig.append_trace(
+                go.Histogram(
+                    x=df_index_parameter_gof[columns_with_parameters[i]],
+                    name=columns_with_parameters[i][0]
+                ), row=1, col=i + 1)
+        else:
+            fig.append_trace(
+                go.Histogram(
+                    x=df_index_parameter_gof[columns_with_parameters[i]],
+                    name=columns_with_parameters[i]
+                ), row=1, col=i + 1)
     return fig
 
 
@@ -140,12 +161,18 @@ def plot_subplot_params_hist_from_df_conditioned(df_index_parameter_gof, name_of
     columns_with_parameters = _get_parameter_columns_df_index_parameter_gof(df_index_parameter_gof)
     fig = make_subplots(rows=1, cols=len(columns_with_parameters))
     for i in range(len(columns_with_parameters)):
-        fig.append_trace(
-            go.Histogram(
-                x=df_index_parameter_gof[mask][columns_with_parameters[i]],
-                name=columns_with_parameters[i]
-            ), row=1, col=i + 1
-        )
+        if isinstance(columns_with_parameters[i], tuple):
+            fig.append_trace(
+                go.Histogram(
+                    x=df_index_parameter_gof[mask][columns_with_parameters[i]],
+                    name=columns_with_parameters[i][0]
+                ), row=1, col=i + 1)
+        else:
+            fig.append_trace(
+                go.Histogram(
+                    x=df_index_parameter_gof[mask][columns_with_parameters[i]],
+                    name=columns_with_parameters[i]
+                ), row=1, col=i + 1)
     return fig
 
 

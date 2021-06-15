@@ -25,7 +25,7 @@ from LarsimUtilityFunctions import larsimDataPreparation
 from LarsimUtilityFunctions import larsimInputOutputUtilities
 from LarsimUtilityFunctions import larsimTimeUtility
 
-
+# TODO refactor to do most of the stuff in some function and not in the constructor
 class LarsimModelSetUp():
     def __init__(self, configurationObject, *args, **kwargs):
 
@@ -103,7 +103,7 @@ class LarsimModelSetUp():
         try:
             self.type_of_output_of_Interest = self.configurationObject["Output"]["type_of_output"]
         except KeyError:
-            self.type_of_output_of_Interest = "result_dict Messung + Vorhersage"
+            self.type_of_output_of_Interest = "Abfluss Messung + Vorhersage"
 
         try:
             self.type_of_output_of_Interest_measured = self.configurationObject["Output"]["type_of_output_measured"]
@@ -113,13 +113,18 @@ class LarsimModelSetUp():
         try:
             self.warm_up_duration = self.configurationObject["Timeframe"]["warm_up_duration"]
         except KeyError:
-            self.warm_up_duration = None#53
+            self.warm_up_duration = None  # 53
 
-        self.calculate_GoF = strtobool(self.configurationObject["Output"]["calculate_GoF"])\
-                       if "calculate_GoF" in self.configurationObject["Output"] else True
+        try:
+            self.calculate_GoF = strtobool(self.configurationObject["Output"]["calculate_GoF"])
+        except KeyError:
+            self.calculate_GoF = True
+
         if self.calculate_GoF:
-            self.objective_function = self.configurationObject["Output"]["objective_function"] \
-                if 'objective_function' in self.configurationObject["Output"] else "all"
+            try:
+                self.objective_function = self.configurationObject["Output"]["objective_function"]
+            except KeyError:
+                self.objective_function = "all"
             self.objective_function = larsimDataPostProcessing._gof_list_to_function_names(self.objective_function)
 
         larsimConfigurationSettings.update_configurationObject_with_parameters_info(self.configurationObject)
@@ -453,7 +458,7 @@ class LarsimModel(Model):
         if self.uq_method is not None and self.uq_method == "sc":  # always break when running gPCE simulation
             self.raise_exception_on_model_break = True
 
-        self.disable_statistics = kwargs.get('disable_statistics') if 'disable_statistics' in kwargs else False
+        self.disable_statistics = kwargs.get('disable_statistics') if 'disable_statistics' in kwargs else True
 
         #####################################
         # Set of config variables propagated via config file
@@ -471,27 +476,34 @@ class LarsimModel(Model):
         try:
             self.type_of_output_of_Interest = self.configurationObject["Output"]["type_of_output"]
         except KeyError:
-            self.type_of_output_of_Interest = "result_dict Messung + Vorhersage"
+            self.type_of_output_of_Interest = "Abfluss Messung + Vorhersage"
 
         try:
             self.type_of_output_of_Interest_measured = self.configurationObject["Output"]["type_of_output_measured"]
         except KeyError:
             self.type_of_output_of_Interest_measured = "Ground Truth"
 
-        self.cut_runs = strtobool(self.configurationObject["Timeframe"]["cut_runs"]) \
-            if "cut_runs" in self.configurationObject["Timeframe"] else False
+        try:
+            self.cut_runs = strtobool(self.configurationObject["Timeframe"]["cut_runs"])
+        except KeyError:
+            self.cut_runs = False
 
-        self.warm_up_duration = self.configurationObject["Timeframe"]["warm_up_duration"] \
-            if "warm_up_duration" in self.configurationObject["Timeframe"] else None  # 53
+        try:
+            self.warm_up_duration = self.configurationObject["Timeframe"]["warm_up_duration"]
+        except KeyError:
+            self.warm_up_duration = None
 
         self.variable_names = []
         if "tuples_parameters_info" in self.configurationObject:
             for i in self.configurationObject["tuples_parameters_info"]:
                 self.variable_names.append(i["name"])
         else:
-            for i in self.configurationObject["parameters"]:
-                self.variable_names.append(i["name"])
-            #larsimConfigurationSettings.update_configurationObject_with_parameters_info(self.configurationObject)
+            try:
+                for i in self.configurationObject["parameters"]:
+                    self.variable_names.append(i["name"])
+                # larsimConfigurationSettings.update_configurationObject_with_parameters_info(self.configurationObject)
+            except KeyError:
+                print(f"[LarsimModel Infor:] This Larsim Model object has empty variable_names list")
 
         #####################################
         # this variable stands for the purpose of LarsimModel run
@@ -499,26 +511,37 @@ class LarsimModel(Model):
         #               calibration, run_and_save_simulations, gradient_computation, UQ_analysis
         # These modes do not have to be mutually exclusive!
         #####################################
-        self.qoi = self.configurationObject["Output"]["QOI"] if "QOI" in self.configurationObject["Output"] else "Q"
+        try:
+            self.qoi = self.configurationObject["Output"]["QOI"]
+        except KeyError:
+            self.qoi = "Q"
         if self.qoi != "Q" and self.qoi != "GoF":
             raise Exception(f"[LarsimModel ERROR:] self.qoi should either be \"Q\" or \"GoF\" ")
 
-        self.mode = self.configurationObject["Output"]["mode"] \
-            if "mode" in self.configurationObject["Output"] else "continuous"
+        try:
+            self.mode = self.configurationObject["Output"]["mode"]
+        except KeyError:
+            self.mode = "continuous"
         if self.mode != "continuous" and self.mode != "sliding_window" and self.mode != "resampling":
             raise Exception(f"[LarsimModel ERROR:] self.mode should have one of the following values:"
                             f" \"continuous\" or \"sliding_window\" or \"resampling\"")
 
         if self.mode == "sliding_window" or self.mode == "resampling":
-            self.interval = self.configurationObject["Output"]["interval"] \
-                if "interval" in self.configurationObject["Output"] else 24
+            try:
+                self.interval = self.configurationObject["Output"]["interval"]
+            except KeyError:
+                self.interval = 24
             # if self.interval == "whole":
             #     self.configurationObject["Output"]["dailyOutput"] = "True"
-            self.min_periods = self.configurationObject["Output"]["min_periods"] \
-                if "min_periods" in self.configurationObject["Output"] else 1
+            try:
+                self.min_periods = self.configurationObject["Output"]["min_periods"]
+            except KeyError:
+                self.min_periods = 1
             if self.qoi == "Q":
-                self.method = self.configurationObject["Output"]["method"] \
-                    if "method" in self.configurationObject["Output"] else "avrg"
+                try:
+                    self.method = self.configurationObject["Output"]["method"]
+                except KeyError:
+                    self.method = "avrg"
                 if self.method != "avrg" and self.method != "max" and self.method != "min":
                     raise Exception(f"[LarsimModel ERROR:] self.method should be either \"avrg\" or \"max\" or \"min\"")
 
@@ -526,16 +549,25 @@ class LarsimModel(Model):
             raise Exception(f"[LarsimModel ERROR:] resampling mode is still not implemented")
 
         # if calibration is True some likelihood / objective functions / GoF functio should be calculated from model run and propageted further
-        self.calculate_GoF = strtobool(self.configurationObject["Output"]["calculate_GoF"]) \
-            if "calculate_GoF" in self.configurationObject["Output"] else True
+        try:
+            self.calculate_GoF = strtobool(self.configurationObject["Output"]["calculate_GoF"])
+        except KeyError:
+            self.calculate_GoF = True
 
         # if we want to compute the gradient (of some likelihood fun or output itself) w.r.t parameters
-        self.compute_gradients = strtobool(self.configurationObject["Output"]["compute_gradients"]) \
-            if "compute_gradients" in self.configurationObject["Output"] else False
+        try:
+            self.compute_gradients = strtobool(self.configurationObject["Output"]["compute_gradients"])
+        except KeyError:
+            self.compute_gradients = False
         if self.compute_gradients:
-            if self.configurationObject["Output"]["gradients_method"] == "Central Difference":
+            try:
+                gradients_method = self.configurationObject["Output"]["gradients_method"]
+            except KeyError:
+                gradients_method = "Forward Difference"
+
+            if gradients_method == "Central Difference":
                 self.CD = 1  # flag for using Central Differences (with 2 * num_evaluations)
-            elif self.configurationObject["Output"]["gradients_method"] == "Forward Difference":
+            elif gradients_method == "Forward Difference":
                 self.CD = 0  # flag for using Forward Differences (with num_evaluations)
             else:
                 raise Exception(f"[LarsimModel ERROR:] NUMERICAL GRADIENT EVALUATION ERROR: Only \"Central Difference\" "
@@ -547,28 +579,41 @@ class LarsimModel(Model):
                 self.eps_val_global = 1e-4
                 
         if self.qoi == "GoF" or self.compute_gradients:
-            self.objective_function_qoi = self.configurationObject["Output"]["objective_function_qoi"] \
-                if 'objective_function_qoi' in self.configurationObject["Output"] else "all"
+            try:
+                self.objective_function_qoi = self.configurationObject["Output"]["objective_function_qoi"]
+            except KeyError:
+                self.objective_function_qoi = "all"
             self.objective_function_qoi = larsimDataPostProcessing._gof_list_to_function_names(self.objective_function_qoi)
         if self.calculate_GoF:
-            self.objective_function = self.configurationObject["Output"]["objective_function"] \
-                if 'objective_function' in self.configurationObject["Output"] else "all"
+            try:
+                self.objective_function = self.configurationObject["Output"]["objective_function"]
+            except KeyError:
+                self.objective_function = "all"
             self.objective_function = larsimDataPostProcessing._gof_list_to_function_names(self.objective_function)
 
         # save the output of each simulation just in run function just in case when run_and_save_simulations in json configuration file is True
         # and no statistics calculations will be performed afterwards, otherwise the simulation results will be saved in LarsimStatistics
 
-        self.run_and_save_simulations = strtobool(self.configurationObject["Output"]["run_and_save_simulations"])\
-                                        if "run_and_save_simulations" in self.configurationObject["Output"] else False
+        try:
+            self.run_and_save_simulations = strtobool(self.configurationObject["Output"]["run_and_save_simulations"])
+        except KeyError:
+            self.run_and_save_simulations = True
         self.run_and_save_simulations = self.run_and_save_simulations and self.disable_statistics
 
-        self.always_save_original_model_runs = strtobool(self.configurationObject["Output"]["always_save_original_model_runs"]) \
-            if "always_save_original_model_runs" in self.configurationObject["Output"] else False
+        try:
+            self.always_save_original_model_runs = strtobool(
+                self.configurationObject["Output"]["always_save_original_model_runs"])
+        except KeyError:
+            self.always_save_original_model_runs = False
 
         # this variable controls if post-processing of the result time series should be done for
         # only self.station_of_Interest (False) or all self.station_for_model_runs (True)
-        self.get_all_possible_stations = strtobool(self.configurationObject["Output"]["post_processing_for_all_stations"]) \
-            if "post_processing_for_all_stations" in self.configurationObject["Output"] else True
+        try:
+            self.get_all_possible_stations = strtobool(
+                self.configurationObject["Output"]["post_processing_for_all_stations"])
+        except KeyError:
+            self.get_all_possible_stations = True
+
         #####################################
         # getting the time span for running the model from the json configuration file
         #####################################
@@ -673,12 +718,15 @@ class LarsimModel(Model):
             # if parameter is not None:
             tape35_path = curr_working_dir / "tape35"
             lanu_path = curr_working_dir / "lanu.par"
-            parameters_dict = larsimConfigurationSettings.params_configurations(parameters=parameter,
-                                                                                tape35_path=tape35_path,
-                                                                                lanu_path=lanu_path,
-                                                                                configurationObject=self.configurationObject,
-                                                                                process_id=i)
-            parameters_dict = {**id_dict, **parameters_dict}
+            if parameter is not None:
+                parameters_dict = larsimConfigurationSettings.params_configurations(parameters=parameter,
+                                                                                    tape35_path=tape35_path,
+                                                                                    lanu_path=lanu_path,
+                                                                                    configurationObject=self.configurationObject,
+                                                                                    process_id=i)
+                parameters_dict = {**id_dict, **parameters_dict}
+            else:
+                parameters_dict = None
             # else: #TODO add option when parameter is None to read default parameters values and run unaltered run
             #     parameters_dict = {**id_dict,}
 
@@ -965,9 +1013,10 @@ class LarsimModel(Model):
 
             # save all the sub-results in case there is no LarsimStatistics run afterward
             if self.run_and_save_simulations:
-                file_path = self.workingDir / f"parameters_Larsim_run_{i}.pkl"
-                with open(file_path, 'wb') as f:
-                    dill.dump(parameters_dict, f)
+                if parameters_dict is not None:
+                    file_path = self.workingDir / f"parameters_Larsim_run_{i}.pkl"
+                    with open(file_path, 'wb') as f:
+                        dill.dump(parameters_dict, f)
 
                 if result is not None:
                     file_path = self.workingDir / f"df_Larsim_run_{i}.pkl"
@@ -1064,9 +1113,8 @@ class LarsimModel(Model):
                   f"- {result_file_path}. None was returned")
             raise
 
-    # TODO Change _multiple_short_larsim_runs such that local_timestep/timestep are set in hours
     def _multiple_short_larsim_runs(self, timeframe, timestep, curr_working_dir, index_run=0, warm_up_duration=None,
-                                    **kwargs):
+                                    timestep_in_hours=False, **kwargs):
 
         if warm_up_duration is None:
             warm_up_duration = self.warm_up_duration
@@ -1080,8 +1128,13 @@ class LarsimModel(Model):
         # if you want to cut execution into shorter runs...
         local_timestep = timestep
 
-        number_of_runs = (timeframe[1] - timeframe[0]).days // datetime.timedelta(days=local_timestep).days
-        number_of_runs_mode = (timeframe[1] - timeframe[0]).days % datetime.timedelta(days=local_timestep).days
+        if timestep_in_hours:
+            number_of_runs = (timeframe[1] - timeframe[0]).hours // datetime.timedelta(hours=local_timestep).hours
+            number_of_runs_mode = (timeframe[1] - timeframe[0]).hours % datetime.timedelta(hours=local_timestep).hours
+        else:
+            number_of_runs = (timeframe[1] - timeframe[0]).days // datetime.timedelta(days=local_timestep).days
+            # TODO eventually, add logic to run for these days as well...
+            number_of_runs_mode = (timeframe[1] - timeframe[0]).days % datetime.timedelta(days=local_timestep).days
 
         local_end_date = timeframe[0]
 
@@ -1096,6 +1149,7 @@ class LarsimModel(Model):
 
         local_resultDF_list = []
         for i in range(number_of_runs):
+            local_warm_up_duration = warm_up_duration
 
             # remove previous tape10
             subprocess.run(["rm", "-f", tape10_path])
@@ -1103,30 +1157,47 @@ class LarsimModel(Model):
             # calculate times - make sure that outputs are continuous in time
             if i == 0:
                 local_start_date = local_end_date
-                local_start_date_warmup = local_start_date - datetime.timedelta(hours=warm_up_duration)
+                # local_start_date_warmup = local_start_date - datetime.timedelta(hours=warm_up_duration)
             else:
-                local_start_date_warmup = local_end_date
-                local_start_date = local_start_date_warmup - datetime.timedelta(hours=warm_up_duration)
+                # local_start_date_warmup = local_end_date
+                # local_start_date = local_start_date_warmup - datetime.timedelta(hours=warm_up_duration)
+                local_start_date = local_end_date - datetime.timedelta(hours=warm_up_duration)
+
+            if local_start_date.hour != 0:
+                local_warm_up_duration = warm_up_duration + local_start_date.hour
+                local_start_date = local_start_date.replace(hour=0, minute=0, second=0)
+
+            local_start_prediction_date = local_start_date + datetime.timedelta(
+                hours=local_warm_up_duration)
 
             if local_start_date > timeframe[1]:
                 break
 
-            if i == 0:
-                local_end_date = local_end_date + datetime.timedelta(hours=warm_up_duration) + datetime.timedelta(days=local_timestep)
+            if timestep_in_hours:
+                if i == 0:
+                    local_end_date = local_end_date + datetime.timedelta(hours=warm_up_duration) + datetime.timedelta(
+                        hours=local_timestep)
+                else:
+                    local_end_date = local_end_date + datetime.timedelta(hours=local_timestep)
             else:
-                local_end_date = local_end_date + datetime.timedelta(days=local_timestep)
+                if i == 0:
+                    local_end_date = local_end_date + datetime.timedelta(hours=warm_up_duration) + datetime.timedelta(days=local_timestep)
+                else:
+                    local_end_date = local_end_date + datetime.timedelta(days=local_timestep)
 
             if local_end_date > timeframe[1]:
                 local_end_date = timeframe[1]
 
-            print(f"[LarsimModel INFO] Process {index_run}; local_start_date: {local_start_date}; local_end_date: {local_end_date}")
+            print(f"[LarsimModel INFO] Process {index_run}; local_start_date: {local_start_date}; "
+                  f"local_start_prediction_date: {local_start_prediction_date}"
+                  f"local_end_date: {local_end_date};")
             single_run_timeframe = (local_start_date, local_end_date)
 
             # run larsim for this shorter period and returned already parsed 'small' ergebnis
             local_resultDF = self._single_larsim_run(timeframe=single_run_timeframe,
                                                      curr_working_dir=curr_working_dir,
                                                      index_run=index_run, sub_index_run=i,
-                                                     warm_up_duration=warm_up_duration,
+                                                     warm_up_duration=local_warm_up_duration,
                                                      raise_exception_on_model_break=raise_exception_on_model_break,
                                                      max_retries=max_retries)
 
@@ -1136,9 +1207,11 @@ class LarsimModel(Model):
 
             # postprocessing of time variables
             local_start_date, local_end_date = local_resultDF["TimeStamp"].min(), local_resultDF["TimeStamp"].max()
-            local_start_date_warmup = local_start_date + datetime.timedelta(hours=warm_up_duration)
+            # local_start_date_warmup should be equal to local_start_prediction_date
+            local_start_date_warmup = local_start_date + datetime.timedelta(hours=local_warm_up_duration)
 
-            local_resultDF_drop = local_resultDF.drop(local_resultDF[local_resultDF['TimeStamp'] < local_start_date_warmup].index)
+            local_resultDF_drop = local_resultDF.drop(local_resultDF[local_resultDF['TimeStamp'] <
+                                                                     local_start_date_warmup].index)
 
             local_resultDF_list.append(local_resultDF_drop)
 
@@ -1164,7 +1237,6 @@ class LarsimModel(Model):
         else:
             raise Exception(f"[LarsimModel ERROR] Process {index_run}: Larsim run was unsuccessful!")
 
-
     def _process_time_series_sliding_window_gof(self, predictedDF, objective_function, interval=24, min_periods=1,
                                                 center=True, closed="neither", get_all_possible_stations=False):
         """
@@ -1186,7 +1258,8 @@ class LarsimModel(Model):
 
         # TODO it makes sense as well to have here self.station_for_model_runs or get_all_possible_stations=True
         stations = LarsimModel.compute_and_get_final_list_of_stations(self.measuredDF, predictedDF,
-                                                           get_all_possible_stations, self.station_of_Interest)
+                                                                      get_all_possible_stations,
+                                                                      self.station_of_Interest)
 
         list_of_results_per_station = []
         for single_station in stations:
@@ -1226,8 +1299,8 @@ class LarsimModel(Model):
         processed_result = pd.concat(list_of_results_per_station, ignore_index=True, sort=False, axis=0)
         return processed_result
 
-    def _process_time_series_sliding_window_q(self, predictedDF, interval=24, method="avrg",
-                                              min_periods=1, center=True):
+    @staticmethod
+    def _process_time_series_sliding_window_q(predictedDF, interval=24, method="avrg", min_periods=1, center=True):
         # if not isinstance(interval, str) or (isinstance(interval, str) and not interval.endswith(('H', 'h'))):
         #     interval = f"{interval}H"
         processed_result = predictedDF.copy(deep=True)

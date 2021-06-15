@@ -92,33 +92,52 @@ class LarsimSamples(object):
      Prepares results from Model to Statistics
     """
     def __init__(self, rawSamples, configurationObject, QoI="Value"):
-
-        station = configurationObject["Output"]["station_calibration_postproc"] \
-            if "station_calibration_postproc" in configurationObject["Output"] else "MARI"
-        type_of_output = configurationObject["Output"]["type_of_output"] \
-            if "type_of_output" in configurationObject["Output"] else "result_dict Messung + Vorhersage"
-        dailyOutput = configurationObject["Output"]["dailyOutput"] \
-            if "dailyOutput" in configurationObject["Output"] else "False"
-
-        qoi = configurationObject["Output"]["QOI"] if "QOI" in configurationObject["Output"] else "Q"
-        mode = configurationObject["Output"]["mode"] \
-            if "mode" in configurationObject["Output"] else "continuous"
-        calculate_GoF = configurationObject["Output"]["calculate_GoF"]
-        compute_gradients = configurationObject["Output"]["compute_gradients"]
+        try:
+            station = configurationObject["Output"]["station_calibration_postproc"]
+        except KeyError:
+            station = "MARI"
+        try:
+            type_of_output = configurationObject["Output"]["type_of_output"]
+        except KeyError:
+            type_of_output = "Abfluss Messung + Vorhersage"
+        try:
+            dailyOutput = configurationObject["Output"]["dailyOutput"]
+        except KeyError:
+            dailyOutput = "False"
+        try:
+            qoi = configurationObject["Output"]["QOI"]
+        except KeyError:
+            qoi = "Q"
+        try:
+            mode = configurationObject["Output"]["mode"]
+        except KeyError:
+            mode = "continuous"
+        try:
+            calculate_GoF = configurationObject["Output"]["calculate_GoF"]
+        except KeyError:
+            calculate_GoF = "False"
+        try:
+            compute_gradients = configurationObject["Output"]["compute_gradients"]
+        except KeyError:
+            compute_gradients = "False"
 
         self.qoi_columns = ["Value", ]
-
         if qoi == "GoF" or strtobool(compute_gradients):
-            objective_function_qoi = configurationObject["Output"]["objective_function_qoi"]
-            if isinstance(objective_function_qoi, list):
-                self.list_objective_function_qoi = [single_gof.__name__ if callable(single_gof) else single_gof
-                                                    for single_gof in objective_function_qoi]
+            try:
+                objective_function_qoi = configurationObject["Output"]["objective_function_qoi"]
+            except KeyError:
+                pass
             else:
-                if callable(objective_function_qoi):
-                    self.list_objective_function_qoi = [objective_function_qoi.__name__, ]
+                objective_function_qoi = larsimDataPostProcessing._gof_list_to_function_names(objective_function_qoi)
+                if isinstance(objective_function_qoi, list):
+                    self.list_objective_function_qoi = [single_gof.__name__ if callable(single_gof) else single_gof
+                                                        for single_gof in objective_function_qoi]
                 else:
-                    self.list_objective_function_qoi = [objective_function_qoi, ]
-            self.qoi_columns = self.qoi_columns + self.list_objective_function_qoi
+                    if callable(objective_function_qoi):
+                        self.list_objective_function_qoi = [objective_function_qoi.__name__, ]
+                    else:
+                        self.list_objective_function_qoi = [objective_function_qoi, ]
+                self.qoi_columns = self.qoi_columns + self.list_objective_function_qoi
 
         #objective_function, interval, min_periods, method
 
@@ -225,8 +244,8 @@ class LarsimSamples(object):
                 # for single_objective_function in self.list_objective_function_qoi:
                 self.dict_of_approx_matrix_c[key] = \
                     sum(gradient_matrix_dict[key]) / len(gradient_matrix_dict[key])
-                self.dict_of_matrix_c_eigen_decomposition[key] = \
-                    np.linalg.eig(self.dict_of_approx_matrix_c[key])
+                self.dict_of_matrix_c_eigen_decomposition[key] = np.linalg.eigh(self.dict_of_approx_matrix_c[key])
+                # np.linalg.eig(self.dict_of_approx_matrix_c[key])
         else:
             self.dict_of_approx_matrix_c = None
             self.dict_of_matrix_c_eigen_decomposition = None
@@ -427,50 +446,18 @@ class LarsimStatistics(Statistics):
             except KeyError:
                 self.workingDir = paths.workingDir
 
-        # TODO for now this is hardcoded such that only a single self.qoi_column is supported
-        self.qoi = configurationObject["Output"]["QOI"] if "QOI" in configurationObject["Output"] else "Q"
+        self.store_qoi_data_in_stat_dict = kwargs.get('store_qoi_data_in_stat_dict') if 'store_qoi_data_in_stat_dict' \
+                                                                                        in kwargs else False
 
-        self.compute_gradients = strtobool(configurationObject["Output"]["compute_gradients"])
-
-        if "qoi_column" in kwargs:
-            self.qoi_column = kwargs.get('qoi_column')
-        elif self.qoi == "GoF":
-            objective_function_qoi = configurationObject["Output"]["objective_function_qoi"]
-            if isinstance(objective_function_qoi, list):
-                if callable(objective_function_qoi[0]):
-                    self.qoi_column = objective_function_qoi[0].__name__
-                else:
-                    self.qoi_column = objective_function_qoi[0]
-            else:
-                if callable(objective_function_qoi):
-                    self.qoi_column = objective_function_qoi.__name__
-                else:
-                    self.qoi_column = objective_function_qoi
-        else:
-            self.qoi_column = "Value"
-
-        self.result_dict = dict()
-
-        self.df_unaltered = None
-        self.df_measured = None
-        self.unaltered_computed = False
-        self.groundTruth_computed = False
-
-        # check if simulation results were already saved in LarsimModel - currently not used
-        self.run_and_save_simulations = strtobool(self.configurationObject["Output"]["run_and_save_simulations"])\
-                                        if "run_and_save_simulations" in self.configurationObject["Output"] else False
-
-        self.station_of_Interest = self.configurationObject["Output"]["station_calibration_postproc"]
-        if not isinstance(self.station_of_Interest, list):
-            self.station_of_Interest = [self.station_of_Interest,]
-
-        # Only the names of the stochastic parameters
-        self.nodeNames = []
-        for i in self.configurationObject["parameters"]:
-            if i["distribution"] != "None":
-                self.nodeNames.append(i["name"])
-        self.dim = len(self.nodeNames)
-        self.labels = [nodeName.strip() for nodeName in self.nodeNames]
+        # TODO: eventually make a non-MPI version
+        self.parallel_statistics = kwargs.get('parallel_statistics') if 'parallel_statistics' in kwargs else False
+        if self.parallel_statistics:
+            self.size = MPI.COMM_WORLD.Get_size()
+            self.rank = MPI.COMM_WORLD.Get_rank()
+            self.name = MPI.Get_processor_name()
+            self.version = MPI.Get_library_version()
+            self.mpi_chunksize = kwargs.get('mpi_chunksize') if 'mpi_chunksize' in kwargs else 1
+            self.unordered = kwargs.get('unordered') if 'unordered' in kwargs else False
 
         self.uq_method = kwargs.get('uq_method') if 'uq_method' in kwargs else None
 
@@ -479,6 +466,80 @@ class LarsimStatistics(Statistics):
         self._compute_Sobol_t = kwargs.get('compute_Sobol_t') if 'compute_Sobol_t' in kwargs else True
         self._compute_Sobol_m = kwargs.get('compute_Sobol_m') if 'compute_Sobol_m' in kwargs else True
         self._compute_Sobol_m2 = kwargs.get('compute_Sobol_m2') if 'compute_Sobol_m2' in kwargs else False
+
+        #####################################
+        # Set of config variables propagated via config file
+        #####################################
+
+        # TODO for now this is hardcoded such that only a single self.qoi_column is supported
+        try:
+            self.qoi = self.configurationObject["Output"]["QOI"]
+        except KeyError:
+            self.qoi = "Q"
+
+        try:
+            self.compute_gradients = strtobool(self.configurationObject["Output"]["compute_gradients"])
+        except KeyError:
+            self.compute_gradients = False
+
+        if "qoi_column" in kwargs:
+            self.qoi_column = kwargs.get('qoi_column')
+        elif self.qoi == "GoF":
+            try:
+                objective_function_qoi = self.configurationObject["Output"]["objective_function_qoi"]
+            except KeyError:
+                self.qoi_column = "Value"
+            else:
+                objective_function_qoi = larsimDataPostProcessing._gof_list_to_function_names(objective_function_qoi)
+                if isinstance(objective_function_qoi, list):
+                    if callable(objective_function_qoi[0]):
+                        self.qoi_column = objective_function_qoi[0].__name__
+                    else:
+                        self.qoi_column = objective_function_qoi[0]
+                else:
+                    if callable(objective_function_qoi):
+                        self.qoi_column = objective_function_qoi.__name__
+                    else:
+                        self.qoi_column = objective_function_qoi
+        else:
+            self.qoi_column = "Value"
+
+        # check if simulation results were already saved in LarsimModel - currently not used
+        try:
+            self.run_and_save_simulations = strtobool(self.configurationObject["Output"]["run_and_save_simulations"])
+        except KeyError:
+            self.run_and_save_simulations = False
+
+        try:
+            self.station_of_Interest = self.configurationObject["Output"]["station_calibration_postproc"]
+        except KeyError as e:
+            print(f"Larsim Statistics: Output -> station_calibration_postproc key does "
+                  f"not exists in the configurationObject{e}")
+            raise
+        if not isinstance(self.station_of_Interest, list):
+            self.station_of_Interest = [self.station_of_Interest,]
+
+        # Only the names of the stochastic parameters
+        self.nodeNames = []
+        try:
+            list_of_parameters = self.configurationObject["parameters"]
+        except KeyError as e:
+            print(f"Larsim Statistics: parameters key does "
+                  f"not exists in the configurationObject{e}")
+            raise
+        for i in list_of_parameters:
+            if i["distribution"] != "None":
+                self.nodeNames.append(i["name"])
+        self.dim = len(self.nodeNames)
+        self.labels = [nodeName.strip() for nodeName in self.nodeNames]
+
+        self.result_dict = dict()
+
+        self.df_unaltered = None
+        self.df_measured = None
+        self.unaltered_computed = False
+        self.groundTruth_computed = False
+
         self._is_Sobol_t_computed = False
         self._is_Sobol_m_computed = False
         self._is_Sobol_m2_computed = False
@@ -495,22 +556,11 @@ class LarsimStatistics(Statistics):
         self.qoi_mean_df = None
         self.gof_mean_measured = None
 
+        self.active_scores_dict = None
+
         # df_statistics_station = None
         # si_t_df = None
         # si_m_df = None
-
-        self.store_qoi_data_in_stat_dict = kwargs.get('store_qoi_data_in_stat_dict') if 'store_qoi_data_in_stat_dict' \
-                                                                                        in kwargs else False
-
-        # TODO: eventually make a non-MPI version
-        self.parallel_statistics = kwargs.get('parallel_statistics') if 'parallel_statistics' in kwargs else False
-        if self.parallel_statistics:
-            self.size = MPI.COMM_WORLD.Get_size()
-            self.rank = MPI.COMM_WORLD.Get_rank()
-            self.name = MPI.Get_processor_name()
-            self.version = MPI.Get_library_version()
-            self.mpi_chunksize = kwargs.get('mpi_chunksize') if 'mpi_chunksize' in kwargs else 1
-            self.unordered = kwargs.get('unordered') if 'unordered' in kwargs else False
 
     def set_timesteps(self, timesteps=None):
         if timesteps is not None:
@@ -550,6 +600,7 @@ class LarsimStatistics(Statistics):
             self.samples.save_index_parameter_values(self.workingDir)
             self.samples.save_index_parameter_gof_values(self.workingDir)
             if self.compute_gradients:
+                self.active_scores_dict = self._compute_active_score(self.samples.dict_of_matrix_c_eigen_decomposition)
                 self.samples.save_dict_of_approx_matrix_c(self.workingDir)
                 self.samples.save_dict_of_matrix_c_eigen_decomposition(self.workingDir)
 
@@ -776,6 +827,7 @@ class LarsimStatistics(Statistics):
             self.samples.save_index_parameter_values(self.workingDir)
             self.samples.save_index_parameter_gof_values(self.workingDir)
             if self.compute_gradients:
+                self.active_scores_dict = self._compute_active_score(self.samples.dict_of_matrix_c_eigen_decomposition)
                 self.samples.save_dict_of_approx_matrix_c(self.workingDir)
                 self.samples.save_dict_of_matrix_c_eigen_decomposition(self.workingDir)
 
@@ -841,6 +893,7 @@ class LarsimStatistics(Statistics):
             self.samples.save_index_parameter_values(self.workingDir)
             self.samples.save_index_parameter_gof_values(self.workingDir)
             if self.compute_gradients:
+                self.active_scores_dict = self._compute_active_score(self.samples.dict_of_matrix_c_eigen_decomposition)
                 self.samples.save_dict_of_approx_matrix_c(self.workingDir)
                 self.samples.save_dict_of_matrix_c_eigen_decomposition(self.workingDir)
 
@@ -923,6 +976,7 @@ class LarsimStatistics(Statistics):
             self.samples.save_index_parameter_values(self.workingDir)
             self.samples.save_index_parameter_gof_values(self.workingDir)
             if self.compute_gradients:
+                self.active_scores_dict = self._compute_active_score(self.samples.dict_of_matrix_c_eigen_decomposition)
                 self.samples.save_dict_of_approx_matrix_c(self.workingDir)
                 self.samples.save_dict_of_matrix_c_eigen_decomposition(self.workingDir)
 
@@ -1089,11 +1143,13 @@ class LarsimStatistics(Statistics):
             fileName = single_station + "_" + self.qoi_column
             single_fileName = self.generateFileName(fileName=fileName, fileNameIdent=".html",
                                              directory=directory, fileNameIdentIsFullName=fileNameIdentIsFullName)
-            self._plotStatisticsDict_plotly(unalatered=self.unaltered_computed, measured=self.groundTruth_computed,
-                                            station=single_station,
-                                            recalculateTimesteps=False, filename=single_fileName, display=display)
+            fig = self._plotStatisticsDict_plotly(unalatered=self.unaltered_computed, measured=self.groundTruth_computed,
+                                                  station=single_station, recalculateTimesteps=False,
+                                                  filename=single_fileName, display=display)
             # self._plotStatisticsDict_plotter(unalatered=None, measured=None, station=single_station,
             #                                  recalculateTimesteps=False, filename=single_fileName, display=display)
+            if display:
+                fig.show()
         print(f"[LARSIM STAT INFO] plotResults function is done!")
 
     def _plotStatisticsDict_plotly(self, unalatered=False, measured=False, station="MARI",
@@ -1219,7 +1275,8 @@ class LarsimStatistics(Statistics):
 
         plot(fig, filename=filename, auto_open=display)
         #fig.write_image(filename)
-        fig.show()
+        #fig.show()
+        return fig
 
     def _compute_number_of_rows_for_plotting(self, starting_row):
         sobol_t_row = sobol_m_row = None
@@ -1242,7 +1299,6 @@ class LarsimStatistics(Statistics):
                                     filename="sim-plotter", display=True):
         raise NotImplementedError("Should have implemented this")
 
-
     def saveToFile(self, fileName="statistics_dict", fileNameIdent="", directory="./",
                    fileNameIdentIsFullName=False):
 
@@ -1250,6 +1306,12 @@ class LarsimStatistics(Statistics):
         statFileName = os.path.abspath(os.path.join(self.workingDir, fileName))
         with open(statFileName, 'wb') as handle:
             pickle.dump(self.result_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+        if self.active_scores_dict is not None:
+            fileName = "active_scores_dict.pkl"
+            statFileName = os.path.abspath(os.path.join(self.workingDir, fileName))
+            with open(statFileName, 'wb') as handle:
+                pickle.dump(self.active_scores_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     ###################################################################################################################
     # Most of the methods below make sense only when QoI is the time-series
@@ -1470,3 +1532,19 @@ class LarsimStatistics(Statistics):
 
     def calculate_p_and_r_factors(self):
         pass
+
+    @staticmethod
+    def _compute_active_score(dict_of_matrix_c_eigen_decomposition):
+        dict_of_active_scores = dict()
+        for key in dict_of_matrix_c_eigen_decomposition.keys():
+            # w, v = np.linalg.eigh(self.samples.dict_of_approx_matrix_c[key])
+            w, v = dict_of_matrix_c_eigen_decomposition[key]
+            scores_vect = []
+            for i in range(len(w)):
+                # temp = np.dot(w, np.power(v[i,:], 2))
+                temp = 0
+                for j in range(v.shape[1]):
+                    temp += w[j] * v[i, j] ** 2
+                scores_vect.append(temp)
+        dict_of_active_scores[key] = scores_vect
+        return dict_of_active_scores

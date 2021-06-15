@@ -47,42 +47,42 @@ uqsim = uqef.UQsim()
 # change args locally for testing and debugging
 local_debugging = True
 if local_debugging:
-    local_debugging_nodes = False  #True
+    local_debugging_nodes = False  # True
     exit_after_debugging_nodes = False
-    save_solver_results = False  #True
+    save_solver_results = False  # True
 
     uqsim.args.model = "larsim"
 
     uqsim.args.uncertain = "all"
     uqsim.args.chunksize = 1
 
-    uqsim.args.uq_method = "mc"  # "sc" | "saltelli" | "mc"
+    uqsim.args.uq_method = "sc"  # "sc" | "saltelli" | "mc"
     uqsim.args.mc_numevaluations = 100
-    uqsim.args.sampling_rule = "halton"  # | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
-    uqsim.args.sc_q_order = 7  #7 #10 3
-    uqsim.args.sc_p_order = 6  #6 #8 6
+    uqsim.args.sampling_rule = "sobol"  # | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
+    uqsim.args.sc_q_order = 7  # 7 #10 3
+    uqsim.args.sc_p_order = 6  # 6 #8 6
     uqsim.args.sc_poly_rule = "three_terms_recurrence"  # "gram_schmidt" | "three_terms_recurrence" | "cholesky"
     uqsim.args.sc_poly_normed = True
     uqsim.args.sc_sparse_quadrature = False  # True
     uqsim.args.regression = False
 
-    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_30_05_grad'))
+    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_12_06_lai_stat'))
     uqsim.args.inputModelDir = os.path.abspath(os.path.join('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2','Larsim-data'))
     uqsim.args.sourceDir = os.path.abspath(os.path.join('/dss/dsshome1/lxc0C/ga45met2', 'Repositories', 'Larsim-UQ'))
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
     #uqsim.args.config_file = "/dss/dsshome1/lxc0C/ga45met2/Repositories/Larsim-UQ/configurations_Larsim/configuration_larsim_uqsim_cm2_v4.json" #"configuration_larsim_uqsim.json"
     #uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/Larsim-UQ/configurations_Larsim/configurations_larsim_master_lai_small.json'
-    uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/Larsim-UQ/configurations_Larsim/configurations_larsim_high_flow_small.json'
+    uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/Larsim-UQ/configurations_Larsim/configurations_larsim_4_may.json'
 
     uqsim.args.transformToStandardDist = True
     uqsim.args.mpi = True
-    uqsim.args.mpi_method = "MpiPoolSolver"  #"LinearSolver"
+    uqsim.args.mpi_method = "MpiPoolSolver"  # "LinearSolver"
     uqsim.args.uqsim_store_to_file = False
 
     uqsim.args.disable_statistics = False
     uqsim.args.parallel_statistics = True  # False
-    uqsim.args.compute_Sobol_t = False #True
-    uqsim.args.compute_Sobol_m = False #True
+    uqsim.args.compute_Sobol_t = True  # True
+    uqsim.args.compute_Sobol_m = True  # True
 
     uqsim.args.num_cores = 1
 
@@ -156,7 +156,7 @@ uqsim.statistics.update({"larsim"         : (lambda: LarsimStatistics.LarsimStat
                                                                                        uq_method=uqsim.args.uq_method,
                                                                                        compute_Sobol_t=uqsim.args.compute_Sobol_t,
                                                                                        compute_Sobol_m=uqsim.args.compute_Sobol_m,
-                                                                                       store_qoi_data_in_stat_dict=False
+                                                                                       store_qoi_data_in_stat_dict=False,
                                                                                        ))})
 uqsim.statistics.update({"oscillator"     : (lambda: LinearDampedOscillatorStatistics.LinearDampedOscillatorStatistics())})
 uqsim.statistics.update({"ishigami"       : (lambda: IshigamiStatistics.IshigamiStatistics(uqsim.configuration_object))})
@@ -277,7 +277,7 @@ if uqsim.is_master():
 # statistics:
 uqsim.calc_statistics()
 uqsim.save_statistics()
-uqsim.plot_statistics(display=False, plot_measured_timeseries=True, plot_unalteres_timeseries=True)
+# uqsim.plot_statistics(display=False, plot_measured_timeseries=True, plot_unalteres_timeseries=True)
 
 # uqsim.args.uqsim_file = os.path.abspath(os.path.join(uqsim.args.outputResultDir, "uqsim.saved"))
 # #uqsim.store_to_file()

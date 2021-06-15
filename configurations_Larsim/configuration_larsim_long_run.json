@@ -1,0 +1,17 @@
+{
+  "Timeframe": {
+    "start_day": 1,
+    "start_month": 1,
+    "start_year": 2013,
+    "start_hour": 0,
+    "start_minute": 0,
+    "end_day": 1,
+    "end_month": 1,
+    "end_year": 2014,
+    "end_hour": 0,
+    "end_minute": 0,
+    "timestep": 31,
+    "cut_runs": "True",
+    "warm_up_duration": 53
+  }
+}

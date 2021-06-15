@@ -2,12 +2,12 @@
   "Timeframe":
     {
       "start_day": 1,
-      "start_month": 6,
+      "start_month": 5,
       "start_year": 2013,
       "start_hour": 0,
       "start_minute": 0,
 
-      "end_day": 30,
+      "end_day": 1,
       "end_month": 6,
       "end_year": 2013,
       "end_hour": 0,
@@ -19,38 +19,54 @@
     },
   "Output":
     {
-      "type_of_output":"Abfluss Messung",
+      "type_of_output":"Abfluss Messung + Vorhersage",
       "type_of_output_measured":"Ground Truth",
       "station_calibration_postproc":"MARI",
-      "station_model_runs": "all",
+      "station_model_runs":"all",
+      "post_processing_for_all_stations":"False",
       "pathsDataFormat":"False",
-      "dailyOutput": "False",
-      "calculate_GoF": "True",
-      "objective_function":"all",
+      "dailyOutput":"False",
       "run_and_save_simulations":"True",
-      "compute_gradients": "False"
+      "compute_gradients":"False",
+      "gradients_method":"Forward Difference",
+      "calculate_GoF": "True",
+      "QOI":"GoF",
+      "objective_function_qoi":["RMSE", "NSE"],
+      "mode":"sliding_window",
+      "interval": 24,
+      "min_periods": 6,
+      "method": "avrg"
     },
   "parameters_settings":
     {
       "addSampledValue":"False",
       "TGB_standard":3085,
-      "TGB":3085,
+      "TGB":"None",
       "roundParameters":"False",
       "roundDecimal":2,
       "cut_limits":"False"
     },
   "parameters": [
     {
-      "name": "Acker:Jun",
+      "name": "locker baumbest.:May",
       "type": "lanu",
       "distribution": "Uniform",
       "lower": 0,
-      "upper": 1,
-      "lower_limit": 3.0,
-      "upper_limit": 7.0,
-      "depends_on":"Acker:May",
-      "direction":"increasing"
+      "upper": 11,
+      "lower_limit": 6.5,
+      "upper_limit": 8.0
     },
+    {
+      "name": "Mischwald:May",
+      "type": "lanu",
+      "distribution": "Uniform",
+      "lower": 0,
+      "upper": 11,
+      "lower_limit": 8.0,
+      "upper_limit": 12.0
+    }
+  ],
+  "unused_parameters": [
     {
       "name": "locker baumbest.:Jun",
       "type": "lanu",
@@ -74,6 +90,17 @@
       "direction":"increasing"
     },
     {
+      "name": "Acker:Jun",
+      "type": "lanu",
+      "distribution": "Uniform",
+      "lower": 0,
+      "upper": 1,
+      "lower_limit": 3.0,
+      "upper_limit": 7.0,
+      "depends_on":"Acker:May",
+      "direction":"increasing"
+    },
+    {
       "name": "Laubwald:Jun",
       "type": "lanu",
       "distribution": "Uniform",
@@ -83,9 +110,7 @@
       "upper_limit": 12.0,
       "depends_on":"Laubwald:May",
       "direction":"increasing"
-    }
-  ],
-  "unused_parameters": [
+    },
     {
       "name": "EKM",
       "type": "tape35",
