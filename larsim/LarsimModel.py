@@ -54,15 +54,15 @@ class LarsimModelSetUp():
 
         self.master_dir = osp.abspath(osp.join(self.workingDir, 'master_configuration'))
 
-        self.global_master_dir = osp.abspath(osp.join(self.inputModelDir,'WHM Regen','master_configuration'))
-        self.master_lila_paths = [osp.abspath(osp.join(self.inputModelDir,'WHM Regen', i)) for i in paths.master_lila_files]
-        self.lila_configured_paths = [os.path.abspath(os.path.join(self.master_dir, i)) for i in paths.lila_files]
+        self.global_master_dir = osp.abspath(osp.join(self.inputModelDir, 'WHM Regen','master_configuration'))
+        self.master_lila_paths = [osp.abspath(osp.join(self.inputModelDir, 'WHM Regen', i)) for i in paths.MASTER_LILA_FILES]
+        self.lila_configured_paths = [os.path.abspath(os.path.join(self.master_dir, i)) for i in paths.LILA_FILES]
         self.all_whms_path = osp.abspath(osp.join(self.inputModelDir,'WHM Regen','var/WHM Regen WHMS'))
 
         try:
             self.larsim_exe = self.configurationObject["Directories"]["larsim_exe"]
         except KeyError:
-            self.larsim_exe = osp.abspath(osp.join(self.inputModelDir, 'Larsim-exe', 'larsim-linux-intel-1000.exe'))
+                self.larsim_exe = osp.abspath(osp.join(self.inputModelDir, 'Larsim-exe', 'larsim-linux-intel-1000.exe'))
 
         self.sourceDir = pathlib.Path(self.sourceDir)
         self.workingDir = pathlib.Path(self.workingDir)
@@ -220,7 +220,7 @@ class LarsimModelSetUp():
             if filtered_timesteps_vs_station_values:
                 read_file_path = self.regen_saved_data_files / 'q_2003-11-01_2018-01-01_time_and_values_filtered.pkl'
             else:
-                read_file_path = self.master_dir / paths.lila_files[0]
+                read_file_path = self.master_dir / paths.LILA_FILES[0]
 
         if read_file_path.is_file():
             self.df_measured = larsimDataPostProcessing.read_process_write_discharge(df=read_file_path,
@@ -236,7 +236,7 @@ class LarsimModelSetUp():
             interpolate_missing_values = kwargs["interpolate_missing_values"] if "interpolate_missing_values" in kwargs else True
             interpolation_method = kwargs["interpolation_method"] if "interpolation_method" in kwargs else 'time'
 
-            read_file_path = self.master_dir / paths.lila_files[0]
+            read_file_path = self.master_dir / paths.LILA_FILES[0]
             if read_file_path.is_file():
                 self.df_measured = larsimDataPreparation.get_filtered_df(df=read_file_path,
                                                                          stations=self.station_for_model_runs,
@@ -444,7 +444,7 @@ class LarsimModel(Model):
 
         self.local_measurement_file = self.workingDir / "df_measured.pkl"
         if not self.local_measurement_file.exists():
-            self.local_measurement_file = self.master_dir / paths.lila_files[0]
+            self.local_measurement_file = self.master_dir / paths.LILA_FILES[0]
 
         #####################################
         # Specification of different variables for setting the model run and purpose of the model run
@@ -671,7 +671,7 @@ class LarsimModel(Model):
             self.measuredDF = larsimInputOutputUtilities.read_dataFrame_from_file(local_measurement_file,
                                                                               compression="gzip")
         else:
-            local_measurement_file = self.master_dir / paths.lila_files[0]
+            local_measurement_file = self.master_dir / paths.LILA_FILES[0]
             self.measuredDF = larsimDataPostProcessing.read_process_write_discharge(df=local_measurement_file,
                                                                                timeframe=self.timeframe,
                                                                                station=self.station_for_model_runs,
@@ -692,6 +692,10 @@ class LarsimModel(Model):
             raise_exception_on_model_break = self.raise_exception_on_model_break
         max_retries = kwargs.get("max_retries") if "max_retries" in kwargs else self.max_retries
 
+        take_direct_value = kwargs.get("take_direct_value") if "take_direct_value" in kwargs else False
+
+        make_n = kwargs.get("take_direct_value") if "take_direct_value" in kwargs else False
+
         results_array = []
         for ip in range(0, len(i_s)): # for each peace of work
             i = i_s[ip]  # i is unique index run
@@ -709,9 +713,10 @@ class LarsimModel(Model):
             curr_working_dir.mkdir(parents=True, exist_ok=True)
 
             # copy all the necessary files to the newly created directory
-            master_dir_for_copying = str(self.master_dir) + "/."
-            subprocess.run(['cp', '-a', master_dir_for_copying, curr_working_dir])
-            print("[LarsimModel INFO] Successfully copied all the files")
+            if curr_working_dir != self.master_dir:
+                master_dir_for_copying = str(self.master_dir) + "/."
+                subprocess.run(['cp', '-a', master_dir_for_copying, curr_working_dir])
+                print("[LarsimModel INFO] Successfully copied all the files")
 
             # change values
             id_dict = {"index_run": i}
@@ -723,7 +728,8 @@ class LarsimModel(Model):
                                                                                     tape35_path=tape35_path,
                                                                                     lanu_path=lanu_path,
                                                                                     configurationObject=self.configurationObject,
-                                                                                    process_id=i)
+                                                                                    process_id=i,
+                                                                                    take_direct_value=take_direct_value)
                 parameters_dict = {**id_dict, **parameters_dict}
             else:
                 parameters_dict = None

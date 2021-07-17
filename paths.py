@@ -75,7 +75,7 @@ lila_files = ["station-wq.lila","station-n.lila", "station-tlu.lila",
               "station-xglob.lila", "station-xludr.lila", "station-zsos.lila",
               "station-rflu.lila", "station-ttau.lila","station-xwind.lila"]
 
-#lila_configured_paths = [os.path.abspath(os.path.join(master_dir, i)) for i in lila_files]
+#lila_configured_paths = [os.path.abspath(os.path.join(master_dir, i)) for i in LILA_FILES]
 
 #timeconfigurations_json = os.path.abspath(os.path.join(master_dir, "configurations.json"))
 

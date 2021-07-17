@@ -26,8 +26,8 @@
       "post_processing_for_all_stations":"False",
       "pathsDataFormat":"False",
       "dailyOutput":"False",
-      "run_and_save_simulations":"True",
-      "compute_gradients":"True",
+      "run_and_save_simulations":"False",
+      "compute_gradients":"False",
       "gradients_method":"Forward Difference",
       "calculate_GoF":"True",
       "objective_function":["RMSE", "NSE"],
@@ -36,7 +36,8 @@
       "mode":"continuous",
       "interval": 24,
       "min_periods": 6,
-      "method": "avrg"
+      "method": "avrg",
+      "sg_testing": "True"
     },
   "parameters_settings":
     {
@@ -48,6 +49,32 @@
       "cut_limits":"False"
     },
   "parameters": [
+    {
+      "name":"EQD",
+      "type":"tape35",
+      "distribution":"Uniform",
+      "lower": 50,
+      "upper": 5000,
+      "lower_limit": 50,
+      "upper_limit": 5000,
+      "depends_on":"EQI",
+      "direction":"decreasing",
+      "default": 450.0
+    },
+    {
+      "name": "BSF",
+      "type": "tape35",
+      "distribution": "Uniform",
+      "mu": 0.3,
+      "sigma": 0.1,
+      "lower": 0.01,
+      "upper": 0.5,
+      "lower_limit": 0.01,
+      "upper_limit": 0.5,
+      "default": 0.3
+    }
+  ],
+  "unused_parameters" : [
     {
       "name":"EQD",
       "type":"tape35",
@@ -69,9 +96,7 @@
       "lower_limit": 0.06,
       "upper_limit": 10,
       "default": 1.0
-    }
-  ],
-  "unused_parameters" : [
+    },
     {
       "name": "BSF",
       "type": "tape35",
