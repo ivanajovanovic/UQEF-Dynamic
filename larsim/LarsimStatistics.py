@@ -128,7 +128,7 @@ class LarsimSamples(object):
             except KeyError:
                 pass
             else:
-                objective_function_qoi = larsimDataPostProcessing._gof_list_to_function_names(objective_function_qoi)
+                objective_function_qoi = larsimDataPostProcessing.gof_list_to_function_names(objective_function_qoi)
                 if isinstance(objective_function_qoi, list):
                     self.list_objective_function_qoi = [single_gof.__name__ if callable(single_gof) else single_gof
                                                         for single_gof in objective_function_qoi]
@@ -468,7 +468,7 @@ class LarsimStatistics(Statistics):
         self._compute_Sobol_m2 = kwargs.get('compute_Sobol_m2') if 'compute_Sobol_m2' in kwargs else False
 
         #####################################
-        # Set of config variables propagated via config file
+        # Set of larsimConfigurationSettings variables propagated via larsimConfigurationSettings file
         #####################################
 
         # TODO for now this is hardcoded such that only a single self.qoi_column is supported
@@ -490,7 +490,7 @@ class LarsimStatistics(Statistics):
             except KeyError:
                 self.qoi_column = "Value"
             else:
-                objective_function_qoi = larsimDataPostProcessing._gof_list_to_function_names(objective_function_qoi)
+                objective_function_qoi = larsimDataPostProcessing.gof_list_to_function_names(objective_function_qoi)
                 if isinstance(objective_function_qoi, list):
                     if callable(objective_function_qoi[0]):
                         self.qoi_column = objective_function_qoi[0].__name__

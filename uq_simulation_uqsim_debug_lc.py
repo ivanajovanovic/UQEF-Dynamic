@@ -123,8 +123,7 @@ if uqsim.is_master() and not uqsim.is_restored():
             "larsim"         : (lambda: LarsimModel.LarsimModelSetUp(configurationObject=uqsim.configuration_object,
                                                                      inputModelDir=uqsim.args.inputModelDir,
                                                                      sourceDir=uqsim.args.sourceDir,
-                                                                     workingDir=uqsim.args.workingDir,
-                                                                     ))
+                                                                     workingDir=uqsim.args.workingDir))
            ,"oscillator"     : (lambda: LinearDampedOscillatorModel.LinearDampedOscillatorModelSetUp(uqsim.configuration_object))
            ,"ishigami"       : (lambda: IshigamiModel.IshigamiModelSetUp(uqsim.configuration_object))
            ,"productFunction": (lambda: ProductFunctionModel.ProductFunctionModelSetUp(uqsim.configuration_object))
@@ -142,8 +141,7 @@ uqsim.models.update({"larsim"         : (lambda: LarsimModel.LarsimModel(configu
                                                                          disable_statistics=uqsim.args.disable_statistics,
                                                                          raise_exception_on_model_break=False,
                                                                          uq_method=uqsim.args.uq_method,
-                                                                         max_retries=10
-                                                                         ))})
+                                                                         max_retries=10))})
 uqsim.models.update({"oscillator"     : (lambda: LinearDampedOscillatorModel.LinearDampedOscillatorModel(uqsim.configuration_object))})
 uqsim.models.update({"ishigami"       : (lambda: IshigamiModel.IshigamiModel(uqsim.configuration_object))})
 uqsim.models.update({"productFunction": (lambda: ProductFunctionModel.ProductFunctionModel(uqsim.configuration_object))})

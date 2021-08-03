@@ -75,9 +75,9 @@ lila_files = ["station-wq.lila","station-n.lila", "station-tlu.lila",
               "station-xglob.lila", "station-xludr.lila", "station-zsos.lila",
               "station-rflu.lila", "station-ttau.lila","station-xwind.lila"]
 
-#lila_configured_paths = [os.path.abspath(os.path.join(master_dir, i)) for i in LILA_FILES]
+#local_lila_paths = [os.path.abspath(os.path.join(global_master_dir, i)) for i in LILA_FILES]
 
-#timeconfigurations_json = os.path.abspath(os.path.join(master_dir, "configurations.json"))
+#timeconfigurations_json = os.path.abspath(os.path.join(global_master_dir, "configurations.json"))
 
 master_tape10_file = os.path.abspath(os.path.join(master_dir, 'tape10_master'))
 configured_tape10_file = master_dir

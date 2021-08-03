@@ -30,19 +30,16 @@ def main():
         print(e)
 
     start_setup = time.time()
-    larsimModelSetUpObject = LarsimModel.LarsimModelSetUp(configurationObject=config_file,
-                                                          workingDir=outputModelDir,
-                                                          get_measured_discharge=True,
-                                                          get_Larsim_saved_simulations=True,
-                                                          run_unaltered_sim=False)
+    larsimModelSetUpObject = LarsimModel.LarsimModelSetUp(configurationObject=config_file, inputModelDir=None,
+                                                          workingDir=outputModelDir, get_measured_discharge=True,
+                                                          get_Larsim_saved_simulations=True, run_unaltered_sim=False)
     end_setup = time.time()
     runtime_setup = end_setup - start_setup
     print(f"Larsim SetUp runtime: {runtime_setup}!")
 
     start = time.time()
-    larsimModel = LarsimModel.LarsimModel(configurationObject=config_file,
-                                          workingDir=outputResultDir,
-                                          max_retries=10)
+    larsimModel = LarsimModel.LarsimModel(configurationObject=config_file, inputModelDir=None,
+                                          workingDir=outputResultDir, max_retries=10)
 
     results_array = larsimModel.run()
     print(f"Type of results_array:{results_array}")

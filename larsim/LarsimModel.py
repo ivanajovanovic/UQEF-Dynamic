@@ -4,9 +4,7 @@ import datetime
 import dill
 from distutils.util import strtobool
 from functools import reduce
-import gc
 import math
-from mpi4py import MPI
 import numpy as np
 import os
 import os.path as osp
@@ -24,148 +22,416 @@ from LarsimUtilityFunctions import larsimDataPostProcessing
 from LarsimUtilityFunctions import larsimDataPreparation
 from LarsimUtilityFunctions import larsimInputOutputUtilities
 from LarsimUtilityFunctions import larsimTimeUtility
+from LarsimUtilityFunctions import Utils as utils
 
-# TODO refactor to do most of the stuff in some function and not in the constructor
-class LarsimModelSetUp():
-    def __init__(self, configurationObject, *args, **kwargs):
+
+class LarsimConfigurations:
+    def __init__(self, configurationObject, deep_copy=False,
+                 log_level: int = utils.log_levels.INFO,
+                 print_level: int = utils.print_levels.INFO,
+                 **kwargs):
+
+        self.log_util = utils.LogUtility(log_level=log_level, print_level=print_level)
+        self.log_util.set_print_prefix('LarsimConfigurations')
+        self.log_util.set_log_prefix('LarsimConfigurations')
+
+        #####################################
+        # Read some configurations from larsimConfigurationSettings file/object
+        #####################################
 
         if not isinstance(configurationObject, dict):
             self.configurationObject = larsimConfigurationSettings.return_configuration_object(configurationObject)
+        elif deep_copy:
+            self.configurationObject = copy.deepcopy(configurationObject)
         else:
             self.configurationObject = configurationObject
 
-        #####################################
-        # Specification of different directories - some are machine / location dependent,
-        # adjust path in larsimPaths module and configuration file/object accordingly
-        #####################################
-
-        self.sourceDir = kwargs.get('sourceDir') if 'sourceDir' in kwargs and osp.isabs(kwargs.get('sourceDir')) \
-            else osp.dirname(pathlib.Path(__file__).resolve())
-
-        self.inputModelDir = kwargs.get('inputModelDir') if 'inputModelDir' in kwargs else paths.larsim_data_path
-
-        if "workingDir" in kwargs:
-            self.workingDir = kwargs.get('workingDir')
+        if "configure_tape10" in kwargs:
+            self.boolean_configure_tape10 = kwargs['configure_tape10']
         else:
             try:
-                self.workingDir = self.configurationObject["Directories"]["workingDir"]
+                self.boolean_configure_tape10 = strtobool(self.configurationObject["model_settings"]["configure_tape10"])
             except KeyError:
-                self.workingDir = paths.workingDir
+                self.boolean_configure_tape10 = False
 
-        self.master_dir = osp.abspath(osp.join(self.workingDir, 'master_configuration'))
+        if "copy_and_configure_whms" in kwargs:
+            self.boolean_copy_and_configure_whms = kwargs['copy_and_configure_whms']
+        else:
+            try:
+                self.boolean_copy_and_configure_whms = strtobool(
+                    self.configurationObject["model_settings"]["copy_and_configure_whms"])
+            except KeyError:
+                self.boolean_copy_and_configure_whms = False
 
-        self.global_master_dir = osp.abspath(osp.join(self.inputModelDir, 'WHM Regen','master_configuration'))
-        self.master_lila_paths = [osp.abspath(osp.join(self.inputModelDir, 'WHM Regen', i)) for i in paths.MASTER_LILA_FILES]
-        self.lila_configured_paths = [os.path.abspath(os.path.join(self.master_dir, i)) for i in paths.LILA_FILES]
-        self.all_whms_path = osp.abspath(osp.join(self.inputModelDir,'WHM Regen','var/WHM Regen WHMS'))
+        if "copy_and_configure_lila_input_files" in kwargs:
+            self.boolean_copy_and_configure_lila_input_files = kwargs['copy_and_configure_lila_input_files']
+        else:
+            try:
+                self.boolean_copy_and_configure_lila_input_files = strtobool(
+                    self.configurationObject["model_settings"]["copy_and_configure_lila_input_files"])
+            except KeyError:
+                self.boolean_copy_and_configure_lila_input_files = False
+
+        if "copy_and_configure_kala_input_files" in kwargs:
+            self.boolean_copy_and_configure_kala_input_files = kwargs['copy_and_configure_kala_input_files']
+        else:
+            try:
+                self.boolean_copy_and_configure_kala_input_files = strtobool(
+                    self.configurationObject["model_settings"]["copy_and_configure_kala_input_files"])
+            except KeyError:
+                self.boolean_copy_and_configure_kala_input_files = False
+
+        if "make_local_copy_of_master_dir" in kwargs:
+            self.boolean_make_local_copy_of_master_dir = kwargs['make_local_copy_of_master_dir']
+        else:
+            try:
+                self.boolean_make_local_copy_of_master_dir = strtobool(
+                    self.configurationObject["model_settings"]["make_local_copy_of_master_dir"])
+            except KeyError:
+                self.boolean_make_local_copy_of_master_dir = False
+
+        if "get_measured_discharge" in kwargs:
+            self.boolean_get_measured_discharge = kwargs['get_measured_discharge']
+        else:
+            try:
+                self.boolean_get_measured_discharge = strtobool(
+                    self.configurationObject["model_settings"]["get_measured_discharge"])
+            except KeyError:
+                self.boolean_get_measured_discharge = False
+
+        if "read_date_from_saved_data_dir" in kwargs:
+            self.boolean_read_date_from_saved_data_dir = kwargs['read_date_from_saved_data_dir']
+        else:
+            try:
+                self.boolean_read_date_from_saved_data_dir = strtobool(
+                    self.configurationObject["model_settings"]["read_date_from_saved_data_dir"])
+            except KeyError:
+                self.boolean_read_date_from_saved_data_dir = False
+
+        if "get_saved_simulations" in kwargs:
+            self.boolean_get_saved_simulations = kwargs['get_saved_simulations']
+        else:
+            try:
+                self.boolean_get_saved_simulations = strtobool(
+                    self.configurationObject["model_settings"]["get_saved_simulations"])
+            except KeyError:
+                self.boolean_get_saved_simulations = False
+        self.boolean_get_saved_simulations = self.boolean_get_saved_simulations \
+                                                    and self.boolean_read_date_from_saved_data_dir
+
+        if "run_unaltered_sim" in kwargs:
+            self.boolean_run_unaltered_sim = kwargs['run_unaltered_sim']
+        else:
+            try:
+                self.boolean_run_unaltered_sim = strtobool(
+                    self.configurationObject["model_settings"]["run_unaltered_sim"])
+            except KeyError:
+                self.boolean_run_unaltered_sim = False
+
+        if "raise_exception_on_model_break" in kwargs:
+            self.raise_exception_on_model_break = kwargs['raise_exception_on_model_break']
+        else:
+            try:
+                self.raise_exception_on_model_break = strtobool(
+                    self.configurationObject["model_settings"]["raise_exception_on_model_break"])
+            except KeyError:
+                self.raise_exception_on_model_break = True
+
+        if "max_retries" in kwargs:
+            self.max_retries = kwargs['max_retries']
+        else:
+            try:
+                self.max_retries = self.configurationObject["model_settings"]["max_retries"]
+            except KeyError:
+                self.max_retries = None
+        #####################################
+        # Set of configuration variables propagated via configuration file related to the output of the model
+        # i.e., time settings, define the purpose of the model run, model ouput setting...
+        #####################################
+
+        # getting the time span for running the model from the json configuration file
+        self.timeframe = None
+        self.t = None
+        if "time_settings" in self.configurationObject:
+            self.timeframe = larsimTimeUtility.parse_datetime_configuration(self.configurationObject)
+            self.t = larsimTimeUtility.get_tape10_timesteps(self.timeframe)
+        else:
+            self.log_util.log_error("time_settings specification is missing from the configuration object!")
+            raise Exception(f"[LarsimConfigurations ERROR:] time_settings specification is missing from the configuration object!")
 
         try:
-            self.larsim_exe = self.configurationObject["Directories"]["larsim_exe"]
+            self.cut_runs = strtobool(self.configurationObject["time_settings"]["cut_runs"])
         except KeyError:
-                self.larsim_exe = osp.abspath(osp.join(self.inputModelDir, 'Larsim-exe', 'larsim-linux-intel-1000.exe'))
-
-        self.sourceDir = pathlib.Path(self.sourceDir)
-        self.workingDir = pathlib.Path(self.workingDir)
-        self.inputModelDir = pathlib.Path(self.inputModelDir)
-        self.master_dir = pathlib.Path(self.master_dir)
-        self.global_master_dir = pathlib.Path(self.global_master_dir)
-        self.all_whms_path = pathlib.Path(self.all_whms_path)
-        self.larsim_exe = pathlib.Path(self.larsim_exe)
-
-        for i, file in enumerate(self.master_lila_paths):
-            self.master_lila_paths[i] = pathlib.Path(file)
-        for i, file in enumerate(self.lila_configured_paths):
-            self.lila_configured_paths[i] = pathlib.Path(file)
-
-        self.regen_saved_data_files = self.inputModelDir / 'WHM Regen' / 'data_files'
-
-        print(f"LarsimModelSetUp.sourceDir = {self.sourceDir}")
-        print(f"LarsimModelSetUp.workingDir = {self.workingDir}")
-        print(f"LarsimModelSetUp.inputModelDir = {self.inputModelDir}")
-        print(f"LarsimModelSetUp.global_master_dir = {self.global_master_dir}")
-        print(f"LarsimModelSetUp.all_whms_path = {self.all_whms_path}")
-        print(f"LarsimModelSetUp.larsim_exe = {self.larsim_exe}")
-
-        #####################################
-        # Specification of different variables for setting the model run and purpose of the model run
-        #####################################
+            self.cut_runs = False
 
         try:
-            self.station_of_Interest = self.configurationObject["Output"]["station_calibration_postproc"]
+            self.warm_up_duration = self.configurationObject["time_settings"]["warm_up_duration"]
+        except KeyError:
+            self.warm_up_duration = None
+
+        # how long one consecutive run should take - used later on in each Larsim run, makes sense only if cut_runs=True
+        try:
+            self.timestep = self.configurationObject["time_settings"]["timestep"]
+        except KeyError:
+            self.timestep = 5
+        #####################################
+        try:
+            self.station_of_Interest = self.configurationObject["output_settings"]["station_calibration_postproc"]
         except KeyError:
             self.station_of_Interest = "MARI"
 
         try:
-            self.station_for_model_runs = self.configurationObject["Output"]["station_model_runs"]
+            self.station_for_model_runs = self.configurationObject["output_settings"]["station_model_runs"]
         except KeyError:
             self.station_for_model_runs = "all"
 
         try:
-            self.type_of_output_of_Interest = self.configurationObject["Output"]["type_of_output"]
+            self.type_of_output_of_Interest = self.configurationObject["output_settings"]["type_of_output"]
         except KeyError:
             self.type_of_output_of_Interest = "Abfluss Messung + Vorhersage"
 
         try:
-            self.type_of_output_of_Interest_measured = self.configurationObject["Output"]["type_of_output_measured"]
+            self.type_of_output_of_Interest_measured = self.configurationObject["output_settings"]["type_of_output_measured"]
         except KeyError:
-            self.type_of_output_of_Interest_measured  = "Ground Truth"
+            self.type_of_output_of_Interest_measured = "Ground Truth"
 
         try:
-            self.warm_up_duration = self.configurationObject["Timeframe"]["warm_up_duration"]
-        except KeyError:
-            self.warm_up_duration = None  # 53
-
-        try:
-            self.calculate_GoF = strtobool(self.configurationObject["Output"]["calculate_GoF"])
+            self.calculate_GoF = strtobool(self.configurationObject["output_settings"]["calculate_GoF"])
         except KeyError:
             self.calculate_GoF = True
 
         if self.calculate_GoF:
             try:
-                self.objective_function = self.configurationObject["Output"]["objective_function"]
+                self.objective_function = self.configurationObject["output_settings"]["objective_function"]
             except KeyError:
                 self.objective_function = "all"
-            self.objective_function = larsimDataPostProcessing._gof_list_to_function_names(self.objective_function)
+            self.objective_function = larsimDataPostProcessing.gof_list_to_function_names(self.objective_function)
 
-        larsimConfigurationSettings.update_configurationObject_with_parameters_info(self.configurationObject)
+        try:
+            self.run_and_save_simulations = strtobool(
+                self.configurationObject["output_settings"]["run_and_save_simulations"])
+        except KeyError:
+            self.run_and_save_simulations = True
 
-        # Get the timeframe for running the simulation from the configuration file
-        if "Timeframe" in self.configurationObject:
-            self.timeframe = larsimTimeUtility.parse_datetime_configuration(self.configurationObject)
+        try:
+            self.always_save_original_model_runs = strtobool(
+                self.configurationObject["output_settings"]["always_save_original_model_runs"])
+        except KeyError:
+            self.always_save_original_model_runs = False
+
+        # this variable controls if post-processing of the result time series should be done for
+        # only self.station_of_Interest (False) or all self.station_for_model_runs (True)
+        try:
+            self.get_all_possible_stations = strtobool(
+                self.configurationObject["output_settings"]["post_processing_for_all_stations"])
+        except KeyError:
+            self.get_all_possible_stations = True
+        #####################################
+        # this variable stands for the purpose of LarsimModel run
+        # distinguish between different modes / purposes of LarsimModel runs:
+        #               calibration, run_and_save_simulations, gradient_computation, UQ_analysis
+        # These modes do not have to be mutually exclusive!
+        #####################################
+        try:
+            self.qoi = self.configurationObject["model_run_settings"]["QOI"]
+        except KeyError:
+            self.qoi = "Q"
+        if self.qoi != "Q" and self.qoi != "GoF":
+            raise Exception(f"[LarsimConfigurations ERROR] self.qoi should either be \"Q\" or \"GoF\" ")
+
+        try:
+            self.mode = self.configurationObject["model_run_settings"]["mode"]
+        except KeyError:
+            self.mode = "continuous"
+        if self.mode != "continuous" and self.mode != "sliding_window" and self.mode != "resampling":
+            raise Exception(f"[LarsimConfigurations ERROR] self.mode should have one of the following values:"
+                            f" \"continuous\" or \"sliding_window\" or \"resampling\"")
+
+        if self.mode == "sliding_window" or self.mode == "resampling":
+            try:
+                self.interval = self.configurationObject["model_run_settings"]["interval"]
+            except KeyError:
+                self.interval = 24
+            # if self.interval == "whole":
+            #     self.configurationObject["output_settings"]["dailyOutput"] = "True"
+            try:
+                self.min_periods = self.configurationObject["model_run_settings"]["min_periods"]
+            except KeyError:
+                self.min_periods = 1
+            if self.qoi == "Q":
+                try:
+                    self.method = self.configurationObject["model_run_settings"]["method"]
+                except KeyError:
+                    self.method = "avrg"
+                if self.method != "avrg" and self.method != "max" and self.method != "min":
+                    raise Exception(f"[LarsimConfigurations ERROR:] self.method should be "
+                                    f"either \"avrg\" or \"max\" or \"min\"")
+
+        if self.mode == "resampling":
+            raise Exception(f"[LarsimConfigurations ERROR] resampling mode is still not implemented")
+
+        # if we want to compute the gradient (of some likelihood fun or output itself) w.r.t parameters
+        try:
+            self.compute_gradients = strtobool(self.configurationObject["model_run_settings"]["compute_gradients"])
+        except KeyError:
+            self.compute_gradients = False
+        if self.compute_gradients:
+            try:
+                gradients_method = self.configurationObject["model_run_settings"]["gradients_method"]
+            except KeyError:
+                gradients_method = "Forward Difference"
+
+            if gradients_method == "Central Difference":
+                self.CD = 1  # flag for using Central Differences (with 2 * num_evaluations)
+            elif gradients_method == "Forward Difference":
+                self.CD = 0  # flag for using Forward Differences (with num_evaluations)
+            else:
+                raise Exception(f"[LarsimConfigurations ERROR] NUMERICAL GRADIENT EVALUATION ERROR: "
+                                f"Only \"Central Difference\" and \"Forward Difference\" supported")
+            try:
+                # difference for gradient computation
+                self.eps_val_global = self.configurationObject["model_run_settings"]["eps_gradients"]
+            except KeyError:
+                self.eps_val_global = 1e-4
+
+        # if calibration is True some likelihood / objective functions / GoF functio should be calculated
+        # from model run and propageted further
+        if self.qoi == "GoF" or self.compute_gradients:
+            try:
+                self.objective_function_qoi = self.configurationObject["model_run_settings"]["objective_function_qoi"]
+            except KeyError:
+                self.objective_function_qoi = "all"
+            self.objective_function_qoi = larsimDataPostProcessing.gof_list_to_function_names(
+                self.objective_function_qoi)
+
+        #####################################
+        if "tuples_parameters_info" not in self.configurationObject:
+            larsimConfigurationSettings.update_configurationObject_with_parameters_info(self.configurationObject)
+
+        self.variable_names = []
+        if "tuples_parameters_info" in self.configurationObject:
+            for i in self.configurationObject["tuples_parameters_info"]:
+                self.variable_names.append(i["name"])
         else:
-            raise Exception(f"[LarsimModelSetUp ERRO:] Timeframe specification is missing from the configuration object!")
+            try:
+                for i in self.configurationObject["parameters"]:
+                    self.variable_names.append(i["name"])
+                # larsimConfigurationSettings.update_configurationObject_with_parameters_info(self.configurationObject)
+            except KeyError:
+                self.log_util.log_info("There is no parameters entry in the configurationObject!")
+                print(f"[LarsimModel Info] This Larsim Model object has empty variable_names list")
 
-        self.copy_master_folder()
-        self.configure_master_folder()
 
-        self.df_simulation = None
+# TODO refactor to do most of the stuff in some function and not in the constructor
+class LarsimModelSetUp:
+    def __init__(self, configurationObject, inputModelDir, workingDir=None, log_level: int = utils.log_levels.INFO,
+                 print_level: int = utils.print_levels.INFO, debug: bool = False, *args, **kwargs):
+
+        #####################################
+        # set-up utility variables
+        #####################################
+        self.log_util = utils.LogUtility(log_level=log_level, print_level=print_level)
+        self.debug = debug
+        if self.debug:
+            self.log_util.log_debug(f'LarsimModelSetUp debug: {self.debug}')
+        self.log_util.set_print_prefix('LarsimModelSetUp')
+        self.log_util.set_log_prefix('LarsimModelSetUp')
+
+        if isinstance(configurationObject, LarsimConfigurations):
+            self.larsimConfObject = configurationObject
+        else:
+            self.larsimConfObject = LarsimConfigurations(configurationObject, False,
+                                                         utils.log_levels.INFO, utils.print_levels.INFO,
+                                                         **kwargs)
+        #####################################
+        self.df_past_sim = None
         self.df_measured = None
         self.df_unaltered_ergebnis = None
         self.df_gof_unaltered_meas = None
         self.df_gof_sim_meas = None
 
-        self.boolean_get_measured_discharge = kwargs.get('get_measured_discharge') \
-            if 'get_measured_discharge' in kwargs else True
-        self.boolean_get_Larsim_saved_simulations = kwargs.get('get_Larsim_saved_simulations') \
-            if 'get_Larsim_saved_simulations' in kwargs else True
-        self.boolean_run_unaltered_sim = kwargs.get('run_unaltered_sim') if 'run_unaltered_sim' in kwargs else True
+        #####################################
+        # Specification of different directories - some are machine / location dependent,
+        # adjust path in larsimPaths module and configuration file/object accordingly
+        #####################################
+        self.inputModelDir = pathlib.Path(inputModelDir)
 
-        if self.boolean_get_measured_discharge:
-            self.get_measured_discharge(write_in_file=True)
-        if self.boolean_get_Larsim_saved_simulations:
-            self.get_Larsim_saved_simulations(write_in_file=True)
-        if self.boolean_run_unaltered_sim:
+        if self.larsimConfObject.dict_params_for_defining_paths is not None:
+            self.larsimPathsObject = paths.LarsimPathsObject(root_data_dir=inputModelDir,
+                                                             **self.larsimConfObject.dict_params_for_defining_paths)
+        else:
+            self.larsimPathsObject = paths.LarsimPathsObject(root_data_dir=inputModelDir)
+
+        self.sourceDir = pathlib.Path(kwargs.get('sourceDir')) \
+            if 'sourceDir' in kwargs and pathlib.Path(kwargs.get('sourceDir')).is_absolute() \
+            else pathlib.Path(__file__).resolve().parents[1]
+
+        self.workingDir = pathlib.Path(workingDir)
+        if self.workingDir is None:
+            self.workingDir = pathlib.Path(paths.workingDir)
+
+        if self.larsimConfObject.boolean_make_local_copy_of_master_dir:
+            self.master_dir = self.workingDir / 'master_configuration'
+        else:
+            self.master_dir = self.workingDir # self.larsimPathsObject.global_master_dir
+
+        log_filename = self.workingDir / "larsimModelSetUp.log"
+        self.log_util.set_log_filename(log_filename=log_filename)
+
+        self.log_util.log_info(f"inputModelDir = {self.inputModelDir}")
+        self.log_util.log_info(f"sourceDir = {self.sourceDir}")
+        self.log_util.log_info(f"workingDir = {self.workingDir}")
+        self.log_util.log_info(f"local_master_dir = {self.master_dir}")
+
+        self.perform_all_setup_steps()
+
+        self.log_util.log_info(f"Model Initial setup is done!")
+
+    def perform_all_setup_steps(self):
+        self.copy_master_folder()
+        self.configure_master_folder()
+
+        if self.larsimConfObject.boolean_get_measured_discharge:
+            # get the path to the files which stores grount-truth/measured data
+            if self.larsimConfObject.boolean_read_date_from_saved_data_dir:
+                if "ground_truth_file" in kwargs:
+                    ground_truth_file = pathlib.Path(kwargs.get('ground_truth_file'))
+                else:
+                    if self.larsimConfObject.dict_params_for_defining_paths is not None:
+                        ground_truth_file = self.larsimConfObject.dict_params_for_defining_paths["ground_truth_file"]
+                    else:
+                        raise Exception(
+                            f"[LarsimModelSetUp ERROR] - error when reading ground truth data from saved file!")
+                read_from_prepared_file = True
+                if ground_truth_file.is_absolute():
+                    read_file_path = ground_truth_file
+                else:
+                    read_file_path = self.larsimPathsObject.saved_data_dir / ground_truth_file
+            else:
+                read_from_prepared_file = False
+                read_file_path = self.master_dir / self.larsimPathsObject.list_input_lila_files[0]  # TODO
+            self.get_measured_discharge(path_to_measured_data=read_file_path,
+                                        read_from_prepared_file=read_from_prepared_file,
+                                        write_in_file=True)
+
+        if self.larsimConfObject.boolean_get_saved_simulations:
+            self.get_saved_simulations(write_in_file=True)
+        if self.larsimConfObject.boolean_run_unaltered_sim:
             self.run_unaltered_sim(createNewFolder=False, write_in_file=True)
-        if self.boolean_get_measured_discharge and self.boolean_run_unaltered_sim:
+        if self.larsimConfObject.boolean_get_measured_discharge and self.larsimConfObject.boolean_run_unaltered_sim:
             self._compare_measurements_and_unalteredSim(get_all_possible_stations=True, write_in_file=True)
 
-        print("[LarsimModelSetUp INFO] Model Initial setup is done! ")
-
     def copy_master_folder(self):
-        # for safety reasons make a copy of the master_dir in the working_dir and continue working with that one
-        self.master_dir.mkdir(parents=True, exist_ok=True)
-        master_dir_for_copying = str(self.global_master_dir) + "/."
-        subprocess.run(['cp', '-a', master_dir_for_copying, self.master_dir])
+        # for safety reasons make a copy of the global_master_dir in the working_dir and continue working with that one
+        if self.master_dir.resolve().absolute() != self.larsimPathsObject.global_master_dir.resolve().absolute():
+            self.master_dir.mkdir(parents=True, exist_ok=True)
+            master_dir_for_copying = str(self.larsimPathsObject.global_master_dir) + "/."
+            subprocess.run(['cp', '-a', master_dir_for_copying, self.master_dir])
+            if self.larsimConfObject.boolean_copy_and_configure_whms:
+                larsimConfigurationSettings._delete_larsim_whm_files(self.master_dir)
+            if self.larsimConfObject.boolean_copy_and_configure_lila_input_files:
+                larsimConfigurationSettings._delete_larsim_lila_files(self.master_dir)
+            self.log_util.log_info(f"Copying to local master folder!")
 
     def configure_master_folder(self):
         """
@@ -176,98 +442,116 @@ class LarsimModelSetUp():
         # # Get the timeframe for running the simulation from the configuration file
         # self.timeframe = larsimTimeUtility.parse_datetime_configuration(self.configurationObject)
 
-        # if not osp.isdir(self.master_dir): raise IOError('LarsimModelSetUp Error: Please first creat the following folder: %s. %s' % (self.master_dir, IOError.strerror))
         if not self.master_dir.is_dir():
+            self.log_util.log_error(f"Please first create the following folder: {self.master_dir}!")
             raise IOError(f'[LarsimModelSetUp Error] Please first create the following folder: '
                           f'{self.master_dir} {IOError.strerror}')
 
         # Based on time settings change tape10_master file - needed for unaltered run -
-        # this will be repeted once again by each process in LarsimModel.run()
-        # tape10_adjusted_path = osp.abspath(osp.join(self.master_dir, 'tape10'))
-        # master_tape10_file = osp.abspath(osp.join(self.master_dir, 'tape10_master'))
-        tape10_adjusted_path = self.master_dir / 'tape10'
-        master_tape10_file = self.master_dir / 'tape10_master'
-
-        try:
-            larsimTimeUtility.tape10_configuration(timeframe=self.timeframe, master_tape10_file=master_tape10_file, \
-                                                   new_path=tape10_adjusted_path, warm_up_duration=self.warm_up_duration)
-        except larsimTimeUtility.ValidDurationError as e:
-            print("[LarsimModelSetUp ERROR] - Something is  wrong with the time settings \n]"+str(e))
-            return None
+        # this will be repeated once again by each process in LarsimModel.run()
+        if self.larsimConfObject.boolean_configure_tape10:
+            local_tape10_path = self.master_dir / 'tape10'
+            global_master_tape10_file = self.larsimPathsObject.master_tape_10_path
+            # global_master_tape10_file = local_tape10_path_copied_from_master = self.larsimPathsObject.global_master_dir / global_master_tape10_file.name
+            try:
+                larsimTimeUtility.tape10_configuration(timeframe=self.larsimConfObject.timeframe,
+                                                       master_tape10_file=global_master_tape10_file, \
+                                                       new_tape10_file=local_tape10_path,
+                                                       warm_up_duration=self.larsimConfObject.warm_up_duration)
+            except larsimTimeUtility.ValidDurationError as e:
+                self.log_util.log_error(f"Error in configure_master_folder - time settings - tape10_configuration!")
+                print("[LarsimModelSetUp ERROR] - Something is  wrong with the time settings \n]" + str(e))
+                return None
 
         # Filter out whm files
-        larsimConfigurationSettings.copy_whm_files(timeframe=self.timeframe, all_whms_path=self.all_whms_path,
-                                                   new_path=self.master_dir)
+        if self.larsimConfObject.boolean_copy_and_configure_whms:
+            larsimConfigurationSettings.copy_whm_files(timeframe=self.larsimConfObject.timeframe,
+                                                       input_whms_dir=self.larsimPathsObject.whms_dir,
+                                                       new_whms_dir=self.master_dir)
 
         # Parse big lila files and create small ones
-        larsimConfigurationSettings.master_lila_parser_based_on_time_crete_new(timeframe=self.timeframe,
-                                                                               master_lila_paths=self.master_lila_paths,
-                                                                               new_lila_paths=self.lila_configured_paths)
+        if self.larsimConfObject.boolean_copy_and_configure_lila_input_files:
+            list_local_lila_paths = [self.master_dir / single_lila_file \
+                                     for single_lila_file in self.larsimPathsObject.list_input_lila_files]
+            larsimConfigurationSettings.master_lila_parser_based_on_time_crete_new(timeframe=self.larsimConfObject.timeframe,
+                                                                                   master_lila_paths=self.larsimPathsObject.list_input_master_lila_paths,
+                                                                                   new_lila_paths=list_local_lila_paths)
 
-        for one_lila_file in self.lila_configured_paths:
-            paths.check_if_file_exists(one_lila_file, f"[LarsimModelSetUp Error] File {one_lila_file} does not exist!")
+            for one_lila_file in list_local_lila_paths:
+                paths.check_if_file_exists(one_lila_file, f"[LarsimModelSetUp Error] File {one_lila_file} does not exist!")
 
-        print("[LarsimModelSetUp INFO] Initial configuration is done - all the files have been copied to master folder!")
+        # Parse big kala files and create small ones
+        if self.larsimConfObject.boolean_copy_and_configure_kala_input_files:
+            raise NotImplementedError("Should have implemented this")
 
-    def get_measured_discharge(self, read_file_path=None, filtered_timesteps_vs_station_values=True, write_in_file=True,
-                               write_file_path=None, *args, **kwargs):
+        self.log_util.log_info(f"Initial configuration of local master folder {self.master_dir} is completed!")
+
+    def get_measured_discharge(self, path_to_measured_data, read_from_prepared_file=False,
+                               filtered_timesteps_vs_station_values=True, write_in_file=True,
+                               write_file_path=None, **kwargs):
         #####################################
         # extract measured (ground truth) discharge values
         # there are multiple ways how one can do that
+        # This function is tailored for WHM Regen Larsim Model, some things might have to be changed for other models...
         #####################################
+        if not path_to_measured_data.is_file():
+            raise Exception(f"[LarsimModelSetUp ERROR] - get_measured_discharge")
 
-        if read_file_path is None:
-            if filtered_timesteps_vs_station_values:
-                read_file_path = self.regen_saved_data_files / 'q_2003-11-01_2018-01-01_time_and_values_filtered.pkl'
-            else:
-                read_file_path = self.master_dir / paths.LILA_FILES[0]
-
-        if read_file_path.is_file():
-            self.df_measured = larsimDataPostProcessing.read_process_write_discharge(df=read_file_path,
-                                                                                     timeframe=self.timeframe,
-                                                                                     station=self.station_for_model_runs,
+        if read_from_prepared_file:
+            self.df_measured = larsimDataPostProcessing.read_process_write_discharge(df=path_to_measured_data,
+                                                                                     timeframe=self.larsimConfObject.timeframe,
+                                                                                     station=self.larsimConfObject.station_for_model_runs,
                                                                                      compression="gzip"
                                                                                      )
         else:
-            # example for this branch is when read_file_path is of type  "./q_2003-11-01_2018-01-01_time_and_values_filtered.pkl"
+            # example for this branch is when path_to_measured_data is of type  "./q_2003-11-01_2018-01-01_time_and_values_filtered.pkl"
             # however it might be that this file does not exist. In that case one will read and process/filter the whole dataFrame again
             drop_duplicates = kwargs["drop_duplicates"] if "drop_duplicates" in kwargs else True
             fill_missing_timesteps = kwargs["fill_missing_timesteps"] if "fill_missing_timesteps" in kwargs else True
             interpolate_missing_values = kwargs["interpolate_missing_values"] if "interpolate_missing_values" in kwargs else True
             interpolation_method = kwargs["interpolation_method"] if "interpolation_method" in kwargs else 'time'
+            self.df_measured = larsimDataPreparation.get_filtered_df(df=path_to_measured_data,
+                                                                     stations=self.larsimConfObject.station_for_model_runs,
+                                                                     start_date=self.larsimConfObject.timeframe[0],
+                                                                     end_date=self.larsimConfObject.timeframe[1],
+                                                                     drop_duplicates=drop_duplicates,
+                                                                     fill_missing_timesteps=fill_missing_timesteps,
+                                                                     interpolate_missing_values=interpolate_missing_values,
+                                                                     interpolation_method=interpolation_method,
+                                                                     only_time_series_values=filtered_timesteps_vs_station_values,
+                                                                     )
+        if filtered_timesteps_vs_station_values:
+            #TODO check the format of self.df_measured, if not timesteps_vs_station_values throw an error
+            pass
 
-            read_file_path = self.master_dir / paths.LILA_FILES[0]
-            if read_file_path.is_file():
-                self.df_measured = larsimDataPreparation.get_filtered_df(df=read_file_path,
-                                                                         stations=self.station_for_model_runs,
-                                                                         start_date=self.timeframe[0],
-                                                                         end_date=self.timeframe[1],
-                                                                         drop_duplicates=drop_duplicates,
-                                                                         fill_missing_timesteps=fill_missing_timesteps,
-                                                                         interpolate_missing_values=interpolate_missing_values,
-                                                                         interpolation_method=interpolation_method,
-                                                                         only_time_series_values=filtered_timesteps_vs_station_values,
-                                                                         )
         if write_in_file:
             if write_file_path is None:
-                write_file_path= self.workingDir / "df_measured.pkl"
+                write_file_path = self.workingDir / "df_measured.pkl"
             larsimInputOutputUtilities.write_dataFrame_to_file(self.df_measured,
                                                                file_path=write_file_path,
                                                                compression="gzip")
 
-    def get_Larsim_saved_simulations(self, filtered_timesteps_vs_station_values=True, write_in_file=True,
-                                     write_file_path=None, *args, **kwargs):
+    # TODO - Rewrite this function such that it is more general, and can be used for other Larsim models besides Regen
+    def get_saved_simulations(self, filtered_timesteps_vs_station_values=True, write_in_file=True,
+                              write_file_path=None, *args, **kwargs):
+        """
+        This function is tailored for WHM Regen Larsim Model, some things might have to be changed for other models...
+        """
+        if not self.larsimConfObject.boolean_get_saved_simulations:
+            raise Exception(f"[LarsimModelSetUp ERROR] - you have tried to run the get_saved_simulations "
+                            f"function, however boolean_get_Larsim_saved_simulations is set to False!")
+
         list_of_df_per_station = []
-        if self.station_for_model_runs is None or self.station_for_model_runs == "all":
+        if self.larsimConfObject.station_for_model_runs is None or self.larsimConfObject.station_for_model_runs == "all":
             station_for_model_runs = list(larsimDataPostProcessing.get_Stations(self.df_measured))
         if not isinstance(station_for_model_runs, list):
             station_for_model_runs = [station_for_model_runs, ]
         for station in station_for_model_runs:
-            df_station_sim_path = self.regen_saved_data_files / f"larsim_output_{station}_2005_2017.pkl"
-            df_station_sim_filtered_path = self.regen_saved_data_files / f"larsim_output_{station}_2005_2017_filtered.pkl"
+            df_station_sim_path = self.larsimPathsObject.saved_data_dir / f"larsim_output_{station}_2005_2017.pkl"
+            df_station_sim_filtered_path = self.larsimPathsObject.saved_data_dir / f"larsim_output_{station}_2005_2017_filtered.pkl"
             if df_station_sim_filtered_path.is_file():
                 df_sim = larsimInputOutputUtilities.read_dataFrame_from_file(df_station_sim_filtered_path, compression="gzip")
-                df_sim = larsimDataPostProcessing.parse_df_based_on_time(df_sim, (self.timeframe[0], self.timeframe[1]))
+                df_sim = larsimDataPostProcessing.parse_df_based_on_time(df_sim, (self.larsimConfObject.timeframe[0], self.larsimConfObject.timeframe[1]))
             elif df_station_sim_path.is_file():
                 drop_duplicates = kwargs["drop_duplicates"] if "drop_duplicates" in kwargs else True
                 fill_missing_timesteps = kwargs[
@@ -276,27 +560,31 @@ class LarsimModelSetUp():
                     "interpolate_missing_values"] if "interpolate_missing_values" in kwargs else True
                 interpolation_method = kwargs["interpolation_method"] if "interpolation_method" in kwargs else 'time'
                 df_sim = larsimDataPreparation.get_filtered_df(df=df_station_sim_path,
-                                                               start_date=self.timeframe[0],
-                                                               end_date=self.timeframe[1],
+                                                               start_date=self.larsimConfObject.timeframe[0],
+                                                               end_date=self.larsimConfObject.timeframe[1],
                                                                drop_duplicates=drop_duplicates,
                                                                fill_missing_timesteps=fill_missing_timesteps,
                                                                interpolate_missing_values=interpolate_missing_values,
                                                                interpolation_method=interpolation_method,
                                                                only_time_series_values=filtered_timesteps_vs_station_values,
                                                                )
+            else:
+                raise Exception(f"[LarsimModelSetUp ERROR] - you have tried to run the get_saved_simulations "
+                                f"function, however neither {df_station_sim_path} nor {df_station_sim_filtered_path}"
+                                f"are not proper files!")
             if filtered_timesteps_vs_station_values:
                 df_sim.rename(columns={"Value": station}, inplace=True)
             list_of_df_per_station.append(df_sim)
 
         if filtered_timesteps_vs_station_values:
-            self.df_simulation = reduce(lambda x, y: pd.merge(x, y, on="TimeStamp", how='outer'), list_of_df_per_station)
+            self.df_past_sim = reduce(lambda x, y: pd.merge(x, y, on="TimeStamp", how='outer'), list_of_df_per_station)
         else:
-            self.df_simulation = pd.concat(list_of_df_per_station, ignore_index=True, sort=False, axis=0)
+            self.df_past_sim = pd.concat(list_of_df_per_station, ignore_index=True, sort=False, axis=0)
 
         if write_in_file:
             if write_file_path is None:
                 write_file_path = self.workingDir / "df_past_simulated.pkl"
-            larsimInputOutputUtilities.write_dataFrame_to_file(self.df_simulation,
+            larsimInputOutputUtilities.write_dataFrame_to_file(self.df_past_sim,
                                                                file_path=write_file_path,
                                                                compression="gzip")
 
@@ -306,7 +594,8 @@ class LarsimModelSetUp():
         ### run unaltered simulation
         #####################################
         if createNewFolder:
-            dir_unaltered_run = self.workingDir / "WHM Regen 000"
+            temp = self.larsimPathsObject.larsim_model_dir.name + "000"
+            dir_unaltered_run = self.workingDir / temp
             dir_unaltered_run.mkdir(parents=True, exist_ok=True)
             master_dir_for_copying = str(self.master_dir) + "/."
             subprocess.run(['cp', '-a', master_dir_for_copying, dir_unaltered_run])
@@ -316,24 +605,25 @@ class LarsimModelSetUp():
         os.chdir(dir_unaltered_run)
         larsimConfigurationSettings._delete_larsim_output_files(curr_directory=dir_unaltered_run)
         local_log_file = dir_unaltered_run / "run.log"
-        subprocess.run([str(self.larsim_exe)], stdout=open(local_log_file, 'w'))
+        subprocess.run([str(self.larsimPathsObject.larsim_exe)], stdout=open(local_log_file, 'w'))
         os.chdir(self.sourceDir)
-        print(f"[LarsimModelSetUp INFO:] Unaltered Run is completed, current folder is: {self.sourceDir}")
+        print(f"[LarsimModelSetUp INFO] Unaltered Run is completed, current folder is: {self.sourceDir}")
 
         result_file_path = dir_unaltered_run / 'ergebnis.lila'
         self.df_unaltered_ergebnis = larsimInputOutputUtilities.ergebnis_parser_toPandas(result_file_path)
 
-        simulation_start_timestamp = self.timeframe[0]
-        if self.warm_up_duration is not None:
-            simulation_start_timestamp = self.timeframe[0] + datetime.timedelta(hours=self.warm_up_duration)
+        simulation_start_timestamp = self.larsimConfObject.timeframe[0]
+        if self.larsimConfObject.warm_up_duration is not None:
+            simulation_start_timestamp = self.larsimConfObject.timeframe[0] + datetime.timedelta(hours=self.larsimConfObject.warm_up_duration)
         self.df_unaltered_ergebnis = larsimDataPostProcessing.parse_df_based_on_time(self.df_unaltered_ergebnis, (simulation_start_timestamp, None))
 
         # filter out results for a concrete station if specified in configuration json file
-        if self.station_for_model_runs is not None and self.station_for_model_runs!="all":
-            self.df_unaltered_ergebnis = larsimDataPostProcessing.filterResultForStation(self.df_unaltered_ergebnis, station=self.station_for_model_runs)
-        if self.type_of_output_of_Interest is not None and self.type_of_output_of_Interest != "all":
+        if self.larsimConfObject.station_for_model_runs is not None and self.larsimConfObject.station_for_model_runs != "all":
+            self.df_unaltered_ergebnis = larsimDataPostProcessing.filterResultForStation(self.df_unaltered_ergebnis,
+                                                                                         station=self.larsimConfObject.station_for_model_runs)
+        if self.larsimConfObject.type_of_output_of_Interest is not None and self.larsimConfObject.type_of_output_of_Interest != "all":
             self.df_unaltered_ergebnis = larsimDataPostProcessing.filterResultForTypeOfOutpu(self.df_unaltered_ergebnis,
-                                                                         type_of_output=self.type_of_output_of_Interest)
+                                                                                             type_of_output=self.larsimConfObject.type_of_output_of_Interest)
 
         if write_in_file:
             if write_file_path is None:
@@ -354,19 +644,20 @@ class LarsimModelSetUp():
             return None
 
         stations = larsimDataPostProcessing.get_stations_intersection(self.df_measured, self.df_unaltered_ergebnis)
-        if not get_all_possible_stations and (self.station_of_Interest != "all" or self.station_of_Interest is not None):
-            if not isinstance(self.station_of_Interest, list):
-                self.station_of_Interest = [self.station_of_Interest,]
-            stations = list(set(stations).intersection(self.station_of_Interest))
+        if not get_all_possible_stations and (self.larsimConfObject.station_of_Interest != "all"
+                                              or self.larsimConfObject.station_of_Interest is not None):
+            if not isinstance(self.larsimConfObject.station_of_Interest, list):
+                self.larsimConfObject.station_of_Interest = [self.larsimConfObject.station_of_Interest, ]
+            stations = list(set(stations).intersection(self.larsimConfObject.station_of_Interest))
 
         gof_list_over_stations = []
         for station in stations:
             df_sim = larsimDataPostProcessing.filterResultForStationAndTypeOfOutpu(self.df_unaltered_ergebnis,
                                                                                    station=station,
-                                                                                   type_of_output=self.type_of_output_of_Interest)
-            temp_gof_dict = larsimDataPostProcessing.calculateGoodnessofFit_simple(self.df_measured,
-                                                                                   df_sim,
-                                                                                   gof_list=self.objective_function,
+                                                                                   type_of_output=self.larsimConfObject.type_of_output_of_Interest)
+            temp_gof_dict = larsimDataPostProcessing.calculateGoodnessofFit_simple(measuredDF=self.df_measured,
+                                                                                   predictedDF=df_sim,
+                                                                                   gof_list=self.larsimConfObject.objective_function,
                                                                                    measuredDF_column_name=station,
                                                                                    simulatedDF_column_name='Value'
                                                                                    )
@@ -374,12 +665,12 @@ class LarsimModelSetUp():
             gof_list_over_stations.append(temp_gof_dict)
         self.df_gof_unaltered_meas = pd.DataFrame(gof_list_over_stations)
 
-        if self.df_simulation is not None:
+        if self.df_past_sim is not None:
             gof_list_over_stations_sim_mes = []
             for station in stations:
-                temp_gof_dict = larsimDataPostProcessing.calculateGoodnessofFit_simple(self.df_measured,
-                                                                                       self.df_simulation,
-                                                                                       gof_list=self.objective_function,
+                temp_gof_dict = larsimDataPostProcessing.calculateGoodnessofFit_simple(measuredDF=self.df_measured,
+                                                                                       predictedDF=self.df_past_sim,
+                                                                                       gof_list=self.larsimConfObject.objective_function,
                                                                                        measuredDF_column_name=station,
                                                                                        simulatedDF_column_name=station
                                                                                        )
@@ -402,238 +693,79 @@ class LarsimModelSetUp():
 
 class LarsimModel(Model):
 
-    def __init__(self, configurationObject, *args, **kwargs):
+    def __init__(self, configurationObject, inputModelDir, workingDir=None,
+                 log_level=utils.log_levels.INFO, print_level=utils.print_levels.INFO,
+                 debug=False, *args, **kwargs):
         Model.__init__(self)
 
-        if not isinstance(configurationObject, dict):
-            self.configurationObject = larsimConfigurationSettings.return_configuration_object(configurationObject)
+        #####################################
+        # set-up utility logging
+        #####################################
+
+        self.log_util = utils.LogUtility(log_level=log_level, print_level=print_level)
+        self.debug = debug
+        if self.debug:
+            self.log_util.log_debug(f'LarsimModel debug: {self.debug}')
+        self.log_util.set_print_prefix('LarsimModel')
+        self.log_util.set_log_prefix('LarsimModel')
+
+        #####################################
+        # Set-up configuration object
+        #####################################
+
+        if isinstance(configurationObject, LarsimConfigurations):
+            self.larsimConfObject = configurationObject
         else:
-            self.configurationObject = copy.deepcopy(configurationObject)
+            self.larsimConfObject = LarsimConfigurations(configurationObject, True,
+                                                         utils.log_levels.INFO, utils.print_levels.INFO,
+                                                         **kwargs)
 
         #####################################
-        # Specification of different directories - some are machine / location dependent,
-        # adjust path in larsimPaths moduel and configuration file/object accordingly
+        # Specification of different directories/paths - some are machine / location dependent,
+        # adjust path in larsimPaths module, and calling code accordingly
         #####################################
+        self.inputModelDir = pathlib.Path(inputModelDir)
 
-        self.sourceDir = kwargs.get('sourceDir') if 'sourceDir' in kwargs and osp.isabs(kwargs.get('sourceDir')) \
-                            else osp.dirname(pathlib.Path(__file__).resolve())
-
-        self.inputModelDir = kwargs.get('inputModelDir') if 'inputModelDir' in kwargs else paths.larsim_data_path
-
-        try:
-            self.larsim_exe = self.configurationObject["Directories"]["larsim_exe"]
-        except KeyError:
-            self.larsim_exe = osp.abspath(osp.join(self.inputModelDir, 'Larsim-exe', 'larsim-linux-intel-1000.exe'))
-
-        # directory for the larsim runs
-        if "workingDir" in kwargs:
-            self.workingDir = kwargs.get('workingDir')
+        if self.larsimConfObject.dict_params_for_defining_paths is not None:
+            self.larsimPathsObject = paths.LarsimPathsObject(root_data_dir=inputModelDir,
+                                                             **self.larsimConfObject.dict_params_for_defining_paths)
         else:
-            try:
-                self.workingDir = self.configurationObject["Directories"]["workingDir"]
-            except KeyError:
-                self.workingDir = paths.workingDir
+            self.larsimPathsObject = paths.LarsimPathsObject(root_data_dir=inputModelDir)
 
-        self.master_dir = osp.abspath(osp.join(self.workingDir, 'master_configuration'))
+        self.sourceDir = pathlib.Path(kwargs.get('sourceDir')) if 'sourceDir' in kwargs and pathlib.Path(
+            kwargs.get('sourceDir')).is_absolute() \
+            else pathlib.Path(__file__).resolve().parents[1]
 
-        self.sourceDir = pathlib.Path(self.sourceDir)
-        self.workingDir = pathlib.Path(self.workingDir)
-        self.inputModelDir = pathlib.Path(self.inputModelDir)
-        self.master_dir = pathlib.Path(self.master_dir)
-        self.larsim_exe = pathlib.Path(self.larsim_exe)
+        self.workingDir = pathlib.Path(workingDir)
+        if self.workingDir is None:
+            self.workingDir = pathlib.Path(paths.workingDir)
 
-        self.local_measurement_file = self.workingDir / "df_measured.pkl"
-        if not self.local_measurement_file.exists():
-            self.local_measurement_file = self.master_dir / paths.LILA_FILES[0]
+        if self.larsimConfObject.boolean_make_local_copy_of_master_dir:
+            self.master_dir = self.workingDir / 'master_configuration'
+        else:
+            self.master_dir = self.workingDir  # self.larsimPathsObject.global_master_dir
+
+        log_filename = self.workingDir / "larsimModel.log"
+        self.log_util.set_log_filename(log_filename=log_filename)
 
         #####################################
-        # Specification of different variables for setting the model run and purpose of the model run
+        # Set of configuration variables propagated via UQsim.args
         #####################################
-        # Set of config variables propagated via UQsim.args
-
-        self.raise_exception_on_model_break = kwargs.get('raise_exception_on_model_break') \
-            if 'raise_exception_on_model_break' in kwargs else True
-        self.max_retries = kwargs.get('max_retries') if 'max_retries' in kwargs else None
-        self.uq_method = kwargs.get('uq_method') if 'uq_method' in kwargs else None
+        self.uq_method = kwargs.get('uq_method', None)
         if self.uq_method is not None and self.uq_method == "sc":  # always break when running gPCE simulation
-            self.raise_exception_on_model_break = True
+            self.larsimConfObject.raise_exception_on_model_break = True
 
-        self.disable_statistics = kwargs.get('disable_statistics') if 'disable_statistics' in kwargs else True
-
-        #####################################
-        # Set of config variables propagated via config file
-
-        try:
-            self.station_of_Interest = self.configurationObject["Output"]["station_calibration_postproc"]
-        except KeyError:
-            self.station_of_Interest = "MARI"
-
-        try:
-            self.station_for_model_runs = self.configurationObject["Output"]["station_model_runs"]
-        except KeyError:
-            self.station_for_model_runs = "all"
-
-        try:
-            self.type_of_output_of_Interest = self.configurationObject["Output"]["type_of_output"]
-        except KeyError:
-            self.type_of_output_of_Interest = "Abfluss Messung + Vorhersage"
-
-        try:
-            self.type_of_output_of_Interest_measured = self.configurationObject["Output"]["type_of_output_measured"]
-        except KeyError:
-            self.type_of_output_of_Interest_measured = "Ground Truth"
-
-        try:
-            self.cut_runs = strtobool(self.configurationObject["Timeframe"]["cut_runs"])
-        except KeyError:
-            self.cut_runs = False
-
-        try:
-            self.warm_up_duration = self.configurationObject["Timeframe"]["warm_up_duration"]
-        except KeyError:
-            self.warm_up_duration = None
-
-        self.variable_names = []
-        if "tuples_parameters_info" in self.configurationObject:
-            for i in self.configurationObject["tuples_parameters_info"]:
-                self.variable_names.append(i["name"])
-        else:
-            try:
-                for i in self.configurationObject["parameters"]:
-                    self.variable_names.append(i["name"])
-                # larsimConfigurationSettings.update_configurationObject_with_parameters_info(self.configurationObject)
-            except KeyError:
-                print(f"[LarsimModel Infor:] This Larsim Model object has empty variable_names list")
+        self.disable_statistics = kwargs.get('disable_statistics', True)
+        self.larsimConfObject.run_and_save_simulations = \
+            self.larsimConfObject.run_and_save_simulations and self.disable_statistics
 
         #####################################
-        # this variable stands for the purpose of LarsimModel run
-        # distinguish between different modes / purposes of LarsimModel runs:
-        #               calibration, run_and_save_simulations, gradient_computation, UQ_analysis
-        # These modes do not have to be mutually exclusive!
-        #####################################
-        try:
-            self.qoi = self.configurationObject["Output"]["QOI"]
-        except KeyError:
-            self.qoi = "Q"
-        if self.qoi != "Q" and self.qoi != "GoF":
-            raise Exception(f"[LarsimModel ERROR:] self.qoi should either be \"Q\" or \"GoF\" ")
-
-        try:
-            self.mode = self.configurationObject["Output"]["mode"]
-        except KeyError:
-            self.mode = "continuous"
-        if self.mode != "continuous" and self.mode != "sliding_window" and self.mode != "resampling":
-            raise Exception(f"[LarsimModel ERROR:] self.mode should have one of the following values:"
-                            f" \"continuous\" or \"sliding_window\" or \"resampling\"")
-
-        if self.mode == "sliding_window" or self.mode == "resampling":
-            try:
-                self.interval = self.configurationObject["Output"]["interval"]
-            except KeyError:
-                self.interval = 24
-            # if self.interval == "whole":
-            #     self.configurationObject["Output"]["dailyOutput"] = "True"
-            try:
-                self.min_periods = self.configurationObject["Output"]["min_periods"]
-            except KeyError:
-                self.min_periods = 1
-            if self.qoi == "Q":
-                try:
-                    self.method = self.configurationObject["Output"]["method"]
-                except KeyError:
-                    self.method = "avrg"
-                if self.method != "avrg" and self.method != "max" and self.method != "min":
-                    raise Exception(f"[LarsimModel ERROR:] self.method should be either \"avrg\" or \"max\" or \"min\"")
-
-        if self.mode == "resampling":
-            raise Exception(f"[LarsimModel ERROR:] resampling mode is still not implemented")
-
-        # if calibration is True some likelihood / objective functions / GoF functio should be calculated from model run and propageted further
-        try:
-            self.calculate_GoF = strtobool(self.configurationObject["Output"]["calculate_GoF"])
-        except KeyError:
-            self.calculate_GoF = True
-
-        # if we want to compute the gradient (of some likelihood fun or output itself) w.r.t parameters
-        try:
-            self.compute_gradients = strtobool(self.configurationObject["Output"]["compute_gradients"])
-        except KeyError:
-            self.compute_gradients = False
-        if self.compute_gradients:
-            try:
-                gradients_method = self.configurationObject["Output"]["gradients_method"]
-            except KeyError:
-                gradients_method = "Forward Difference"
-
-            if gradients_method == "Central Difference":
-                self.CD = 1  # flag for using Central Differences (with 2 * num_evaluations)
-            elif gradients_method == "Forward Difference":
-                self.CD = 0  # flag for using Forward Differences (with num_evaluations)
-            else:
-                raise Exception(f"[LarsimModel ERROR:] NUMERICAL GRADIENT EVALUATION ERROR: Only \"Central Difference\" "
-                                f"and \"Forward Difference\" supported")
-            try:
-                # difference for gradient computation
-                self.eps_val_global = self.configurationObject["Output"]["eps_gradients"]
-            except KeyError:
-                self.eps_val_global = 1e-4
-                
-        if self.qoi == "GoF" or self.compute_gradients:
-            try:
-                self.objective_function_qoi = self.configurationObject["Output"]["objective_function_qoi"]
-            except KeyError:
-                self.objective_function_qoi = "all"
-            self.objective_function_qoi = larsimDataPostProcessing._gof_list_to_function_names(self.objective_function_qoi)
-        if self.calculate_GoF:
-            try:
-                self.objective_function = self.configurationObject["Output"]["objective_function"]
-            except KeyError:
-                self.objective_function = "all"
-            self.objective_function = larsimDataPostProcessing._gof_list_to_function_names(self.objective_function)
-
-        # save the output of each simulation just in run function just in case when run_and_save_simulations in json configuration file is True
-        # and no statistics calculations will be performed afterwards, otherwise the simulation results will be saved in LarsimStatistics
-
-        try:
-            self.run_and_save_simulations = strtobool(self.configurationObject["Output"]["run_and_save_simulations"])
-        except KeyError:
-            self.run_and_save_simulations = True
-        self.run_and_save_simulations = self.run_and_save_simulations and self.disable_statistics
-
-        try:
-            self.always_save_original_model_runs = strtobool(
-                self.configurationObject["Output"]["always_save_original_model_runs"])
-        except KeyError:
-            self.always_save_original_model_runs = False
-
-        # this variable controls if post-processing of the result time series should be done for
-        # only self.station_of_Interest (False) or all self.station_for_model_runs (True)
-        try:
-            self.get_all_possible_stations = strtobool(
-                self.configurationObject["Output"]["post_processing_for_all_stations"])
-        except KeyError:
-            self.get_all_possible_stations = True
-
-        #####################################
-        # getting the time span for running the model from the json configuration file
-        #####################################
-
-        if "Timeframe" in self.configurationObject:
-            self.timeframe = larsimTimeUtility.parse_datetime_configuration(self.configurationObject)
-            # generate timesteps for plotting based on tape10 settings which are set in LarsimModelSetUp
-            self.t = larsimTimeUtility.get_tape10_timesteps(self.timeframe)
-        else:
-            raise Exception(f"[LarsimModel ERROR:] Timeframe specification is missing from the configuration object!")
-
-        # how long one consecutive run should take - used later on in each Larsim run
-        self.timestep = self.configurationObject["Timeframe"]["timestep"] if "timestep" in self.configurationObject["Timeframe"] else 5
-
         self.measuredDF = None
         self._is_measuredDF_computed = False
         self.measuredDF_column_name = 'Value'
         #self._set_measured_df()
 
-        print("[LarsimModel INFO] INITIALIZATION DONE]\n")
+        self.log_util.log_info(f"INITIALIZATION DONE!")
 
     def prepare(self):
         #pass
@@ -645,20 +777,26 @@ class LarsimModel(Model):
     def normaliseParameter(self, parameter):
         return parameter
 
-    def set_configuration_object(self, configurationObject):
-        self.configurationObject = larsimConfigurationSettings.return_configuration_object(configurationObject)
+    def set_configuration_object(self, configurationObject, **kwargs):
+        if isinstance(configurationObject, LarsimConfigurations):
+            self.larsimConfObject = configurationObject
+        else:
+            self.larsimConfObject = LarsimConfigurations(configurationObject, **kwargs)
+        # self.configurationObject = larsimConfigurationSettingstings.return_configuration_object(configurationObject)
 
     def set_timeframe(self, timeframe):
-        self.timeframe = larsimTimeUtility.timeframe_to_datetime_list(timeframe)
-        larsimConfigurationSettings.update_configurationObject_with_datetime_info(self.configurationObject, timeframe)
-        self.t = larsimTimeUtility.get_tape10_timesteps(timeframe)
+        self.larsimConfObject.timeframe = larsimTimeUtility.timeframe_to_datetime_list(timeframe)
+        larsimConfigurationSettings.update_configurationObject_with_datetime_info(
+            self.larsimConfObject.configurationObject, timeframe)
+        self.larsimConfObject.t = larsimTimeUtility.get_tape10_timesteps(timeframe)
 
     def set_station_of_Interest(self, station_of_Interest):
-        larsimConfigurationSettings.update_config_dict_station_of_interest(self.configurationObject, station_of_Interest)
-        self.station_of_Interest = station_of_Interest
+        larsimConfigurationSettings.update_config_dict_station_of_interest(
+            self.larsimConfObject.configurationObject, station_of_Interest)
+        self.larsimConfObject.station_of_Interest = station_of_Interest
 
     def timesteps(self):
-        return self.t
+        return self.larsimConfObject.t
 
     def __set_measuredDF_column_name(self):
         if self.measuredDF is not None and 'Value' not in self.measuredDF.columns:
@@ -673,8 +811,8 @@ class LarsimModel(Model):
         else:
             local_measurement_file = self.master_dir / paths.LILA_FILES[0]
             self.measuredDF = larsimDataPostProcessing.read_process_write_discharge(df=local_measurement_file,
-                                                                               timeframe=self.timeframe,
-                                                                               station=self.station_for_model_runs,
+                                                                               timeframe=self.larsimConfObject.timeframe,
+                                                                               station=self.larsimConfObject.station_for_model_runs,
                                                                                compression="gzip")
         self._is_measuredDF_computed = True
         self.__set_measuredDF_column_name()
@@ -684,17 +822,29 @@ class LarsimModel(Model):
             self._set_measured_df()
         return self.measuredDF
 
+    def setUp(self):
+        pass
+
+    def copy_master_folder(self):
+        pass
+
+    def configure_master_folder(self):
+        pass
+
+    def run_unaltered_run(self, index_of_unaltered_run: int = 1000):
+        pass
+
     def run(self, i_s=[0,], parameters=None, raise_exception_on_model_break=None, *args, **kwargs):  # i_s - index chunk; parameters - parameters chunk
 
         print(f"[LarsimModel INFO] {i_s} parameter: {parameters}")
 
         if raise_exception_on_model_break is None:
-            raise_exception_on_model_break = self.raise_exception_on_model_break
-        max_retries = kwargs.get("max_retries") if "max_retries" in kwargs else self.max_retries
+            raise_exception_on_model_break = self.larsimConfObject.raise_exception_on_model_break
+        max_retries = kwargs.get("max_retries", self.larsimConfObject.max_retries)
 
-        take_direct_value = kwargs.get("take_direct_value") if "take_direct_value" in kwargs else False
-
-        make_n = kwargs.get("take_direct_value") if "take_direct_value" in kwargs else False
+        take_direct_value = kwargs.get("take_direct_value", False)
+        createNewFolder = kwargs.get("createNewFolder", True)
+        deleteFolderAfterwards = kwargs.get("deleteFolderAfterwards", True)
 
         results_array = []
         for ip in range(0, len(i_s)): # for each peace of work
@@ -708,12 +858,15 @@ class LarsimModel(Model):
             start = time.time()
 
             # create local directory for this particular run
-            working_folder_name = f"WHM Regen{i}"
-            curr_working_dir = self.workingDir / working_folder_name
-            curr_working_dir.mkdir(parents=True, exist_ok=True)
+            if createNewFolder:
+                working_folder_name = self.larsimPathsObject.larsim_model_dir.name + "_" + str(i)
+                curr_working_dir = self.workingDir / working_folder_name
+                curr_working_dir.mkdir(parents=True, exist_ok=True)
+            else:
+                curr_working_dir = self.workingDir
 
             # copy all the necessary files to the newly created directory
-            if curr_working_dir != self.master_dir:
+            if self.master_dir.resolve().absolute() != curr_working_dir.resolve().absolute():
                 master_dir_for_copying = str(self.master_dir) + "/."
                 subprocess.run(['cp', '-a', master_dir_for_copying, curr_working_dir])
                 print("[LarsimModel INFO] Successfully copied all the files")
@@ -721,13 +874,13 @@ class LarsimModel(Model):
             # change values
             id_dict = {"index_run": i}
             # if parameter is not None:
-            tape35_path = curr_working_dir / "tape35"
-            lanu_path = curr_working_dir / "lanu.par"
+            tape35_path = curr_working_dir / self.larsimPathsObject.tape_35_path.name
+            lanu_path = curr_working_dir / self.larsimPathsObject.lanu_path.name
             if parameter is not None:
                 parameters_dict = larsimConfigurationSettings.params_configurations(parameters=parameter,
                                                                                     tape35_path=tape35_path,
                                                                                     lanu_path=lanu_path,
-                                                                                    configurationObject=self.configurationObject,
+                                                                                    configurationObject=self.larsimConfObject.configurationObject,
                                                                                     process_id=i,
                                                                                     take_direct_value=take_direct_value)
                 parameters_dict = {**id_dict, **parameters_dict}
@@ -740,17 +893,23 @@ class LarsimModel(Model):
             os.chdir(curr_working_dir)
 
             # Run Larsim
-            if self.cut_runs:
-                result = self._multiple_short_larsim_runs(timeframe=self.timeframe, timestep=self.timestep,
-                                                          curr_working_dir=curr_working_dir, index_run=i,
-                                                          warm_up_duration=self.warm_up_duration,
+            if self.larsimConfObject.cut_runs:
+                result = self._multiple_short_larsim_runs(timeframe=self.larsimConfObject.timeframe,
+                                                          timestep=self.larsimConfObject.timestep,
+                                                          curr_working_dir=curr_working_dir,
+                                                          larsim_exe=self.larsimPathsObject.larsim_exe, index_run=i,
+                                                          warm_up_duration=self.larsimConfObject.warm_up_duration,
                                                           raise_exception_on_model_break=raise_exception_on_model_break,
                                                           max_retries=max_retries)
             else:
-                result = self._single_larsim_run(timeframe=self.timeframe, curr_working_dir=curr_working_dir,
-                                                 index_run=i, warm_up_duration=self.warm_up_duration,
-                                                 raise_exception_on_model_break=raise_exception_on_model_break,
-                                                 max_retries=max_retries)
+                result = _single_larsim_run(timeframe=self.larsimConfObject.timeframe,
+                                            curr_working_dir=curr_working_dir,
+                                            larsim_exe=self.larsimPathsObject.larsim_exe,
+                                            index_run=i,
+                                            warm_up_duration=self.larsimConfObject.warm_up_duration,
+                                            boolean_configure_tape10=self.larsimConfObject.boolean_configure_tape10,
+                                            raise_exception_on_model_break=raise_exception_on_model_break,
+                                            max_retries=max_retries)
             if result is None:
                 larsimConfigurationSettings.cleanDirectory_completely(curr_directory=curr_working_dir)
                 os.chdir(self.sourceDir)
@@ -766,16 +925,21 @@ class LarsimModel(Model):
             # filter output time-series in order to disregard warm-up time;
             # if not, then at least disregard these values when calculating statistics and GoF
             # however, take care that is is not done twice!
-            simulation_start_timestamp = self.timeframe[0]
-            if self.warm_up_duration is not None:
-                simulation_start_timestamp = self.timeframe[0] + datetime.timedelta(hours=self.warm_up_duration) # pd.Timestamp(result.TimeStamp.min())
+            simulation_start_timestamp = self.larsimConfObject.timeframe[0]
+            if self.larsimConfObject.warm_up_duration is not None:
+                simulation_start_timestamp = self.larsimConfObject.timeframe[0] + \
+                                             datetime.timedelta(hours=self.larsimConfObject.warm_up_duration)  # pd.Timestamp(result.TimeStamp.min())
             result = larsimDataPostProcessing.parse_df_based_on_time(result, (simulation_start_timestamp, None))
 
             # filter out results for a concrete station if specified in configuration json file
-            if self.station_for_model_runs is not None and self.station_for_model_runs != "all":
-                result = larsimDataPostProcessing.filterResultForStation(result, station=self.station_for_model_runs)
-            if self.type_of_output_of_Interest is not None and self.type_of_output_of_Interest != "all":
-                result = larsimDataPostProcessing.filterResultForTypeOfOutpu(result, type_of_output=self.type_of_output_of_Interest)
+            if self.larsimConfObject.station_for_model_runs is not None \
+                    and self.larsimConfObject.station_for_model_runs != "all":
+                result = larsimDataPostProcessing.filterResultForStation(
+                    result, station=self.larsimConfObject.station_for_model_runs)
+            if self.larsimConfObject.type_of_output_of_Interest is not None \
+                    and self.larsimConfObject.type_of_output_of_Interest != "all":
+                result = larsimDataPostProcessing.filterResultForTypeOfOutpu(
+                    result, type_of_output=self.larsimConfObject.type_of_output_of_Interest)
 
             end = time.time()
             runtime = end - start
@@ -787,11 +951,11 @@ class LarsimModel(Model):
             # TODO eventually design the code to disregard the runs with an unsatisfying value of some GoF
             #  when uq_method is mc or saltelli, or to identify those runs that break
             index_parameter_gof_DF = None
-            if self.calculate_GoF:
+            if self.larsimConfObject.calculate_GoF:
                 index_parameter_gof_DF = self._calculate_GoF(predictedDF=result,
                                                              parameters_dict=parameters_dict,
-                                                             objective_function=self.objective_function,
-                                                             get_all_possible_stations=self.get_all_possible_stations)
+                                                             objective_function=self.larsimConfObject.objective_function,
+                                                             get_all_possible_stations=self.larsimConfObject.get_all_possible_stations)
                 result_dict["gof_df"] = index_parameter_gof_DF
 
             ######################################################################################################
@@ -799,37 +963,37 @@ class LarsimModel(Model):
             # process result DF to compute the final GoI
             processed_result = None
             change_original_result_and_keep_it = True
-            if self.mode == "sliding_window":
-                if self.qoi == "GoF":
+            if self.larsimConfObject.mode == "sliding_window":
+                if self.larsimConfObject.qoi == "GoF":
                     processed_result = self._process_time_series_sliding_window_gof(predictedDF=result,
-                                                                                    interval=self.interval,
-                                                                                    min_periods=self.min_periods,
-                                                                                    objective_function=self.objective_function_qoi,
-                                                                                    get_all_possible_stations=self.get_all_possible_stations)
+                                                                                    interval=self.larsimConfObject.interval,
+                                                                                    min_periods=self.larsimConfObject.min_periods,
+                                                                                    objective_function=self.larsimConfObject.objective_function_qoi,
+                                                                                    get_all_possible_stations=self.larsimConfObject.get_all_possible_stations)
                 else:
                     processed_result = self._process_time_series_sliding_window_q(predictedDF=result,
-                                                                                  interval=self.interval,
-                                                                                  min_periods=self.min_periods,
-                                                                                  method=self.method)
-            # elif self.mode == "resampling":
+                                                                                  interval=self.larsimConfObject.interval,
+                                                                                  min_periods=self.larsimConfObject.min_periods,
+                                                                                  method=self.larsimConfObject.method)
+            # elif self.larsimConfObject.mode == "resampling":
             #     # resampling can happen in Statistics as well
-            #     if self.qoi == "GoF":
+            #     if self.larsimConfObject.qoi == "GoF":
             #         processed_result = self._process_time_series_resampling_gof(predictedDF=result,
-            #                                                                     interval=self.interval,
-            #                                                                     min_periods=self.min_periods,
-            #                                                                     objective_function=self.objective_function_qoi,
-            #                                                                     get_all_possible_stations=self.get_all_possible_stations)
+            #                                                                     interval=self.larsimConfObject.interval,
+            #                                                                     min_periods=self.larsimConfObject.min_periods,
+            #                                                                     objective_function=self.larsimConfObject.objective_function_qoi,
+            #                                                                     get_all_possible_stations=self.larsimConfObject.get_all_possible_stations)
             #     else:
             #         processed_result = self._process_time_series_resampling_q(predictedDF=result,
-            #                                                                   interval=self.interval,
-            #                                                                   min_periods=self.min_periods,
-            #                                                                   method=self.method)
+            #                                                                   interval=self.larsimConfObject.interval,
+            #                                                                   min_periods=self.larsimConfObject.min_periods,
+            #                                                                   method=self.larsimConfObject.method)
 
             # Important, from now on the result is changed
             if processed_result is not None:
                 # before one overwrites result - check if the raw model output should be saved as well
-                if self.run_and_save_simulations and self.always_save_original_model_runs:
-                    file_path = self.workingDir / f"df_Larsim_raw_run_{i}.pkl"
+                if self.larsimConfObject.run_and_save_simulations and self.larsimConfObject.always_save_original_model_runs:
+                    file_path = self.workingDir / f"df_Larsim_raw_run_{i}.pkl"  # TODO
                     result.to_pickle(file_path, compression="gzip")
                 result = processed_result
 
@@ -838,34 +1002,34 @@ class LarsimModel(Model):
             ######################################################################################################
 
             # Postprocessing the timeframe
-            # self.timeframe[0], self.timeframe[1] = result["TimeStamp"].min(), result["TimeStamp"].max()
-            # larsimConfigurationSettings.update_configurationObject_with_datetime_info(self.configurationObject, self.timeframe)
-            # self.t = larsimTimeUtility.get_tape10_timesteps(self.timeframe)
+            # self.larsimConfObject.timeframe[0], self.larsimConfObject.timeframe[1] = result["TimeStamp"].min(), result["TimeStamp"].max()
+            # larsimConfigurationSettings.update_configurationObject_with_datetime_info(self.larsimConfObject.configurationObject, self.larsimConfObject.timeframe)
+            # self.larsimConfObject.t = larsimTimeUtility.get_tape10_timesteps(self.larsimConfObject.timeframe)
 
             ######################################################################################################
 
             # compute gradient of the output/QoI, or gradient of some likelihood measure w.r.t parameters
             # for now f is only evaluation of some GoF, this makes sense only when:
-            # self.mode=="continuous", self.qoi="Q", self.calculate_GoF=True
-            # self.mode="resampling", self.qoi="GoF"
-            if self.compute_gradients:
+            # self.larsimConfObject.mode=="continuous", self.larsimConfObject.qoi="Q", self.larsimConfObject.calculate_GoF=True
+            # self.larsimConfObject.mode="resampling", self.larsimConfObject.qoi="GoF"
+            if self.larsimConfObject.compute_gradients:
 
-                # self.configurationObject["parameters_settings"]["cut_limits"] = "True"
+                # self.larsimConfObject.configurationObject["parameters_settings"]["cut_limits"] = "True"
 
-                # compute different GoFs (those in self.objective_function_qoi)
-                # only for stations in self.station_of_Interest, for main result to use it as a baseline
+                # compute different GoFs (those in self.larsimConfObject.objective_function_qoi)
+                # only for stations in self.larsimConfObject.station_of_Interest, for main result to use it as a baseline
                 # and only when self.uq_method != "sc"
                 if index_parameter_gof_DF is None:
                     index_parameter_gof_DF = self._calculate_GoF(predictedDF=result,
                                                                  parameters_dict=parameters_dict,
-                                                                 objective_function=self.objective_function_qoi,
+                                                                 objective_function=self.larsimConfObject.objective_function_qoi,
                                                                  get_all_possible_stations=False)
 
-                if not isinstance(self.station_of_Interest, list):
-                    list_of_stations = [self.station_of_Interest, ]
+                if not isinstance(self.larsimConfObject.station_of_Interest, list):
+                    list_of_stations = [self.larsimConfObject.station_of_Interest, ]
                 else:
-                    list_of_stations = self.station_of_Interest
-                list_of_gof = self.objective_function_qoi
+                    list_of_stations = self.larsimConfObject.station_of_Interest
+                list_of_gof = self.larsimConfObject.objective_function_qoi
                 list_of_gof = [single_gof.__name__ if callable(single_gof) else single_gof for single_gof in list_of_gof]
 
                 h_vector = []
@@ -875,26 +1039,27 @@ class LarsimModel(Model):
 
                 # CD = 1 central differences; CD = 0 forward differences
                 # Assumption: parameter is a list, not a dictionary
-                length_evaluations_gradient = 2 * len(parameter) if self.CD else len(parameter)
+                length_evaluations_gradient = 2 * len(parameter) if self.larsimConfObject.CD else len(parameter)
 
                 for id_param in range(length_evaluations_gradient):
                     # 2.1. For every uncertain parameter, create a new folder where 1 parameter is changed, copy the set-up
                     curr_working_dir_gradient = self._copy_files_for_gradient_computation(curr_working_dir, i, id_param)
 
                     # 2.2. Adjust configuration files (tape35 and lanu.par)
-                    if self.CD:
-                        eps_val = self.eps_val_global if id_param % 2 == 0 else -self.eps_val_global  # used for computing f(x+-h)
+                    if self.larsimConfObject.CD:
+                        eps_val = self.larsimConfObject.eps_val_global \
+                            if id_param % 2 == 0 else -self.larsimConfObject.eps_val_global  # used for computing f(x+-h)
                         param_index = int(id_param / 2)
                     else:  # FD
-                        eps_val = self.eps_val_global  # used for computing f(x+h)
+                        eps_val = self.larsimConfObject.eps_val_global  # used for computing f(x+h)
                         param_index = id_param
 
-                    tape35_path = curr_working_dir_gradient / "tape35"
-                    lanu_path = curr_working_dir_gradient / "lanu.par"
+                    tape35_path = curr_working_dir_gradient / self.larsimPathsObject.tape_35_path.name
+                    lanu_path = curr_working_dir_gradient / self.larsimPathsObject.lanu_path.name
                     parameter_dict = larsimConfigurationSettings.params_configurations(parameters=parameter,
                                                                                        tape35_path=tape35_path,
                                                                                        lanu_path=lanu_path,
-                                                                                       configurationObject=self.configurationObject,
+                                                                                       configurationObject=self.larsimConfObject.configurationObject,
                                                                                        process_id=i,
                                                                                        write_new_values_to_tape35=True,
                                                                                        write_new_values_to_lanu=True,
@@ -904,27 +1069,33 @@ class LarsimModel(Model):
                     current_param_name = list(parameter_dict.keys())[0]
                     h = parameter_dict[current_param_name][1]
 
-                    if not self.CD:
+                    if not self.larsimConfObject.CD:
                         h_vector.append(h)  # update vector of h's
                         parameter_names.append(current_param_name)
-                    elif self.CD and (id_param % 2 == 0):
+                    elif self.larsimConfObject.CD and (id_param % 2 == 0):
                         h_vector.append(2 * h)
                         parameter_names.append(current_param_name)
 
                     # 2.3. Run the simulation
                     # Run Larsim
-                    if self.cut_runs:
-                        result_grd = self._multiple_short_larsim_runs(timeframe=self.timeframe, timestep=self.timestep,
+                    if self.larsimConfObject.cut_runs:
+                        result_grd = self._multiple_short_larsim_runs(timeframe=self.larsimConfObject.timeframe,
+                                                                      timestep=self.larsimConfObject.timestep,
                                                                       curr_working_dir=curr_working_dir_gradient,
-                                                                      index_run=i, warm_up_duration=self.warm_up_duration,
+                                                                      larsim_exe=self.larsimPathsObject.larsim_exe,
+                                                                      index_run=i,
+                                                                      warm_up_duration=self.larsimConfObject.warm_up_duration,
                                                                       raise_exception_on_model_break=raise_exception_on_model_break,
                                                                       max_retries=max_retries)
                     else:
-                        result_grd = self._single_larsim_run(timeframe=self.timeframe,
-                                                             curr_working_dir=curr_working_dir_gradient,
-                                                             index_run=i, warm_up_duration=self.warm_up_duration,
-                                                             raise_exception_on_model_break=raise_exception_on_model_break,
-                                                             max_retries=max_retries)
+                        result_grd = _single_larsim_run(timeframe=self.larsimConfObject.timeframe,
+                                                        curr_working_dir=curr_working_dir_gradient,
+                                                        larsim_exe=self.larsimPathsObject.larsim_exe,
+                                                        index_run=i,
+                                                        warm_up_duration=self.larsimConfObject.warm_up_duration,
+                                                        boolean_configure_tape10=self.larsimConfObject.boolean_configure_tape10,
+                                                        raise_exception_on_model_break=raise_exception_on_model_break,
+                                                        max_retries=max_retries)
 
                     if result_grd is None:
                         larsimConfigurationSettings.cleanDirectory_completely(curr_directory=curr_working_dir_gradient)
@@ -943,14 +1114,14 @@ class LarsimModel(Model):
                     result_grd = larsimDataPostProcessing.parse_df_based_on_time(result_grd,
                                                                                  (simulation_start_timestamp, None))
                     # filter out results
-                    result_grd = larsimDataPostProcessing.filterResultForStation(result_grd,
-                                                                                 station=self.station_of_Interest)
-                    result_grd = larsimDataPostProcessing.filterResultForTypeOfOutpu(result_grd,
-                                                                                     type_of_output=self.type_of_output_of_Interest)
+                    result_grd = larsimDataPostProcessing.filterResultForStation(
+                        result_grd, station=self.larsimConfObject.station_of_Interest)
+                    result_grd = larsimDataPostProcessing.filterResultForTypeOfOutpu(
+                        result_grd, type_of_output=self.larsimConfObject.type_of_output_of_Interest)
 
                     # 2.5. Compute goodness of fit (GoF) &
                     result_grd_gof_DF = self._calculate_GoF(predictedDF=result_grd,
-                                                            objective_function=self.objective_function_qoi,
+                                                            objective_function=self.larsimConfObject.objective_function_qoi,
                                                             get_all_possible_stations=False)
 
 
@@ -958,7 +1129,7 @@ class LarsimModel(Model):
                     for single_station in list_of_stations:
                         for single_gof in list_of_gof:
                             grad_estimation = np.nan
-                            if self.CD:  # Central Difference (CD) computation
+                            if self.larsimConfObject.CD:  # Central Difference (CD) computation
                                 if id_param % 2 == 0:
                                     f_x_ij_p_h = result_grd_gof_DF.loc[(result_grd_gof_DF["station"] == single_station)][single_gof].values[0]
                                     gradient_vectors_dict[(single_station, single_gof)].append(f_x_ij_p_h)
@@ -991,7 +1162,7 @@ class LarsimModel(Model):
                 if gradient_vectors_dict:
                     for single_station in list_of_stations:
                         for single_gof in list_of_gof:
-                            if self.CD:  # Central Difference (CD) computation
+                            if self.larsimConfObject.CD:  # Central Difference (CD) computation
                                 f_x_ij_p_h_array = np.array(gradient_vectors_dict[(single_station, single_gof)][0::2], dtype=np.float32)
                                 f_x_ij_m_h_array = np.array(gradient_vectors_dict[(single_station, single_gof)][1::2], dtype=np.float32)
                                 grad_estimation = (f_x_ij_p_h_array - f_x_ij_m_h_array) / np.array(h_vector)
@@ -1018,22 +1189,22 @@ class LarsimModel(Model):
             ######################################################################################################
 
             # save all the sub-results in case there is no LarsimStatistics run afterward
-            if self.run_and_save_simulations:
+            if self.larsimConfObject.run_and_save_simulations:
                 if parameters_dict is not None:
-                    file_path = self.workingDir / f"parameters_Larsim_run_{i}.pkl"
+                    file_path = self.workingDir / f"parameters_Larsim_run_{i}.pkl"  # TODO
                     with open(file_path, 'wb') as f:
                         dill.dump(parameters_dict, f)
 
                 if result is not None:
-                    file_path = self.workingDir / f"df_Larsim_run_{i}.pkl"
+                    file_path = self.workingDir / f"df_Larsim_run_{i}.pkl"  #TODO
                     result.to_pickle(file_path, compression="gzip")
 
-                if self.calculate_GoF:
+                if self.larsimConfObject.calculate_GoF:
                     file_path = self.workingDir / f"gof_{i}.pkl"
                     index_parameter_gof_DF.to_pickle(file_path, compression="gzip")
 
-                if self.compute_gradients and gradient_matrix_dict:
-                    file_path = self.workingDir / f"gradients_matrices_{i}.npy"
+                if self.larsimConfObject.compute_gradients and gradient_matrix_dict:
+                    file_path = self.workingDir / f"gradients_matrices_{i}.npy"  # TODO
                     np.save(file_path, gradient_matrix_dict)
 
             ######################################################################################################
@@ -1058,30 +1229,29 @@ class LarsimModel(Model):
 
         return results_array
 
-    def _single_larsim_run(self, timeframe, curr_working_dir, index_run=0, sub_index_run=0, warm_up_duration=None,
-                           **kwargs):
+    def _single_larsim_run(self, timeframe, curr_working_dir, larsim_exe, index_run=0, sub_index_run=0,
+                           warm_up_duration=None, boolean_configure_tape10=True, **kwargs):
 
-        if warm_up_duration is None:
-            warm_up_duration = self.warm_up_duration
         if warm_up_duration is None:
             warm_up_duration = 0
 
-        raise_exception_on_model_break = kwargs.get('raise_exception_on_model_break') \
-            if 'raise_exception_on_model_break' in kwargs else True
-        max_retries = kwargs.get('max_retries') if 'max_retries' in kwargs else None
+        raise_exception_on_model_break = kwargs.get('raise_exception_on_model_break', True)
+        max_retries = kwargs.get('max_retries', None)
 
         # start clean
         larsimConfigurationSettings._delete_larsim_output_files(curr_directory=curr_working_dir)
 
         # change tape 10 accordingly
-        local_master_tape10_file = curr_working_dir / 'tape10_master'
-        local_tape10_adjusted_path = curr_working_dir / 'tape10'
-        try:
-            larsimTimeUtility.tape10_configuration(timeframe=timeframe, master_tape10_file=local_master_tape10_file,
-                                                   new_path=local_tape10_adjusted_path, warm_up_duration=warm_up_duration)
-        except larsimTimeUtility.ValidDurationError as e:
-            print(f"[LarsimModel ERROR - None is returned after the Larsim run \n]"+str(e))
-            return None
+        if boolean_configure_tape10:
+            local_master_tape10_file = curr_working_dir / self.larsimPathsObject.master_tape_10_path.name
+            local_tape10_adjusted_path = curr_working_dir / self.larsimPathsObject.tape_35_path.name
+            try:
+                larsimTimeUtility.tape10_configuration(timeframe=timeframe, master_tape10_file=local_master_tape10_file,
+                                                       new_tape10_file=local_tape10_adjusted_path,
+                                                       warm_up_duration=warm_up_duration)
+            except larsimTimeUtility.ValidDurationError as e:
+                print(f"[LarsimModel ERROR - None is returned after the Larsim run \n]" + str(e))
+                return None
 
         # command = 'chmod 755 ' + local_tape10_adjusted_path
         # subprocess.run(command.split())
@@ -1098,7 +1268,7 @@ class LarsimModel(Model):
         # log file for larsim
         local_log_file = curr_working_dir / f"run_{index_run}_{sub_index_run}.log"
         # run Larsim as external process
-        subprocess.run([str(self.larsim_exe)], stdout=open(local_log_file, 'w'))
+        subprocess.run([str(larsim_exe)], stdout=open(local_log_file, 'w'))
         print(f"[LarsimModel INFO] I am done with LARSIM Execution {index_run}")
 
         # check if larsim.ok exist - Larsim execution was successful
@@ -1119,17 +1289,14 @@ class LarsimModel(Model):
                   f"- {result_file_path}. None was returned")
             raise
 
-    def _multiple_short_larsim_runs(self, timeframe, timestep, curr_working_dir, index_run=0, warm_up_duration=None,
-                                    timestep_in_hours=False, **kwargs):
+    def _multiple_short_larsim_runs(self, timeframe, timestep, curr_working_dir, larsim_exe, index_run=0,
+                                    warm_up_duration=None, timestep_in_hours=False, **kwargs):
 
-        if warm_up_duration is None:
-            warm_up_duration = self.warm_up_duration
         if warm_up_duration is None:
             warm_up_duration = 0
 
-        raise_exception_on_model_break = kwargs.get('raise_exception_on_model_break') \
-            if 'raise_exception_on_model_break' in kwargs else True
-        max_retries = kwargs.get('max_retries') if 'max_retries' in kwargs else None
+        raise_exception_on_model_break = kwargs.get('raise_exception_on_model_break', True)
+        max_retries = kwargs.get('max_retries', None)
 
         # if you want to cut execution into shorter runs...
         local_timestep = timestep
@@ -1144,6 +1311,7 @@ class LarsimModel(Model):
 
         local_end_date = timeframe[0]
 
+        # TODO
         result_file_path = curr_working_dir / 'ergebnis.lila'
         larsim_ok_file_path = curr_working_dir / 'larsim.ok'
         tape11_file_path = curr_working_dir / 'tape11'
@@ -1200,12 +1368,15 @@ class LarsimModel(Model):
             single_run_timeframe = (local_start_date, local_end_date)
 
             # run larsim for this shorter period and returned already parsed 'small' ergebnis
-            local_resultDF = self._single_larsim_run(timeframe=single_run_timeframe,
-                                                     curr_working_dir=curr_working_dir,
-                                                     index_run=index_run, sub_index_run=i,
-                                                     warm_up_duration=local_warm_up_duration,
-                                                     raise_exception_on_model_break=raise_exception_on_model_break,
-                                                     max_retries=max_retries)
+            local_resultDF = _single_larsim_run(timeframe=single_run_timeframe,
+                                                curr_working_dir=curr_working_dir,
+                                                larsim_exe=larsim_exe,
+                                                index_run=index_run,
+                                                sub_index_run=i,
+                                                warm_up_duration=local_warm_up_duration,
+                                                boolean_configure_tape10=True,
+                                                raise_exception_on_model_break=raise_exception_on_model_break,
+                                                max_retries=max_retries)
 
             if local_resultDF is None:
                 local_resultDF_list = []
@@ -1262,10 +1433,10 @@ class LarsimModel(Model):
             interval = predictedDF.TimeStamp.nunique()
             min_periods = 1
 
-        # TODO it makes sense as well to have here self.station_for_model_runs or get_all_possible_stations=True
+        # TODO it makes sense as well to have here self.larsimConfObject.station_for_model_runs or get_all_possible_stations=True
         stations = LarsimModel.compute_and_get_final_list_of_stations(self.measuredDF, predictedDF,
                                                                       get_all_possible_stations,
-                                                                      self.station_of_Interest)
+                                                                      self.larsimConfObject.station_of_Interest)
 
         list_of_results_per_station = []
         for single_station in stations:
@@ -1314,15 +1485,15 @@ class LarsimModel(Model):
             processed_result.set_index("TimeStamp", inplace=True)
 
         if method == "avrg":
-            processed_result = processed_result.groupby(["Stationskennung","Index_run","Type"]).\
+            processed_result = processed_result.groupby(["Stationskennung", "Index_run", "Type"]).\
                 rolling(window=interval, min_periods=min_periods, center=center,
                         win_type=None).Value.mean().dropna().reset_index()
         elif method == "min":
-            processed_result = processed_result.groupby(["Stationskennung","Index_run","Type"]).\
+            processed_result = processed_result.groupby(["Stationskennung", "Index_run", "Type"]).\
                 rolling(window=interval, min_periods=min_periods, center=center,
                         win_type=None).Value.min().dropna().reset_index()
         elif method == "max":
-            processed_result = processed_result.groupby(["Stationskennung","Index_run","Type"]). \
+            processed_result = processed_result.groupby(["Stationskennung", "Index_run", "Type"]). \
                 rolling(window=interval, min_periods=min_periods, center=center,
                         win_type=None).Value.max().dropna().reset_index()
         else:
@@ -1371,7 +1542,7 @@ class LarsimModel(Model):
         measuredDF = larsimDataPostProcessing.filterResultForStation(measuredDF, station=station)
 
         if objective_function_qoi is None:
-            objective_function_qoi = self.objective_function_qoi
+            objective_function_qoi = self.larsimConfObject.objective_function_qoi
         #objective_function_qoi = larsimDataPostProcessing._gof_list_to_function_names(objective_function_qoi)
 
         # list_over_objective_function = larsimDataPostProcessing.\
@@ -1406,11 +1577,12 @@ class LarsimModel(Model):
         measuredDF_column_name = self.measuredDF_column_name
 
         if objective_function is None:
-            objective_function = self.objective_function
+            objective_function = self.larsimConfObject.objective_function
         #objective_function = larsimDataPostProcessing._gof_list_to_function_names(objective_function)
 
         stations = LarsimModel.compute_and_get_final_list_of_stations(measuredDF, predictedDF,
-                                                           get_all_possible_stations, self.station_of_Interest)
+                                                                      get_all_possible_stations,
+                                                                      self.larsimConfObject.station_of_Interest)
 
         gof_list_over_stations = larsimDataPostProcessing.\
             calculateGoodnessofFit(measuredDF=measuredDF,
@@ -1419,10 +1591,10 @@ class LarsimModel(Model):
                                    gof_list=objective_function,
                                    measuredDF_column_name=measuredDF_column_name,
                                    simulatedDF_column_name='Value',
-                                   type_of_output_of_Interest=self.type_of_output_of_Interest,
+                                   type_of_output_of_Interest=self.larsimConfObject.type_of_output_of_Interest,
                                    dailyStatisict=False,
                                    disregard_initila_timesteps=False,
-                                   warm_up_duration=self.warm_up_duration,
+                                   warm_up_duration=self.larsimConfObject.warm_up_duration,
                                    keep_info_on_TimeStampas=False,
                                    filter_station=True,
                                    filter_type_of_output=True,
@@ -1444,7 +1616,7 @@ class LarsimModel(Model):
         stations = larsimDataPostProcessing.get_stations_intersection(measuredDF, predictedDF)
         if not get_all_possible_stations and station_of_Interest != "all" and station_of_Interest is not None:
             if not isinstance(station_of_Interest, list):
-                station_of_Interest = [station_of_Interest,]
+                station_of_Interest = [station_of_Interest, ]
             stations = list(set(stations).intersection(station_of_Interest))
             if not stations:
                 raise Exception(
@@ -1455,19 +1627,20 @@ class LarsimModel(Model):
     def _copy_files_for_gradient_computation(self, curr_working_dir, i, id_param):
         os.chdir(curr_working_dir)
         # working_folder_name = "compute_gradient_" + str(i) + "_" + str(id_param)
-        working_folder_name = f"compute_gradient_{i}_{id_param}"
+        working_folder_name = f"compute_gradient_{i}_{id_param}"  #TODO
         curr_working_dir_gradient = curr_working_dir / working_folder_name
         curr_working_dir_gradient.mkdir(parents=True, exist_ok=True)
 
         # copy all the necessary files to the newly created directory
-        # master_dir_for_copying = self.master_dir + "/."
+        # master_dir_for_copying = self.larsimPathsObject.global_master_dir + "/."
         # subprocess.run(['cp', '-a', master_dir_for_copying, curr_working_dir_gradient])
         curr_working_dir_for_copying = str(curr_working_dir) + "/."
         master_dir_for_copying = str(self.master_dir) + "/."
         subprocess.run(['cp', '-a', master_dir_for_copying, curr_working_dir_gradient])
 
-        tape35_path = curr_working_dir / "tape35"
-        lanu_path = curr_working_dir / "lanu.par"
+        tape35_path = curr_working_dir / self.larsimPathsObject.tape_35_path.name
+        lanu_path = curr_working_dir / self.larsimPathsObject.lanu_path.name
+
         subprocess.run(['cp', tape35_path, curr_working_dir_gradient])
         subprocess.run(['cp', lanu_path, curr_working_dir_gradient])
         print("[LarsimModel INFO] Successfully copied all the files for gradient computation")
