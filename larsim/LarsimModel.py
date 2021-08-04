@@ -25,15 +25,15 @@ from LarsimUtilityFunctions import larsimTimeUtility
 from LarsimUtilityFunctions import Utils as utils
 
 
-class LarsimConfigurations:
+class LarsimConfigurations(object):
     def __init__(self, configurationObject, deep_copy=False,
                  log_level: int = utils.log_levels.INFO,
                  print_level: int = utils.print_levels.INFO,
                  **kwargs):
 
-        self.log_util = utils.LogUtility(log_level=log_level, print_level=print_level)
-        self.log_util.set_print_prefix('LarsimConfigurations')
-        self.log_util.set_log_prefix('LarsimConfigurations')
+        # self.log_util = utils.LogUtility(log_level=log_level, print_level=print_level)
+        # self.log_util.set_print_prefix('LarsimConfigurations')
+        # self.log_util.set_log_prefix('LarsimConfigurations')
 
         #####################################
         # Read some configurations from larsimConfigurationSettings file/object
@@ -80,6 +80,11 @@ class LarsimConfigurations:
                     self.configurationObject["model_settings"]["copy_and_configure_kala_input_files"])
             except KeyError:
                 self.boolean_copy_and_configure_kala_input_files = False
+
+        self.boolean_tape10_is_already_configured = False
+        self.boolean_whms_are_already_configured = False
+        self.boolean_lila_files_are_already_configured = False
+        self.boolean_kala_files_are_already_configured = False
 
         if "make_local_copy_of_master_dir" in kwargs:
             self.boolean_make_local_copy_of_master_dir = kwargs['make_local_copy_of_master_dir']
@@ -156,7 +161,7 @@ class LarsimConfigurations:
             self.timeframe = larsimTimeUtility.parse_datetime_configuration(self.configurationObject)
             self.t = larsimTimeUtility.get_tape10_timesteps(self.timeframe)
         else:
-            self.log_util.log_error("time_settings specification is missing from the configuration object!")
+            # self.log_util.log_error("time_settings specification is missing from the configuration object!")
             raise Exception(f"[LarsimConfigurations ERROR:] time_settings specification is missing from the configuration object!")
 
         try:
@@ -318,12 +323,29 @@ class LarsimConfigurations:
                     self.variable_names.append(i["name"])
                 # larsimConfigurationSettings.update_configurationObject_with_parameters_info(self.configurationObject)
             except KeyError:
-                self.log_util.log_info("There is no parameters entry in the configurationObject!")
+                # self.log_util.log_info("There is no parameters entry in the configurationObject!")
                 print(f"[LarsimModel Info] This Larsim Model object has empty variable_names list")
+
+    @property
+    def configurationObject(self):
+        return self.configurationObject
+
+    @configurationObject.setter
+    def configurationObject(self, configurationObject, deep_copy=False):
+        if not isinstance(configurationObject, dict):
+            self.configurationObject = larsimConfigurationSettings.return_configuration_object(configurationObject)
+        elif deep_copy:
+            self.configurationObject = copy.deepcopy(configurationObject)
+        else:
+            self.configurationObject = configurationObject
+
+    @configurationObject.deleter
+    def configurationObject(self):
+        del self.configurationObject
 
 
 # TODO refactor to do most of the stuff in some function and not in the constructor
-class LarsimModelSetUp:
+class LarsimModelSetUp(object):
     def __init__(self, configurationObject, inputModelDir, workingDir=None, log_level: int = utils.log_levels.INFO,
                  print_level: int = utils.print_levels.INFO, debug: bool = False, *args, **kwargs):
 
@@ -346,7 +368,7 @@ class LarsimModelSetUp:
         #####################################
         self.df_past_sim = None
         self.df_measured = None
-        self.df_unaltered_ergebnis = None
+        self.df_unaltered_result = None
         self.df_gof_unaltered_meas = None
         self.df_gof_sim_meas = None
 
@@ -369,6 +391,7 @@ class LarsimModelSetUp:
         self.workingDir = pathlib.Path(workingDir)
         if self.workingDir is None:
             self.workingDir = pathlib.Path(paths.workingDir)
+        self.workingDir.mkdir(parents=True, exist_ok=True)
 
         if self.larsimConfObject.boolean_make_local_copy_of_master_dir:
             self.master_dir = self.workingDir / 'master_configuration'
@@ -383,37 +406,36 @@ class LarsimModelSetUp:
         self.log_util.log_info(f"workingDir = {self.workingDir}")
         self.log_util.log_info(f"local_master_dir = {self.master_dir}")
 
-        self.perform_all_setup_steps()
+        self.ground_truth_file = kwargs.get('ground_truth_file', None)
+
+        # self.perform_all_setup_steps()
 
         self.log_util.log_info(f"Model Initial setup is done!")
+
+    @property
+    def larsimConfObject(self):
+        return self.larsimConfObject
+
+    @larsimConfObject.setter
+    def larsimConfObject(self, larsimConfObject, **kwargs):
+        if isinstance(larsimConfObject, LarsimConfigurations):
+            self.larsimConfObject = larsimConfObject
+        else:
+            raise Exception(f"larsimConfObject must be of type LarsimConfigurations ")
+
+    @larsimConfObject.deleter
+    def larsimConfObject(self):
+        del self.larsimConfObject
 
     def perform_all_setup_steps(self):
         self.copy_master_folder()
         self.configure_master_folder()
 
         if self.larsimConfObject.boolean_get_measured_discharge:
-            # get the path to the files which stores grount-truth/measured data
-            if self.larsimConfObject.boolean_read_date_from_saved_data_dir:
-                if "ground_truth_file" in kwargs:
-                    ground_truth_file = pathlib.Path(kwargs.get('ground_truth_file'))
-                else:
-                    if self.larsimConfObject.dict_params_for_defining_paths is not None:
-                        ground_truth_file = self.larsimConfObject.dict_params_for_defining_paths["ground_truth_file"]
-                    else:
-                        raise Exception(
-                            f"[LarsimModelSetUp ERROR] - error when reading ground truth data from saved file!")
-                read_from_prepared_file = True
-                if ground_truth_file.is_absolute():
-                    read_file_path = ground_truth_file
-                else:
-                    read_file_path = self.larsimPathsObject.saved_data_dir / ground_truth_file
-            else:
-                read_from_prepared_file = False
-                read_file_path = self.master_dir / self.larsimPathsObject.list_input_lila_files[0]  # TODO
+            read_file_path, read_from_prepared_file = self._get_file_path_for_measured_discharge(self.ground_truth_file)
             self.get_measured_discharge(path_to_measured_data=read_file_path,
                                         read_from_prepared_file=read_from_prepared_file,
                                         write_in_file=True)
-
         if self.larsimConfObject.boolean_get_saved_simulations:
             self.get_saved_simulations(write_in_file=True)
         if self.larsimConfObject.boolean_run_unaltered_sim:
@@ -431,6 +453,8 @@ class LarsimModelSetUp:
                 larsimConfigurationSettings._delete_larsim_whm_files(self.master_dir)
             if self.larsimConfObject.boolean_copy_and_configure_lila_input_files:
                 larsimConfigurationSettings._delete_larsim_lila_files(self.master_dir)
+            if self.larsimConfObject.boolean_copy_and_configure_kala_input_files:
+                larsimConfigurationSettings._delete_larsim_kala_files(self.master_dir)
             self.log_util.log_info(f"Copying to local master folder!")
 
     def configure_master_folder(self):
@@ -449,8 +473,9 @@ class LarsimModelSetUp:
 
         # Based on time settings change tape10_master file - needed for unaltered run -
         # this will be repeated once again by each process in LarsimModel.run()
-        if self.larsimConfObject.boolean_configure_tape10:
-            local_tape10_path = self.master_dir / 'tape10'
+        if self.larsimConfObject.boolean_configure_tape10 \
+                and not self.larsimConfObject.boolean_tape10_is_already_configured:
+            local_tape10_path = self.master_dir / self.larsimPathsObject.tape_10_path.name
             global_master_tape10_file = self.larsimPathsObject.master_tape_10_path
             # global_master_tape10_file = local_tape10_path_copied_from_master = self.larsimPathsObject.global_master_dir / global_master_tape10_file.name
             try:
@@ -462,15 +487,20 @@ class LarsimModelSetUp:
                 self.log_util.log_error(f"Error in configure_master_folder - time settings - tape10_configuration!")
                 print("[LarsimModelSetUp ERROR] - Something is  wrong with the time settings \n]" + str(e))
                 return None
+            else:
+                self.larsimConfObject.boolean_tape10_is_already_configured = True
 
         # Filter out whm files
-        if self.larsimConfObject.boolean_copy_and_configure_whms:
+        if self.larsimConfObject.boolean_copy_and_configure_whms \
+                and not self.larsimConfObject.boolean_whms_are_already_configured:
             larsimConfigurationSettings.copy_whm_files(timeframe=self.larsimConfObject.timeframe,
                                                        input_whms_dir=self.larsimPathsObject.whms_dir,
                                                        new_whms_dir=self.master_dir)
+            self.larsimConfObject.boolean_whms_are_already_configured = True
 
         # Parse big lila files and create small ones
-        if self.larsimConfObject.boolean_copy_and_configure_lila_input_files:
+        if self.larsimConfObject.boolean_copy_and_configure_lila_input_files \
+                and not self.larsimConfObject.boolean_lila_files_are_already_configured:
             list_local_lila_paths = [self.master_dir / single_lila_file \
                                      for single_lila_file in self.larsimPathsObject.list_input_lila_files]
             larsimConfigurationSettings.master_lila_parser_based_on_time_crete_new(timeframe=self.larsimConfObject.timeframe,
@@ -479,9 +509,11 @@ class LarsimModelSetUp:
 
             for one_lila_file in list_local_lila_paths:
                 paths.check_if_file_exists(one_lila_file, f"[LarsimModelSetUp Error] File {one_lila_file} does not exist!")
+            self.larsimConfObject.boolean_lila_files_are_already_configured = True
 
         # Parse big kala files and create small ones
-        if self.larsimConfObject.boolean_copy_and_configure_kala_input_files:
+        if self.larsimConfObject.boolean_copy_and_configure_kala_input_files \
+                and not self.larsimConfObject.boolean_kala_files_are_already_configured:
             raise NotImplementedError("Should have implemented this")
 
         self.log_util.log_info(f"Initial configuration of local master folder {self.master_dir} is completed!")
@@ -589,12 +621,13 @@ class LarsimModelSetUp:
                                                                compression="gzip")
 
     # TODO change run_unaltered_sim such that it can as well run in cut_runs mode
-    def run_unaltered_sim(self, createNewFolder=False, write_in_file=True, write_file_path=None):
-        #####################################
-        ### run unaltered simulation
-        #####################################
+    def run_unaltered_sim(self, createNewFolder=False, index_of_unaltered_run="000",
+                          write_in_file=True, write_file_path=None):
+        """
+        run unaltered simulation
+        """
         if createNewFolder:
-            temp = self.larsimPathsObject.larsim_model_dir.name + "000"
+            temp = self.larsimPathsObject.larsim_model_dir.name + str(index_of_unaltered_run)
             dir_unaltered_run = self.workingDir / temp
             dir_unaltered_run.mkdir(parents=True, exist_ok=True)
             master_dir_for_copying = str(self.master_dir) + "/."
@@ -609,26 +642,26 @@ class LarsimModelSetUp:
         os.chdir(self.sourceDir)
         print(f"[LarsimModelSetUp INFO] Unaltered Run is completed, current folder is: {self.sourceDir}")
 
-        result_file_path = dir_unaltered_run / 'ergebnis.lila'
-        self.df_unaltered_ergebnis = larsimInputOutputUtilities.ergebnis_parser_toPandas(result_file_path)
+        result_file_path = dir_unaltered_run / self.larsimPathsObject.result_file_path.name
+        self.df_unaltered_result = larsimInputOutputUtilities.result_parser_toPandas(result_file_path)
 
         simulation_start_timestamp = self.larsimConfObject.timeframe[0]
         if self.larsimConfObject.warm_up_duration is not None:
             simulation_start_timestamp = self.larsimConfObject.timeframe[0] + datetime.timedelta(hours=self.larsimConfObject.warm_up_duration)
-        self.df_unaltered_ergebnis = larsimDataPostProcessing.parse_df_based_on_time(self.df_unaltered_ergebnis, (simulation_start_timestamp, None))
+        self.df_unaltered_result = larsimDataPostProcessing.parse_df_based_on_time(self.df_unaltered_result, (simulation_start_timestamp, None))
 
         # filter out results for a concrete station if specified in configuration json file
         if self.larsimConfObject.station_for_model_runs is not None and self.larsimConfObject.station_for_model_runs != "all":
-            self.df_unaltered_ergebnis = larsimDataPostProcessing.filterResultForStation(self.df_unaltered_ergebnis,
-                                                                                         station=self.larsimConfObject.station_for_model_runs)
+            self.df_unaltered_result = larsimDataPostProcessing.filterResultForStation(self.df_unaltered_result,
+                                                                                       station=self.larsimConfObject.station_for_model_runs)
         if self.larsimConfObject.type_of_output_of_Interest is not None and self.larsimConfObject.type_of_output_of_Interest != "all":
-            self.df_unaltered_ergebnis = larsimDataPostProcessing.filterResultForTypeOfOutpu(self.df_unaltered_ergebnis,
-                                                                                             type_of_output=self.larsimConfObject.type_of_output_of_Interest)
+            self.df_unaltered_result = larsimDataPostProcessing.filterResultForTypeOfOutpu(self.df_unaltered_result,
+                                                                                           type_of_output=self.larsimConfObject.type_of_output_of_Interest)
 
         if write_in_file:
             if write_file_path is None:
                 write_file_path = self.workingDir / "df_unaltered.pkl"
-            larsimInputOutputUtilities.write_dataFrame_to_file(self.df_unaltered_ergebnis,
+            larsimInputOutputUtilities.write_dataFrame_to_file(self.df_unaltered_result,
                                                                file_path=write_file_path,
                                                                compression="gzip")
 
@@ -640,10 +673,10 @@ class LarsimModelSetUp:
 
     def _compare_measurements_and_unalteredSim(self, get_all_possible_stations=True,
                                                write_in_file=True, write_file_path=None):
-        if self.df_measured is None or self.df_unaltered_ergebnis is None:
+        if self.df_measured is None or self.df_unaltered_result is None:
             return None
 
-        stations = larsimDataPostProcessing.get_stations_intersection(self.df_measured, self.df_unaltered_ergebnis)
+        stations = larsimDataPostProcessing.get_stations_intersection(self.df_measured, self.df_unaltered_result)
         if not get_all_possible_stations and (self.larsimConfObject.station_of_Interest != "all"
                                               or self.larsimConfObject.station_of_Interest is not None):
             if not isinstance(self.larsimConfObject.station_of_Interest, list):
@@ -652,7 +685,7 @@ class LarsimModelSetUp:
 
         gof_list_over_stations = []
         for station in stations:
-            df_sim = larsimDataPostProcessing.filterResultForStationAndTypeOfOutpu(self.df_unaltered_ergebnis,
+            df_sim = larsimDataPostProcessing.filterResultForStationAndTypeOfOutpu(self.df_unaltered_result,
                                                                                    station=station,
                                                                                    type_of_output=self.larsimConfObject.type_of_output_of_Interest)
             temp_gof_dict = larsimDataPostProcessing.calculateGoodnessofFit_simple(measuredDF=self.df_measured,
@@ -690,6 +723,28 @@ class LarsimModelSetUp:
                                                                    file_path=write_file_path,
                                                                    compression="gzip")
 
+    def _get_file_path_for_measured_discharge(self, ground_truth_file=None):
+        # get the path to the files which stores grount-truth/measured data
+        if self.larsimConfObject.boolean_read_date_from_saved_data_dir:
+            if ground_truth_file is not None:
+                ground_truth_file = pathlib.Path(ground_truth_file)
+            else:
+                if self.larsimConfObject.dict_params_for_defining_paths is not None:
+                    ground_truth_file = self.larsimConfObject.dict_params_for_defining_paths[
+                        "ground_truth_file"]  # TODO
+                else:
+                    raise Exception(
+                        f"[LarsimModelSetUp ERROR] - error when reading ground truth data from saved file!")
+            read_from_prepared_file = True
+            if ground_truth_file.is_absolute():
+                read_file_path = ground_truth_file
+            else:
+                read_file_path = self.larsimPathsObject.saved_data_dir / ground_truth_file
+        else:
+            read_from_prepared_file = False
+            read_file_path = self.master_dir / self.larsimPathsObject.list_input_lila_files[0]  # TODO
+        return read_file_path, read_from_prepared_file
+
 
 class LarsimModel(Model):
 
@@ -699,15 +754,15 @@ class LarsimModel(Model):
         Model.__init__(self)
 
         #####################################
-        # set-up utility logging
+        # set-up utility logging TODO check how logging works in multiprocesses set-up
         #####################################
 
-        self.log_util = utils.LogUtility(log_level=log_level, print_level=print_level)
-        self.debug = debug
-        if self.debug:
-            self.log_util.log_debug(f'LarsimModel debug: {self.debug}')
-        self.log_util.set_print_prefix('LarsimModel')
-        self.log_util.set_log_prefix('LarsimModel')
+        # self.log_util = utils.LogUtility(log_level=log_level, print_level=print_level)
+        # self.debug = debug
+        # if self.debug:
+        #     self.log_util.log_debug(f'LarsimModel debug: {self.debug}')
+        # self.log_util.set_print_prefix('LarsimModel')
+        # self.log_util.set_log_prefix('LarsimModel')
 
         #####################################
         # Set-up configuration object
@@ -739,14 +794,15 @@ class LarsimModel(Model):
         self.workingDir = pathlib.Path(workingDir)
         if self.workingDir is None:
             self.workingDir = pathlib.Path(paths.workingDir)
+        # self.workingDir.mkdir(parents=True, exist_ok=True)
 
         if self.larsimConfObject.boolean_make_local_copy_of_master_dir:
             self.master_dir = self.workingDir / 'master_configuration'
         else:
             self.master_dir = self.workingDir  # self.larsimPathsObject.global_master_dir
 
-        log_filename = self.workingDir / "larsimModel.log"
-        self.log_util.set_log_filename(log_filename=log_filename)
+        # log_filename = self.workingDir / "larsimModel.log"
+        # self.log_util.set_log_filename(log_filename=log_filename)
 
         #####################################
         # Set of configuration variables propagated via UQsim.args
@@ -760,15 +816,72 @@ class LarsimModel(Model):
             self.larsimConfObject.run_and_save_simulations and self.disable_statistics
 
         #####################################
+        self._larsimModelSetUpObject = None
         self.measuredDF = None
         self._is_measuredDF_computed = False
         self.measuredDF_column_name = 'Value'
         #self._set_measured_df()
 
-        self.log_util.log_info(f"INITIALIZATION DONE!")
+        # self.log_util.log_info(f"INITIALIZATION DONE!")
+
+    @property
+    def larsimConfObject(self):
+        return self.larsimConfObject
+
+    @larsimConfObject.setter
+    def larsimConfObject(self, larsimConfObject, **kwargs):
+        if isinstance(larsimConfObject, LarsimConfigurations):
+            self.larsimConfObject = larsimConfObject
+        else:
+            raise Exception(f"larsimConfObject must be of type LarsimConfigurations ")
+
+    @larsimConfObject.deleter
+    def larsimConfObject(self):
+        del self.larsimConfObject
+
+    @property
+    def larsimModelSetUpObject(self):
+        return self._larsimModelSetUpObject
+
+    @larsimModelSetUpObject.setter
+    def larsimModelSetUpObject(self, larsimModelSetUpObject=None):
+        if larsimModelSetUpObject is not None:
+            if isinstance(larsimModelSetUpObject, LarsimModelSetUp):
+                self._larsimModelSetUpObject = larsimModelSetUpObject
+            else:
+                raise Exception(f"larsimConfObject must be of type LarsimConfigurations ")
+        else:
+            self._larsimModelSetUpObject = LarsimModelSetUp(configurationObject=self.larsimConfObject,
+                                                            inputModelDir=self.inputModelDir,
+                                                            workingDir=self.workingDir,
+                                                            sourceDir=self.sourceDir)
+
+    @larsimModelSetUpObject.deleter
+    def larsimModelSetUpObject(self):
+        del self._larsimModelSetUpObject
+
+    def intialize_larsimModelSetUpObject(self):
+        self._larsimModelSetUpObject = LarsimModelSetUp(configurationObject=self.larsimConfObject,
+                                                        inputModelDir=self.inputModelDir,
+                                                        workingDir=self.workingDir,
+                                                        sourceDir=self.sourceDir)
+
+    def larsimModel_prepare(self):
+        self._larsimModelSetUpObject.perform_all_setup_steps()
+
+    def copy_master_folder(self):
+        self._larsimModelSetUpObject.copy_master_folder()
+
+    def configure_master_folder(self):
+        self._larsimModelSetUpObject.configure_master_folder()
+
+    def run_unaltered_run(self, index_of_unaltered_run="000"):
+        self._larsimModelSetUpObject.run_unaltered_sim(createNewFolder=True,
+                                                       index_of_unaltered_run= index_of_unaltered_run,
+                                                       write_in_file=True)
 
     def prepare(self):
-        #pass
+        self.larsimModel_prepare()
         self._set_measured_df()
 
     def assertParameter(self, parameter):
@@ -776,13 +889,6 @@ class LarsimModel(Model):
 
     def normaliseParameter(self, parameter):
         return parameter
-
-    def set_configuration_object(self, configurationObject, **kwargs):
-        if isinstance(configurationObject, LarsimConfigurations):
-            self.larsimConfObject = configurationObject
-        else:
-            self.larsimConfObject = LarsimConfigurations(configurationObject, **kwargs)
-        # self.configurationObject = larsimConfigurationSettingstings.return_configuration_object(configurationObject)
 
     def set_timeframe(self, timeframe):
         self.larsimConfObject.timeframe = larsimTimeUtility.timeframe_to_datetime_list(timeframe)
@@ -807,13 +913,13 @@ class LarsimModel(Model):
         local_measurement_file = self.workingDir / "df_measured.pkl" #self.local_measurement_file
         if local_measurement_file.exists():
             self.measuredDF = larsimInputOutputUtilities.read_dataFrame_from_file(local_measurement_file,
-                                                                              compression="gzip")
+                                                                                  compression="gzip")
         else:
             local_measurement_file = self.master_dir / paths.LILA_FILES[0]
             self.measuredDF = larsimDataPostProcessing.read_process_write_discharge(df=local_measurement_file,
-                                                                               timeframe=self.larsimConfObject.timeframe,
-                                                                               station=self.larsimConfObject.station_for_model_runs,
-                                                                               compression="gzip")
+                                                                                    timeframe=self.larsimConfObject.timeframe,
+                                                                                    station=self.larsimConfObject.station_for_model_runs,
+                                                                                    compression="gzip")
         self._is_measuredDF_computed = True
         self.__set_measuredDF_column_name()
 
@@ -822,19 +928,7 @@ class LarsimModel(Model):
             self._set_measured_df()
         return self.measuredDF
 
-    def setUp(self):
-        pass
-
-    def copy_master_folder(self):
-        pass
-
-    def configure_master_folder(self):
-        pass
-
-    def run_unaltered_run(self, index_of_unaltered_run: int = 1000):
-        pass
-
-    def run(self, i_s=[0,], parameters=None, raise_exception_on_model_break=None, *args, **kwargs):  # i_s - index chunk; parameters - parameters chunk
+    def run(self, i_s=[0, ], parameters=None, raise_exception_on_model_break=None, *args, **kwargs):  # i_s - index chunk; parameters - parameters chunk
 
         print(f"[LarsimModel INFO] {i_s} parameter: {parameters}")
 
@@ -873,7 +967,6 @@ class LarsimModel(Model):
 
             # change values
             id_dict = {"index_run": i}
-            # if parameter is not None:
             tape35_path = curr_working_dir / self.larsimPathsObject.tape_35_path.name
             lanu_path = curr_working_dir / self.larsimPathsObject.lanu_path.name
             if parameter is not None:
@@ -897,7 +990,8 @@ class LarsimModel(Model):
                 result = self._multiple_short_larsim_runs(timeframe=self.larsimConfObject.timeframe,
                                                           timestep=self.larsimConfObject.timestep,
                                                           curr_working_dir=curr_working_dir,
-                                                          larsim_exe=self.larsimPathsObject.larsim_exe, index_run=i,
+                                                          larsim_exe=self.larsimPathsObject.larsim_exe,
+                                                          index_run=i,
                                                           warm_up_duration=self.larsimConfObject.warm_up_duration,
                                                           raise_exception_on_model_break=raise_exception_on_model_break,
                                                           max_retries=max_retries)
@@ -943,7 +1037,10 @@ class LarsimModel(Model):
 
             end = time.time()
             runtime = end - start
-            result_dict = {"run_time": runtime, "parameters_dict": parameters_dict}
+            if parameters_dict is not None:
+                result_dict = {"run_time": runtime, "parameters_dict": parameters_dict}
+            else:
+                result_dict = {"run_time": runtime}
 
             ######################################################################################################
 
@@ -1196,11 +1293,11 @@ class LarsimModel(Model):
                         dill.dump(parameters_dict, f)
 
                 if result is not None:
-                    file_path = self.workingDir / f"df_Larsim_run_{i}.pkl"  #TODO
+                    file_path = self.workingDir / f"df_Larsim_run_{i}.pkl"  # TODO
                     result.to_pickle(file_path, compression="gzip")
 
                 if self.larsimConfObject.calculate_GoF:
-                    file_path = self.workingDir / f"gof_{i}.pkl"
+                    file_path = self.workingDir / f"gof_{i}.pkl"  # TODO
                     index_parameter_gof_DF.to_pickle(file_path, compression="gzip")
 
                 if self.larsimConfObject.compute_gradients and gradient_matrix_dict:
@@ -1217,13 +1314,16 @@ class LarsimModel(Model):
             results_array.append((result_dict, runtime))
 
             # Delete everything except .log and .csv files
-            larsimConfigurationSettings.cleanDirectory_completely(curr_directory=curr_working_dir)
+            if curr_working_dir.resolve().absolute() != self.workingDir.resolve().absolute():
+                larsimConfigurationSettings.cleanDirectory_completely(curr_directory=curr_working_dir)
 
             # change back to starting directory of all the processes
             os.chdir(self.sourceDir)
 
             # Delete local working folder
-            subprocess.run(["rm", "-r", curr_working_dir])
+            if deleteFolderAfterwards and \
+                    curr_working_dir.resolve().absolute() != self.workingDir.resolve().absolute():
+                subprocess.run(["rm", "-r", curr_working_dir])
 
             print(f"[LarsimModel INFO] I am done - solver number {i}")
 
@@ -1244,7 +1344,7 @@ class LarsimModel(Model):
         # change tape 10 accordingly
         if boolean_configure_tape10:
             local_master_tape10_file = curr_working_dir / self.larsimPathsObject.master_tape_10_path.name
-            local_tape10_adjusted_path = curr_working_dir / self.larsimPathsObject.tape_35_path.name
+            local_tape10_adjusted_path = curr_working_dir / self.larsimPathsObject.tape_10_path.name
             try:
                 larsimTimeUtility.tape10_configuration(timeframe=timeframe, master_tape10_file=local_master_tape10_file,
                                                        new_tape10_file=local_tape10_adjusted_path,
@@ -1279,13 +1379,13 @@ class LarsimModel(Model):
         elif not ok_found and not raise_exception_on_model_break:
             return None
 
-        result_file_path = curr_working_dir / 'ergebnis.lila'
+        result_file_path = curr_working_dir / self.larsimPathsObject.result_file_path.name
         try:
-            df_single_ergebnis = larsimInputOutputUtilities.ergebnis_parser_toPandas(result_file_path, index_run)
-            return df_single_ergebnis
+            df_single_result = larsimInputOutputUtilities.result_parser_toPandas(result_file_path, index_run)
+            return df_single_result
         except paths.FileError as e:
             print(str(e))
-            print(f"[LarsimModel ERROR] Process {index_run}: The following Ergebnis file was not found "
+            print(f"[LarsimModel ERROR] Process {index_run}: The following result file was not found "
                   f"- {result_file_path}. None was returned")
             raise
 
@@ -1312,11 +1412,11 @@ class LarsimModel(Model):
         local_end_date = timeframe[0]
 
         # TODO
-        result_file_path = curr_working_dir / 'ergebnis.lila'
+        result_file_path = curr_working_dir / self.larsimPathsObject.result_file_path.name
         larsim_ok_file_path = curr_working_dir / 'larsim.ok'
         tape11_file_path = curr_working_dir / 'tape11'
         karte_path = curr_working_dir / 'karten'  # curr_working_dir / 'karten/*'
-        tape10_path = curr_working_dir / 'tape10'
+        tape10_path = curr_working_dir / self.larsimPathsObject.tape10.name
 
         print(f"[LarsimModel INFO] process {index_run} gonna run {number_of_runs} "
               f"shorter Larsim runs (and number_of_runs_mode {number_of_runs_mode})")
@@ -1392,10 +1492,9 @@ class LarsimModel(Model):
 
             local_resultDF_list.append(local_resultDF_drop)
 
-            # rename ergebnis.lila
-            local_result_file_path = curr_working_dir / f'ergebnis_{i}.lila'
+            local_result_file_path = curr_working_dir / f'ergebnis_{i}.lila'  # TODO
             subprocess.run(["mv", result_file_path, local_result_file_path])
-            local_larsim_ok_file_path = curr_working_dir / f'larsim_{i}.ok'
+            local_larsim_ok_file_path = curr_working_dir / f'larsim_{i}.ok'  # TODO
             subprocess.run(["mv", larsim_ok_file_path, local_larsim_ok_file_path])
 
         if local_resultDF_list:

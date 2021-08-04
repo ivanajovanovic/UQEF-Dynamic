@@ -171,17 +171,17 @@ class LarsimSamples(object):
             else:
                 df_result = value
 
-            df_single_ergebnis = larsimDataPostProcessing.read_process_write_discharge(df=df_result,\
+            df_single_result = larsimDataPostProcessing.read_process_write_discharge(df=df_result,\
                                  index_run=index_run,\
                                  type_of_output=type_of_output,\
                                  station=station)
 
-            #larsimInputOutputUtilities._postProcessing_DataFrame_after_reading(df_single_ergebnis)
-            #simulation_start_timestamp = pd.Timestamp(df_single_ergebnis.TimeStamp.min()) + datetime.timedelta(hours=self.warm_up_duration)
-            #df_single_ergebnis = larsimDataPostProcessing.parse_df_based_on_time(df_single_ergebnis, (simulation_start_timestamp, None))
+            #larsimInputOutputUtilities._postProcessing_DataFrame_after_reading(df_single_result)
+            #simulation_start_timestamp = pd.Timestamp(df_single_result.TimeStamp.min()) + datetime.timedelta(hours=self.warm_up_duration)
+            #df_single_result = larsimDataPostProcessing.parse_df_based_on_time(df_single_result, (simulation_start_timestamp, None))
 
-            if df_single_ergebnis is not None:
-                list_of_single_df.append(df_single_ergebnis)
+            if df_single_result is not None:
+                list_of_single_df.append(df_single_result)
 
         if list_of_single_df:
             self.df_simulation_result = pd.concat(list_of_single_df, ignore_index=True, sort=False, axis=0)
@@ -446,26 +446,25 @@ class LarsimStatistics(Statistics):
             except KeyError:
                 self.workingDir = paths.workingDir
 
-        self.store_qoi_data_in_stat_dict = kwargs.get('store_qoi_data_in_stat_dict') if 'store_qoi_data_in_stat_dict' \
-                                                                                        in kwargs else False
+        self.store_qoi_data_in_stat_dict = kwargs.get('store_qoi_data_in_stat_dict', False)
 
         # TODO: eventually make a non-MPI version
-        self.parallel_statistics = kwargs.get('parallel_statistics') if 'parallel_statistics' in kwargs else False
+        self.parallel_statistics = kwargs.get('parallel_statistics', False)
         if self.parallel_statistics:
             self.size = MPI.COMM_WORLD.Get_size()
             self.rank = MPI.COMM_WORLD.Get_rank()
             self.name = MPI.Get_processor_name()
             self.version = MPI.Get_library_version()
-            self.mpi_chunksize = kwargs.get('mpi_chunksize') if 'mpi_chunksize' in kwargs else 1
-            self.unordered = kwargs.get('unordered') if 'unordered' in kwargs else False
+            self.mpi_chunksize = kwargs.get('mpi_chunksize', 1)
+            self.unordered = kwargs.get('unordered', False)
 
-        self.uq_method = kwargs.get('uq_method') if 'uq_method' in kwargs else None
+        self.uq_method = kwargs.get('uq_method', None)
 
-        self.save_samples = kwargs.get('save_samples') if 'save_samples' in kwargs else True
+        self.save_samples = kwargs.get('save_samples', True)
 
-        self._compute_Sobol_t = kwargs.get('compute_Sobol_t') if 'compute_Sobol_t' in kwargs else True
-        self._compute_Sobol_m = kwargs.get('compute_Sobol_m') if 'compute_Sobol_m' in kwargs else True
-        self._compute_Sobol_m2 = kwargs.get('compute_Sobol_m2') if 'compute_Sobol_m2' in kwargs else False
+        self._compute_Sobol_t = kwargs.get('compute_Sobol_t', True)
+        self._compute_Sobol_m = kwargs.get('compute_Sobol_m', True)
+        self._compute_Sobol_m2 = kwargs.get('compute_Sobol_m2', False)
 
         #####################################
         # Set of larsimConfigurationSettings variables propagated via larsimConfigurationSettings file
