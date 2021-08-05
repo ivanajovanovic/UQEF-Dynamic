@@ -10,7 +10,6 @@ import pickle
 import dill
 from distutils.util import strtobool
 
-
 import uqef
 
 from larsim import LarsimModel
@@ -26,6 +25,7 @@ from productFunction import ProductFunctionModel
 from productFunction import ProductFunctionStatistics
 
 import LarsimUtilityFunctions.larsimPaths as paths
+from LarsimUtilityFunctions import larsimModel
 
 # additionally added for the debugging of the nodes
 import chaospy as cp
@@ -118,45 +118,46 @@ if uqsim.is_master() and not uqsim.is_restored():
 # one time initial model setup
 #####################################
 # put here if there is something specifically related to the model that should be done only once
-if uqsim.is_master() and not uqsim.is_restored():
-    def initialModelSetUp():
-        models = {
-            "larsim"         : (lambda: LarsimModel.LarsimModelSetUp(configurationObject=uqsim.configuration_object,
-                                                                     inputModelDir=uqsim.args.inputModelDir,
-                                                                     sourceDir=uqsim.args.sourceDir,
-                                                                     workingDir=uqsim.args.workingDir))
-           ,"oscillator"     : (lambda: LinearDampedOscillatorModel.LinearDampedOscillatorModelSetUp(uqsim.configuration_object))
-           ,"ishigami"       : (lambda: IshigamiModel.IshigamiModelSetUp(uqsim.configuration_object))
-           ,"productFunction": (lambda: ProductFunctionModel.ProductFunctionModelSetUp(uqsim.configuration_object))
-        }
-        models[uqsim.args.model]()
-    initialModelSetUp()
+# if uqsim.is_master() and not uqsim.is_restored():
+#     def initialModelSetUp():
+#         models = {
+#             "larsim": (lambda: larsimModel.LarsimModelSetUp(configurationObject=uqsim.configuration_object,
+#                                                             inputModelDir=uqsim.args.inputModelDir,
+#                                                             workingDir=uqsim.args.workingDir,
+#                                                             sourceDir=uqsim.args.sourceDir))
+#            ,"oscillator"     : (lambda: LinearDampedOscillatorModel.LinearDampedOscillatorModelSetUp(uqsim.configuration_object))
+#            ,"ishigami"       : (lambda: IshigamiModel.IshigamiModelSetUp(uqsim.configuration_object))
+#            ,"productFunction": (lambda: ProductFunctionModel.ProductFunctionModelSetUp(uqsim.configuration_object))
+#         }
+#         models[uqsim.args.model]()
+#     initialModelSetUp()
 
 #####################################
 #####################################
 # register model
-uqsim.models.update({"larsim"         : (lambda: LarsimModel.LarsimModel(configurationObject=uqsim.configuration_object,
-                                                                         inputModelDir=uqsim.args.inputModelDir,
-                                                                         sourceDir=uqsim.args.sourceDir,
-                                                                         workingDir=uqsim.args.workingDir,
-                                                                         disable_statistics=uqsim.args.disable_statistics,
-                                                                         raise_exception_on_model_break=False,
-                                                                         uq_method=uqsim.args.uq_method,
-                                                                         max_retries=10))})
+uqsim.models.update({"larsim"         : (lambda: LarsimModel.LarsimModelUQ(configurationObject=uqsim.configuration_object,
+                                                                           inputModelDir=uqsim.args.inputModelDir,
+                                                                           sourceDir=uqsim.args.sourceDir,
+                                                                           workingDir=uqsim.args.workingDir,
+                                                                           disable_statistics=uqsim.args.disable_statistics,
+                                                                           raise_exception_on_model_break=False,
+                                                                           uq_method=uqsim.args.uq_method,
+                                                                           max_retries=10))})
 uqsim.models.update({"oscillator"     : (lambda: LinearDampedOscillatorModel.LinearDampedOscillatorModel(uqsim.configuration_object))})
 uqsim.models.update({"ishigami"       : (lambda: IshigamiModel.IshigamiModel(uqsim.configuration_object))})
 uqsim.models.update({"productFunction": (lambda: ProductFunctionModel.ProductFunctionModel(uqsim.configuration_object))})
 
 # register statistics
-uqsim.statistics.update({"larsim"         : (lambda: LarsimStatistics.LarsimStatistics(uqsim.configuration_object,
-                                                                                       parallel_statistics=uqsim.args.parallel_statistics,
-                                                                                       mpi_chunksize=uqsim.args.mpi_chunksize,
-                                                                                       unordered=False,
-                                                                                       uq_method=uqsim.args.uq_method,
-                                                                                       compute_Sobol_t=uqsim.args.compute_Sobol_t,
-                                                                                       compute_Sobol_m=uqsim.args.compute_Sobol_m,
-                                                                                       store_qoi_data_in_stat_dict=False
-                                                                                       ))})
+uqsim.statistics.update({"larsim"         : (lambda: LarsimStatistics.LarsimStatistics(
+    configurationObject=uqsim.configuration_object,
+    workingDir=uqsim.args.workingDir,
+    parallel_statistics=uqsim.args.parallel_statistics,
+    mpi_chunksize=uqsim.args.mpi_chunksize,
+    unordered=False,
+    uq_method=uqsim.args.uq_method,
+    compute_Sobol_t=uqsim.args.compute_Sobol_t,
+    compute_Sobol_m=uqsim.args.compute_Sobol_m,
+    store_qoi_data_in_stat_dict=False))})
 uqsim.statistics.update({"oscillator"     : (lambda: LinearDampedOscillatorStatistics.LinearDampedOscillatorStatistics())})
 uqsim.statistics.update({"ishigami"       : (lambda: IshigamiStatistics.IshigamiStatistics(uqsim.configuration_object))})
 uqsim.statistics.update({"productFunction": (lambda: ProductFunctionStatistics.ProductFunctionStatistics(uqsim.configuration_object))})
@@ -265,7 +266,7 @@ if uqsim.is_master():
         processed_sample_results.save_samples_to_file(uqsim.args.outputResultDir)
         processed_sample_results.save_index_parameter_values(uqsim.args.outputResultDir)
         processed_sample_results.save_index_parameter_gof_values(uqsim.args.outputResultDir)
-        if strtobool(uqsim.configuration_object["Output"]["compute_gradients"]) :
+        if strtobool(uqsim.configuration_object["model_run_settings"]["compute_gradients"]) :
             processed_sample_results.save_dict_of_approx_matrix_c(uqsim.args.outputResultDir)
             processed_sample_results.save_dict_of_matrix_c_eigen_decomposition(uqsim.args.outputResultDir)
 

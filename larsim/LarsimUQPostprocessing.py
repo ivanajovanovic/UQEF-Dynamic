@@ -300,15 +300,13 @@ def extracting_statistics_df_for_one_station(station="MARI"):
 
 
 def create_larsimStatistics_object(configuration_object, uqsim_args_dict, workingDir):
-    larsimStatisticsObject = LarsimStatistics.LarsimStatistics(configuration_object,
-                                                               workingDir=workingDir,
-                                                               parallel_statistics=uqsim_args_dict["parallel_statistics"],
+    larsimStatisticsObject = LarsimStatistics.LarsimStatistics(configuration_object, workingDir=workingDir,
+                                                               parallel_statistics=uqsim_args_dict[
+                                                                   "parallel_statistics"],
                                                                mpi_chunksize=uqsim_args_dict["mpi_chunksize"],
-                                                               unordered=False,
-                                                               uq_method=uqsim_args_dict["uq_method"],
+                                                               unordered=False, uq_method=uqsim_args_dict["uq_method"],
                                                                compute_Sobol_t=uqsim_args_dict["compute_Sobol_t"],
-                                                               compute_Sobol_m=uqsim_args_dict["compute_Sobol_m"]
-                                                               )
+                                                               compute_Sobol_m=uqsim_args_dict["compute_Sobol_m"])
     return larsimStatisticsObject
 
 

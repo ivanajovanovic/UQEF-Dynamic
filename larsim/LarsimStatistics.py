@@ -25,11 +25,12 @@ from LarsimUtilityFunctions import larsimDataPostProcessing
 from LarsimUtilityFunctions import larsimInputOutputUtilities
 from LarsimUtilityFunctions import larsimConfigurationSettings
 import LarsimUtilityFunctions.larsimPaths as paths
+from LarsimUtilityFunctions.larsimModel import LarsimConfigurations
 
 #from Larsim-UQ.common import saltelliSobolIndicesHelpingFunctions
 from common import saltelliSobolIndicesHelpingFunctions
 
-from numba import jit, prange
+# from numba import jit, prange
 
 COLORS = [
     '#1f77b4',  # muted blue
@@ -91,55 +92,15 @@ class LarsimSamples(object):
      Samples is a collection of the (filtered) sampled results of a whole UQ simulation
      Prepares results from Model to Statistics
     """
-    def __init__(self, rawSamples, configurationObject, QoI="Value"):
-        try:
-            station = configurationObject["Output"]["station_calibration_postproc"]
-        except KeyError:
-            station = "MARI"
-        try:
-            type_of_output = configurationObject["Output"]["type_of_output"]
-        except KeyError:
-            type_of_output = "Abfluss Messung + Vorhersage"
-        try:
-            dailyOutput = configurationObject["Output"]["dailyOutput"]
-        except KeyError:
-            dailyOutput = "False"
-        try:
-            qoi = configurationObject["Output"]["QOI"]
-        except KeyError:
-            qoi = "Q"
-        try:
-            mode = configurationObject["Output"]["mode"]
-        except KeyError:
-            mode = "continuous"
-        try:
-            calculate_GoF = configurationObject["Output"]["calculate_GoF"]
-        except KeyError:
-            calculate_GoF = "False"
-        try:
-            compute_gradients = configurationObject["Output"]["compute_gradients"]
-        except KeyError:
-            compute_gradients = "False"
+    def __init__(self, rawSamples, configurationObject, QoI="Value", **kwargs):
 
-        self.qoi_columns = ["Value", ]
-        if qoi == "GoF" or strtobool(compute_gradients):
-            try:
-                objective_function_qoi = configurationObject["Output"]["objective_function_qoi"]
-            except KeyError:
-                pass
-            else:
-                objective_function_qoi = larsimDataPostProcessing.gof_list_to_function_names(objective_function_qoi)
-                if isinstance(objective_function_qoi, list):
-                    self.list_objective_function_qoi = [single_gof.__name__ if callable(single_gof) else single_gof
-                                                        for single_gof in objective_function_qoi]
-                else:
-                    if callable(objective_function_qoi):
-                        self.list_objective_function_qoi = [objective_function_qoi.__name__, ]
-                    else:
-                        self.list_objective_function_qoi = [objective_function_qoi, ]
-                self.qoi_columns = self.qoi_columns + self.list_objective_function_qoi
+        if isinstance(configurationObject, LarsimConfigurations):
+            self.larsimConfObject = configurationObject
+        else:
+            self.larsimConfObject = LarsimConfigurations(configurationObject, False, **kwargs)
 
-        #objective_function, interval, min_periods, method
+        self.list_objective_function_qoi = self.larsimConfObject.list_objective_function_qoi
+        self.qoi_columns = self.larsimConfObject.qoi_columns
 
         list_of_single_df = []
         list_index_parameters_dict = []
@@ -161,9 +122,9 @@ class LarsimSamples(object):
                     df_result = None
                 if "parameters_dict" in value:
                     list_index_parameters_dict.append(value["parameters_dict"])
-                if "gof_df" in value and strtobool(calculate_GoF):
+                if "gof_df" in value and self.larsimConfObject.calculate_GoF:
                     list_of_single_index_parameter_gof_df.append(value["gof_df"])
-                if "gradient_matrix_dict" in value and strtobool(compute_gradients):
+                if "gradient_matrix_dict" in value and self.larsimConfObject.compute_gradients:
                     gradient_matrix_dict = value["gradient_matrix_dict"]
                     if gradient_matrix_dict is not None:
                         # TODO Extract only entry for station and oneor multiple gofs
@@ -171,10 +132,10 @@ class LarsimSamples(object):
             else:
                 df_result = value
 
-            df_single_result = larsimDataPostProcessing.read_process_write_discharge(df=df_result,\
-                                 index_run=index_run,\
-                                 type_of_output=type_of_output,\
-                                 station=station)
+            df_single_result = larsimDataPostProcessing.read_process_write_discharge(df=df_result,
+                                                                                     index_run=index_run,
+                                                                                     type_of_output=self.larsimConfObject.type_of_output_of_Interest,
+                                                                                     station=self.larsimConfObject.station_of_Interest)
 
             #larsimInputOutputUtilities._postProcessing_DataFrame_after_reading(df_single_result)
             #simulation_start_timestamp = pd.Timestamp(df_single_result.TimeStamp.min()) + datetime.timedelta(hours=self.warm_up_duration)
@@ -189,7 +150,7 @@ class LarsimSamples(object):
             print(f"[LARSIM STAT INFO] Number of Unique TimeStamps (Hourly): "
                   f"{len(self.df_simulation_result.TimeStamp.unique())}")
             # TODO remove/refactor resample_time_series_df
-            if strtobool(dailyOutput):
+            if self.larsimConfObject.dailyOutput:
                 print(f"[LarsimSamples INFO] Transformation to daily output")
                 self.transform_dict = dict()
                 for one_qoi_column in self.qoi_columns:
@@ -433,18 +394,22 @@ class LarsimStatistics(Statistics):
        TODO The problem is that LarsimSamples currently supports vice versa logic - single stations and multiple Qoi/GoFs
     """
 
-    def __init__(self, configurationObject, *args, **kwargs):
+    def __init__(self, configurationObject, workingDir=None, *args, **kwargs):
         Statistics.__init__(self)
 
-        self.configurationObject = configurationObject
-
-        if "workingDir" in kwargs:
-            self.workingDir = kwargs.get('workingDir')
+        # self.configurationObject = configurationObject
+        if isinstance(configurationObject, LarsimConfigurations):
+            self.larsimConfObject = configurationObject
         else:
-            try:
-                self.workingDir = self.configurationObject["Directories"]["workingDir"]
-            except KeyError:
-                self.workingDir = paths.workingDir
+            self.larsimConfObject = LarsimConfigurations(configurationObject, False, **kwargs)
+
+        self.workingDir = pathlib.Path(workingDir)
+        if self.workingDir is None:
+            self.workingDir = pathlib.Path(paths.workingDir)
+
+        #####################################
+        # Set of configuration variables propagated via UQsim.args and **kwargs
+        #####################################
 
         self.store_qoi_data_in_stat_dict = kwargs.get('store_qoi_data_in_stat_dict', False)
 
@@ -467,61 +432,22 @@ class LarsimStatistics(Statistics):
         self._compute_Sobol_m2 = kwargs.get('compute_Sobol_m2', False)
 
         #####################################
-        # Set of larsimConfigurationSettings variables propagated via larsimConfigurationSettings file
+        # Set of configuration variables propagated via either kwargs or config json file, i.e., larsimConfObject
+        # important for Statistics computation, i.e., parsing the results DF
         #####################################
+        # TODO for now only a single self.qoi_column is supported, but multiple stations!
 
-        # TODO for now this is hardcoded such that only a single self.qoi_column is supported
-        try:
-            self.qoi = self.configurationObject["Output"]["QOI"]
-        except KeyError:
-            self.qoi = "Q"
+        self.qoi_column = kwargs.get('qoi_column', self.larsimConfObject.qoi_column)
 
-        try:
-            self.compute_gradients = strtobool(self.configurationObject["Output"]["compute_gradients"])
-        except KeyError:
-            self.compute_gradients = False
-
-        if "qoi_column" in kwargs:
-            self.qoi_column = kwargs.get('qoi_column')
-        elif self.qoi == "GoF":
-            try:
-                objective_function_qoi = self.configurationObject["Output"]["objective_function_qoi"]
-            except KeyError:
-                self.qoi_column = "Value"
-            else:
-                objective_function_qoi = larsimDataPostProcessing.gof_list_to_function_names(objective_function_qoi)
-                if isinstance(objective_function_qoi, list):
-                    if callable(objective_function_qoi[0]):
-                        self.qoi_column = objective_function_qoi[0].__name__
-                    else:
-                        self.qoi_column = objective_function_qoi[0]
-                else:
-                    if callable(objective_function_qoi):
-                        self.qoi_column = objective_function_qoi.__name__
-                    else:
-                        self.qoi_column = objective_function_qoi
-        else:
-            self.qoi_column = "Value"
-
-        # check if simulation results were already saved in LarsimModel - currently not used
-        try:
-            self.run_and_save_simulations = strtobool(self.configurationObject["Output"]["run_and_save_simulations"])
-        except KeyError:
-            self.run_and_save_simulations = False
-
-        try:
-            self.station_of_Interest = self.configurationObject["Output"]["station_calibration_postproc"]
-        except KeyError as e:
-            print(f"Larsim Statistics: Output -> station_calibration_postproc key does "
-                  f"not exists in the configurationObject{e}")
-            raise
+        self.station_of_Interest = kwargs.get('station_of_Interest', self.larsimConfObject.station_of_Interest)
         if not isinstance(self.station_of_Interest, list):
             self.station_of_Interest = [self.station_of_Interest,]
 
+        #####################################
         # Only the names of the stochastic parameters
         self.nodeNames = []
         try:
-            list_of_parameters = self.configurationObject["parameters"]
+            list_of_parameters = self.larsimConfObject.configurationObject["parameters"]
         except KeyError as e:
             print(f"Larsim Statistics: parameters key does "
                   f"not exists in the configurationObject{e}")
@@ -547,6 +473,7 @@ class LarsimStatistics(Statistics):
         self.timesteps_max = None
         self.numbTimesteps = None
         self.timesteps = None
+        self.pdTimesteps = None
         self.number_of_unique_index_runs = None
         self.numEvaluations = None
         self.samples = None
@@ -593,12 +520,12 @@ class LarsimStatistics(Statistics):
         self.solverTimes = kwargs.get('solverTimes') if 'solverTimes' in kwargs else None
         self.work_package_indexes = kwargs.get('work_package_indexes') if 'work_package_indexes' in kwargs else None
 
-        self.samples = LarsimSamples(rawSamples, configurationObject=self.configurationObject)
+        self.samples = LarsimSamples(rawSamples, configurationObject=self.larsimConfObject)
         if self.save_samples:
             self.samples.save_samples_to_file(self.workingDir)
             self.samples.save_index_parameter_values(self.workingDir)
             self.samples.save_index_parameter_gof_values(self.workingDir)
-            if self.compute_gradients:
+            if self.larsimConfObject.compute_gradients:
                 self.active_scores_dict = self._compute_active_score(self.samples.dict_of_matrix_c_eigen_decomposition)
                 self.samples.save_dict_of_approx_matrix_c(self.workingDir)
                 self.samples.save_dict_of_matrix_c_eigen_decomposition(self.workingDir)
@@ -818,14 +745,14 @@ class LarsimStatistics(Statistics):
 
     def calcStatisticsForMc(self, rawSamples, timesteps, simulationNodes,
                             numEvaluations, order, regression, poly_normed, poly_rule, solverTimes,
-                            work_package_indexes, original_runtime_estimator, **kwargs):
+                            work_package_indexes, original_runtime_estimator=None, *args, **kwargs):
 
-        self.samples = LarsimSamples(rawSamples, configurationObject=self.configurationObject)
+        self.samples = LarsimSamples(rawSamples, configurationObject=self.larsimConfObject)
         if self.save_samples:
             self.samples.save_samples_to_file(self.workingDir)
             self.samples.save_index_parameter_values(self.workingDir)
             self.samples.save_index_parameter_gof_values(self.workingDir)
-            if self.compute_gradients:
+            if self.larsimConfObject.compute_gradients:
                 self.active_scores_dict = self._compute_active_score(self.samples.dict_of_matrix_c_eigen_decomposition)
                 self.samples.save_dict_of_approx_matrix_c(self.workingDir)
                 self.samples.save_dict_of_matrix_c_eigen_decomposition(self.workingDir)
@@ -884,14 +811,14 @@ class LarsimStatistics(Statistics):
 
     def calcStatisticsForSc(self, rawSamples, timesteps,
                            simulationNodes, order, regression, poly_normed, poly_rule, solverTimes,
-                           work_package_indexes, original_runtime_estimator, **kwargs):
+                           work_package_indexes, original_runtime_estimator=None,  *args, **kwargs):
 
-        self.samples = LarsimSamples(rawSamples, configurationObject=self.configurationObject)
+        self.samples = LarsimSamples(rawSamples, configurationObject=self.larsimConfObject)
         if self.save_samples:
             self.samples.save_samples_to_file(self.workingDir)
             self.samples.save_index_parameter_values(self.workingDir)
             self.samples.save_index_parameter_gof_values(self.workingDir)
-            if self.compute_gradients:
+            if self.larsimConfObject.compute_gradients:
                 self.active_scores_dict = self._compute_active_score(self.samples.dict_of_matrix_c_eigen_decomposition)
                 self.samples.save_dict_of_approx_matrix_c(self.workingDir)
                 self.samples.save_dict_of_matrix_c_eigen_decomposition(self.workingDir)
@@ -967,14 +894,14 @@ class LarsimStatistics(Statistics):
 
     def calcStatisticsForSaltelli(self, rawSamples, timesteps,
                             simulationNodes, numEvaluations, order, regression, poly_normed, poly_rule, solverTimes,
-                            work_package_indexes, original_runtime_estimator=None, **kwargs):
+                            work_package_indexes, original_runtime_estimator=None,  *args, **kwargs):
 
-        self.samples = LarsimSamples(rawSamples, configurationObject=self.configurationObject)
+        self.samples = LarsimSamples(rawSamples, configurationObject=self.larsimConfObject)
         if self.save_samples:
             self.samples.save_samples_to_file(self.workingDir)
             self.samples.save_index_parameter_values(self.workingDir)
             self.samples.save_index_parameter_gof_values(self.workingDir)
-            if self.compute_gradients:
+            if self.larsimConfObject.compute_gradients:
                 self.active_scores_dict = self._compute_active_score(self.samples.dict_of_matrix_c_eigen_decomposition)
                 self.samples.save_dict_of_approx_matrix_c(self.workingDir)
                 self.samples.save_dict_of_matrix_c_eigen_decomposition(self.workingDir)
@@ -1060,21 +987,25 @@ class LarsimStatistics(Statistics):
     # TODO timestepRange calculated based on whole Time-series
     def get_measured_discharge(self, timestepRange=None):
         transform_measured_to_daily = False
-        if strtobool(self.configurationObject["Output"]["dailyOutput"]) and self.qoi_column == "Value":
+        if self.larsimConfObject.dailyOutput and self.qoi_column == "Value":
             transform_measured_to_daily = True
 
         local_measurment_file = os.path.abspath(os.path.join(self.workingDir, "df_measured.pkl"))
         if os.path.exists(local_measurment_file):
-            self.df_measured = larsimDataPostProcessing.read_process_write_discharge(df=local_measurment_file,\
-                                     timeframe=timestepRange,\
-                                     station=self.station_of_Interest,\
-                                     dailyOutput=transform_measured_to_daily,\
-                                     compression="gzip")
+            self.df_measured = larsimDataPostProcessing.read_process_write_discharge(df=local_measurment_file,
+                                                                                     timeframe=timestepRange,
+                                                                                     station=self.station_of_Interest,
+                                                                                     dailyOutput=transform_measured_to_daily,
+                                                                                     compression="gzip")
         else:
-            self.df_measured = larsimConfigurationSettings.extract_measured_discharge(timestepRange[0], timestepRange[1], index_run=0)
-            self.df_measured = larsimDataPostProcessing.filterResultForStationAndTypeOfOutpu(self.df_measured,\
-                                                       station=self.station_of_Interest,\
-                                                       type_of_output=self.configurationObject["Output"]["type_of_output_measured"])
+            self.df_measured = larsimConfigurationSettings.extract_measured_discharge(
+                timestepRange[0], timestepRange[1], index_run=0
+            )
+            self.df_measured = larsimDataPostProcessing.filterResultForStationAndTypeOfOutpu(
+                self.df_measured,
+                station=self.station_of_Interest,
+                type_of_output=self.larsimConfObject.type_of_output_of_Interest_measured
+            )
             if transform_measured_to_daily:
                 # TODO resample_time_series_df was refactored
                 if "Value" in self.df_measured.columns:
@@ -1083,20 +1014,21 @@ class LarsimStatistics(Statistics):
                     transform_dict = dict()
                     for single_station in self.station_of_Interest:
                         transform_dict[single_station] = 'mean'
-                self.df_measured = larsimDataPostProcessing.resample_time_series_df(self.df_measured,
-                                                                                    transform_dict=transform_dict,
-                                                                                    groupby_some_columns=True,
-                                                                                    columns_to_groupby=["Stationskennung",],
-                                                                                    time_column="TimeStamp",
-                                                                                    resample_freq="D"
-                                                                                    )
+                self.df_measured = larsimDataPostProcessing.resample_time_series_df(
+                    self.df_measured,
+                    transform_dict=transform_dict,
+                    groupby_some_columns=True,
+                    columns_to_groupby=["Stationskennung", ],
+                    time_column="TimeStamp",
+                    resample_freq="D"
+                )
         self.groundTruth_computed = True
         #self.result_dict["Ground_Truth_Measurements"] = self.measured
 
     # TODO timestepRange calculated based on whole Time-series
     def get_unaltered_discharge(self, timestepRange=None):
         transform_unaltered_to_daily = False
-        if strtobool(self.configurationObject["Output"]["dailyOutput"]) and self.qoi_column == "Value":
+        if self.larsimConfObject.dailyOutput and self.qoi_column == "Value":
             transform_unaltered_to_daily = True
         df_unaltered_file = os.path.abspath(os.path.join(self.workingDir, "df_unaltered.pkl"))
         if paths.check_if_file_exists(df_unaltered_file,
@@ -1104,7 +1036,7 @@ class LarsimStatistics(Statistics):
             self.df_unaltered = larsimDataPostProcessing.read_process_write_discharge(
                 df=df_unaltered_file,
                 timeframe=timestepRange,
-                type_of_output=self.configurationObject["Output"]["type_of_output"],
+                type_of_output=self.larsimConfObject.type_of_output_of_Interest,
                 station=self.station_of_Interest,
                 dailyOutput=transform_unaltered_to_daily,
                 compression="gzip")
@@ -1299,7 +1231,7 @@ class LarsimStatistics(Statistics):
         raise NotImplementedError("Should have implemented this")
 
     def saveToFile(self, fileName="statistics_dict", fileNameIdent="", directory="./",
-                   fileNameIdentIsFullName=False):
+                   fileNameIdentIsFullName=False, **kwargs):
 
         fileName = "statistics_dictionary_qoi_" + self.qoi_column + ".pkl"
         statFileName = os.path.abspath(os.path.join(self.workingDir, fileName))
@@ -1545,5 +1477,5 @@ class LarsimStatistics(Statistics):
                 for j in range(v.shape[1]):
                     temp += w[j] * v[i, j] ** 2
                 scores_vect.append(temp)
-        dict_of_active_scores[key] = scores_vect
+            dict_of_active_scores[key] = scores_vect
         return dict_of_active_scores
