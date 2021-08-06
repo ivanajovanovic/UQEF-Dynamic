@@ -22,7 +22,7 @@
     "configure_tape10": "True",
     "copy_and_configure_whms": "True",
     "copy_and_configure_lila_input_files": "True",
-    "copy_and_configure_kala_input_files": "True",
+    "copy_and_configure_kala_input_files": "False",
     "get_measured_discharge": "True",
     "read_date_from_saved_data_dir": "True",
     "get_saved_simulations": "True",
