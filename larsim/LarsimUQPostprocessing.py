@@ -30,7 +30,7 @@ from LarsimUtilityFunctions import larsimPaths as paths
 
 from common import saltelliSobolIndicesHelpingFunctions
 
-from larsim import LarsimModel
+# from larsim import LarsimModel
 from larsim import LarsimStatistics
 ###################################################################################################################
 # Reading saved data
