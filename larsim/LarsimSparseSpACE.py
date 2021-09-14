@@ -20,16 +20,7 @@ from sparseSpACE.ErrorCalculator import *
 from sparseSpACE.GridOperation import *
 
 from LarsimUtilityFunctions import larsimPaths as larsimPaths
-from LarsimUtilityFunctions import larsimConfigurationSettings
 from LarsimUtilityFunctions import larsimDataPostProcessing
-from LarsimUtilityFunctions import larsimDataPreProcessing
-from LarsimUtilityFunctions import larsimDataPreparation
-from LarsimUtilityFunctions import larsimInputOutputUtilities
-from LarsimUtilityFunctions import larsimTimeUtility
-from LarsimUtilityFunctions import larsimPlottingUtility
-from LarsimUtilityFunctions import likelihoods
-from LarsimUtilityFunctions import objectivefunctions
-from LarsimUtilityFunctions import Utils as utils
 from LarsimUtilityFunctions import larsimModel
 
 import chaospy as cp
@@ -60,8 +51,10 @@ class LarsimFunction(Function):
         self.global_eval_counter = 0
 
     def output_length(self):
-        return 1
-
+        if self.qoi == "Q":
+            return len(self.larsimModelObject.larsimConfObject.t) - self.larsimModelObject.larsimConfObject.warm_up_duration
+        else:
+            return 1
     #     def getAnalyticSolutionIntegral(self, start, end): assert "not implemented"
 
     def eval(self, coordinates):
@@ -84,18 +77,31 @@ class LarsimFunction(Function):
             )
             return np.array(df['Value'])
         elif self.qoi == "GoF":
-            return np.array(larsim_res[0][0]['gof_df'][self.gof].values)
+            if self.gof == "calculateRMSE":  # TODO change this - hard-coded for now...
+                temp = larsim_res[0][0]['gof_df'][self.gof].values
+                temp = 1000 - temp
+                return np.array(temp)
+            else:
+                return np.array(larsim_res[0][0]['gof_df'][self.gof].values)
         else:
             raise Exception(f"Not implemented")
+
 
 local_debugging = True
 if local_debugging:
     sourceDir = pathlib.Path('/work/ga45met/mnt/linux_cluster_2/Larsim-UQ')
     inputModelDir = pathlib.Path(osp.abspath(osp.join(larsimPaths.data_dir, 'Larsim-data'))) #larsimPaths.larsim_data_path
     scratch_dir = pathlib.Path("/work/ga45met")
-    outputModelDir = outputResultDir = workingDir = scratch_dir / "larsim_runs" / 'larsim_run_new_setup_sg_3' #"Larsim_runs"
+    outputModelDir = outputResultDir = workingDir = scratch_dir / "larsim_runs" / 'larsim_sg_nse_2' #"Larsim_runs"
     config_file = pathlib.Path('/work/ga45met/mnt/linux_cluster_2/Larsim-UQ/configurations_Larsim/configurations_larsim_high_flow_small.json')
     # LARSIM_REGEN_DATA_FILES_PATH = pathlib.Path("/home/ga45met/Repositories/Larsim/Larsim-data/WHM Regen/data_files")
+    # TODO save config_file!!!
+
+    plot_file = str(outputModelDir / "output.png")
+    filename_contour_plot = str(outputModelDir / "output_contour_plot.png")
+    filename_refinement_graph = str(outputModelDir / "output_refinement_graph.png")
+    filename_combi_scheme_plot = str(outputModelDir / "output_combi_scheme.png")
+    filename_sparse_grid_plot = str(outputModelDir / "output_sg_graph.png")
 
     with open(config_file) as f:
         configuration_object = json.load(f)
@@ -140,13 +146,17 @@ if local_debugging:
     b = np.array([param["upper"] for param in params])
 
     #####################################
-    qoi = "Q"  # "Q" "GoF"
-    gof = "calculateNSE"  # "calculateRMSE", "None"
+    qoi = "GoF"  # "Q" "GoF"
+    gof = "calculateNSE"   # "calculateRMSE" "calculateNSE"  "None"
+    operation = "UncertaintyQuantification"  # "Interpolation"
     problem_function = LarsimFunction(config_file=config_file, qoi=qoi, gof=gof)
 
     op = UncertaintyQuantification(problem_function, distributions, a, b)
     # grid = GaussLegendreGrid(a, b, op)
-    grid = GlobalTrapezoidalGridWeighted(a, b, op, boundary=False)
+    grid = GlobalTrapezoidalGridWeighted(a, b, op, boundary=False)  # try with modified_basis=True
+    # try odther grids:
+    # GlobalBSplineGrid, GlobalHierarchizationGrid, ClenshawCurtisGridGlobal,
+    # GlobalLagrangeGrid, GlobalLagrangeGridWeighted
     # TODO - Add this from Jonas' branch
     # grid.integrator = IntegratorParallelArbitraryGridOptimized(grid)
     op.set_grid(grid)
@@ -159,32 +169,66 @@ if local_debugging:
     # combiinstance = StandardCombi(a, b, operation=op, norm=2)
     combiinstance = SpatiallyAdaptiveSingleDimensions2(
         a, b, operation=op, norm=2, grid_surplusses=grid)
+    combiinstance.filename_contour_plot = filename_contour_plot
+    combiinstance.filename_refinement_graph = filename_refinement_graph
+    combiinstance.filename_combi_scheme_plot = filename_combi_scheme_plot
+    combiinstance.filename_sparse_grid_plot = filename_sparse_grid_plot
 
     error_operator = ErrorCalculatorSingleDimVolumeGuided()
 
-    lmax = 2
+    lmax = 4  # 2, max_evaluations=50
     # combiinstance.perform_operation(1, lmax)
-    combiinstance.performSpatiallyAdaptiv(1, lmax,
-                                          error_operator, tol=0, max_evaluations=50, do_plot=True)
+    combiinstance.performSpatiallyAdaptiv(1, lmax, error_operator, tol=0, max_evaluations=50,
+                                          do_plot=True)
 
     # Create the PCE approximation; it is saved internally in the operation
-    op.calculate_PCE(None, combiinstance)
+    op.calculate_PCE(None, combiinstance)  # restrict_degrees
 
-    # Calculate the expectation, variance and sobol indices with the PCE coefficients
-    # (E,), (Var,) = op.calculate_expectation_and_variance(combiinstance)
-    # (E,), (Var,) = op.calculate_expectation_and_variance(combiinstance, use_combiinstance_solution=False)
-    (E,), (Var,) = op.get_expectation_and_variance_PCE()
-    print(f"E: {E}, PCE Var: {Var}")
+    fileName = f"gpce_{qoi}_{gof}.pkl"
+    gpceFileName = str(outputModelDir / fileName)
+    with open(gpceFileName, 'wb') as handle:
+        pickle.dump(op.gPCE, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+    fileName = f"pce_polys_{qoi}_{gof}.pkl"
+    pcePolysFileName = str(outputModelDir / fileName)
+    with open(pcePolysFileName, 'wb') as handle:
+        pickle.dump(op.pce_polys, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+    # Compare with chaospy
+    # polynomial_degree_max = 4
+    # num_quad_points = 10
+    # op._set_pce_polys(polynomial_degree_max)
+    # nodes, weights = cp.generate_quadrature(num_quad_points,
+    #                                         op.distributions_joint, rule="G")
+    # f_evals = [op.f(c) for c in zip(*nodes)]
+    # op.gPCE = cp.fit_quadrature(op.pce_polys, nodes, weights,
+    #                             np.asarray(f_evals), norms=op.pce_polys_norms)
+
+    # TODO - Save gPCE coeff. from chaospy to compare
+
+    # Calculate sobol indices with the PCE coefficients
     si_first = op.get_first_order_sobol_indices()
     si_total = op.get_total_order_sobol_indices()
 
     print("First order Sobol indices:", op.get_first_order_sobol_indices())
     print("Total order Sobol indices:", op.get_total_order_sobol_indices())
 
+    # Calculate the expectation, variance with the PCE coefficients
+    # (E,), (Var,) = op.calculate_expectation_and_variance(combiinstance)
+    # (E,), (Var,) = op.calculate_expectation_and_variance(combiinstance, use_combiinstance_solution=False)
+    (E,), (Var,) = op.get_expectation_and_variance_PCE()
+    print(f"E: {E}, PCE Var: {Var}")
+
+    # results_e_var = op.get_expectation_and_variance_PCE()
+    # print(f"results_e_var: {results_e_var}")
+
     temp = f"results_{qoi}_{gof}.txt"
-    save_file = workingDir / temp
+    save_file = outputModelDir / temp
     fp = open(save_file, "w")
     fp.write(f'E: {E},\n Var: {Var}, \n '
              f'First order Sobol indices: {si_first} \n; '
              f'Total order Sobol indices: {si_total} \n')
+    # fp.write(f'results_e_var: {results_e_var} \n '
+    #          f'First order Sobol indices: {si_first} \n; '
+    #          f'Total order Sobol indices: {si_total} \n')
     fp.close()

@@ -73,7 +73,7 @@
     "station_model_runs": "all",
     "post_processing_for_all_stations": "False",
     "dailyOutput": "False",
-    "run_and_save_simulations": "True",
+    "run_and_save_simulations": "False",
     "calculate_GoF": "True",
     "objective_function": [
       "RMSE",
@@ -107,9 +107,9 @@
       "type":"tape35",
       "distribution":"Uniform",
       "lower": 50,
-      "upper": 5000,
+      "upper": 4000,
       "lower_limit": 50,
-      "upper_limit": 5000,
+      "upper_limit": 4000,
       "depends_on":"EQI",
       "direction":"decreasing",
       "default": 450.0
@@ -120,10 +120,10 @@
       "distribution": "Uniform",
       "mu": 0.3,
       "sigma": 0.1,
-      "lower": 0.01,
-      "upper": 0.5,
-      "lower_limit": 0.01,
-      "upper_limit": 0.5,
+      "lower": 0.1,
+      "upper": 0.45,
+      "lower_limit": 0.1,
+      "upper_limit": 0.45,
       "default": 0.3
     }
   ],
