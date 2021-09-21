@@ -70,7 +70,7 @@
     "type_of_output": "Abfluss Messung + Vorhersage",
     "type_of_output_measured": "Ground Truth",
     "station_calibration_postproc": "MARI",
-    "station_model_runs": "all",
+    "station_for_model_runs": "all",
     "post_processing_for_all_stations": "False",
     "dailyOutput": "False",
     "run_and_save_simulations": "False",
