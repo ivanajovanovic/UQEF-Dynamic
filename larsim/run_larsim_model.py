@@ -6,9 +6,10 @@ import time
 
 import LarsimUtilityFunctions.larsimPaths as paths
 from LarsimUtilityFunctions import larsimTimeUtility
+from LarsimUtilityFunctions import larsimModel
 
-from larsim import LarsimModel
-from larsim import LarsimStatistics
+# from larsim import LarsimModel
+# from larsim import LarsimStatistics
 
 sys.path.insert(0, os.getcwd())
 
@@ -21,6 +22,8 @@ def main():
     sourceDir = paths.sourceDir
     outputModelDir = outputResultDir
 
+    start = time.time()
+
     with open(config_file) as f:
         configurationObject = json.load(f)
     print(f"configurationObject: {configurationObject}")
@@ -29,19 +32,38 @@ def main():
     except KeyError as e:
         print(e)
 
+    larsimConfigurationsObject = larsimModel.LarsimConfigurations(
+        configurationObject=configurationObject,
+        configure_tape10=True,
+        copy_and_configure_whms=True,
+        copy_and_configure_lila_input_files=True,
+        make_local_copy_of_master_dir=True,
+        get_measured_discharge=True,
+        read_date_from_saved_data_dir=True,
+        get_saved_simulations=True,
+        run_unaltered_sim=False,
+        raise_exception_on_model_break=True,
+        max_retries=10
+    )
+
+    larsimModelObject = larsimModel.LarsimModel(
+        configurationObject=larsimConfigurationsObject,
+        inputModelDir=inputModelDir,
+        workingDir=outputResultDir,
+        disable_statistics=True
+    )
+
     start_setup = time.time()
-    larsimModelSetUpObject = LarsimModel.LarsimModelSetUp(configurationObject=config_file, inputModelDir=None,
-                                                          workingDir=outputModelDir, get_measured_discharge=True,
-                                                          get_Larsim_saved_simulations=True, run_unaltered_sim=False)
+    larsimModelObject.prepare(infoModel=True)
     end_setup = time.time()
     runtime_setup = end_setup - start_setup
     print(f"Larsim SetUp runtime: {runtime_setup}!")
 
-    start = time.time()
-    larsimModel = LarsimModel.LarsimModel(configurationObject=config_file, inputModelDir=None,
-                                          workingDir=outputResultDir, max_retries=10)
-
-    results_array = larsimModel.run()
+    results_array = larsimModelObject.run(
+        raise_exception_on_model_break=True,
+        createNewFolder=False,
+        deleteFolderAfterwards=False
+    )
     print(f"Type of results_array:{results_array}")
     print(f"results_array: {results_array}")
 

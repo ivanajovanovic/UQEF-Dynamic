@@ -11,6 +11,7 @@ import numpy as np
 import os
 import pandas as pd
 from pandas.plotting import register_matplotlib_converters
+import pathlib
 import pickle
 from plotly.offline import iplot, plot
 import plotly.graph_objs as go
@@ -276,25 +277,24 @@ class LarsimSamples(object):
 ########################################################################################################################
 
 
-def _my_parallel_calc_stats_for_MC(keyIter_chunk, discharge_values_chunk, numEvaluations,
-                                   store_qoi_data_in_stat_dict=False):
+def _my_parallel_calc_stats_for_MC(keyIter_chunk, qoi_values_chunk, numEvaluations, store_qoi_data_in_stat_dict=False):
     results = []
     for ip in range(0, len(keyIter_chunk)):  # for each peace of work
         key = keyIter_chunk[ip]
-        discharge_values = discharge_values_chunk[ip]
+        qoi_values = qoi_values_chunk[ip]
         local_result_dict = dict()
         if store_qoi_data_in_stat_dict:
-            local_result_dict["Q"] = discharge_values
+            local_result_dict["QoI"] = qoi_values
 
-        # local_result_dict["E"] = np.sum(discharge_values, axis=0, dtype=np.float64) / numEvaluations
-        local_result_dict["E"] = np.mean(discharge_values, 0)
-        local_result_dict["Var"] = np.sum((discharge_values - local_result_dict["E"]) ** 2, axis=0,
+        # local_result_dict["E"] = np.sum(qoi_values, axis=0, dtype=np.float64) / numEvaluations
+        local_result_dict["E"] = np.mean(qoi_values, 0)
+        local_result_dict["Var"] = np.sum((qoi_values - local_result_dict["E"]) ** 2, axis=0,
                                           dtype=np.float64) / (numEvaluations - 1)
         # local_result_dict["StdDev"] = np.sqrt(local_result_dict["Var"], dtype=np.float64)
-        local_result_dict["StdDev"] = np.std(discharge_values, 0, ddof=1)
+        local_result_dict["StdDev"] = np.std(qoi_values, 0, ddof=1)
 
-        local_result_dict["P10"] = np.percentile(discharge_values, 10, axis=0)
-        local_result_dict["P90"] = np.percentile(discharge_values, 90, axis=0)
+        local_result_dict["P10"] = np.percentile(qoi_values, 10, axis=0)
+        local_result_dict["P90"] = np.percentile(qoi_values, 90, axis=0)
         if isinstance(local_result_dict["P10"], list) and len(local_result_dict["P10"]) == 1:
             local_result_dict["P10"] = local_result_dict["P10"][0]
             local_result_dict["P90"] = local_result_dict["P90"][0]
@@ -303,28 +303,25 @@ def _my_parallel_calc_stats_for_MC(keyIter_chunk, discharge_values_chunk, numEva
     return results
 
 
-def _my_parallel_calc_stats_for_SC(keyIter_chunk, discharge_values_chunk,
-                                   dist, polynomial_expansion, nodes,
-                                   compute_Sobol_t=False, compute_Sobol_m=False,
-                                   store_qoi_data_in_stat_dict=False):
+def _my_parallel_calc_stats_for_SC(keyIter_chunk, qoi_values_chunk, dist, polynomial_expansion, nodes,
+                                   compute_Sobol_t=False, compute_Sobol_m=False, store_qoi_data_in_stat_dict=False):
     pass
 
 
-def _my_parallel_calc_stats_for_gPCE(keyIter_chunk, discharge_values_chunk,
-                                     dist, polynomial_expansion, nodes, weights=None,
+def _my_parallel_calc_stats_for_gPCE(keyIter_chunk, qoi_values_chunk, dist, polynomial_expansion, nodes, weights=None,
                                      regression=False, compute_Sobol_t=False, compute_Sobol_m=False,
                                      store_qoi_data_in_stat_dict=False):
     results = []
     for ip in range(0, len(keyIter_chunk)):  # for each peace of work
         key = keyIter_chunk[ip]
-        discharge_values = discharge_values_chunk[ip]
+        qoi_values = qoi_values_chunk[ip]
         local_result_dict = dict()
         if store_qoi_data_in_stat_dict:
-            local_result_dict["Q"] = discharge_values
+            local_result_dict["QoI"] = qoi_values
         if regression:
-            qoi_gPCE = cp.fit_regression(polynomial_expansion, nodes, discharge_values)
+            qoi_gPCE = cp.fit_regression(polynomial_expansion, nodes, qoi_values)
         else:
-            qoi_gPCE = cp.fit_quadrature(polynomial_expansion, nodes, weights, discharge_values)
+            qoi_gPCE = cp.fit_quadrature(polynomial_expansion, nodes, weights, qoi_values)
 
         numPercSamples = 10 ** 5
         local_result_dict["gPCE"] = qoi_gPCE
@@ -349,38 +346,37 @@ def _my_parallel_calc_stats_for_gPCE(keyIter_chunk, discharge_values_chunk,
     return results
 
 
-def _my_parallel_calc_stats_for_mc_saltelli(keyIter_chunk, discharge_values_chunk, numEvaluations, dim,
-                                             compute_Sobol_t=False, compute_Sobol_m=False,
-                                             store_qoi_data_in_stat_dict=False):
+def _my_parallel_calc_stats_for_mc_saltelli(keyIter_chunk, qoi_values_chunk, numEvaluations, dim, compute_Sobol_t=False,
+                                            compute_Sobol_m=False, store_qoi_data_in_stat_dict=False):
     results = []
     for ip in range(0, len(keyIter_chunk)):  # for each peace of work
         key = keyIter_chunk[ip]
-        discharge_values = discharge_values_chunk[ip]
+        qoi_values = qoi_values_chunk[ip]
         local_result_dict = dict()
 
-        discharge_values_saltelli = discharge_values[:, np.newaxis]
-        standard_discharge_values = discharge_values_saltelli[:numEvaluations, :]
-        extended_standard_discharge_values = discharge_values_saltelli[:(2 * numEvaluations), :]
+        qoi_values_saltelli = qoi_values[:, np.newaxis]
+        standard_qoi_values = qoi_values_saltelli[:numEvaluations, :]
+        extended_standard_qoi_values = qoi_values_saltelli[:(2 * numEvaluations), :]
 
         if store_qoi_data_in_stat_dict:
-            local_result_dict["Q"] = standard_discharge_values
+            local_result_dict["QoI"] = standard_qoi_values
 
-        local_result_dict["E"] = np.mean(discharge_values[:(2 * numEvaluations)], 0)
-        local_result_dict["Var"] = np.sum((extended_standard_discharge_values - local_result_dict["E"]) ** 2,
+        local_result_dict["E"] = np.mean(qoi_values[:(2 * numEvaluations)], 0)
+        local_result_dict["Var"] = np.sum((extended_standard_qoi_values - local_result_dict["E"]) ** 2,
                                           axis=0, dtype=np.float64) / (2 * numEvaluations - 1)
-        local_result_dict["StdDev"] = np.std(discharge_values[:(2 * numEvaluations)], 0, ddof=1)
-        local_result_dict["P10"] = np.percentile(discharge_values[:(2 * numEvaluations)], 10, axis=0)
-        local_result_dict["P90"] = np.percentile(discharge_values[:(2 * numEvaluations)], 90, axis=0)
+        local_result_dict["StdDev"] = np.std(qoi_values[:(2 * numEvaluations)], 0, ddof=1)
+        local_result_dict["P10"] = np.percentile(qoi_values[:(2 * numEvaluations)], 10, axis=0)
+        local_result_dict["P90"] = np.percentile(qoi_values[:(2 * numEvaluations)], 90, axis=0)
         if isinstance(local_result_dict["P10"], list) and len(local_result_dict["P10"]) == 1:
             local_result_dict["P10"] = local_result_dict["P10"][0]
             local_result_dict["P90"] = local_result_dict["P90"][0]
 
         if compute_Sobol_t:
             local_result_dict["Sobol_t"] = saltelliSobolIndicesHelpingFunctions._Sens_t_sample_4(
-                discharge_values_saltelli, dim, numEvaluations)
+                qoi_values_saltelli, dim, numEvaluations)
         if compute_Sobol_m:
             local_result_dict["Sobol_m"] = saltelliSobolIndicesHelpingFunctions._Sens_m_sample_4(
-                discharge_values_saltelli, dim, numEvaluations)
+                qoi_values_saltelli, dim, numEvaluations)
 
         results.append((key, local_result_dict))
     return results
@@ -785,24 +781,24 @@ class LarsimStatistics(Statistics):
             polynomial_expansion = cp.generate_expansion(order, dist, rule=poly_rule, normed=poly_normed)
 
         for key, val_indices in groups.items():
-            discharge_values = self.samples.df_simulation_result.loc[val_indices.values][self.qoi_column].values #numpy array nx1
-            #discharge_values = self.samples.df_simulation_result.Value.loc[val_indices].values
+            qoi_values = self.samples.df_simulation_result.loc[val_indices.values][self.qoi_column].values #numpy array nx1
+            #qoi_values = self.samples.df_simulation_result.Value.loc[val_indices].values
             self.result_dict[key] = dict()
             if self.store_qoi_data_in_stat_dict:
-                self.result_dict[key]["Q"] = discharge_values
+                self.result_dict[key]["QoI"] = qoi_values
             if regression:
-                self.qoi_gPCE = cp.fit_regression(polynomial_expansion, nodes, discharge_values)
+                self.qoi_gPCE = cp.fit_regression(polynomial_expansion, nodes, qoi_values)
                 self._calc_stats_for_gPCE(dist, key)
             else:
-                # self.result_dict[key]["E"] = np.sum(discharge_values, axis=0, dtype=np.float64)/ numEvaluations
-                self.result_dict[key]["E"] = np.mean(discharge_values, 0)
-                #self.result_dict[key]["Var"] = float(np.sum(power(discharge_values)) / numEvaluations - self.result_dict[key]["E"]**2)
-                self.result_dict[key]["Var"] = np.sum((discharge_values - self.result_dict[key]["E"]) ** 2,
+                # self.result_dict[key]["E"] = np.sum(qoi_values, axis=0, dtype=np.float64)/ numEvaluations
+                self.result_dict[key]["E"] = np.mean(qoi_values, 0)
+                #self.result_dict[key]["Var"] = float(np.sum(power(qoi_values)) / numEvaluations - self.result_dict[key]["E"]**2)
+                self.result_dict[key]["Var"] = np.sum((qoi_values - self.result_dict[key]["E"]) ** 2,
                                                       axis=0, dtype=np.float64) / (numEvaluations - 1)
                 # self.result_dict[key]["StdDev"] = np.sqrt(self.result_dict[key]["Var"], dtype=np.float64)
-                self.result_dict[key]["StdDev"] = np.std(discharge_values, 0, ddof=1)
-                self.result_dict[key]["P10"] = np.percentile(discharge_values, 10, axis=0)
-                self.result_dict[key]["P90"] = np.percentile(discharge_values, 90, axis=0)
+                self.result_dict[key]["StdDev"] = np.std(qoi_values, 0, ddof=1)
+                self.result_dict[key]["P10"] = np.percentile(qoi_values, 10, axis=0)
+                self.result_dict[key]["P90"] = np.percentile(qoi_values, 90, axis=0)
                 if isinstance(self.result_dict[key]["P10"], list) and len(self.result_dict[key]["P10"]) == 1:
                     self.result_dict[key]["P10"] = self.result_dict[key]["P10"][0]
                     self.result_dict[key]["P90"] = self.result_dict[key]["P90"][0]
@@ -849,14 +845,14 @@ class LarsimStatistics(Statistics):
         groups = grouped.groups
 
         for key, val_indices in groups.items():
-            discharge_values = self.samples.df_simulation_result.loc[val_indices.values][self.qoi_column].values
+            qoi_values = self.samples.df_simulation_result.loc[val_indices.values][self.qoi_column].values
             self.result_dict[key] = dict()
             if self.store_qoi_data_in_stat_dict:
-                self.result_dict[key]["Q"] = discharge_values
+                self.result_dict[key]["QoI"] = qoi_values
             if regression:
-                self.qoi_gPCE = cp.fit_regression(polynomial_expansion, nodes, discharge_values)
+                self.qoi_gPCE = cp.fit_regression(polynomial_expansion, nodes, qoi_values)
             else:
-                self.qoi_gPCE = cp.fit_quadrature(polynomial_expansion, nodes, weights, discharge_values)
+                self.qoi_gPCE = cp.fit_quadrature(polynomial_expansion, nodes, weights, qoi_values)
             self._calc_stats_for_gPCE(dist, key)
 
         print(f"[LARSIM STAT INFO] calcStatisticsForSc function is done!")
@@ -934,42 +930,42 @@ class LarsimStatistics(Statistics):
             self.result_dict[key] = dict()
 
             # numpy array - for sartelli it should be n(2+d)x1
-            discharge_values = self.samples.df_simulation_result.loc[val_indices.values][self.qoi_column].values
-            # extended_standard_discharge_values = discharge_values[:(2*numEvaluations)]
-            discharge_values_saltelli = discharge_values[:, np.newaxis]
+            qoi_values = self.samples.df_simulation_result.loc[val_indices.values][self.qoi_column].values
+            # extended_standard_qoi_values = qoi_values[:(2*numEvaluations)]
+            qoi_values_saltelli = qoi_values[:, np.newaxis]
             # values based on which we calculate standard statistics
-            standard_discharge_values = discharge_values_saltelli[:numEvaluations, :]
-            extended_standard_discharge_values = discharge_values_saltelli[:(2*numEvaluations), :]
+            standard_qoi_values = qoi_values_saltelli[:numEvaluations, :]
+            extended_standard_qoi_values = qoi_values_saltelli[:(2*numEvaluations), :]
             if self.store_qoi_data_in_stat_dict:
-                self.result_dict[key]["Q"] = standard_discharge_values
+                self.result_dict[key]["QoI"] = standard_qoi_values
 
-            #self.result_dict[key]["min_q"] = np.amin(discharge_values) #standard_discharge_values.min()
-            #self.result_dict[key]["max_q"] = np.amax(discharge_values) #standard_discharge_values.max()
+            #self.result_dict[key]["min_q"] = np.amin(qoi_values) #standard_qoi_values.min()
+            #self.result_dict[key]["max_q"] = np.amax(qoi_values) #standard_qoi_values.max()
 
-            #self.result_dict[key]["E"] = np.sum(extended_standard_discharge_values, axis=0, dtype=np.float64) / (2*numEvaluations)
-            self.result_dict[key]["E"] = np.mean(discharge_values[:(2 * numEvaluations)], 0)
-            #self.result_dict[key]["Var"] = float(np.sum(power(standard_discharge_values)) / numEvaluations - self.result_dict[key]["E"] ** 2)
-            self.result_dict[key]["Var"] = np.sum((extended_standard_discharge_values - self.result_dict[key]["E"]) ** 2,
+            #self.result_dict[key]["E"] = np.sum(extended_standard_qoi_values, axis=0, dtype=np.float64) / (2*numEvaluations)
+            self.result_dict[key]["E"] = np.mean(qoi_values[:(2 * numEvaluations)], 0)
+            #self.result_dict[key]["Var"] = float(np.sum(power(standard_qoi_values)) / numEvaluations - self.result_dict[key]["E"] ** 2)
+            self.result_dict[key]["Var"] = np.sum((extended_standard_qoi_values - self.result_dict[key]["E"]) ** 2,
                                                   axis=0, dtype=np.float64) / (2*numEvaluations - 1)
             #self.result_dict[key]["StdDev"] = np.sqrt(self.result_dict[key]["Var"], dtype=np.float64)
-            self.result_dict[key]["StdDev"] = np.std(discharge_values[:(2 * numEvaluations)], 0, ddof=1)
+            self.result_dict[key]["StdDev"] = np.std(qoi_values[:(2 * numEvaluations)], 0, ddof=1)
 
-            #self.result_dict[key]["P10"] = np.percentile(discharge_values[:numEvaluations], 10, axis=0)
-            #self.result_dict[key]["P90"] = np.percentile(discharge_values[:numEvaluations], 90, axis=0)
-            self.result_dict[key]["P10"] = np.percentile(discharge_values[:(2 * numEvaluations)], 10, axis=0)
-            self.result_dict[key]["P90"] = np.percentile(discharge_values[:(2 * numEvaluations)], 90, axis=0)
+            #self.result_dict[key]["P10"] = np.percentile(qoi_values[:numEvaluations], 10, axis=0)
+            #self.result_dict[key]["P90"] = np.percentile(qoi_values[:numEvaluations], 90, axis=0)
+            self.result_dict[key]["P10"] = np.percentile(qoi_values[:(2 * numEvaluations)], 10, axis=0)
+            self.result_dict[key]["P90"] = np.percentile(qoi_values[:(2 * numEvaluations)], 90, axis=0)
             if isinstance(self.result_dict[key]["P10"], list) and len(self.result_dict[key]["P10"]) == 1:
                 self.result_dict[key]["P10"] = self.result_dict[key]["P10"][0]
                 self.result_dict[key]["P90"] = self.result_dict[key]["P90"][0]
 
             if self._compute_Sobol_t:
                 self.result_dict[key]["Sobol_t"] = saltelliSobolIndicesHelpingFunctions._Sens_t_sample_4(
-                    discharge_values_saltelli, self.dim, numEvaluations)
+                    qoi_values_saltelli, self.dim, numEvaluations)
             if self._compute_Sobol_m:
                 self.result_dict[key]["Sobol_m"] = saltelliSobolIndicesHelpingFunctions._Sens_m_sample_4(
-                    discharge_values_saltelli, self.dim, numEvaluations)
+                    qoi_values_saltelli, self.dim, numEvaluations)
                 # self.result_dict[key]["Sobol_m"] = saltelliSobolIndicesHelpingFunctions._Sens_m_sample_3
-                # (discharge_values_saltelli, self.dim, numEvaluations)
+                # (qoi_values_saltelli, self.dim, numEvaluations)
 
         print(f"[LARSIM STAT INFO] calcStatisticsForSaltelli function is done!")
 
@@ -985,7 +981,7 @@ class LarsimStatistics(Statistics):
         self._is_Sobol_m2_computed = "Sobol_m2" in self.result_dict[keyIter[0]]
 
     # TODO timestepRange calculated based on whole Time-series
-    def get_measured_discharge(self, timestepRange=None):
+    def get_measured_data(self, timestepRange=None):
         transform_measured_to_daily = False
         if self.larsimConfObject.dailyOutput and self.qoi_column == "Value":
             transform_measured_to_daily = True
@@ -1026,7 +1022,7 @@ class LarsimStatistics(Statistics):
         #self.result_dict["Ground_Truth_Measurements"] = self.measured
 
     # TODO timestepRange calculated based on whole Time-series
-    def get_unaltered_discharge(self, timestepRange=None):
+    def get_unaltered_run_data(self, timestepRange=None):
         transform_unaltered_to_daily = False
         if self.larsimConfObject.dailyOutput and self.qoi_column == "Value":
             transform_unaltered_to_daily = True
@@ -1057,16 +1053,16 @@ class LarsimStatistics(Statistics):
             if "plot_unalteres_timeseries" in kwargs else True
         if self.timesteps_min is None or self.timesteps_max is None:
             if plot_measured_timeseries:
-                self.get_measured_discharge()
+                self.get_measured_data()
             if plot_unalteres_timeseries:
-                self.get_unaltered_discharge()
+                self.get_unaltered_run_data()
         else:
             # timestepRange = (pd.Timestamp(min(self.timesteps)), pd.Timestamp(max(self.timesteps)))
             timestepRange = (pd.Timestamp(self.timesteps_min), pd.Timestamp(self.timesteps_max))
             if plot_measured_timeseries:
-                self.get_measured_discharge(timestepRange=timestepRange)
+                self.get_measured_data(timestepRange=timestepRange)
             if plot_unalteres_timeseries:
-                self.get_unaltered_discharge(timestepRange=timestepRange)
+                self.get_unaltered_run_data(timestepRange=timestepRange)
 
         print(f"[LARSIM STAT INFO] plotResults function is called!")
 
@@ -1283,7 +1279,7 @@ class LarsimStatistics(Statistics):
     # It makes sense that the function below are executed for one input station
     ###################################################################################################################
 
-    def create_df_from_statistics_data_singe_station(self, station=None, uq_method="sc"):
+    def create_df_from_statistics_data_single_station(self, station=None, uq_method="sc"):
         station = self._check_station_argument(station)
         keyIter = list(itertools.product([station, ], self.pdTimesteps))
         mean_time_series = [self.result_dict[key]["E"] for key in keyIter]
@@ -1347,7 +1343,7 @@ class LarsimStatistics(Statistics):
 
     def compute_gof_over_different_time_series(self, objective_function, station=None):
         station = self._check_station_argument(station)
-        df_statistics_station = self.create_df_from_statistics_data_singe_station(station)
+        df_statistics_station = self.create_df_from_statistics_data_single_station(station)
         if df_statistics_station is None:
             return
         if not callable(
@@ -1446,7 +1442,7 @@ class LarsimStatistics(Statistics):
         if si_df is None:
             si_df = self.create_df_from_sensitivity_indices_for_singe_station(station, si_type, uq_method)
         if df_statistics_station is None:
-            df_statistics_station = self.create_df_from_statistics_data_singe_station(station, uq_method)
+            df_statistics_station = self.create_df_from_statistics_data_single_station(station, uq_method)
         fig = px.line(si_df, x=si_df.index, y=si_columns)
         fig.add_trace(go.Scatter(x=df_statistics_station['TimeStamp'],
                                  y=df_statistics_station[measured_norm_columns_name],
