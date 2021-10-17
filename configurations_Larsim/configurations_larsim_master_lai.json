@@ -1,5 +1,5 @@
 {
-  "Timeframe":
+  "time_settings":
     {
       "start_day": 1,
       "start_month": 5,
@@ -17,24 +17,98 @@
       "cut_runs": "False",
       "warm_up_duration": 53
     },
-  "Output":
-    {
-      "type_of_output":"Abfluss Messung",
-      "type_of_output_measured":"Ground Truth",
-      "station_calibration_postproc":"MARI",
-      "station_model_runs": "all",
-      "pathsDataFormat":"False",
-      "dailyOutput": "False",
-      "calculate_GoF": "True",
-      "objective_function":"all",
-      "run_and_save_simulations":"True",
-      "compute_gradients": "False"
-    },
+  "model_settings":
+  {
+    "make_local_copy_of_master_dir": "True",
+    "configure_tape10": "True",
+    "copy_and_configure_whms": "True",
+    "copy_and_configure_lila_input_files": "True",
+    "copy_and_configure_kala_input_files": "False",
+    "get_measured_discharge": "True",
+    "read_date_from_saved_data_dir": "True",
+    "get_saved_simulations": "True",
+    "run_unaltered_sim": "True",
+    "raise_exception_on_model_break": "True",
+    "max_retries": 10
+  },
+  "model_settings":
+  {
+    "make_local_copy_of_master_dir": "True",
+    "configure_tape10": "True",
+    "copy_and_configure_whms": "True",
+    "copy_and_configure_lila_input_files": "True",
+    "copy_and_configure_kala_input_files": "False",
+    "get_measured_discharge": "True",
+    "read_date_from_saved_data_dir": "True",
+    "get_saved_simulations": "True",
+    "run_unaltered_sim": "True",
+    "raise_exception_on_model_break": "True",
+    "max_retries": 10
+  },
+  "model_paths":
+  {
+    "larsim_exe": "./Larsim-exe/larsim-linux-intel-1000.exe",
+    "larsim_model_dir": "WHM Regen",
+    "list_input_lila_files":
+    [
+      "station-wq.lila",
+      "station-n.lila",
+      "station-tlu.lila",
+      "station-xglob.lila",
+      "station-xludr.lila",
+      "station-zsos.lila",
+      "station-rflu.lila",
+      "station-ttau.lila",
+      "station-xwind.lila"
+    ],
+    "whms_dir": "var/WHM Regen WHMS",
+    "global_master_dir": "master_configuration",
+    "master_tape_10_path": "tape10_master",
+    "master_tape_35_path": "tape35",
+    "master_lanu_path": "lanu.par",
+    "list_input_master_lila_files":
+    [
+      "q_2003-11-01_2018-01-01.lila",
+      "n_2003-11-01_2018-01-01.lila",
+      "tlu_2003-11-01_2018-01-01.lila",
+      "xglob_2003-11-01_2018-01-01.lila",
+      "xludr_2003-11-01_2018-01-01.lila",
+      "zsos_2003-11-01_2018-01-01.lila",
+      "rflu_2003-11-01_2018-01-01.lila",
+      "ttau_2003-11-01_2018-01-01.lila",
+      "xwind_2003-11-01_2018-01-01.lila"
+    ],
+    "saved_data_dir": "data_files",
+    "ground_truth_file": "q_2003-11-01_2018-01-01_time_and_values_filtered.pkl"
+  },
+  "output_settings":
+  {
+    "type_of_output":"Abfluss Messung + Vorhersage",
+    "type_of_output_measured":"Ground Truth",
+    "station_calibration_postproc":"MARI",
+    "station_for_model_runs":"all",
+    "post_processing_for_all_stations":"False",
+    "dailyOutput":"False",
+    "run_and_save_simulations":"True",
+    "calculate_GoF":"True",
+    "objective_function":"all"
+  },
+  "model_run_settings":
+  {
+    "QOI":"GoF",
+    "objective_function_qoi":"NSE",
+    "mode":"sliding_window",
+    "interval": 72,
+    "min_periods": 24,
+    "method": "avrg",
+    "compute_gradients":"False",
+    "gradients_method":"Forward Difference"
+  },
   "parameters_settings":
     {
       "addSampledValue":"False",
       "TGB_standard":3085,
-      "TGB":3085,
+      "TGB":"None",
       "roundParameters":"False",
       "roundDecimal":2,
       "cut_limits":"False"

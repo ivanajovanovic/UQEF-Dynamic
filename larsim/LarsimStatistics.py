@@ -128,7 +128,7 @@ class LarsimSamples(object):
                 if "gradient_matrix_dict" in value and self.larsimConfObject.compute_gradients:
                     gradient_matrix_dict = value["gradient_matrix_dict"]
                     if gradient_matrix_dict is not None:
-                        # TODO Extract only entry for station and oneor multiple gofs
+                        # TODO Extract only entry for station and one or multiple gofs
                         list_of_gradient_matrix_dict.append(gradient_matrix_dict)
             else:
                 df_result = value
@@ -285,6 +285,8 @@ def _my_parallel_calc_stats_for_MC(keyIter_chunk, qoi_values_chunk, numEvaluatio
         local_result_dict = dict()
         if store_qoi_data_in_stat_dict:
             local_result_dict["QoI"] = qoi_values
+
+        numEvaluations = len(qoi_values)
 
         # local_result_dict["E"] = np.sum(qoi_values, axis=0, dtype=np.float64) / numEvaluations
         local_result_dict["E"] = np.mean(qoi_values, 0)
@@ -531,6 +533,7 @@ class LarsimStatistics(Statistics):
         self.timesteps_max = self.samples.get_timesteps_max()
         self.pdTimesteps = [pd.Timestamp(timestep) for timestep in self.timesteps]
         self.number_of_unique_index_runs = self.samples.get_number_of_runs()
+        self.numEvaluations = self.number_of_unique_index_runs
 
         self.numbTimesteps = len(self.timesteps)
 
@@ -630,6 +633,9 @@ class LarsimStatistics(Statistics):
                 for chunk_result in chunk_results:
                     for result in chunk_result:
                         self.result_dict[result[0]] = result[1]
+
+    def calcStatisticsForEnsembleParallel(self, chunksize=1, regression=False, *args, **kwargs):
+        self.calcStatisticsForMcParallel(chunksize=chunksize, regression=False, *args, **kwargs)
 
     def calcStatisticsForScParallel(self, chunksize=1, regression=False, *args, **kwargs):
         if self.rank == 0:
@@ -804,6 +810,15 @@ class LarsimStatistics(Statistics):
                     self.result_dict[key]["P90"] = self.result_dict[key]["P90"][0]
 
         print(f"[LARSIM STAT INFO] calcStatisticsForMc function is done!")
+
+    def calcStatisticsForEnsemble(self, rawSamples, timesteps, simulationNodes, numEvaluations, solverTimes,
+                                  work_package_indexes, original_runtime_estimator=None, *args, **kwargs):
+        self.calcStatisticsForMc(
+            rawSamples=rawSamples, timesteps=timesteps, simulationNodes=simulationNodes, numEvaluations=numEvaluations,
+            order=None, regression=False, poly_normed=None, poly_rule=None, solverTimes=solverTimes,
+            work_package_indexes=work_package_indexes, original_runtime_estimator=original_runtime_estimator,
+            *args, **kwargs
+        )
 
     def calcStatisticsForSc(self, rawSamples, timesteps,
                            simulationNodes, order, regression, poly_normed, poly_rule, solverTimes,

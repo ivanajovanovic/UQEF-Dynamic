@@ -99,6 +99,57 @@
     },
   "parameters": [
     {
+      "name": "EQD",
+      "type": "tape35",
+      "distribution": "None",
+      "lower": 50,
+      "upper": 1000,
+      "lower_limit": 500,
+      "upper_limit": 1000,
+      "depends_on":"EQI",
+      "direction":"decreasing",
+      "default": 450.0,
+      "values_list": [50, 450.0, 1000]
+    },
+    {
+      "name": "Dmax",
+      "type": "tape35",
+      "distribution": "None",
+      "lower": 0.06,
+      "upper": 10,
+      "lower_limit": 0.06,
+      "upper_limit": 10,
+      "default": 1.0,
+      "values_list": [0.06, 1.0, 10]
+    }
+  ],
+  "unused_parameters" : [
+    {
+      "name": "EQD2",
+      "type": "tape35",
+      "distribution": "None",
+      "lower": 10,
+      "upper": 1000,
+      "lower_limit": 10,
+      "upper_limit": 1000,
+      "depends_on":"EQD",
+      "direction":"decreasing",
+      "default": 250.0,
+      "values_list": [10, 250.0, 1000]
+    },
+    {
+      "name": "beta",
+      "type": "tape35",
+      "distribution": "None",
+      "lower": 0.000002,
+      "upper": 0.1,
+      "lower_limit": 0.000002,
+      "upper_limit": 0.1,
+      "transformation":"log",
+      "default": 0.012,
+      "values_list": [0.000002, 0.012, 0.1]
+    },
+    {
       "name": "EQB",
       "type": "tape35",
       "distribution": "None",
@@ -106,7 +157,8 @@
       "upper": 50000,
       "lower_limit": 10000,
       "upper_limit": 50000,
-      "default": 40000.0
+      "default": 40000.0,
+      "values_list": [10000, 40000.0, 50000]
     },
     {
       "name": "EQI",
@@ -118,31 +170,19 @@
       "upper_limit": 10000,
       "depends_on":"EQB",
       "direction":"decreasing",
-      "default": 1000.0
+      "default": 1000.0,
+      "values_list": [1000, 1000.0, 10000]
     },
     {
-      "name": "EQD",
+      "name": "KG",
       "type": "tape35",
-      "distribution": "None",
-      "lower": 500,
-      "upper": 1000,
-      "lower_limit": 500,
-      "upper_limit": 1000,
-      "depends_on":"EQI",
-      "direction":"decreasing",
-      "default": 450.0
-    },
-    {
-      "name": "EQD2",
-      "type": "tape35",
-      "distribution": "None",
-      "lower": 10,
-      "upper": 500,
-      "lower_limit": 10,
-      "upper_limit": 500,
-      "depends_on":"EQD",
-      "direction":"decreasing",
-      "default": 250.0
+      "distribution": "Uniform",
+      "lower": 0.5,
+      "upper": 1.2,
+      "lower_limit": 0.5,
+      "upper_limit": 1.2,
+      "default": 0.93,
+      "values_list": [0.5, 0.93, 1.2]
     },
     {
       "name": "A2",
@@ -154,7 +194,8 @@
       "upper": 4.0,
       "lower_limit": 0.5,
       "upper_limit": 4.0,
-      "default": 1.5
+      "default": 1.5,
+      "values_list": [0.5, 1.5, 4.0]
     },
     {
       "name": "BSF",
@@ -166,40 +207,8 @@
       "upper": 0.5,
       "lower_limit": 0.01,
       "upper_limit": 0.5,
-      "default": 0.3
-    },
-    {
-      "name": "beta",
-      "type": "tape35",
-      "distribution": "None",
-      "lower": 0.000002,
-      "upper": 0.1,
-      "lower_limit": 0.000002,
-      "upper_limit": 0.1,
-      "transformation":"log",
-      "default": 0.012
-    },
-    {
-      "name": "Dmax",
-      "type": "tape35",
-      "distribution": "None",
-      "lower": 0.06,
-      "upper": 10,
-      "lower_limit": 0.06,
-      "upper_limit": 10,
-      "default": 1.0
-    }
-  ],
-  "unused_parameters" : [
-       {
-      "name": "KG",
-      "type": "tape35",
-      "distribution": "Uniform",
-      "lower": 0.5,
-      "upper": 1.2,
-      "lower_limit": 0.5,
-      "upper_limit": 1.2,
-      "default": 0.93
+      "default": 0.3,
+      "values_list": [0.01, 0.3, 0.5]
     },
     {
       "name": "EKM",
@@ -209,7 +218,8 @@
       "upper": 3.0,
       "lower_limit": 0.3,
       "upper_limit": 3.0,
-      "default": 0.9
+      "default": 0.9,
+      "values_list": [0.3, 0.9, 3.0]
     },
     {
       "name": "EKL",
@@ -219,7 +229,8 @@
       "upper": 3.0,
       "lower_limit": 0.3,
       "upper_limit": 3.0,
-      "default": 0.9
+      "default": 0.9,
+      "values_list": [0.3, 0.9, 3.0]
     },
     {
       "name": "EKR",
@@ -229,7 +240,8 @@
       "upper": 3.0,
       "lower_limit": 0.3,
       "upper_limit": 3.0,
-      "default": 0.9
+      "default": 0.9,
+      "values_list": [0.3, 0.9, 3.0]
     },
     {
       "name": "Acker:Apr",
@@ -241,7 +253,8 @@
       "upper_limit": 3.0,
       "depends_on":"Acker:Mar",
       "direction":"increasing",
-      "default": 0.7
+      "default": 0.7,
+      "values_list": [0.3, 0.7, 3.0]
     },
     {
       "name": "Acker:May",
