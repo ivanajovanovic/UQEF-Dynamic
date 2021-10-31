@@ -67,6 +67,7 @@ def read_and_print_uqsim_args_file(file):
     print(f"UQSIM.ARGS")
     for key, value in uqsim_args_temp_dict.items():
         print(f"{key}: {value}")
+    return uqsim_args
 
 
 def _get_df_simulation_from_file(working_folder):
@@ -75,11 +76,16 @@ def _get_df_simulation_from_file(working_folder):
     return df_all_simulations
 
 
-def _get_nodes_from_file(working_folder):
+def _get_nodes_from_file(working_folder, dill_or_pickle="dill"):
     working_folder = paths.pathlib_to_from_str(working_folder, transfrom_to='Path')
     nodes_dict = working_folder / 'nodes.simnodes'
     with open(nodes_dict, 'rb') as f:
-        simulationNodes = dill.load(f)
+        if dill_or_pickle == "dill":
+            simulationNodes = dill.load(f)
+        elif dill_or_pickle == "pickle":
+            simulationNodes = pickle.load(f)
+        else:
+            simulationNodes = None
     return simulationNodes
 
 
@@ -106,7 +112,8 @@ def _get_parameter_columns_df_index_parameter_gof(df_index_parameter_gof):
     def check_if_column_stores_parameter(x):
         if isinstance(x, tuple):
             x = x[0]
-        return not x.startswith("calculate") and not x.startswith("d_calculate") and x not in ["index_run", "station"]
+        return not x.startswith("calculate") and not x.startswith("d_calculate") and \
+               x not in ["index_run", "station", "successful_run"]
     return [x for x in df_index_parameter_gof.columns.tolist() if check_if_column_stores_parameter(x)]
 
 
@@ -146,7 +153,7 @@ def plot_subplot_params_hist_from_df(df_index_parameter_gof):
 
 
 def plot_subplot_params_hist_from_df_conditioned(df_index_parameter_gof, name_of_gof_column="calculateNSE",
-                                                 threshold_gof_value = 0, comparison="smaller"):
+                                                 threshold_gof_value=0, comparison="smaller"):
     """
     comparison should be: "smaller", "greater", "equal"
     """
@@ -176,16 +183,18 @@ def plot_subplot_params_hist_from_df_conditioned(df_index_parameter_gof, name_of
     return fig
 
 
-def plot_scatter_matrix_params_vs_gof(df_index_parameter_gof, name_of_gof_column="calculateNSE"):
-    columns_with_parameters = [x for x in df_index_parameter_gof.columns.tolist()
-                               if not x.startswith("calculate") and x not in ["index_run", "station"]]
+def plot_scatter_matrix_params_vs_gof(df_index_parameter_gof, name_of_gof_column="calculateNSE",
+                                      hover_name="index_run"):
+    columns_with_parameters = _get_parameter_columns_df_index_parameter_gof(df_index_parameter_gof)
     fig = px.scatter_matrix(df_index_parameter_gof,
                             dimensions=columns_with_parameters,
-                            color=name_of_gof_column)
+                            color=name_of_gof_column,
+                            hover_name=hover_name)
     fig.update_traces(diagonal_visible=False)
     return fig
 
 
+# TODO  - This function does not work properly
 def plot_2d_contour_params_vs_gof(df_index_parameter_gof, param1, param2,
                                   num_of_points_in_1d=8, name_of_gof_column="calculateNSE"):
     x = df_index_parameter_gof[param1].values
@@ -196,16 +205,19 @@ def plot_2d_contour_params_vs_gof(df_index_parameter_gof, param1, param2,
                                     y=Y[0, :],
                                     z=np.reshape(df_index_parameter_gof[name_of_gof_column].values,
                                                  (-1, num_of_points_in_1d)).T))
-    fig.update_layout(title="calculateNSE",
+    fig.update_layout(title=name_of_gof_column,
                       xaxis_title=param1,
                       yaxis_title=param2
                       )
     return fig
 
 
-def scatter_3d_params_vs_gof(df_index_parameter_gof, param1, param2, param3, name_of_gof_column="calculateNSE"):
-    fig = px.scatter_3d(df_index_parameter_gof, x=param1, y=param2, z=param3,
-                        color=name_of_gof_column, opacity=0.7, hover_data=[name_of_gof_column])
+def scatter_3d_params_vs_gof(df_index_parameter_gof, param1, param2, param3, name_of_gof_column="calculateNSE",
+                             name_of_index_run_column="index_run"):
+    fig = px.scatter_3d(
+        df_index_parameter_gof, x=param1, y=param2, z=param3, color=name_of_gof_column, opacity=0.7,
+        hover_data=[name_of_gof_column, name_of_index_run_column]
+    )
     return fig
 
 
@@ -259,8 +271,7 @@ def plot_parallel_params_vs_gof(df_index_parameter_gof, name_of_gof_column="calc
 
 
 def plot_scatter_matrix_params_vs_gof_seaborn(df_index_parameter_gof, name_of_gof_column="calculateNSE"):
-    columns_with_parameters = [x for x in df_index_parameter_gof.columns.tolist()
-                               if not x.startswith("calculate") and x not in ["index_run", "station"]]
+    columns_with_parameters = _get_parameter_columns_df_index_parameter_gof(df_index_parameter_gof)
     sns.set(style="ticks", color_codes=True)
     g = sns.pairplot(df_index_parameter_gof,
                      vars=columns_with_parameters,
@@ -304,12 +315,50 @@ def create_larsimStatistics_object(configuration_object, uqsim_args_dict, workin
                                                                parallel_statistics=uqsim_args_dict[
                                                                    "parallel_statistics"],
                                                                mpi_chunksize=uqsim_args_dict["mpi_chunksize"],
-                                                               unordered=False, uq_method=uqsim_args_dict["uq_method"],
+                                                               unordered=False,
+                                                               uq_method=uqsim_args_dict["uq_method"],
                                                                compute_Sobol_t=uqsim_args_dict["compute_Sobol_t"],
                                                                compute_Sobol_m=uqsim_args_dict["compute_Sobol_m"])
     return larsimStatisticsObject
 
 
+def extend_larsimStatistics_object(larsimStatisticsObject, statistics_dictionary, df_simulation_result,
+                                   get_measured_data=False, get_unaltered_data=False
+                                   ):
+    larsimStatisticsObject.result_dict = statistics_dictionary
+    larsimStatisticsObject.timesteps = list(df_simulation_result.TimeStamp.unique())
+    larsimStatisticsObject.timesteps_min = df_simulation_result.TimeStamp.min()
+    larsimStatisticsObject.timesteps_max = df_simulation_result.TimeStamp.max()
+
+    timestepRange = (pd.Timestamp(larsimStatisticsObject.timesteps_min),
+                     pd.Timestamp(larsimStatisticsObject.timesteps_max))
+
+    larsimStatisticsObject.pdTimesteps = [pd.Timestamp(timestep) for timestep in larsimStatisticsObject.timesteps]
+
+    larsimStatisticsObject.number_of_unique_index_runs = get_number_of_unique_runs(
+        df_simulation_result, index_run_column_name="Index_run")
+    larsimStatisticsObject.numEvaluations = larsimStatisticsObject.number_of_unique_index_runs
+
+    larsimStatisticsObject.numbTimesteps = len(larsimStatisticsObject.timesteps)
+
+    larsimStatisticsObject.samples_station_names = list(df_simulation_result["Stationskennung"].unique())
+    larsimStatisticsObject.station_of_Interest = list(set(larsimStatisticsObject.samples_station_names).intersection(
+        larsimStatisticsObject.station_of_Interest))
+    if not larsimStatisticsObject.station_of_Interest:
+        larsimStatisticsObject.station_of_Interest = larsimStatisticsObject.samples_station_names
+
+    larsimStatisticsObject._check_if_Sobol_t_computed(list(larsimStatisticsObject.result_dict.keys()))
+    larsimStatisticsObject._check_if_Sobol_m_computed(list(larsimStatisticsObject.result_dict.keys()))
+
+    if get_measured_data:
+        larsimStatisticsObject.get_measured_data(timestepRange=timestepRange)
+
+    if get_unaltered_data:
+        larsimStatisticsObject.get_unaltered_run_data(timestepRange=timestepRange)
+
+
+def get_number_of_unique_runs(df, index_run_column_name="Index_run"):
+    return df[index_run_column_name].nunique()
 ###################################################################################################################
 
 # TODO Add _calcStatisticsForMC and calcStatisticsForMc
@@ -323,32 +372,32 @@ def _calcStatisticsForSc(df_all_simulations, simulationNodes, order=2, regressio
     weights = simulationNodes.weights
     polynomial_expansion = cp.orth_ttr(order, dist)
 
-    Abfluss = {}
+    result_dict = {}
 
     grouped = df_all_simulations.groupby(['Stationskennung','TimeStamp'])
     groups = grouped.groups
     for key,val_indices in groups.items():
         discharge_values = df_all_simulations.loc[val_indices.values].Value.values
-        Abfluss[key] = {}
-        Abfluss[key]["Q"] = discharge_values
+        result_dict[key] = {}
+        result_dict[key]["Q"] = discharge_values
         if regression:
             qoi_gPCE = cp.fit_regression(polynomial_expansion, nodes, discharge_values)
         else:
             qoi_gPCE = cp.fit_quadrature(polynomial_expansion, nodes, weights, discharge_values)
         numPercSamples = 10 ** 5
-        Abfluss[key]["gPCE"] = qoi_gPCE
-        Abfluss[key]["E"] = float((cp.E(qoi_gPCE, dist)))
-        Abfluss[key]["Var"] = float((cp.Var(qoi_gPCE, dist)))
-        Abfluss[key]["StdDev"] = float((cp.Std(qoi_gPCE, dist)))
-        Abfluss[key]["Sobol_m"] = cp.Sens_m(qoi_gPCE, dist)
-        Abfluss[key]["Sobol_m2"] = cp.Sens_m2(qoi_gPCE, dist)
-        Abfluss[key]["Sobol_t"] = cp.Sens_t(qoi_gPCE, dist)
-        Abfluss[key]["P10"] = float(cp.Perc(qoi_gPCE, 10, dist, numPercSamples))
-        Abfluss[key]["P90"] = float(cp.Perc(qoi_gPCE, 90, dist, numPercSamples))
-        if isinstance(Abfluss[key]["P10"], (list)) and len(Abfluss[key]["P10"]) == 1:
-            Abfluss[key]["P10"]= Abfluss[key]["P10"][0]
-            Abfluss[key]["P90"] = Abfluss[key]["P90"][0]
-    return Abfluss
+        result_dict[key]["gPCE"] = qoi_gPCE
+        result_dict[key]["E"] = float((cp.E(qoi_gPCE, dist)))
+        result_dict[key]["Var"] = float((cp.Var(qoi_gPCE, dist)))
+        result_dict[key]["StdDev"] = float((cp.Std(qoi_gPCE, dist)))
+        result_dict[key]["Sobol_m"] = cp.Sens_m(qoi_gPCE, dist)
+        result_dict[key]["Sobol_m2"] = cp.Sens_m2(qoi_gPCE, dist)
+        result_dict[key]["Sobol_t"] = cp.Sens_t(qoi_gPCE, dist)
+        result_dict[key]["P10"] = float(cp.Perc(qoi_gPCE, 10, dist, numPercSamples))
+        result_dict[key]["P90"] = float(cp.Perc(qoi_gPCE, 90, dist, numPercSamples))
+        if isinstance(result_dict[key]["P10"], (list)) and len(result_dict[key]["P10"]) == 1:
+            result_dict[key]["P10"] = result_dict[key]["P10"][0]
+            result_dict[key]["P90"] = result_dict[key]["P90"][0]
+    return result_dict
 
 
 def _calcStatisticsForSaltelli(df_all_simulations, simulationNodes, numEvaluations, order, regression):
@@ -358,7 +407,7 @@ def _calcStatisticsForSaltelli(df_all_simulations, simulationNodes, numEvaluatio
 
     nodes = simulationNodes.distNodes
 
-    Abfluss = {}
+    result_dict = {}
 
     grouped = df_all_simulations.groupby(['Stationskennung','TimeStamp'])
     groups = grouped.groups
@@ -366,7 +415,7 @@ def _calcStatisticsForSaltelli(df_all_simulations, simulationNodes, numEvaluatio
     dim = len(simulationNodes.nodeNames)
 
     for key,val_indices in groups.items():
-        Abfluss[key] = {}
+        result_dict[key] = {}
 
         discharge_values = df_all_simulations.loc[val_indices.values].Value.values #numpy array - for sartelli it should be n(2+d)x1
         #extended_standard_discharge_values = discharge_values[:(2*numEvaluations)]
@@ -374,39 +423,38 @@ def _calcStatisticsForSaltelli(df_all_simulations, simulationNodes, numEvaluatio
         standard_discharge_values = discharge_values_saltelli[:numEvaluations,:] #values based on which we calculate standard statistics
         extended_standard_discharge_values = discharge_values_saltelli[:(2*numEvaluations),:]
 
-        Abfluss[key]["Q"] = standard_discharge_values
+        result_dict[key]["Q"] = standard_discharge_values
 
         #result_dict[key]["min_q"] = np.amin(discharge_values) #standard_discharge_values.min()
         #result_dict[key]["max_q"] = np.amax(discharge_values) #standard_discharge_values.max()
 
         #result_dict[key]["E"] = np.sum(extended_standard_discharge_values, axis=0, dtype=np.float64) / (2*numEvaluations)
-        Abfluss[key]["E"] = np.mean(discharge_values[:(2*numEvaluations)], 0)
+        result_dict[key]["E"] = np.mean(discharge_values[:(2*numEvaluations)], 0)
         #result_dict[key]["E"] = np.mean(extended_standard_discharge_values, 0)
         #result_dict[key]["Var"] = float(np.sum(power(standard_discharge_values)) / numEvaluations - result_dict[key]["E"] ** 2)
         #result_dict[key]["Var"] = np.sum((extended_standard_discharge_values - result_dict[key]["E"]) ** 2, axis=0, dtype=np.float64) / (2*numEvaluations - 1)
         #result_dict[key]["StdDev"] = np.sqrt(result_dict[key]["Var"], dtype=np.float64)
-        Abfluss[key]["StdDev"] = np.std(discharge_values[:(2*numEvaluations)], 0, ddof=1)
+        result_dict[key]["StdDev"] = np.std(discharge_values[:(2*numEvaluations)], 0, ddof=1)
         #result_dict[key]["StdDev"] = np.std(extended_standard_discharge_values, 0, ddof=1)
 
         #result_dict[key]["P10"] = np.percentile(discharge_values[:numEvaluations], 10, axis=0)
         #result_dict[key]["P90"] = np.percentile(discharge_values[:numEvaluations], 90, axis=0)
-        Abfluss[key]["P10"] = np.percentile(discharge_values[:(2*numEvaluations)], 10, axis=0)
-        Abfluss[key]["P90"] = np.percentile(discharge_values[:(2*numEvaluations)], 90, axis=0)
+        result_dict[key]["P10"] = np.percentile(discharge_values[:(2*numEvaluations)], 10, axis=0)
+        result_dict[key]["P90"] = np.percentile(discharge_values[:(2*numEvaluations)], 90, axis=0)
 
-        Abfluss[key]["Sobol_m"] = saltelliSobolIndicesHelpingFunctions._Sens_m_sample_4(discharge_values_saltelli, dim, numEvaluations)
+        result_dict[key]["Sobol_m"] = saltelliSobolIndicesHelpingFunctions._Sens_m_sample_4(discharge_values_saltelli, dim, numEvaluations)
         #result_dict[key]["Sobol_m"] = saltelliSobolIndicesHelpingFunctions._Sens_m_sample_3(discharge_values_saltelli, dim, numEvaluations)
-        Abfluss[key]["Sobol_t"] = saltelliSobolIndicesHelpingFunctions._Sens_t_sample_4(discharge_values_saltelli, dim, numEvaluations)
+        result_dict[key]["Sobol_t"] = saltelliSobolIndicesHelpingFunctions._Sens_t_sample_4(discharge_values_saltelli, dim, numEvaluations)
 
-        if isinstance(Abfluss[key]["P10"], (list)) and len(Abfluss[key]["P10"]) == 1:
-            Abfluss[key]["P10"]=Abfluss[key]["P10"][0]
-            Abfluss[key]["P90"]=Abfluss[key]["P90"][0]
+        if isinstance(result_dict[key]["P10"], (list)) and len(result_dict[key]["P10"]) == 1:
+            result_dict[key]["P10"]=result_dict[key]["P10"][0]
+            result_dict[key]["P90"]=result_dict[key]["P90"][0]
 
 
-# TODO Add sub-options for calcStatisticsForSaltelli
 def _replot_statistics(working_folder):
     df_all_simulations = _get_df_simulation_from_file(working_folder)
     simulationNodes = _get_nodes_from_file(working_folder)
-    Abfluss = _calcStatisticsForSc(df_all_simulations, simulationNodes, order=2, regression=False)
+    result_dict = _calcStatisticsForSc(df_all_simulations, simulationNodes, order=2, regression=False)
 
     timesteps = df_all_simulations.TimeStamp.unique()
     pdTimesteps = [pd.Timestamp(timestep) for timestep in timesteps]
@@ -416,17 +464,17 @@ def _replot_statistics(working_folder):
     n_rows = 4
 
     fig = make_subplots(rows=n_rows, cols=1, shared_xaxes=False)
-    fig.add_trace(go.Scatter(x=pdTimesteps, y=[Abfluss[key]["E"] for key in keyIter], name='E[Q]',line_color='green', mode='lines'), row=1, col=1)
-    fig.add_trace(go.Scatter(x=pdTimesteps, y=[(Abfluss[key]["E"] - Abfluss[key]["StdDev"]) for key in keyIter], name='mean - std. dev', line_color='darkviolet', mode='lines'), row=1, col=1)
-    fig.add_trace(go.Scatter(x=pdTimesteps, y=[(Abfluss[key]["E"] + Abfluss[key]["StdDev"]) for key in keyIter], name='mean + std. dev', line_color='darkviolet', mode='lines', fill='tonexty'), row=1, col=1)
-    fig.add_trace(go.Scatter(x=pdTimesteps, y=[Abfluss[key]["P10"] for key in keyIter], name='10th percentile',line_color='yellow', mode='lines'), row=1, col=1)
-    fig.add_trace(go.Scatter(x=pdTimesteps, y=[Abfluss[key]["P90"] for key in keyIter], name='90th percentile',line_color='yellow', mode='lines',fill='tonexty'), row=1, col=1)
+    fig.add_trace(go.Scatter(x=pdTimesteps, y=[result_dict[key]["E"] for key in keyIter], name='E[Q]',line_color='green', mode='lines'), row=1, col=1)
+    fig.add_trace(go.Scatter(x=pdTimesteps, y=[(result_dict[key]["E"] - result_dict[key]["StdDev"]) for key in keyIter], name='mean - std. dev', line_color='darkviolet', mode='lines'), row=1, col=1)
+    fig.add_trace(go.Scatter(x=pdTimesteps, y=[(result_dict[key]["E"] + result_dict[key]["StdDev"]) for key in keyIter], name='mean + std. dev', line_color='darkviolet', mode='lines', fill='tonexty'), row=1, col=1)
+    fig.add_trace(go.Scatter(x=pdTimesteps, y=[result_dict[key]["P10"] for key in keyIter], name='10th percentile',line_color='yellow', mode='lines'), row=1, col=1)
+    fig.add_trace(go.Scatter(x=pdTimesteps, y=[result_dict[key]["P90"] for key in keyIter], name='90th percentile',line_color='yellow', mode='lines',fill='tonexty'), row=1, col=1)
 
-    fig.add_trace(go.Scatter(x=pdTimesteps, y=[Abfluss[key]["StdDev"] for key in keyIter], name='std. dev', line_color='darkviolet'), row=2, col=1)
+    fig.add_trace(go.Scatter(x=pdTimesteps, y=[result_dict[key]["StdDev"] for key in keyIter], name='std. dev', line_color='darkviolet'), row=2, col=1)
 
     for i in range(len(labels)):
-        fig.add_trace(go.Scatter(x=pdTimesteps, y=[Abfluss[key]["Sobol_m"][i] for key in keyIter], name=labels[i], legendgroup=labels[i], line_color=colors[i]), row=3, col=1)
-        fig.add_trace(go.Scatter(x=pdTimesteps, y=[Abfluss[key]["Sobol_t"][i] for key in keyIter], legendgroup=labels[i], showlegend = False, line_color=colors[i]), row=4, col=1)
+        fig.add_trace(go.Scatter(x=pdTimesteps, y=[result_dict[key]["Sobol_m"][i] for key in keyIter], name=labels[i], legendgroup=labels[i], line_color=colors[i]), row=3, col=1)
+        fig.add_trace(go.Scatter(x=pdTimesteps, y=[result_dict[key]["Sobol_t"][i] for key in keyIter], legendgroup=labels[i], showlegend = False, line_color=colors[i]), row=4, col=1)
 
     fig.update_traces(mode='lines')
     fig.update_yaxes(title_text="Q [m^3/s]", side='left', showgrid=True, row=1, col=1)
