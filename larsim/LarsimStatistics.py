@@ -244,30 +244,30 @@ class LarsimSamples(object):
             with open(fileName, 'wb') as handle:
                 pickle.dump(self.dict_of_matrix_c_eigen_decomposition, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-    def get_number_of_runs(self):
-        return self.df_simulation_result.Index_run.nunique()
+    def get_number_of_runs(self, index_run_column_name="Index_run"):
+        return self.df_simulation_result[index_run_column_name].nunique()
 
-    def get_simulation_timesteps(self):
+    def get_simulation_timesteps(self, time_stamp_column="TimeStamp"):
         if self.df_simulation_result is not None:
-            return list(self.df_simulation_result.TimeStamp.unique())
+            return list(self.df_simulation_result[time_stamp_column].unique())
         else:
             return None
 
-    def get_timesteps_min(self):
+    def get_timesteps_min(self, time_stamp_column="TimeStamp"):
         if self.df_simulation_result is not None:
-            return self.df_simulation_result.TimeStamp.min()
+            return self.df_simulation_result[time_stamp_column].min()
         else:
             return None
 
-    def get_timesteps_max(self):
+    def get_timesteps_max(self, time_stamp_column="TimeStamp"):
         if self.df_simulation_result is not None:
-            return self.df_simulation_result.TimeStamp.max()
+            return self.df_simulation_result[time_stamp_column].max()
         else:
             return None
 
-    def get_simulation_stations(self):
+    def get_simulation_stations(self, stations_column_name="Stationskennung"):
         if self.df_simulation_result is not None:
-            return list(self.df_simulation_result.Stationskennung.unique())
+            return list(self.df_simulation_result[stations_column_name].unique())
         else:
             return None
 
@@ -451,7 +451,7 @@ class LarsimStatistics(Statistics):
                   f"not exists in the configurationObject{e}")
             raise
         for i in list_of_parameters:
-            if i["distribution"] != "None":
+            if self.uq_method == "ensemble" or i["distribution"] != "None":
                 self.nodeNames.append(i["name"])
         self.dim = len(self.nodeNames)
         self.labels = [nodeName.strip() for nodeName in self.nodeNames]
@@ -482,6 +482,10 @@ class LarsimStatistics(Statistics):
 
         self.active_scores_dict = None
 
+        self.solverTimes = None
+        self.work_package_indexes = None
+        self.samples_station_names = None
+
         # df_statistics_station = None
         # si_t_df = None
         # si_m_df = None
@@ -511,6 +515,11 @@ class LarsimStatistics(Statistics):
     def set_result_dict(self, result_dict):
         self.result_dict = result_dict
 
+    def reset_station_of_interest(self):
+        # Update self.station_of_Interest, though there is probably no need for this!
+        self.station_of_Interest = list(set(self.samples_station_names).intersection(self.station_of_Interest))
+        if not self.station_of_Interest:
+            self.station_of_Interest = self.samples_station_names
     ###################################################################################################################
 
     def prepare(self, rawSamples, **kwargs):
@@ -539,9 +548,7 @@ class LarsimStatistics(Statistics):
 
         # Update self.station_of_Interest, though there is probably no need for this!
         self.samples_station_names = self.samples.get_simulation_stations()
-        self.station_of_Interest = list(set(self.samples_station_names).intersection(self.station_of_Interest))
-        if not self.station_of_Interest:
-            self.station_of_Interest = self.samples_station_names
+        self.reset_station_of_interest()
 
     def preparePolyExpanForMc(self, simulationNodes, numEvaluations, regression=None, order=None,
                               poly_normed=None, poly_rule=None, *args, **kwargs):
@@ -1012,11 +1019,9 @@ class LarsimStatistics(Statistics):
             self.df_measured = larsimConfigurationSettings.extract_measured_discharge(
                 timestepRange[0], timestepRange[1], index_run=0
             )
-            self.df_measured = larsimDataPostProcessing.filterResultForStationAndTypeOfOutpu(
-                self.df_measured,
-                station=self.station_of_Interest,
-                type_of_output=self.larsimConfObject.type_of_output_of_Interest_measured
-            )
+            self.df_measured = larsimDataPostProcessing.filterResultForStationAndTypeOfOutpu(self.df_measured,
+                                                                                             station=self.station_of_Interest,
+                                                                                             type_of_output=self.larsimConfObject.type_of_output_of_Interest_measured)
             if transform_measured_to_daily:
                 # TODO resample_time_series_df was refactored
                 if "Value" in self.df_measured.columns:
@@ -1329,8 +1334,7 @@ class LarsimStatistics(Statistics):
         df_statistics_station = pd.DataFrame(list(zip(*list_of_columns)), columns=list_of_columns_names)
 
         if self.groundTruth_computed:
-            temp = larsimDataPostProcessing.filterResultForStation(self.df_measured,
-                                                                   station=station)
+            temp = larsimDataPostProcessing.filterResultForStation(self.df_measured, station=station)
             column_to_extract = 'Value' if 'Value' in self.df_measured.columns else station
             df_statistics_station = pd.merge_ordered(df_statistics_station,
                                                           temp[[column_to_extract, "TimeStamp"]],
@@ -1344,8 +1348,7 @@ class LarsimStatistics(Statistics):
                 (df_statistics_station.measured.max() - df_statistics_station.measured.min())
 
         if self.unaltered_computed:
-            temp = larsimDataPostProcessing.filterResultForStation(self.df_unaltered,
-                                                                   station=station)
+            temp = larsimDataPostProcessing.filterResultForStation(self.df_unaltered, station=station)
             column_to_extract = 'Value' if 'Value' in self.df_unaltered.columns else station
             df_statistics_station = pd.merge_ordered(df_statistics_station,
                                                           temp[[column_to_extract, "TimeStamp"]],
@@ -1473,6 +1476,9 @@ class LarsimStatistics(Statistics):
         return station
 
     def calculate_p_and_r_factors(self):
+        pass
+
+    def calculate_gof_over_lead_time(self):
         pass
 
     @staticmethod
