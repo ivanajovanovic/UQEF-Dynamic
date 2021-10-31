@@ -24,7 +24,6 @@ from ishigami import IshigamiStatistics
 from productFunction import ProductFunctionModel
 from productFunction import ProductFunctionStatistics
 
-import LarsimUtilityFunctions.larsimPaths as paths
 from LarsimUtilityFunctions import larsimModel
 
 # additionally added for the debugging of the nodes
@@ -57,7 +56,6 @@ if local_debugging:
     uqsim.args.uncertain = "all"
     uqsim.args.chunksize = 1
 
-    #uqsim.args.uq_method = "saltelli"
     uqsim.args.uq_method = "ensemble"  # "sc" | "saltelli" | "mc" | "ensemble"
     uqsim.args.mc_numevaluations = 50
     uqsim.args.sampling_rule = "halton"  # | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
@@ -70,10 +68,10 @@ if local_debugging:
 
     uqsim.args.inputModelDir = pathlib.Path('/work/ga45met/Larsim-data')  # paths.larsim_data_path
     uqsim.args.sourceDir = pathlib.Path("/work/ga45met")  # paths.sourceDir
-    uqsim.args.outputModelDir = uqsim.args.outputResultDir
     scratch_dir = uqsim.args.sourceDir
     uqsim.args.outputResultDir = uqsim.args.sourceDir / "larsim_runs" / 'larsim_run_ensemble'
     uqsim.args.outputResultDir = str(uqsim.args.outputResultDir)  # for now reast of the code expects path in the string
+    uqsim.args.outputModelDir = uqsim.args.outputResultDir
 
     #uqsim.args.config_file = "/home/ga45met/Repositories/Larsim/Larsim-UQ/configurations_Larsim/configurations_larsim_master_lai.json"
     # uqsim.args.config_file = '/work/ga45met/mnt/linux_cluster_2/Larsim-UQ/configurations_Larsim/configurations_larsim_high_flow_small.json'
