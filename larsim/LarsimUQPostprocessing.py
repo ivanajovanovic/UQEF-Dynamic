@@ -306,10 +306,6 @@ def plot_time_series_of_all_simulations(df_all_simulations):
 ###################################################################################################################
 
 
-def extracting_statistics_df_for_one_station(station="MARI"):
-    pass
-
-
 def create_larsimStatistics_object(configuration_object, uqsim_args_dict, workingDir):
     larsimStatisticsObject = LarsimStatistics.LarsimStatistics(configuration_object, workingDir=workingDir,
                                                                parallel_statistics=uqsim_args_dict[
@@ -359,6 +355,60 @@ def extend_larsimStatistics_object(larsimStatisticsObject, statistics_dictionary
 
 def get_number_of_unique_runs(df, index_run_column_name="Index_run"):
     return df[index_run_column_name].nunique()
+
+
+def extracting_statistics_df_for_one_station(larsimStatisticsObject, station="MARI"):
+    pass
+
+
+def compute_gof_over_different_time_series(objective_function, station, df_statistics_station):
+    """
+    This function will run only for a single station
+    """
+    if isinstance(station, list):
+        station = station[0]
+
+    if not callable(
+            objective_function) and objective_function in larsimDataPostProcessing.mapping_gof_names_to_functions:
+        objective_function = larsimDataPostProcessing.mapping_gof_names_to_functions[objective_function]
+    elif not callable(
+            objective_function) and objective_function not in larsimDataPostProcessing.mapping_gof_names_to_functions \
+            or callable(objective_function) and objective_function not in larsimDataPostProcessing._all_functions:
+        raise ValueError("Not proper specification of Goodness of Fit function name")
+
+    gof_meas_unalt = None
+    gof_meas_mean = None
+    gof_meas_mean_m_std = None
+    gof_meas_mean_p_std = None
+    gof_meas_p10 = None
+    gof_meas_p90 = None
+
+    if 'unaltered' in df_statistics_station.columns:
+        gof_meas_unalt = objective_function(df_statistics_station, df_statistics_station,
+                                            measuredDF_column_name='measured', simulatedDF_column_name='unaltered')
+    if 'E' in df_statistics_station.columns:
+        gof_meas_mean = objective_function(df_statistics_station, df_statistics_station,
+                                           measuredDF_column_name='measured', simulatedDF_column_name='E')
+    if 'E_minus_std' in df_statistics_station.columns:
+        gof_meas_mean_m_std = objective_function(df_statistics_station, df_statistics_station,
+                                                 measuredDF_column_name='measured',
+                                                 simulatedDF_column_name='E_minus_std')
+    if 'E_plus_std' in df_statistics_station.columns:
+        gof_meas_mean_p_std = objective_function(df_statistics_station, df_statistics_station,
+                                                 measuredDF_column_name='measured',
+                                                 simulatedDF_column_name='E_plus_std')
+    if 'P10' in df_statistics_station.columns:
+        gof_meas_p10 = objective_function(df_statistics_station, df_statistics_station,
+                                          measuredDF_column_name='measured', simulatedDF_column_name='P10')
+    if 'P90' in df_statistics_station.columns:
+        gof_meas_p90 = objective_function(df_statistics_station, df_statistics_station,
+                                          measuredDF_column_name='measured', simulatedDF_column_name='P90')
+
+    print(f"gof_meas_unalt:{gof_meas_unalt} \ngof_meas_mean:{gof_meas_mean} \n"
+          f"gof_meas_mean_m_std:{gof_meas_mean_m_std} \ngof_meas_mean_p_std:{gof_meas_mean_p_std} \n"
+          f"gof_meas_p10:{gof_meas_p10} \ngof_meas_p90:{gof_meas_p90} \n")
+
+
 ###################################################################################################################
 
 # TODO Add _calcStatisticsForMC and calcStatisticsForMc

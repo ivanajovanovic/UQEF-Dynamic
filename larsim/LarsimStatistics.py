@@ -1359,11 +1359,15 @@ class LarsimStatistics(Statistics):
         df_statistics_station["E_plus_std"] = df_statistics_station['E'] + df_statistics_station['Std']
         return df_statistics_station
 
-    def compute_gof_over_different_time_series(self, objective_function, station=None):
+    def compute_gof_over_different_time_series(self, objective_function, df_statistics_station=None, station=None):
         station = self._check_station_argument(station)
-        df_statistics_station = self.create_df_from_statistics_data_single_station(station)
+
+        if df_statistics_station is None:
+            df_statistics_station = self.create_df_from_statistics_data_single_station(station)
+
         if df_statistics_station is None:
             return
+
         if not callable(
                 objective_function) and objective_function in larsimDataPostProcessing.mapping_gof_names_to_functions:
             objective_function = larsimDataPostProcessing.mapping_gof_names_to_functions[objective_function]
@@ -1372,20 +1376,33 @@ class LarsimStatistics(Statistics):
                 or callable(objective_function) and objective_function not in larsimDataPostProcessing._all_functions:
             raise ValueError("Not proper specification of Goodness of Fit function name")
 
-        gof_meas_unalt = objective_function(df_statistics_station, df_statistics_station,
-                                            measuredDF_column_name='measured', simulatedDF_column_name='unaltered')
-        gof_meas_mean = objective_function(df_statistics_station, df_statistics_station,
-                                           measuredDF_column_name='measured', simulatedDF_column_name='E')
-        gof_meas_mean_m_std = objective_function(df_statistics_station, df_statistics_station,
-                                                 measuredDF_column_name='measured',
-                                                 simulatedDF_column_name='E_minus_std')
-        gof_meas_mean_p_std = objective_function(df_statistics_station, df_statistics_station,
-                                                 measuredDF_column_name='measured',
-                                                 simulatedDF_column_name='E_plus_std')
-        gof_meas_p10 = objective_function(df_statistics_station, df_statistics_station,
-                                          measuredDF_column_name='measured', simulatedDF_column_name='P10')
-        gof_meas_p90 = objective_function(df_statistics_station, df_statistics_station,
-                                          measuredDF_column_name='measured', simulatedDF_column_name='P90')
+        gof_meas_unalt = None
+        gof_meas_mean = None
+        gof_meas_mean_m_std = None
+        gof_meas_mean_p_std = None
+        gof_meas_p10 = None
+        gof_meas_p90 = None
+
+        if 'unaltered' in df_statistics_station.columns:
+            gof_meas_unalt = objective_function(df_statistics_station, df_statistics_station,
+                                                measuredDF_column_name='measured', simulatedDF_column_name='unaltered')
+        if 'E' in df_statistics_station.columns:
+            gof_meas_mean = objective_function(df_statistics_station, df_statistics_station,
+                                               measuredDF_column_name='measured', simulatedDF_column_name='E')
+        if 'E_minus_std' in df_statistics_station.columns:
+            gof_meas_mean_m_std = objective_function(df_statistics_station, df_statistics_station,
+                                                     measuredDF_column_name='measured',
+                                                     simulatedDF_column_name='E_minus_std')
+        if 'E_plus_std' in df_statistics_station.columns:
+            gof_meas_mean_p_std = objective_function(df_statistics_station, df_statistics_station,
+                                                     measuredDF_column_name='measured',
+                                                     simulatedDF_column_name='E_plus_std')
+        if 'P10' in df_statistics_station.columns:
+            gof_meas_p10 = objective_function(df_statistics_station, df_statistics_station,
+                                              measuredDF_column_name='measured', simulatedDF_column_name='P10')
+        if 'P90' in df_statistics_station.columns:
+            gof_meas_p90 = objective_function(df_statistics_station, df_statistics_station,
+                                              measuredDF_column_name='measured', simulatedDF_column_name='P90')
 
         print(f"gof_meas_unalt:{gof_meas_unalt} \ngof_meas_mean:{gof_meas_mean} \n"
               f"gof_meas_mean_m_std:{gof_meas_mean_m_std} \ngof_meas_mean_p_std:{gof_meas_mean_p_std} \n"
