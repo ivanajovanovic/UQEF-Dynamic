@@ -1408,6 +1408,8 @@ class LarsimStatistics(Statistics):
               f"gof_meas_mean_m_std:{gof_meas_mean_m_std} \ngof_meas_mean_p_std:{gof_meas_mean_p_std} \n"
               f"gof_meas_p10:{gof_meas_p10} \ngof_meas_p90:{gof_meas_p90} \n")
 
+    ###################################################################################################################
+
     def create_df_from_sensitivity_indices_for_singe_station(self, station=None, si_type="Sobol_t", uq_method="sc"):
         """
         si_type should be: Sobol_t, Sobol_m or Sobol_m2
@@ -1484,6 +1486,8 @@ class LarsimStatistics(Statistics):
                                  fill='tozeroy', name="Normalized Q[m^3/s]"))
         return fig
 
+    ###################################################################################################################
+
     def _check_station_argument(self, station=None):
         if station is None:
             if not isinstance(self.station_of_Interest, list):
@@ -1492,8 +1496,37 @@ class LarsimStatistics(Statistics):
                 station = self.station_of_Interest[0]
         return station
 
-    def calculate_p_and_r_factors(self):
-        pass
+    def calculate_p_factor(self, df_statistics_station=None, station=None,
+                                  column_lower_uncertainty_bound="P10", column_upper_uncertainty_bound="P90",
+                                  observed_column="measured"):
+        station = self._check_station_argument(station)
+
+        if df_statistics_station is None:
+            df_statistics_station = self.create_df_from_statistics_data_single_station(station)
+
+        condition = df_statistics_station[
+            (df_statistics_station[observed_column] >= df_statistics_station[column_lower_uncertainty_bound]) & (
+                        df_statistics_station[observed_column] <= df_statistics_station[column_upper_uncertainty_bound])]
+
+        p = len(condition.index) / len(df_statistics_station.index)
+        print(f"P factor is: {p * 100}%")
+        return p
+
+    def compute_stat_of_uncertainty_band(self, df_statistics_station=None, station=None,
+                                  column_lower_uncertainty_bound="P10", column_upper_uncertainty_bound="P90",
+                                  observed_column="measured"):
+        station = self._check_station_argument(station)
+        if df_statistics_station is None:
+            df_statistics_station = self.create_df_from_statistics_data_single_station(station)
+        mean_uncertainty_band = np.mean(
+            df_statistics_station[column_upper_uncertainty_bound] - df_statistics_station[
+                column_lower_uncertainty_bound])
+        std_uncertainty_band = np.std(
+            df_statistics_station[column_upper_uncertainty_bound] - df_statistics_station[
+                column_lower_uncertainty_bound])
+        mean_observed = df_statistics_station[observed_column].mean()
+        std_observed = df_statistics_station[observed_column].std(ddof=1)
+        return mean_uncertainty_band, std_uncertainty_band, mean_observed, std_observed
 
     def calculate_gof_over_lead_time(self):
         pass
