@@ -8,6 +8,7 @@ from uqef.stat import Statistics
 
 import paths
 
+
 class Samples(object):
     """
     Samples is a collection of the sampled results of a whole UQ simulation
@@ -19,9 +20,7 @@ class Samples(object):
         self.voi = np.array([sample for sample in rawSamples])
 
 
-
 class IshigamiStatistics(Statistics):
-
 
     def __init__(self, configurationObject):
         Statistics.__init__(self)
@@ -31,7 +30,6 @@ class IshigamiStatistics(Statistics):
             self.working_dir = self.configurationObject["Directories"]["working_dir"]
         except KeyError:
             self.working_dir = paths.working_dir  # directoy for all the larsim runs
-
 
     def calcStatisticsForMc(self, rawSamples, timesteps,
                             simulationNodes, numEvaluations, solverTimes,
@@ -114,8 +112,6 @@ class IshigamiStatistics(Statistics):
             self.P10_qoi = self.P10_qoi[0]
             self.P90_qoi = self.P90_qoi[0]
 
-
-
     def calcStatisticsForSc(self, rawSamples, timesteps,
                             simulationNodes, order, solverTimes,
                             work_package_indexes, original_runtime_estimator, regression):
@@ -177,7 +173,6 @@ class IshigamiStatistics(Statistics):
         if isinstance(self.P10_qoi, (list)) and len(self.P10_qoi) == 1:
             self.P10_qoi = self.P10_qoi[0]
             self.P90_qoi = self.P90_qoi[0]
-
 
     def plotResults(self, simulationNodes, display=False,
                     fileName="", fileNameIdent="", directory="./",

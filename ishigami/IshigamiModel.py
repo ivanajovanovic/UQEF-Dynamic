@@ -27,8 +27,7 @@ class IshigamiModel(Model):
         self.t = [0,]
         self.t_interest = 0.0
 
-
-    def prepare(self):
+    def prepare(self, *args, **kwargs):
         pass
 
     def assertParameter(self, parameter):
@@ -37,7 +36,7 @@ class IshigamiModel(Model):
     def normaliseParameter(self, parameter):
         return parameter
 
-    def run(self, i_s, parameters):
+    def run(self, i_s, parameters, *args, **kwargs):
 
         print("{}: paramater: {}".format(i_s, parameters))
 
