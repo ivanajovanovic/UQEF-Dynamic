@@ -24,7 +24,7 @@ from ishigami import IshigamiStatistics
 from productFunction import ProductFunctionModel
 from productFunction import ProductFunctionStatistics
 
-from LarsimUtilityFunctions import larsimModel
+from LarsimUtilityFunctions import larsimModel, larsimPaths
 
 # additionally added for the debugging of the nodes
 import chaospy as cp
@@ -48,7 +48,7 @@ uqsim = uqef.UQsim()
 local_debugging = True
 if local_debugging:
     local_debugging_nodes = True
-    exit_after_debugging_nodes = False
+    exit_after_debugging_nodes = True
     save_solver_results = True
 
     uqsim.args.model = "larsim"
@@ -56,27 +56,28 @@ if local_debugging:
     uqsim.args.uncertain = "all"
     uqsim.args.chunksize = 1
 
-    uqsim.args.uq_method = "ensemble"  # "sc" | "saltelli" | "mc" | "ensemble"
+    uqsim.args.uq_method = "sc"  # "sc" | "saltelli" | "mc" | "ensemble"
     uqsim.args.mc_numevaluations = 50
     uqsim.args.sampling_rule = "halton"  # | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
-    uqsim.args.sc_q_order = 2  # 10 #7
-    uqsim.args.sc_p_order = 1  # 6 #5
+    uqsim.args.sc_q_order = 7  # 10 #7
+    uqsim.args.sc_p_order = 6  # 6 #5
+    uqsim.args.sc_quadrature_rule = "G"
     uqsim.args.sc_poly_rule = "three_terms_recurrence"  # "gram_schmidt" | "three_terms_recurrence" | "cholesky"
-    uqsim.args.sc_poly_normed = True
-    uqsim.args.sc_sparse_quadrature = False  # True
+    uqsim.args.sc_poly_normed = False
+    uqsim.args.sc_sparse_quadrature = False  # False
     uqsim.args.regression = False
 
     uqsim.args.inputModelDir = pathlib.Path('/work/ga45met/Larsim-data')  # paths.larsim_data_path
     uqsim.args.sourceDir = pathlib.Path("/work/ga45met")  # paths.sourceDir
     scratch_dir = uqsim.args.sourceDir
-    uqsim.args.outputResultDir = uqsim.args.sourceDir / "larsim_runs" / 'larsim_run_ensemble'
+    uqsim.args.outputResultDir = uqsim.args.sourceDir / "larsim_runs" / 'larsim_run_nonsparse_experimental'
     uqsim.args.outputResultDir = str(uqsim.args.outputResultDir)  # for now reast of the code expects path in the string
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
 
     #uqsim.args.config_file = "/home/ga45met/Repositories/Larsim/Larsim-UQ/configurations_Larsim/configurations_larsim_master_lai.json"
     # uqsim.args.config_file = '/work/ga45met/mnt/linux_cluster_2/Larsim-UQ/configurations_Larsim/configurations_larsim_high_flow_small.json'
     uqsim.args.config_file = pathlib.Path(
-        '/work/ga45met/mnt/linux_cluster_2/Larsim-UQ/configurations_Larsim/configurations_larsim_boundery_values_mls.json')
+        '/work/ga45met/mnt/linux_cluster_2/Larsim-UQ/configurations_Larsim/configurations_larsim_high_flow.json')
     #uqsim.args.config_file = '/home/ga45met/mnt/linux_cluster_2/Larsim-UQ/configurations_Larsim/configurations_larsim_master_lai_small.json'
     #uqsim.args.config_file = "/home/ga45met/Repositories/Larsim/Larsim-UQ/configurations_Larsim/configuration_larsim_updated_lai_jun.json"
 
@@ -90,8 +91,8 @@ if local_debugging:
 
     uqsim.args.disable_statistics = True
     uqsim.args.parallel_statistics = True  # False
-    uqsim.args.compute_Sobol_t = False
-    uqsim.args.compute_Sobol_m = False
+    uqsim.args.compute_Sobol_t = True
+    uqsim.args.compute_Sobol_m = True
 
     uqsim.setup_configuration_object()
 
@@ -197,8 +198,25 @@ if uqsim.is_master():
         # # experiment by Ivana - remove
         # print(uqsim.configuration_object["tuples_parameters_info"])
 
-        # play with different sampling rules...
+        # Do the initial set-up
         larsimConfigurationsObject = larsimModel.LarsimConfigurations(configurationObject=uqsim.configuration_object)
+        _larsimModelSetUpObject = larsimModel.LarsimModelSetUp(
+            configurationObject=larsimConfigurationsObject,
+            inputModelDir=uqsim.args.inputModelDir,
+            workingDir=uqsim.args.workingDir,
+            sourceDir=uqsim.args.sourceDir)
+        _larsimModelSetUpObject.copy_master_folder()
+        _larsimModelSetUpObject.configure_master_folder()
+        # larsimPathsObject = larsimPaths.LarsimPathsClass(
+        #     root_data_dir==uqsim.args.inputModelDir, **larsimConfigurationsObject.dict_params_for_defining_paths)
+        if larsimConfigurationsObject.boolean_make_local_copy_of_master_dir:
+            local_master_dir = pathlib.Path(uqsim.args.workingDir) / 'master_configuration'
+        else:
+            local_master_dir = pathlib.Path(uqsim.args.workingDir)
+        tape35_path = local_master_dir / "tape35"
+        lanu_path = local_master_dir / "lanu.par"
+
+        # play with different sampling rules...
 
         # plot position of the nodes
         local_nodes = uqsim.simulationNodes.nodes.T
@@ -207,30 +225,30 @@ if uqsim.is_master():
         print(f"Shape of simulationNodes.parameters.T is: {local_parameters.shape}")
         local_simulation_parameters = uqsim.simulation.parameters
         print(f"Shape of simulation.parameters is: {local_simulation_parameters.shape}")
-        local_dist = uqsim.simulationNodes.joinedDists
 
-        if uqsim.simulationNodes.distNodes:
+        if uqsim.simulationNodes.distNodes.size:
             local_distNodes = uqsim.simulationNodes.distNodes.T
             print(f"Shape of simulationNodes.distNodes.T is: {local_distNodes.shape}")
-        if uqsim.simulationNodes.weights:
+        if uqsim.simulationNodes.weights.size:
             local_weights = uqsim.simulationNodes.weights
             print(f"Shape of simulationNodes.weights is: {local_weights.shape}")
 
-        # Problem with Saltelli&MC is that uqsim.simulationNodes.parameters
+        # Problem with Saltelli & MC is that uqsim.simulationNodes.parameters
         # are different from uqsim.simulation.parameters
         # plot position of the final parameters
         if "tuples_parameters_info" not in uqsim.configuration_object:
             print(f"uqsim.configuration_object was not updated together with model.configurationObject")
             larsimConfigurationSettings.update_configurationObject_with_parameters_info(uqsim.configuration_object)
         list_of_parameters_dict = []
-        local_master_dir = pathlib.Path(osp.abspath(osp.join(uqsim.args.workingDir, 'master_configuration')))
-        tape35_path = local_master_dir / "tape35"
-        lanu_path = local_master_dir / "lanu.par"
         for parameter in local_parameters:  # local_simulation_parameters
-            ordered_dict_of_all_params, _ = larsimConfigurationSettings.params_configurations(
+            ordered_dict_of_all_params, unsupported_values_of_parameters_flag = larsimConfigurationSettings.params_configurations(
                 parameter, tape35_path, lanu_path, uqsim.configuration_object, process_id=0,
-                reference_value_from_TGB=3085, take_direct_value=False,
-                write_new_values_to_tape35=False, write_new_values_to_lanu=False)
+                reference_value_from_TGB=3085, take_direct_value=False, write_new_values_to_tape35=False,
+                write_new_values_to_lanu=False)
+            if unsupported_values_of_parameters_flag:
+                ordered_dict_of_all_params["correct_parameters"] = "failed"
+            else:
+                ordered_dict_of_all_params["correct_parameters"] = "correct"
             list_of_parameters_dict.append(ordered_dict_of_all_params)
         df_with_final_parameters = pd.DataFrame(list_of_parameters_dict)
         temp_file_path = pathlib.Path(uqsim.args.outputResultDir) / "parameters.pkl"
@@ -238,19 +256,30 @@ if uqsim.is_master():
 
         # Plot polynomials
         # polynomial_expansion = cp.orth_ttr(order, dist)
-        if uqsim.args.uq_method == "sc":
-            polynomial_expansion = cp.generate_expansion(uqsim.args.sc_q_order, local_dist,
-                                                         rule=uqsim.args.sc_poly_rule,
-                                                         normed=uqsim.args.sc_poly_normed)
+        local_dist = uqsim.simulationNodes.joinedDists
+        local_standard_dist = None
+        polynomial_standard_expansion = None
+        if uqsim.simulationNodes.joinedStandardDists:
+            local_standard_dist = uqsim.simulationNodes.joinedStandardDists
 
-        # plotting simulation nodes
-        if uqsim.simulationNodes.dists:
-            uqsim.simulationNodes.plotDists(fileName=uqsim.args.outputResultDir + "/dists", fileNameIdentIsFullName=True)
-            uqsim.simulationNodes.plotDistsSetup(fileName=uqsim.args.outputResultDir + "/distsSetup.pdf",
-                                                 numCollocationPointsPerDim=10)
-        # uqsim.plot_nodes()
+        # if uqsim.args.uq_method == "sc":
+        #     polynomial_expansion = cp.generate_expansion(uqsim.args.sc_q_order, local_dist,
+        #                                                  rule=uqsim.args.sc_poly_rule,
+        #                                                  normed=uqsim.args.sc_poly_normed)
+        #     if uqsim.simulationNodes.joinedStandardDists:
+        #         polynomial_standard_expansion = cp.generate_expansion(uqsim.args.sc_q_order, local_standard_dist,
+        #                                                      rule=uqsim.args.sc_poly_rule,
+        #                                                      normed=uqsim.args.sc_poly_normed)
+        #
+        # # plotting simulation nodes
+        # if uqsim.simulationNodes.dists:
+        #     uqsim.simulationNodes.plotDists(fileName=uqsim.args.outputResultDir + "/dists", fileNameIdentIsFullName=True)
+        #     uqsim.simulationNodes.plotDistsSetup(fileName=uqsim.args.outputResultDir + "/distsSetup.pdf",
+        #                                          numCollocationPointsPerDim=10)
+        # # uqsim.plot_nodes()
 
         if exit_after_debugging_nodes:
+            # return polynomial_expansion, polynomial_standard_expansion
             sys.exit()
 
 #####################################

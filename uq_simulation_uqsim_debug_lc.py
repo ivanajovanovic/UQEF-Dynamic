@@ -206,10 +206,14 @@ if uqsim.is_master():
         tape35_path = local_master_dir / "tape35"
         lanu_path = local_master_dir / "lanu.par"
         for parameter in local_parameters: # local_simulation_parameters
-            ordered_dict_of_all_params, _ = larsimConfigurationSettings.params_configurations(
-                parameter, tape35_path, lanu_path, uqsim.configuration_object, process_id=0,
-                reference_value_from_TGB=3085, take_direct_value=False,
-                write_new_values_to_tape35=False, write_new_values_to_lanu=False)
+            ordered_dict_of_all_params, _ = larsimConfigurationSettings.params_configurations(parameter, tape35_path,
+                                                                                              lanu_path,
+                                                                                              uqsim.configuration_object,
+                                                                                              process_id=0,
+                                                                                              reference_value_from_TGB=3085,
+                                                                                              take_direct_value=False,
+                                                                                              write_new_values_to_tape35=False,
+                                                                                              write_new_values_to_lanu=False)
             list_of_parameters_dict.append(ordered_dict_of_all_params)
         df_with_final_parameters = pd.DataFrame(list_of_parameters_dict)
         temp_file_path = pathlib.Path(uqsim.args.outputResultDir) / "parameters.pkl"

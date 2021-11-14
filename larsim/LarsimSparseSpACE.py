@@ -66,6 +66,7 @@ class LarsimFunction(Function):
             i_s=[self.global_eval_counter, ],
             take_direct_value=True,
             createNewFolder=True,
+            deleteFilesAfterwards=True,
             deleteFolderAfterwards=True
         )
 
