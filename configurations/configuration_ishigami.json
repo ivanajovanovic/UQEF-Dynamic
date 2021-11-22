@@ -1,25 +1,25 @@
 {
-  "Parameters":
+  "other_model_parameters":
     {
       "a": 7.0,
       "b": 0.1
     },
-  "Variables": [
+  "parameters": [
      {
       "name": "x1",
-      "distribution": "uniform",
+      "distribution": "Uniform",
       "lower": -3.14159265359,
       "upper": 3.14159265359
     },
     {
       "name": "x2",
-      "distribution": "uniform",
+      "distribution": "Uniform",
       "lower": -3.14159265359,
       "upper": 3.14159265359
     },
     {
       "name": "x3",
-      "distribution": "uniform",
+      "distribution": "Uniform",
       "lower": -3.14159265359,
       "upper": 3.14159265359
     }

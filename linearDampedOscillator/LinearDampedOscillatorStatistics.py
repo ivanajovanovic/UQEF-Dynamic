@@ -17,9 +17,9 @@ class Samples(object):
         self.voi = []
 
         #for sample in rawSamples:
-        #    self.voi.append(sample[0])
+        #    self.qoi.append(sample[0])
 
-        #self.voi = np.array(self.voi)
+        #self.qoi = np.array(self.qoi)
 
         self.voi = np.array([sample for sample in rawSamples])
 
@@ -188,8 +188,8 @@ class LinearDampedOscillatorStatistics(Statistics):
         #print(self.Sobol_t_qoi.shape)
 
         # needs to be numpy array for plotting
-        #self.voi = np.array([sample for sample in rawSamples])
-        #self.voi = np.array([sample for sample in rawSamples])
+        #self.qoi = np.array([sample for sample in rawSamples])
+        #self.qoi = np.array([sample for sample in rawSamples])
 
         self.P10_qoi = cp.Perc(qoi_gPCE, 10, dist, numPercSamples)
         self.P90_qoi = cp.Perc(qoi_gPCE, 90, dist, numPercSamples)

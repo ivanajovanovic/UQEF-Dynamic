@@ -6,14 +6,16 @@ from math import pow
 
 
 def model(p, x):
-    a, b 		= p
-    x1, x2, x3 	= x
+    a, b = p
+    x1, x2, x3 = x
     f = np.sin(x1) + a * pow(np.sin(x2),2) + b * pow(x3,4) * np.sin(x1)
-    return [f,]
+    return f
+
 
 class IshigamiModelSetUp():
     def __init__(self, configurationObject):
         pass
+
 
 class IshigamiModel(Model):
     def __init__(self, configurationObject):
@@ -21,10 +23,10 @@ class IshigamiModel(Model):
 
         self.configurationObject = configurationObject
 
-        self.a = self.configurationObject["Parameters"]["a"]
-        self.b = self.configurationObject["Parameters"]["b"]
+        self.a = self.configurationObject["other_model_parameters"]["a"]
+        self.b = self.configurationObject["other_model_parameters"]["b"]
 
-        self.t = [0,]
+        self.t = [0, ]
         self.t_interest = 0.0
 
     def prepare(self, *args, **kwargs):
@@ -38,7 +40,7 @@ class IshigamiModel(Model):
 
     def run(self, i_s, parameters, *args, **kwargs):
 
-        print("{}: paramater: {}".format(i_s, parameters))
+        print(f"[Ishigami Model] {i_s}: paramater: {parameters}")
 
         results = []
 
@@ -56,7 +58,6 @@ class IshigamiModel(Model):
 
             results.append((f_result, runtime))
 
-        #return [value_of_interest]
         return results
 
     def timesteps(self):
