@@ -1,0 +1,40 @@
+Ishigami:
+Sobol_t: [0.5574/0.5576, 0.4424/0.4424, 0.2436/0.2437]
+Sobol_m: [0.3138/0.3139, 0.4424/0.4424, 0.0/0.0000]
+
+IMPORTANT: With Saltelli only random works!!!
+IMPORTANT: Saltelli sometimes still gives negative value when SI close to 0!!!
+
+Normalized polynomials; saltelli; 1000->5000, no transformation: - 5000 model runs - halton
+        WRONG!!!!
+	Sobol_t_qoi: [4.78774606e-02 4.14642486e-01 2.55410713e-04]; shape:(3,)
+	Sobol_m_qoi: [0.58560669 0.95160101 0.53939457]; shape:(3,)
+
+Normalized polynomials; saltelli; 2000->10000, no transformation: - 10000 model runs - random
+	Sobol_t_qoi: [0.57814693 0.44734212 0.24896176]; shape:(3,)
+	Sobol_m_qoi: [0.29420935 0.42089895 0.02740504]; shape:(3,)
+
+Normalized polynomials; saltelli; 1000->5000, no transformation: - 5000 model runs - random
+         code: 4(best); 3(negative m_3); 2(wrong); 1(negative total!!!);
+	Sobol_t_qoi: [0.53025562 0.46023587 0.22305464]; shape:(3,)
+	Sobol_m_qoi: [ 0.29382401  0.45745877 -0.00617224]; shape:(3,)
+
+Normalized polynomials; q=7; p=6, no transformation: - 512 model runs
+	Sobol_t_qoi: [0.56371626 0.43628374 0.24071006]; shape:(3,)
+	Sobol_m_qoi: [3.23006201e-01 4.36283741e-01 2.91779286e-30]; shape:(3,)
+
+Normalized polynomials; q=11; p=7, no transformation:
+	Sobol_t_qoi: [0.56227314 0.43772686 0.24562696]; shape:(3,)
+	Sobol_m_qoi: [0.316646178e 0.437726860e 0.0]; shape:(3,)
+
+Normalized polynomials; q=11; p=5, no transformation:
+	Sobol_t_qoi: [0.64550176 0.35449824 0.27563309]; shape:(3,)
+	Sobol_m_qoi: [3.69868674e-01 3.54498237e-01 7.46626291e-31]; shape:(3,)
+
+Normalized polynomials; q=7; p=5, no transformation:
+	Sobol_t_qoi: [0.64634036 0.35365964 0.27599102]; shape:(3,)
+	Sobol_m_qoi: [3.70349340e-01 3.53659641e-01 1.54124529e-30]; shape:(3,)
+
+Not-Normalized polynomials; q=7; p=5, no transformation:
+	Sobol_t_qoi: [0.64634036 0.35365964 0.27599102]; shape:(3,)
+	Sobol_m_qoi: [3.70349340e-01 3.53659641e-01 1.04090894e-30]; shape:(3,)

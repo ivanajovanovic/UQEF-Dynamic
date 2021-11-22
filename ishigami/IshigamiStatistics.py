@@ -87,7 +87,7 @@ class IshigamiStatistics(Statistics):
 
         self.timesteps = timesteps
         self.numbTimesteps = len(self.timesteps)
-        print("timesteps Info")
+        print("STATISTICS INFO: timesteps Info")
         print(type(self.timesteps))
         print("numbTimesteps is: {}".format(self.numbTimesteps))
 
@@ -108,6 +108,8 @@ class IshigamiStatistics(Statistics):
             self.P10_qoi = self.P10_qoi[0]
             self.P90_qoi = self.P90_qoi[0]
 
+        print(f"STATISTICS INFO: calcStatisticsForSc function is done!")
+
     def calcStatisticsForSaltelli(self, rawSamples, timesteps,
                             simulationNodes, numEvaluations, order, regression, poly_normed, poly_rule, solverTimes,
                             work_package_indexes, original_runtime_estimator=None, *args, **kwargs):
@@ -122,11 +124,12 @@ class IshigamiStatistics(Statistics):
         
         self.timesteps = timesteps
         self.numbTimesteps = len(self.timesteps)
-        print("timesteps Info")
+        print("STATISTICS INFO: timesteps Info")
         print(type(self.timesteps))
         print("numbTimesteps is: {}".format(self.numbTimesteps))
 
         qoi_values_saltelli = self.qoi[:, np.newaxis]
+        print(f"qoi_values_saltelli.shape = {qoi_values_saltelli.shape}")
         standard_qoi = qoi_values_saltelli[:numEvaluations, :]
         extended_standard_qoi = qoi_values_saltelli[:(2*numEvaluations), :]
 
@@ -148,23 +151,23 @@ class IshigamiStatistics(Statistics):
             self.P10_qoi = self.P10_qoi[0]
             self.P90_qoi = self.P90_qoi[0]
 
-        # dim = len(simulationNodes.nodeNames)
-        dim = len(simulationNodes.distNodes[0])
+        dim = len(simulationNodes.nodeNames)
+        # dim = len(simulationNodes.distNodes[0])
 
         if self._compute_Sobol_m:
-            self.Sobol_m_qoi = saltelliSobolIndicesHelpingFunctions.Sens_m_sample_4(
-                qoi_values_saltelli, dim, numEvaluations)
+            self.Sobol_m_qoi = saltelliSobolIndicesHelpingFunctions._Sens_m_sample(
+                qoi_values_saltelli, dim, numEvaluations, code=4)
 
         if self._compute_Sobol_t:
-            self.Sobol_t_qoi = saltelliSobolIndicesHelpingFunctions.Sens_t_sample_4(
-                qoi_values_saltelli, dim, numEvaluations)
+            self.Sobol_t_qoi = saltelliSobolIndicesHelpingFunctions._Sens_t_sample(
+                qoi_values_saltelli, dim, numEvaluations, code=4)
 
         print("self.Sobol_m_qoi.shape")
         print(self.Sobol_m_qoi.shape)
         print("self.Sobol_t_qoi.shape")
         print(self.Sobol_t_qoi.shape)
 
-        print(f"[LARSIM STAT INFO] calcStatisticsForSaltelli function is done!")
+        print(f"STATISTICS INFO: calcStatisticsForSc function is done!")
 
     def calcStatisticsForSc(self, rawSamples, timesteps,
                             simulationNodes, order, regression, poly_normed, poly_rule, solverTimes,
@@ -211,25 +214,12 @@ class IshigamiStatistics(Statistics):
         self.Var_qoi = float(cp.Var(qoi_gPCE, dist))
         self.StdDev_qoi = float(cp.Std(qoi_gPCE, dist))
 
-        print("STATISTICS INFO: E, Var, Std")
-        print(f"E_qoi: {self.E_qoi}")
-        print(f"E_qoi: {self.Var_qoi}")
-        print(f"E_qoi: {self.StdDev_qoi}")
-
         if self._compute_Sobol_t:
             self.Sobol_t_qoi = cp.Sens_t(qoi_gPCE, dist)
         if self._compute_Sobol_m:
             self.Sobol_m_qoi = cp.Sens_m(qoi_gPCE, dist)
         if self._compute_Sobol_m2:
             self.Sobol_m2_qoi = cp.Sens_m2(qoi_gPCE, dist)
-
-        print("STATISTICS INFO: E, Var, Std")
-        if self._compute_Sobol_t:
-            print(f"Sobol_t_qoi: {self.Sobol_t_qoi}; shape:{self.Sobol_t_qoi.shape}")
-        if self._compute_Sobol_m:
-            print(f"Sobol_m_qoi: {self.Sobol_m_qoi}; shape:{self.Sobol_m_qoi.shape}")
-        if self._compute_Sobol_m2:
-            print(f"Sobol_m2_qoi: {self.Sobol_m2_qoi}; shape:{self.Sobol_m2_qoi.shape}")
 
         self.P10_qoi = float(cp.Perc(qoi_gPCE, 10, dist, numPercSamples))
         self.P90_qoi = float(cp.Perc(qoi_gPCE, 90, dist, numPercSamples))
@@ -266,6 +256,19 @@ class IshigamiStatistics(Statistics):
         self._check_if_Sobol_t_computed()
         self._check_if_Sobol_m_computed()
         self._check_if_Sobol_m2_computed()
+
+        print("STATISTICS INFO: E, Var, Std")
+        print(f"E_qoi: {self.E_qoi}")
+        print(f"Var_qoi: {self.Var_qoi}")
+        print(f"StdDev_qoi: {self.StdDev_qoi}")
+
+        print("STATISTICS INFO: E, Var, Std")
+        if self._is_Sobol_t_computed:
+            print(f"Sobol_t_qoi: {self.Sobol_t_qoi}; shape:{self.Sobol_t_qoi.shape}")
+        if self._is_Sobol_m_computed:
+            print(f"Sobol_m_qoi: {self.Sobol_m_qoi}; shape:{self.Sobol_m_qoi.shape}")
+        if self._is_Sobol_m2_computed:
+            print(f"Sobol_m2_qoi: {self.Sobol_m2_qoi}; shape:{self.Sobol_m2_qoi.shape}")
 
         v = self.a**2/8 + (self.b*np.pi**4)/5 + (self.b**2*np.pi**8)/18 + 0.5
         vm1 = 0.5*(1+(self.b*np.pi**4)/5)**2

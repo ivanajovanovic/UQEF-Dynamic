@@ -8,7 +8,7 @@ from math import pow
 def model(p, x):
     a, b = p
     x1, x2, x3 = x
-    f = np.sin(x1) + a * pow(np.sin(x2),2) + b * pow(x3,4) * np.sin(x1)
+    f = np.sin(x1) + a * pow(np.sin(x2), 2) + b * pow(x3, 4) * np.sin(x1)
     return f
 
 
@@ -40,7 +40,7 @@ class IshigamiModel(Model):
 
     def run(self, i_s, parameters, *args, **kwargs):
 
-        print(f"[Ishigami Model] {i_s}: paramater: {parameters}")
+        # print(f"[Ishigami Model] {i_s}: paramater: {parameters}")
 
         results = []
 
