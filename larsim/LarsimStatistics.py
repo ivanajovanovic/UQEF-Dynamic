@@ -30,63 +30,9 @@ from LarsimUtilityFunctions.larsimModel import LarsimConfigurations
 
 #from Larsim-UQ.common import saltelliSobolIndicesHelpingFunctions
 from common import saltelliSobolIndicesHelpingFunctions
+from common import colors
 
 # from numba import jit, prange
-
-COLORS = [
-    '#1f77b4',  # muted blue
-    '#ff7f0e',  # safety orange
-    '#2ca02c',  # cooked asparagus green
-    '#d62728',  # brick red
-    '#9467bd',  # muted purple
-    '#8c564b',  # chestnut brown
-    '#e377c2',  # raspberry yogurt pink
-    '#7f7f7f',  # middle gray
-    '#bcbd22',  # curry yellow-green
-    '#17becf'   # blue-teal
-]
-
-s = '''
-        aliceblue, antiquewhite, aqua, aquamarine, azure,
-        beige, bisque, black, blanchedalmond, blue,
-        blueviolet, brown, burlywood, cadetblue,
-        chartreuse, chocolate, coral, cornflowerblue,
-        cornsilk, crimson, cyan, darkblue, darkcyan,
-        darkgoldenrod, darkgray, darkgrey, darkgreen,
-        darkkhaki, darkmagenta, darkolivegreen, darkorange,
-        darkorchid, darkred, darksalmon, darkseagreen,
-        darkslateblue, darkslategray, darkslategrey,
-        darkturquoise, darkviolet, deeppink, deepskyblue,
-        dimgray, dimgrey, dodgerblue, firebrick,
-        floralwhite, forestgreen, fuchsia, gainsboro,
-        ghostwhite, gold, goldenrod, gray, grey, green,
-        greenyellow, honeydew, hotpink, indianred, indigo,
-        ivory, khaki, lavender, lavenderblush, lawngreen,
-        lemonchiffon, lightblue, lightcoral, lightcyan,
-        lightgoldenrodyellow, lightgray, lightgrey,
-        lightgreen, lightpink, lightsalmon, lightseagreen,
-        lightskyblue, lightslategray, lightslategrey,
-        lightsteelblue, lightyellow, lime, limegreen,
-        linen, magenta, maroon, mediumaquamarine,
-        mediumblue, mediumorchid, mediumpurple,
-        mediumseagreen, mediumslateblue, mediumspringgreen,
-        mediumturquoise, mediumvioletred, midnightblue,
-        mintcream, mistyrose, moccasin, navajowhite, navy,
-        oldlace, olive, olivedrab, orange, orangered,
-        orchid, palegoldenrod, palegreen, paleturquoise,
-        palevioletred, papayawhip, peachpuff, peru, pink,
-        plum, powderblue, purple, red, rosybrown,
-        royalblue, saddlebrown, salmon, sandybrown,
-        seagreen, seashell, sienna, silver, skyblue,
-        slateblue, slategray, slategrey, snow, springgreen,
-        steelblue, tan, teal, thistle, tomato, turquoise,
-        violet, wheat, white, whitesmoke, yellow,
-        yellowgreen
-        '''
-COLORS_ALL = s.split(',')
-COLORS_ALL = [l.replace('\n', '') for l in COLORS_ALL]
-COLORS_ALL = [l.replace(' ', '') for l in COLORS_ALL]
-
 
 class LarsimSamples(object):
     """
@@ -456,8 +402,6 @@ class LarsimStatistics(Statistics):
         self.dim = len(self.nodeNames)
         self.labels = [nodeName.strip() for nodeName in self.nodeNames]
 
-        self.result_dict = dict()
-
         self.df_unaltered = None
         self.df_measured = None
         self.unaltered_computed = False
@@ -475,6 +419,7 @@ class LarsimStatistics(Statistics):
         self.number_of_unique_index_runs = None
         self.numEvaluations = None
         self.samples = None
+        # self.result_dict = dict()
         self.result_dict = None
 
         self.qoi_mean_df = None
@@ -1179,22 +1124,22 @@ class LarsimStatistics(Statistics):
                 name = self.labels[i] + "_S_m"
                 if uq_method == "saltelli":
                     fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.result_dict[key]["Sobol_m"][i][0] for key in keyIter],
-                                             name=name, legendgroup=self.labels[i], line_color=COLORS[i]),
+                                             name=name, legendgroup=self.labels[i], line_color=colors.COLORS[i]),
                                   row=sobol_m_row, col=1)
                 else:
                     fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.result_dict[key]["Sobol_m"][i] for key in keyIter],
-                                             name=name, legendgroup=self.labels[i], line_color=COLORS[i]),
+                                             name=name, legendgroup=self.labels[i], line_color=colors.COLORS[i]),
                                   row=sobol_m_row, col=1)
         if self._is_Sobol_t_computed:
             for i in range(len(self.labels)):
                 name = self.labels[i] + "_S_t"
                 if uq_method == "saltelli":
                     fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.result_dict[key]["Sobol_t"][i][0] for key in keyIter],
-                                             name=name, legendgroup=self.labels[i], line_color=COLORS[i]),
+                                             name=name, legendgroup=self.labels[i], line_color=colors.COLORS[i]),
                                   row=sobol_t_row, col=1)
                 else:
                     fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.result_dict[key]["Sobol_t"][i] for key in keyIter],
-                                             name=name, legendgroup=self.labels[i], line_color=COLORS[i]),
+                                             name=name, legendgroup=self.labels[i], line_color=colors.COLORS[i]),
                                   row=sobol_t_row, col=1)
 
         # TODO - Make additional plots - each parameter independently with color + normalized Q measured
@@ -1462,11 +1407,11 @@ class LarsimStatistics(Statistics):
             if uq_method == "saltelli":
                 fig.add_trace(
                     go.Scatter(x=self.pdTimesteps, y=[self.result_dict[key][si_type][i][0] for key in keyIter],
-                               name=self.labels[i], legendgroup=self.labels[i], line_color=COLORS[i]))
+                               name=self.labels[i], legendgroup=self.labels[i], line_color=colors.COLORS[i]))
             else:
                 fig.add_trace(
                     go.Scatter(x=self.pdTimesteps, y=[self.result_dict[key][si_type][i] for key in keyIter],
-                               name=self.labels[i], legendgroup=self.labels[i], line_color=COLORS[i]))
+                               name=self.labels[i], legendgroup=self.labels[i], line_color=colors.COLORS[i]))
 
         return fig
 

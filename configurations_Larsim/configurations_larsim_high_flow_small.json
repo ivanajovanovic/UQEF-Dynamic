@@ -110,8 +110,8 @@
       "upper": 1,
       "lower_limit": 50,
       "upper_limit": 4000,
-      "depends_on":"EQI",
-      "direction":"decreasing",
+      "depends_on":["EQD2","EQI"],
+      "direction":["increasing", "decreasing"],
       "default": 450.0
     },
     {

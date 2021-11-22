@@ -77,6 +77,7 @@ class LarsimFunction(Function):
                 type_of_output=self.larsimModelObject.larsimConfObject.type_of_output_of_Interest
             )
             return np.array(df['Value'])
+            # TODO take just last time-step
         elif self.qoi == "GoF":
             if self.gof == "calculateRMSE":  # TODO change this - hard-coded for now...
                 temp = larsim_res[0][0]['gof_df'][self.gof].values
@@ -91,10 +92,10 @@ class LarsimFunction(Function):
 local_debugging = True
 if local_debugging:
     sourceDir = pathlib.Path('/work/ga45met/mnt/linux_cluster_2/Larsim-UQ')
-    inputModelDir = pathlib.Path(osp.abspath(osp.join(larsimPaths.data_dir, 'Larsim-data'))) #larsimPaths.larsim_data_path
+    inputModelDir = pathlib.Path(osp.abspath(osp.join(larsimPaths.data_dir, 'Larsim-data')))  # larsimPaths.larsim_data_path
     scratch_dir = pathlib.Path("/work/ga45met")
-    outputModelDir = outputResultDir = workingDir = scratch_dir / "larsim_runs" / 'larsim_sg_nse_2' #"Larsim_runs"
-    config_file = pathlib.Path('/work/ga45met/mnt/linux_cluster_2/Larsim-UQ/configurations_Larsim/configurations_larsim_high_flow_small.json')
+    outputModelDir = outputResultDir = workingDir = scratch_dir / "larsim_runs" / 'larsim_sg_lognse_modified_basis'  # "Larsim_runs"
+    config_file = pathlib.Path('/work/ga45met/mnt/linux_cluster_2/Larsim-UQ/configurations_Larsim/configurations_larsim_high_flow_small_sg.json')
     # LARSIM_REGEN_DATA_FILES_PATH = pathlib.Path("/home/ga45met/Repositories/Larsim/Larsim-data/WHM Regen/data_files")
     # TODO save config_file!!!
 
@@ -140,7 +141,7 @@ if local_debugging:
 
     params = configuration_object["parameters"]
     param_names = [(param["type"], param["name"]) for param in params]
-    dim = len(params)
+    dim = len(params)  # TODO take only uncertain paramters into account
     distributions = [(param["distribution"], param["lower"], param["upper"]) for param in params]
 
     a = np.array([param["lower"] for param in params])
@@ -148,14 +149,14 @@ if local_debugging:
 
     #####################################
     qoi = "GoF"  # "Q" "GoF"
-    gof = "calculateNSE"   # "calculateRMSE" "calculateNSE"  "None"
+    gof = "calculateLogNSE"   # "calculateRMSE" "calculateNSE"  "None"
     operation = "UncertaintyQuantification"  # "Interpolation"
     problem_function = LarsimFunction(config_file=config_file, qoi=qoi, gof=gof)
 
     op = UncertaintyQuantification(problem_function, distributions, a, b)
     # grid = GaussLegendreGrid(a, b, op)
-    grid = GlobalTrapezoidalGridWeighted(a, b, op, boundary=False)  # try with modified_basis=True
-    # try odther grids:
+    grid = GlobalTrapezoidalGridWeighted(a, b, op, boundary=False, modified_basis=True)  # try with modified_basis=True
+    # try other grids:
     # GlobalBSplineGrid, GlobalHierarchizationGrid, ClenshawCurtisGridGlobal,
     # GlobalLagrangeGrid, GlobalLagrangeGridWeighted
     # TODO - Add this from Jonas' branch
@@ -179,7 +180,7 @@ if local_debugging:
 
     lmax = 4  # 2, max_evaluations=50
     # combiinstance.perform_operation(1, lmax)
-    combiinstance.performSpatiallyAdaptiv(1, lmax, error_operator, tol=0, max_evaluations=50,
+    combiinstance.performSpatiallyAdaptiv(1, lmax, error_operator, tol=0, max_evaluations=100,
                                           do_plot=True)
 
     # Create the PCE approximation; it is saved internally in the operation
