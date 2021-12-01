@@ -35,6 +35,8 @@ class IshigamiStatistics(Statistics):
         self.a = self.configurationObject["other_model_parameters"]["a"]
         self.b = self.configurationObject["other_model_parameters"]["b"]
 
+        self.sampleFromStandardDist = kwargs.get('sampleFromStandardDist', False)
+
         self.uq_method = kwargs.get('uq_method', None)
         self._compute_Sobol_t = kwargs.get('compute_Sobol_t', True)
         self._compute_Sobol_m = kwargs.get('compute_Sobol_m', True)
@@ -57,6 +59,9 @@ class IshigamiStatistics(Statistics):
         self._is_Sobol_m_computed = False
         self._is_Sobol_m2_computed = False
 
+        self.sobol_m_analytical = None
+        self.sobol_t_analytical = None
+
         self.numbTimesteps = None
         self.timesteps = None
         self.number_of_unique_index_runs = None
@@ -66,6 +71,28 @@ class IshigamiStatistics(Statistics):
 
         self.solverTimes = None
         self.work_package_indexes = None
+
+    def get_analytical_sobol_indices(self):
+        v = self.a**2/8 + (self.b*np.pi**4)/5 + (self.b**2*np.pi**8)/18 + 0.5
+        vm1 = 0.5*(1+(self.b*np.pi**4)/5)**2
+        vm2 = self.a**2/8
+        vm3 = 0
+        sm1 = vm1/v
+        sm2 = vm2/v
+        sm3 = vm3/v
+
+        vt1 = 0.5*(1+(self.b*np.pi**4)/5)**2 + 8*self.b**2*np.pi**8/225
+        vt2 = self.a**2/8
+        vt3 = 8*self.b**2*np.pi**8/225
+        st1 = vt1/v
+        st2 = vt2/v
+        st3 = vt3/v
+
+        # Sobol_m_analytical = np.array([0.3138/0.3139, 0.4424/0.4424, 0.0/0.0000], dtype=np.float64)
+        self.sobol_m_analytical = np.array([sm1, sm2, sm3], dtype=np.float64)
+
+        # Sobol_t_analytical = np.array([0.5574/0.5576, 0.4424/0.4424, 0.2436/0.2437], dtype=np.float64)
+        self.sobol_t_analytical = np.array([st1, st2, st3], dtype=np.float64)
 
     def calcStatisticsForMc(self, rawSamples, timesteps, simulationNodes,
                             numEvaluations, order, regression, poly_normed, poly_rule, solverTimes,
@@ -81,8 +108,11 @@ class IshigamiStatistics(Statistics):
 
         if regression:
             nodes = simulationNodes.distNodes
-            dist = simulationNodes.joinedDists
-            # P = cp.orth_ttr(order, dist)
+            if self.sampleFromStandardDist:
+                dist = simulationNodes.joinedStandardDists
+            else:
+                dist = simulationNodes.joinedDists
+                # P = cp.orth_ttr(order, dist)
             polynomial_expansion = cp.generate_expansion(order, dist, rule=poly_rule, normed=poly_normed)
 
         self.timesteps = timesteps
@@ -188,7 +218,10 @@ class IshigamiStatistics(Statistics):
 
         nodes = simulationNodes.distNodes
         weights = simulationNodes.weights
-        dist = simulationNodes.joinedDists
+        if self.sampleFromStandardDist:
+            dist = simulationNodes.joinedStandardDists
+        else:
+            dist = simulationNodes.joinedDists
         # P = cp.orth_ttr(order, dist)
         polynomial_expansion = cp.generate_expansion(order, dist, rule=poly_rule, normed=poly_normed)
 

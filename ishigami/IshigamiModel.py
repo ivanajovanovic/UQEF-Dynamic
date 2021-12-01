@@ -62,3 +62,27 @@ class IshigamiModel(Model):
 
     def timesteps(self):
         return self.t
+
+    def get_analytical_sobol_indices(self):
+        v = self.a**2/8 + (self.b*np.pi**4)/5 + (self.b**2*np.pi**8)/18 + 0.5
+        vm1 = 0.5*(1+(self.b*np.pi**4)/5)**2
+        vm2 = self.a**2/8
+        vm3 = 0
+        sm1 = vm1/v
+        sm2 = vm2/v
+        sm3 = vm3/v
+
+        vt1 = 0.5*(1+(self.b*np.pi**4)/5)**2 + 8*self.b**2*np.pi**8/225
+        vt2 = self.a**2/8
+        vt3 = 8*self.b**2*np.pi**8/225
+        st1 = vt1/v
+        st2 = vt2/v
+        st3 = vt3/v
+
+        # Sobol_m_analytical = np.array([0.3138/0.3139, 0.4424/0.4424, 0.0/0.0000], dtype=np.float64)
+        sobol_m_analytical = np.array([sm1, sm2, sm3], dtype=np.float64)
+
+        # Sobol_t_analytical = np.array([0.5574/0.5576, 0.4424/0.4424, 0.2436/0.2437], dtype=np.float64)
+        sobol_t_analytical = np.array([st1, st2, st3], dtype=np.float64)
+
+        return sobol_m_analytical, sobol_t_analytical
