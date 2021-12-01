@@ -56,28 +56,28 @@ if local_debugging:
     uqsim.args.uncertain = "all"
     uqsim.args.chunksize = 1
 
-    uqsim.args.uq_method = "saltelli"  # "sc" | "saltelli" | "mc" | "ensemble"
+    uqsim.args.uq_method = "sc"  # "sc" | "saltelli" | "mc" | "ensemble"
     uqsim.args.mc_numevaluations = 1000
     uqsim.args.sampling_rule = "random"  # | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
-    uqsim.args.sc_q_order = 7  # 7 #10 3
-    uqsim.args.sc_p_order = 6  # 6 #8 6
+    uqsim.args.sc_q_order = 11  # 11 7 #10 3
+    uqsim.args.sc_p_order = 8  # 8 6 #8 6
     uqsim.args.sc_poly_rule = "three_terms_recurrence"  # "gram_schmidt" | "three_terms_recurrence" | "cholesky"
     uqsim.args.sc_poly_normed = True  # True
-    uqsim.args.sc_sparse_quadrature = False  # True
+    uqsim.args.sc_sparse_quadrature = True  # True
     uqsim.args.regression = False
 
     uqsim.args.inputModelDir = os.path.abspath(os.path.join('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2','Larsim-data'))
     uqsim.args.sourceDir = os.path.abspath(os.path.join('/dss/dsshome1/lxc0C/ga45met2', 'Repositories', 'Larsim-UQ'))
     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_ensemble_2'))
-    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "ishigami_runs", 'run_saltelli_1000_random'))
+    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "ishigami_runs", 'run_ssc_11_8_transformation'))
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
     #uqsim.args.config_file = "/dss/dsshome1/lxc0C/ga45met2/Repositories/Larsim-UQ/configurations_Larsim/configuration_larsim_uqsim_cm2_v4.json" #"configuration_larsim_uqsim.json"
     #uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/Larsim-UQ/configurations_Larsim/configurations_larsim_master_lai_small.json'
     # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/Larsim-UQ/configurations_Larsim/configurations_larsim_boundery_values_mls.json'
     uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/Larsim-UQ/configurations/configuration_ishigami.json'
 
-    uqsim.args.sampleFromStandardDist = False #True
-    uqsim.args.transformToStandardDist = False #True
+    uqsim.args.sampleFromStandardDist = True  # True
+    uqsim.args.transformToStandardDist = True  # True
 
     uqsim.args.mpi = True
     uqsim.args.mpi_method = "MpiPoolSolver"  # "LinearSolver"
@@ -141,6 +141,7 @@ uqsim.models.update({"productFunction": (lambda: ProductFunctionModel.ProductFun
 uqsim.statistics.update({"larsim"         : (lambda: LarsimStatistics.LarsimStatistics(
     configurationObject=uqsim.configuration_object,
     workingDir=uqsim.args.workingDir,
+    sampleFromStandardDist=uqsim.args.sampleFromStandardDist,
     store_qoi_data_in_stat_dict=False,
     parallel_statistics=uqsim.args.parallel_statistics,
     mpi_chunksize=uqsim.args.mpi_chunksize,
@@ -153,6 +154,7 @@ uqsim.statistics.update({"oscillator"     : (lambda: LinearDampedOscillatorStati
 uqsim.statistics.update({"ishigami"       : (lambda: IshigamiStatistics.IshigamiStatistics(
     configurationObject=uqsim.configuration_object,
     workingDir=uqsim.args.workingDir,
+    sampleFromStandardDist=uqsim.args.sampleFromStandardDist,
     uq_method=uqsim.args.uq_method,
     compute_Sobol_t=uqsim.args.compute_Sobol_t,
     compute_Sobol_m=uqsim.args.compute_Sobol_m

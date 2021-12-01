@@ -2,7 +2,6 @@
 Usage of the UQEF with a (mainly) Larsim model.
 @author: Florian Kuenzner and Ivana Jovanovic
 """
-
 import os
 import subprocess
 import sys
@@ -37,8 +36,9 @@ sys.path.insert(0, os.getcwd())
 uqsim = uqef.UQsim()
 
 #####################################
-#####################################
 # change args locally for testing and debugging
+#####################################
+
 local_debugging = False
 if local_debugging:
     save_solver_results = False
@@ -131,17 +131,20 @@ uqsim.models.update({"productFunction": (lambda: ProductFunctionModel.ProductFun
 uqsim.statistics.update({"larsim"         : (lambda: LarsimStatistics.LarsimStatistics(
     configurationObject=uqsim.configuration_object,
     workingDir=uqsim.args.workingDir,
+    sampleFromStandardDist=uqsim.args.sampleFromStandardDist,
     store_qoi_data_in_stat_dict=False,
     parallel_statistics=uqsim.args.parallel_statistics,
     mpi_chunksize=uqsim.args.mpi_chunksize,
     unordered=False,
     uq_method=uqsim.args.uq_method,
     compute_Sobol_t=uqsim.args.compute_Sobol_t,
-    compute_Sobol_m=uqsim.args.compute_Sobol_m))})
+    compute_Sobol_m=uqsim.args.compute_Sobol_m
+))})
 uqsim.statistics.update({"oscillator"     : (lambda: LinearDampedOscillatorStatistics.LinearDampedOscillatorStatistics())})
 uqsim.statistics.update({"ishigami"       : (lambda: IshigamiStatistics.IshigamiStatistics(
     configurationObject=uqsim.configuration_object,
     workingDir=uqsim.args.workingDir,
+    sampleFromStandardDist=uqsim.args.sampleFromStandardDist,
     uq_method=uqsim.args.uq_method,
     compute_Sobol_t=uqsim.args.compute_Sobol_t,
     compute_Sobol_m=uqsim.args.compute_Sobol_m
