@@ -354,6 +354,7 @@ class LarsimStatistics(Statistics):
         #####################################
         # Set of configuration variables propagated via UQsim.args and **kwargs
         #####################################
+        self.sampleFromStandardDist = kwargs.get('sampleFromStandardDist', False)
 
         self.store_qoi_data_in_stat_dict = kwargs.get('store_qoi_data_in_stat_dict', False)
 
@@ -503,12 +504,18 @@ class LarsimStatistics(Statistics):
         if regression:
             self.nodes = simulationNodes.distNodes
             self.weights = None
-            self.dist = simulationNodes.joinedDists
+            if self.sampleFromStandardDist:
+                self.dist = simulationNodes.joinedStandardDists
+            else:
+                self.dist = simulationNodes.joinedDists
             self.polynomial_expansion = cp.generate_expansion(order, self.dist, rule=poly_rule, normed=poly_normed)
 
     def preparePolyExpanForSc(self, simulationNodes, order, poly_normed, poly_rule, *args, **kwargs):
         self.nodes = simulationNodes.distNodes
-        self.dist = simulationNodes.joinedDists
+        if self.sampleFromStandardDist:
+            self.dist = simulationNodes.joinedStandardDists
+        else:
+            self.dist = simulationNodes.joinedDists
         self.weights = simulationNodes.weights
         self.polynomial_expansion = cp.generate_expansion(order, self.dist, rule=poly_rule, normed=poly_normed)
 
@@ -735,7 +742,10 @@ class LarsimStatistics(Statistics):
 
         if regression:
             nodes = simulationNodes.distNodes
-            dist = simulationNodes.joinedDists
+            if self.sampleFromStandardDist:
+                dist = simulationNodes.joinedStandardDists
+            else:
+                dist = simulationNodes.joinedDists
             polynomial_expansion = cp.generate_expansion(order, dist, rule=poly_rule, normed=poly_normed)
 
         for key, val_indices in groups.items():
@@ -804,7 +814,10 @@ class LarsimStatistics(Statistics):
 
         # components independent on model evaluations, i.e., defined a priori, based solely on the underlying distribution
         nodes = simulationNodes.distNodes
-        dist = simulationNodes.joinedDists
+        if self.sampleFromStandardDist:
+            dist = simulationNodes.joinedStandardDists
+        else:
+            dist = simulationNodes.joinedDists
         weights = simulationNodes.weights
         polynomial_expansion = cp.generate_expansion(order, dist, rule=poly_rule, normed=poly_normed)
 

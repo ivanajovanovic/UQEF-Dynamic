@@ -55,6 +55,7 @@ class LarsimFunction(Function):
             return len(self.larsimModelObject.larsimConfObject.t) - self.larsimModelObject.larsimConfObject.warm_up_duration
         else:
             return 1
+
     #     def getAnalyticSolutionIntegral(self, start, end): assert "not implemented"
 
     def eval(self, coordinates):
