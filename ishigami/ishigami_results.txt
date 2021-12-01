@@ -5,6 +5,18 @@ Sobol_m: [0.3138/0.3139, 0.4424/0.4424, 0.0/0.0000]
 IMPORTANT: With Saltelli only random works!!!
 IMPORTANT: Saltelli sometimes still gives negative value when SI close to 0!!!
 
+Normalized polynomials; q=7; p=6, with transformation - sparse: - 1506 model runs
+    Sobol_t_qoi: [0.56426268 0.43615197 0.24227894]; shape:(3,)
+    Sobol_m_qoi: [0.32245707 0.43472401 0.00047616]; shape:(3,)
+
+Normalized polynomials; q=11; p=8, with transformation - sparse: -  9373 model runs
+    Sobol_t_qoi: [0.55759373 0.44240622 0.2435828 ]; shape:(3,)
+    Sobol_m_qoi: [3.14010980e-01 4.42406174e-01 2.03030331e-11]; shape:(3,)
+
+Normalized polynomials; q=11; p=8, with transformation - not-sparse: - 1728 model runs
+    Sobol_t_qoi: [0.55759382 0.44240623 0.24358284]; shape:(3,)
+    Sobol_m_qoi: [0.314010972 0.442406201 0.317265305e-23]; shape:(3,)
+
 Normalized polynomials; saltelli; 1000->5000, no transformation: - 5000 model runs - halton
         WRONG!!!!
 	Sobol_t_qoi: [4.78774606e-02 4.14642486e-01 2.55410713e-04]; shape:(3,)
