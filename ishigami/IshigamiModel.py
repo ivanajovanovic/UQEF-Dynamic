@@ -12,6 +12,14 @@ def model(p, x):
     return f
 
 
+def model_2d(p, x):
+    a, b = p
+    x1, x3 = x
+    x2 = 0
+    f = np.sin(x1) + a * pow(np.sin(x2), 2) + b * pow(x3, 4) * np.sin(x1)
+    return f
+
+
 class IshigamiModelSetUp():
     def __init__(self, configurationObject):
         pass

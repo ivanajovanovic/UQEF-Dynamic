@@ -59,18 +59,19 @@ if local_debugging:
     uqsim.args.uq_method = "sc"  # "sc" | "saltelli" | "mc" | "ensemble"
     uqsim.args.mc_numevaluations = 50
     uqsim.args.sampling_rule = "halton"  # | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
-    uqsim.args.sc_q_order = 7  # 10 #7
-    uqsim.args.sc_p_order = 6  # 6 #5
-    uqsim.args.sc_quadrature_rule = "G"
+    uqsim.args.sc_q_order = 8 #7  # 10 #7
+    uqsim.args.sc_p_order = 7 #6  # 6 #5
+    uqsim.args.sc_quadrature_rule = "patterson"  # "clenshaw_curtis", "patterson", "G"
+
     uqsim.args.sc_poly_rule = "three_terms_recurrence"  # "gram_schmidt" | "three_terms_recurrence" | "cholesky"
     uqsim.args.sc_poly_normed = False
-    uqsim.args.sc_sparse_quadrature = False  # False
+    uqsim.args.sc_sparse_quadrature = True  # False
     uqsim.args.regression = False
 
     uqsim.args.inputModelDir = pathlib.Path('/work/ga45met/Larsim-data')  # paths.larsim_data_path
     uqsim.args.sourceDir = pathlib.Path("/work/ga45met")  # paths.sourceDir
     scratch_dir = uqsim.args.sourceDir
-    uqsim.args.outputResultDir = uqsim.args.sourceDir / "larsim_runs" / 'larsim_run_nonsparse_experimental'
+    uqsim.args.outputResultDir = uqsim.args.sourceDir / "larsim_runs" / 'larsim_run_sc_sg_patterson_p7_q8'
     uqsim.args.outputResultDir = str(uqsim.args.outputResultDir)  # for now reast of the code expects path in the string
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
 
@@ -257,10 +258,18 @@ if uqsim.is_master():
             larsimConfigurationSettings.update_configurationObject_with_parameters_info(uqsim.configuration_object)
         list_of_parameters_dict = []
         for parameter in local_parameters:  # local_simulation_parameters
-            ordered_dict_of_all_params, unsupported_values_of_parameters_flag = larsimConfigurationSettings.params_configurations(
-                parameter, tape35_path, lanu_path, uqsim.configuration_object, process_id=0,
-                reference_value_from_TGB=3085, take_direct_value=False, write_new_values_to_tape35=False,
-                write_new_values_to_lanu=False)
+            ordered_dict_of_all_params, unsupported_values_of_parameters_flag = \
+                larsimConfigurationSettings.params_configurations(
+                    parameters=parameter,
+                    tape35_path=tape35_path,
+                    lanu_path=lanu_path,
+                    configurationObject=uqsim.configuration_object,
+                    process_id=0,
+                    reference_value_from_TGB=3085,
+                    take_direct_value=False,
+                    write_new_values_to_tape35=False,
+                    write_new_values_to_lanu=False,
+                    break_if_faulty_values_of_parameters=False)
             if unsupported_values_of_parameters_flag:
                 ordered_dict_of_all_params["correct_parameters"] = "failed"
             else:
@@ -272,21 +281,20 @@ if uqsim.is_master():
 
         # Plot polynomials
         # polynomial_expansion = cp.orth_ttr(order, dist)
-        local_dist = uqsim.simulationNodes.joinedDists
-        local_standard_dist = None
-        polynomial_standard_expansion = None
-        if uqsim.simulationNodes.joinedStandardDists:
-            local_standard_dist = uqsim.simulationNodes.joinedStandardDists
-
+        # local_dist = uqsim.simulationNodes.joinedDists
+        # local_standard_dist = None
+        # polynomial_standard_expansion = None
+        # if uqsim.simulationNodes.joinedStandardDists:
+        #     local_standard_dist = uqsim.simulationNodes.joinedStandardDists
         # if uqsim.args.uq_method == "sc":
-        #     polynomial_expansion = cp.generate_expansion(uqsim.args.sc_q_order, local_dist,
-        #                                                  rule=uqsim.args.sc_poly_rule,
-        #                                                  normed=uqsim.args.sc_poly_normed)
+        #     polynomial_expansion = cp.generate_expansion(
+        #         uqsim.args.sc_q_order, local_dist,
+        #         rule=uqsim.args.sc_poly_rule, normed=uqsim.args.sc_poly_normed)
         #     if uqsim.simulationNodes.joinedStandardDists:
-        #         polynomial_standard_expansion = cp.generate_expansion(uqsim.args.sc_q_order, local_standard_dist,
-        #                                                      rule=uqsim.args.sc_poly_rule,
-        #                                                      normed=uqsim.args.sc_poly_normed)
-        #
+        #         polynomial_standard_expansion = cp.generate_expansion(
+        #             uqsim.args.sc_q_order, local_standard_dist,
+        #             rule=uqsim.args.sc_poly_rule, normed=uqsim.args.sc_poly_normed)
+
         # # plotting simulation nodes
         # if uqsim.simulationNodes.dists:
         #     uqsim.simulationNodes.plotDists(fileName=uqsim.args.outputResultDir + "/dists", fileNameIdentIsFullName=True)

@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plotter
 import pathlib
+import pickle
 
 import chaospy as cp
 import os
@@ -260,6 +261,10 @@ class IshigamiStatistics(Statistics):
             self.P10_qoi = self.P10_qoi[0]
             self.P90_qoi = self.P90_qoi[0]
 
+        gpceFileName = os.path.abspath(os.path.join(str(self.workingDir), "gpce.pkl"))
+        with open(gpceFileName, 'wb') as handle:
+            pickle.dump(qoi_gPCE, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
     def _check_if_Sobol_t_computed(self):
         if hasattr(self, "Sobol_t_qoi"):
             self._is_Sobol_t_computed = True
@@ -295,13 +300,13 @@ class IshigamiStatistics(Statistics):
         print(f"Var_qoi: {self.Var_qoi}")
         print(f"StdDev_qoi: {self.StdDev_qoi}")
 
-        print("STATISTICS INFO: E, Var, Std")
+        print("STATISTICS INFO: Sobol' Indices")
         if self._is_Sobol_t_computed:
-            print(f"Sobol_t_qoi: {self.Sobol_t_qoi}; shape:{self.Sobol_t_qoi.shape}")
+            print(f"Sobol_t_qoi: {self.Sobol_t_qoi}")
         if self._is_Sobol_m_computed:
-            print(f"Sobol_m_qoi: {self.Sobol_m_qoi}; shape:{self.Sobol_m_qoi.shape}")
+            print(f"Sobol_m_qoi: {self.Sobol_m_qoi}")
         if self._is_Sobol_m2_computed:
-            print(f"Sobol_m2_qoi: {self.Sobol_m2_qoi}; shape:{self.Sobol_m2_qoi.shape}")
+            print(f"Sobol_m2_qoi: {self.Sobol_m2_qoi}")
 
         v = self.a**2/8 + (self.b*np.pi**4)/5 + (self.b**2*np.pi**8)/18 + 0.5
         vm1 = 0.5*(1+(self.b*np.pi**4)/5)**2
@@ -324,27 +329,39 @@ class IshigamiStatistics(Statistics):
         # Sobol_t_analytical = np.array([0.5574/0.5576, 0.4424/0.4424, 0.2436/0.2437], dtype=np.float64)
         Sobol_t_analytical = np.array([st1, st2, st3], dtype=np.float64)
 
+        Sobol_t_error = np.empty(len(self.labels), dtype=np.float64)
+        Sobol_m_error = np.empty(len(self.labels), dtype=np.float64)
+
         if self._is_Sobol_t_computed:
             for i in range(len(self.labels)):
                 if self.Sobol_t_qoi.shape[0] == len(self.timesteps):
-                    print(f"Sobol's Total Index for parameter {self.labels[i]} is: \n")
-                    print(f"Sobol Total Simulation = {(self.Sobol_t_qoi.T)[i]} \n")
-                    print(f"Sobol Total Analytical = {Sobol_t_analytical[i]} \n")
+                    # print(f"Sobol's Total Index for parameter {self.labels[i]} is: \n")
+                    # print(f"Sobol Total Simulation = {(self.Sobol_t_qoi.T)[i]} \n")
+                    # print(f"Sobol Total Analytical = {Sobol_t_analytical[i]} \n")
+                    Sobol_t_error[i] = (self.Sobol_t_qoi.T)[i] - Sobol_t_analytical[i]
                 else:
-                    print(f"Sobol's Total Index for parameter {self.labels[i]} is: \n")
-                    print(f"Sobol Total Simulation = {self.Sobol_t_qoi[i]:.4f} \n")
-                    print(f"Sobol Total Analytical = {Sobol_t_analytical[i]:.4f} \n")
-
+                    # print(f"Sobol's Total Index for parameter {self.labels[i]} is: \n")
+                    # print(f"Sobol Total Simulation = {self.Sobol_t_qoi[i]:.4f} \n")
+                    # print(f"Sobol Total Analytical = {Sobol_t_analytical[i]:.4f} \n")
+                    Sobol_t_error[i] = self.Sobol_t_qoi[i] - Sobol_t_analytical[i]
         if self._is_Sobol_m_computed:
             for i in range(len(self.labels)):
                 if self.Sobol_m_qoi.shape[0] == len(self.timesteps):
-                    print(f"Sobol's Main Index for parameter {self.labels[i]} is: \n")
-                    print(f"Sobol Main Simulation = {(self.Sobol_m_qoi.T)[i]:.4f} \n")
-                    print(f"Sobol Main Analytical = {Sobol_m_analytical[i]:.4f} \n")
+                    # print(f"Sobol's Main Index for parameter {self.labels[i]} is: \n")
+                    # print(f"Sobol Main Simulation = {(self.Sobol_m_qoi.T)[i]:.4f} \n")
+                    # print(f"Sobol Main Analytical = {Sobol_m_analytical[i]:.4f} \n")
+                    Sobol_m_error[i] = (self.Sobol_m_qoi.T)[i] - Sobol_m_analytical[i]
                 else:
-                    print(f"Sobol's Main Index for parameter {self.labels[i]} is: \n")
-                    print(f"Sobol Main Simulation = {self.Sobol_m_qoi[i]:.4f} \n")
-                    print(f"Sobol Main Analytical = {Sobol_m_analytical[i]:.4f} \n")
+                    # print(f"Sobol's Main Index for parameter {self.labels[i]} is: \n")
+                    # print(f"Sobol Main Simulation = {self.Sobol_m_qoi[i]:.4f} \n")
+                    # print(f"Sobol Main Analytical = {Sobol_m_analytical[i]:.4f} \n")
+                    Sobol_m_error[i] = self.Sobol_m_qoi[i] - Sobol_m_analytical[i]
+
+        print("STATISTICS INFO: Sobol' Indices Error")
+        if self._is_Sobol_t_computed:
+            print("Sobol_t_error: {}".format(Sobol_t_error, ".6f"))
+        if self._is_Sobol_m_computed:
+            print("Sobol_m_error: {}".format(Sobol_m_error, ".6f"))
 
         if self._is_Sobol_t_computed:
             sobol_t_qoi_file = os.path.abspath(os.path.join(str(self.workingDir), "sobol_t_qoi_file.npy"))

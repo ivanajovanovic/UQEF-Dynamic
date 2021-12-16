@@ -2,7 +2,56 @@ Ishigami:
 Sobol_t: [0.5574/0.5576, 0.4424/0.4424, 0.2436/0.2437]
 Sobol_m: [0.3138/0.3139, 0.4424/0.4424, 0.0/0.0000]
 
-IMPORTANT: With Saltelli only random works!!!
+
+KPU L=8 p=7 #model=399
+E_qoi: 3.5000004877355337
+Var_qoi: 13.724846773796116
+StdDev_qoi: 3.7047060306853115
+Sobol_t_qoi: [0.56227576 0.43777562 0.24563088]
+Sobol_m_qoi: [0.316644270 0.437723771 4.73734273e-07]
+
+
+KPU L=18 p=7 #model=6413/4447
+E_qoi: 3.5000000649155183
+Var_qoi: 13.724744387119472
+StdDev_qoi: 3.70469221219786
+Sobol_t_qoi: [0.56227328 0.43772672 0.24562707]
+Sobol_m_qoi: [0.316646216 0.437726715 2.61497469e-13]
+
+
+-------Ishigami & SparsSpACE-----------
+-> Trapezoidal Integration
+polynomial_degree_max = 3
+lmax = 4
+max_evaluations=200
+------------------
+Number of refinements: 8
+Number of distinct points used during the refinement: 207
+Time used adaptive (s): 112.16107894852757
+Final error: 1.3263282532562601
+E: 3.4846161564551976, PCE Var: 10.824183508450815
+
+Sobol's Total Index for parameter x1 is:
+Sobol_t_qoi: [0.33577695, 0.33577695, 0.33577695]
+Sobol_m_qoi: [0.33088972, 0.33088972, 0.33088972]
+
+
+polynomial_degree_max = 3
+lmax = 4
+max_evaluations=1000
+------------------
+Number of refinements:
+Number of distinct points used during the refinement:
+Time used adaptive (s):
+Final error:
+E:
+
+Sobol's Total Index for parameter x1 is:
+
+
+-------Ishigami & UQEF/Larsim-UQ-----------
+
+IMPORTANT: With Saltelli only random works!!! [TODO check this]
 IMPORTANT: Saltelli sometimes still gives negative value when SI close to 0!!!
 
 Normalized polynomials; q=7; p=6, with transformation - sparse: - 1506 model runs
