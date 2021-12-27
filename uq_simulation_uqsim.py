@@ -48,20 +48,27 @@ if local_debugging:
     uqsim.args.uncertain = "all"
     uqsim.args.chunksize = 1
 
-    uqsim.args.uq_method = "sc"  # "sc" | "saltelli" | "mc" | "ensemble"
-    uqsim.args.mc_numevaluations = 1000
-    uqsim.args.sampling_rule = "latin_hypercube"  # | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
+    uqsim.args.uq_method = "saltelli"  # "sc" | "saltelli" | "mc" | "ensemble"
+    uqsim.args.mc_numevaluations = 100
+    uqsim.args.sampling_rule = "random"  # | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
     uqsim.args.sc_q_order = 7  # 7 #10 3
-    uqsim.args.sc_p_order = 6  # 6 #8 6
+    uqsim.args.sc_p_order = 7  # 6 #8 6
+    uqsim.args.sc_quadrature_rule = "p"
+
+    uqsim.args.read_nodes_from_file = False
+    l = 10
+    path_to_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/sparse_grid_nodes_weights")
+    uqsim.args.parameters_file = path_to_file / f"KPU_d5_l{l}.asc" # f"KPU_d3_l{l}.asc"
+
     uqsim.args.sc_poly_rule = "three_terms_recurrence"  # "gram_schmidt" | "three_terms_recurrence" | "cholesky"
     uqsim.args.sc_poly_normed = True
-    uqsim.args.sc_sparse_quadrature = True  # False
+    uqsim.args.sc_sparse_quadrature = False  # False
     uqsim.args.regression = False
 
     uqsim.args.inputModelDir = os.path.abspath(os.path.join('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2','Larsim-data'))
     uqsim.args.sourceDir = os.path.abspath(os.path.join('/dss/dsshome1/lxc0C/ga45met2', 'Repositories', 'Larsim-UQ'))
     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_ensemble_2013_all_tgb'))
-    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_sparse'))
+    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_saltelli_trial'))
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
     # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/Larsim-UQ/configurations_Larsim/configurations_larsim_boundery_values.json'
     uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/Larsim-UQ/configurations_Larsim/configurations_larsim_high_flow_small.json'
@@ -203,10 +210,14 @@ if uqsim.is_master():
 
 uqsim.calc_statistics()
 uqsim.save_statistics()
-# if uqsim.args.model == "larsim":
-#     uqsim.plot_statistics(display=False, plot_measured_timeseries=True, plot_unalteres_timeseries=False)
-# else:
-#     uqsim.plot_statistics(display=False)
+if uqsim.args.model == "larsim":
+    uqsim.plot_statistics(
+        display=False,
+        plot_measured_timeseries=uqsim.configuration_object["model_settings"]["get_measured_discharge"],
+        plot_unalteres_timeseries=uqsim.configuration_object["model_settings"]["run_unaltered_sim"]
+    )
+else:
+    uqsim.plot_statistics(display=False)
 
 # uqsim.args.uqsim_file = os.path.abspath(os.path.join(uqsim.args.outputResultDir, "uqsim.saved"))
 # #uqsim.store_to_file()

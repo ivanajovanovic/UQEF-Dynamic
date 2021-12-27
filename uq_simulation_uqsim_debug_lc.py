@@ -59,14 +59,14 @@ if local_debugging:
     uqsim.args.uq_method = "sc"  # "sc" | "saltelli" | "mc" | "ensemble"
     uqsim.args.mc_numevaluations = 1000
     uqsim.args.sampling_rule = "random"  # | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
-    uqsim.args.sc_q_order = 8  # 11 7 #10 3
-    uqsim.args.sc_p_order = 7  # 8 6 #8 6
+    uqsim.args.sc_q_order = 6  # 11 7 #10 3
+    uqsim.args.sc_p_order = 8  # 8 6 #8 6
     uqsim.args.sc_quadrature_rule = "p"  # "clenshaw_curtis", "patterson", "G"
 
     uqsim.args.read_nodes_from_file = True
-    l = 8
+    l = 10
     path_to_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/sparse_grid_nodes_weights")
-    uqsim.args.parameters_file = path_to_file / f"GQU_d3_l{l}.asc" # f"KPU_d3_l{l}.asc"
+    uqsim.args.parameters_file = path_to_file / f"KPU_d3_l{l}.asc" # f"KPU_d3_l{l}.asc"
 
     uqsim.args.sc_poly_rule = "three_terms_recurrence"  # "gram_schmidt" | "three_terms_recurrence" | "cholesky"
     uqsim.args.sc_poly_normed = True  # True
@@ -76,7 +76,7 @@ if local_debugging:
     uqsim.args.inputModelDir = os.path.abspath(os.path.join('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2','Larsim-data'))
     uqsim.args.sourceDir = os.path.abspath(os.path.join('/dss/dsshome1/lxc0C/ga45met2', 'Repositories', 'Larsim-UQ'))
     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_ensemble_2'))
-    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "ishigami_runs", 'ishigami_run_sc_sg_gqu_p7_q8'))
+    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "ishigami_runs", "new_runs", 'ishigami_run_sc_sg_kpu_p8_q10'))
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
     #uqsim.args.config_file = "/dss/dsshome1/lxc0C/ga45met2/Repositories/Larsim-UQ/configurations_Larsim/configuration_larsim_uqsim_cm2_v4.json" #"configuration_larsim_uqsim.json"
     #uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/Larsim-UQ/configurations_Larsim/configurations_larsim_master_lai_small.json'

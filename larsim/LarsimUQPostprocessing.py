@@ -29,6 +29,7 @@ from LarsimUtilityFunctions import larsimInputOutputUtilities
 from LarsimUtilityFunctions import larsimPaths as paths
 
 from common import saltelliSobolIndicesHelpingFunctions
+from common import utility
 
 # from larsim import LarsimModel
 from larsim import LarsimStatistics
@@ -409,6 +410,59 @@ def compute_gof_over_different_time_series(objective_function, station, df_stati
           f"gof_meas_p10:{gof_meas_p10} \ngof_meas_p90:{gof_meas_p90} \n")
 
 
+def redo_all_statistics(workingDir, get_measured_data=False, get_unaltered_data=False, station="MARI", uq_method="sc"):
+    uq_output_paths_obj = utility.UQOutputPaths(workingDir)
+
+    with open(uq_output_paths_obj.configuration_object_file, 'rb') as f:
+        configuration_object = dill.load(f)
+
+    with open(uq_output_paths_obj.args_file, 'rb') as f:
+        uqsim_args = pickle.load(f)
+    uqsim_args_dict = vars(uqsim_args)
+
+    samples_df_simulation_result = pd.read_pickle(uq_output_paths_obj.df_all_simulations_file, compression="gzip")
+
+    if uq_output_paths_obj.statistics_dictionary_file.is_file():
+        with open(uq_output_paths_obj.statistics_dictionary_file, 'rb') as f:
+            statistics_dictionary = pickle.load(f)
+
+        larsimStatisticsObject = create_larsimStatistics_object(
+            configuration_object, uqsim_args_dict, workingDir)
+
+        extend_larsimStatistics_object(
+            larsimStatisticsObject=larsimStatisticsObject,
+            statistics_dictionary=statistics_dictionary,
+            df_simulation_result=samples_df_simulation_result,
+            get_measured_data=get_measured_data,
+            get_unaltered_data=get_unaltered_data
+        )
+
+        df_statistics_station = larsimStatisticsObject.create_df_from_statistics_data_single_station(
+            station=station, uq_method=uq_method)
+
+        si_m_df = larsimStatisticsObject.create_df_from_sensitivity_indices_for_singe_station(station=station,
+                                                                                              si_type="Sobol_m")
+        si_t_df = larsimStatisticsObject.create_df_from_sensitivity_indices_for_singe_station(station=station,
+                                                                                              si_type="Sobol_t")
+
+        # P factor
+        p = larsimStatisticsObject.calculate_p_factor(df_statistics_station=df_statistics_station, station=station)
+        print(f"P factor is: {p * 100}%")
+
+        # fig = larsimStatisticsObject.plot_heatmap_si_for_single_station(station="MARI", si_type="Sobol_m")
+        # fig.update_layout(title="Time Varying First Order Sobol Indices")
+        # fig.show()
+        #
+        # fig = larsimStatisticsObject.plot_heatmap_si_for_single_station(station="MARI", si_type="Sobol_t")
+        # fig.update_layout(title="Time Varying Total Order Sobol Indices")
+        # fig.show()
+        #
+        # fig = larsimStatisticsObject.plot_si_and_normalized_measured_time_signal(si_df=si_m_df, station="MARI")
+        # fig.show()
+
+
+###################################################################################################################
+# Refactor this
 ###################################################################################################################
 
 # TODO Add _calcStatisticsForMC and calcStatisticsForMc

@@ -312,7 +312,11 @@ def _my_parallel_calc_stats_for_mc_saltelli(keyIter_chunk, qoi_values_chunk, num
         local_result_dict["E"] = np.mean(qoi_values[:(2 * numEvaluations)], 0)
         local_result_dict["Var"] = np.sum((extended_standard_qoi_values - local_result_dict["E"]) ** 2,
                                           axis=0, dtype=np.float64) / (2 * numEvaluations - 1)
+        # local_result_dict["Var"] = np.sum((qoi_values[:(2 * numEvaluations)] - local_result_dict["E"]) ** 2,
+        #                                    axis=0, dtype=np.float64)/(2 * numEvaluations - 1)
+
         local_result_dict["StdDev"] = np.std(qoi_values[:(2 * numEvaluations)], 0, ddof=1)
+
         local_result_dict["P10"] = np.percentile(qoi_values[:(2 * numEvaluations)], 10, axis=0)
         local_result_dict["P90"] = np.percentile(qoi_values[:(2 * numEvaluations)], 90, axis=0)
         if isinstance(local_result_dict["P10"], list) and len(local_result_dict["P10"]) == 1:
@@ -320,11 +324,11 @@ def _my_parallel_calc_stats_for_mc_saltelli(keyIter_chunk, qoi_values_chunk, num
             local_result_dict["P90"] = local_result_dict["P90"][0]
 
         if compute_Sobol_t:
-            local_result_dict["Sobol_t"] = saltelliSobolIndicesHelpingFunctions._Sens_t_sample_4(
-                qoi_values_saltelli, dim, numEvaluations)
+            local_result_dict["Sobol_t"] = saltelliSobolIndicesHelpingFunctions._Sens_t_sample(
+                qoi_values_saltelli, dim, numEvaluations, code=4)
         if compute_Sobol_m:
-            local_result_dict["Sobol_m"] = saltelliSobolIndicesHelpingFunctions._Sens_m_sample_4(
-                qoi_values_saltelli, dim, numEvaluations)
+            local_result_dict["Sobol_m"] = saltelliSobolIndicesHelpingFunctions._Sens_m_sample(
+                qoi_values_saltelli, dim, numEvaluations, code=4)
 
         results.append((key, local_result_dict))
     return results
@@ -966,7 +970,7 @@ class LarsimStatistics(Statistics):
         if self.larsimConfObject.dailyOutput and self.qoi_column == "Value":
             transform_measured_to_daily = True
 
-        local_measurment_file = os.path.abspath(os.path.join(self.workingDir, "df_measured.pkl"))
+        local_measurment_file = os.path.abspath(os.path.join(str(self.workingDir), "df_measured.pkl"))
         if os.path.exists(local_measurment_file):
             self.df_measured = larsimDataPostProcessing.read_process_write_discharge(df=local_measurment_file,
                                                                                      timeframe=timestepRange,
@@ -1004,7 +1008,7 @@ class LarsimStatistics(Statistics):
         transform_unaltered_to_daily = False
         if self.larsimConfObject.dailyOutput and self.qoi_column == "Value":
             transform_unaltered_to_daily = True
-        df_unaltered_file = os.path.abspath(os.path.join(self.workingDir, "df_unaltered.pkl"))
+        df_unaltered_file = os.path.abspath(os.path.join(str(self.workingDir), "df_unaltered.pkl"))
         if paths.check_if_file_exists(df_unaltered_file,
                                       message="[LARSIM STAT INFO] df_unaltered_file does not exist"):
             self.df_unaltered = larsimDataPostProcessing.read_process_write_discharge(
