@@ -24,9 +24,9 @@ from mpi4py import MPI
 comm = MPI.COMM_WORLD
 rank = MPI.COMM_WORLD.Get_rank()
 
-def ishigami(coordinates, a=7, b=0.1):
+def ishigami(coordinates, a_model_param=7, b_model_param=0.1):
     x1, x2, x3 = coordinates
-    return math.sin(x1) + a * (math.sin(x2)) ** 2 + b * x3 ** 4 * math.sin(x1)
+    return math.sin(x1) + a_model_param * (math.sin(x2)) ** 2 + b_model_param * x3 ** 4 * math.sin(x1)
 
 class IshigamiFunctionSimple(Function):
     def __init__(self):
@@ -36,6 +36,7 @@ class IshigamiFunctionSimple(Function):
         return 1
 
     def eval(self, coordinates):
+        # TODO make it accept a_model_param and b_model_param
         return ishigami(coordinates)
 
 class IshigamiFunction(Function):
@@ -60,18 +61,18 @@ class IshigamiFunction(Function):
         return value_of_interest  # np.array(value_of_interest)
 
 
-def get_analytical_sobol_indices(a=7, b=0.1):
-    v = a ** 2 / 8 + (b * np.pi ** 4) / 5 + (b ** 2 * np.pi ** 8) / 18 + 0.5
-    vm1 = 0.5 * (1 + (b * np.pi ** 4) / 5) ** 2
-    vm2 = a ** 2 / 8
+def get_analytical_sobol_indices(a_model_param=7, b_model_param=0.1):
+    v = a_model_param ** 2 / 8 + (b_model_param * np.pi ** 4) / 5 + (b_model_param ** 2 * np.pi ** 8) / 18 + 0.5
+    vm1 = 0.5 * (1 + (b_model_param * np.pi ** 4) / 5) ** 2
+    vm2 = a_model_param ** 2 / 8
     vm3 = 0
     sm1 = vm1 / v
     sm2 = vm2 / v
     sm3 = vm3 / v
 
-    vt1 = 0.5 * (1 + (b * np.pi ** 4) / 5) ** 2 + 8 * b ** 2 * np.pi ** 8 / 225
-    vt2 = a ** 2 / 8
-    vt3 = 8 * b ** 2 * np.pi ** 8 / 225
+    vt1 = 0.5 * (1 + (b_model_param * np.pi ** 4) / 5) ** 2 + 8 * b_model_param ** 2 * np.pi ** 8 / 225
+    vt2 = a_model_param ** 2 / 8
+    vt3 = 8 * b_model_param ** 2 * np.pi ** 8 / 225
     st1 = vt1 / v
     st2 = vt2 / v
     st3 = vt3 / v
@@ -85,46 +86,53 @@ def get_analytical_sobol_indices(a=7, b=0.1):
     return sobol_m_analytical, sobol_t_analytical
 
 
-def compute_gpce_chaospy(a=7, b=0.1, outputModelDir="./", rule='gaussian', sparse=True, q=7, p=6):
-    x1 = cp.Uniform(-math.pi, math.pi)
-    x2 = cp.Uniform(-math.pi, math.pi)
-    x3 = cp.Uniform(-math.pi, math.pi)
-    joint_isghigami = cp.J(x1, x2, x3)
+def _compute_gpce_chaospy_ishigami(a_model_param, b_model_param, labels, my_model, joint, q, p, rule, sparse, outputModelDir,
+                                   can_model_evaluate_all_vector_nodes=True):
+    # TODO Introduction of this function has slowed down the execution!
+    quads = cp.generate_quadrature(q, joint, rule=rule, sparse=sparse)
+    nodes, weights = quads
 
-    labels = [param_name.strip() for param_name in ["x1", "x2", "x3"]]
+    # evaluate surrogate
+    if can_model_evaluate_all_vector_nodes:
+        evaluations = my_model(nodes.T)
+    else:
+        evaluations = np.array([my_model(node) for node in nodes.T])
 
-    # _compute_gpce_chaospy_ishigami(a=a, b=b, labels=labels, my_model=ishigami, joint=joint_isghigami,
-    # q=q, p=p, rule=rule, sparse=sparse,
-    # outputModelDir=outputModelDir, can_model_evaluate_all_vector_nodes=False)
-
-    # gauss_quads = cp.generate_quadrature(57, joint_isghigami, rule='gaussian')
-    sparse_quads = cp.generate_quadrature(q, joint_isghigami, rule=rule, sparse=sparse)
-
-    nodes, weights = sparse_quads
-    print(f"Number of model runs {len(nodes.T)}")
-
-    evaluations = np.array([ishigami(node) for node in nodes.T])
-    expansion = cp.generate_expansion(p, joint_isghigami)
-
-    # model_approxRet = cp.fit_quadrature(expansion, nodes, weights, evaluations, retall=True)
+    expansion = cp.generate_expansion(p, joint)
     gPCE = cp.fit_quadrature(expansion, nodes, weights, evaluations)
+    # TODO add point collocation with regression!
 
-    expected = cp.E(gPCE, joint_isghigami)
-    variance = cp.Var(gPCE, joint_isghigami)
-    # first_order_sobol_indices = cp.Sens_m(gPCE)
+    expectedInterp = cp.E(gPCE, joint)
+    varianceInterp = cp.Var(gPCE, joint)
+    first_order_sobol_indices = cp.Sens_m(gPCE, joint)
+    total_order_sobol_indices = cp.Sens_t(gPCE, joint)
 
-    first_order_sobol_indices = cp.Sens_m(gPCE, joint_isghigami)
-    total_order_sobol_indices = cp.Sens_t(gPCE, joint_isghigami)
-
-    print("expectation = ", expected, ", variance = ", variance)
+    print("expectation = ", expectedInterp, ", variance = ", varianceInterp)
     print("First order Sobol indices: ", first_order_sobol_indices)
     print("Total order Sobol indices: ", total_order_sobol_indices)
 
-    sobol_m_analytical, sobol_t_analytical = get_analytical_sobol_indices(a, b)
-    Sobol_t_error = sobol_t_analytical - total_order_sobol_indices
-    Sobol_m_error = sobol_m_analytical - first_order_sobol_indices
-    print("Sobol_t_error: {}".format(Sobol_t_error, ".6f"))
-    print("Sobol_m_error: {}".format(Sobol_m_error, ".6f"))
+    sobol_m_analytical, sobol_t_analytical = get_analytical_sobol_indices(a_model_param, b_model_param)
+
+    # Sobol_t_error = sobol_t_analytical - total_order_sobol_indices
+    # Sobol_m_error = sobol_m_analytical - first_order_sobol_indices
+    # print("Sobol_t_error: {}".format(Sobol_t_error, ".6f"))
+    # # print(f"Sobol Total Error = {Sobol_t_error:.6f} \n")
+    # print("Sobol_m_error: {}".format(Sobol_m_error, ".6f"))
+    # # print(f"Sobol Main Error = {Sobol_m_error:.6f} \n")
+
+    sobol_t_error = np.empty(len(labels), dtype=np.float64)
+    for i in range(len(labels)):
+        # print(f"Sobol Total Simulation = {total_order_sobol_indices[i][0]} \n")
+        # print(f"Sobol Total Analytical = {sobol_t_analytical[i]:.6f} \n")
+        sobol_t_error[i] = sobol_t_analytical[i] - total_order_sobol_indices[i][0]
+        print(f"Sobol Total Error = {sobol_t_error[i]:.6f} \n")
+    #
+    sobol_m_error = np.empty(len(labels), dtype=np.float64)
+    for i in range(len(labels)):
+        # print(f"Sobol Main Simulation = {first_order_sobol_indices[i][0]} \n")
+        # print(f"Sobol Main Analytical = {sobol_m_analytical[i]:.6f} \n")
+        sobol_m_error[i] = sobol_m_analytical[i] - first_order_sobol_indices[i][0]
+        print(f"Sobol Main Error = {sobol_m_error[i]:.6f} \n")
 
     #####################################
     # Saving
@@ -143,13 +151,28 @@ def compute_gpce_chaospy(a=7, b=0.1, outputModelDir="./", rule='gaussian', spars
     temp = f"results.txt"
     save_file = outputModelDir / temp
     fp = open(save_file, "w")
-    fp.write(f'E: {expected},\n Var: {variance}, \n '
+    fp.write(f'E: {expectedInterp},\n Var: {varianceInterp}, \n '
              f'First order Sobol indices: {first_order_sobol_indices} \n; '
              f'Total order Sobol indices: {total_order_sobol_indices} \n')
     fp.close()
 
 
-def compute_surrogate_sparsespace_and_gpce(a=7, b=0.1, modified_basis=False, spatiallyAdaptive=True,
+def compute_gpce_chaospy(a_model_param=7, b_model_param=0.1, outputModelDir="./", rule='gaussian', sparse=True, q=7, p=6):
+    x1 = cp.Uniform(-math.pi, math.pi)
+    x2 = cp.Uniform(-math.pi, math.pi)
+    x3 = cp.Uniform(-math.pi, math.pi)
+    joint_isghigami = cp.J(x1, x2, x3)
+
+    labels = [param_name.strip() for param_name in ["x1", "x2", "x3"]]
+
+    _compute_gpce_chaospy_ishigami(a_model_param=a_model_param, b_model_param=b_model_param, labels=labels,
+                                   my_model=ishigami, joint=joint_isghigami,
+                                   q=q, p=p, rule=rule, sparse=sparse,
+                                   outputModelDir=outputModelDir, can_model_evaluate_all_vector_nodes=False)
+
+
+def compute_surrogate_sparsespace_and_gpce(a_model_param=7, b_model_param=0.1, modified_basis=False,
+                                           spatiallyAdaptive=True,
                                            plotting=True, outputModelDir="./",
                                            lmax=2, max_evals=2000, tolerance=10 ** -5,
                                            rule='gaussian', sparse=False, q=7, p=6):
@@ -198,150 +221,16 @@ def compute_surrogate_sparsespace_and_gpce(a=7, b=0.1, modified_basis=False, spa
                                                                max_evaluations=max_evals)
     else:
         adaptiveCombiInstanceSingleDim.perform_operation(1, lmax)
-        # TODO Can StandardCombi go with performSpatiallyAdaptiv?
-        # adaptiveCombiInstanceSingleDim.performSpatiallyAdaptiv(1, lmax, errorOperator, tol=tolerance, do_plot=plotting,
-        #                                                        max_evaluations=max_evals)
 
     if plotting:
         adaptiveCombiInstanceSingleDim.print_resulting_sparsegrid(markersize=10)
 
     #####################################
-    # TODO From this point on SparseSpACE can again come to play, instead of chaospy - think if it makes sense!
-    # _compute_gpce_chaospy_ishigami(a=a, b=b, labels=labels, my_model=adaptiveCombiInstanceSingleDim, joint=joint,
-    # q=q, p=p, rule=rule, sparse=sparse,
-    # outputModelDir=outputModelDir, can_model_evaluate_all_vector_nodes=True)
-
-    quads = cp.generate_quadrature(q, joint, rule=rule, sparse=sparse)
-    nodes, weights = quads
-
-    # evaluate surrogate
-    evaluations = adaptiveCombiInstanceSingleDim(nodes.T)
-
-    expansion = cp.generate_expansion(p, joint)
-    gPCE = cp.fit_quadrature(expansion, nodes, weights, evaluations)
-
-    expectedInterp = cp.E(gPCE, joint)
-    varianceInterp = cp.Var(gPCE, joint)
-    first_order_sobol_indices = cp.Sens_m(gPCE, joint)
-    total_order_sobol_indices = cp.Sens_t(gPCE, joint)
-
-    print("expectation = ", expectedInterp, ", variance = ", varianceInterp)
-    print("First order Sobol indices: ", first_order_sobol_indices)
-    print("Total order Sobol indices: ", total_order_sobol_indices)
-
-    sobol_m_analytical, sobol_t_analytical = get_analytical_sobol_indices(a, b)
-
-    # Sobol_t_error = sobol_t_analytical - total_order_sobol_indices
-    # Sobol_m_error = sobol_m_analytical - first_order_sobol_indices
-    # print("Sobol_t_error: {}".format(Sobol_t_error, ".6f"))
-    # print("Sobol_m_error: {}".format(Sobol_m_error, ".6f"))
-
-    sobol_t_error = np.empty(len(labels), dtype=np.float64)
-    for i in range(len(labels)):
-        # print(f"Sobol Total Simulation = {total_order_sobol_indices[i][0]} \n")
-        # print(f"Sobol Total Analytical = {sobol_t_analytical[i][0]:.6f} \n")
-        sobol_t_error[i] = sobol_t_analytical[i][0] - total_order_sobol_indices[i][0]
-        print(f"Sobol Total Error = {sobol_t_error[i]:.6f} \n")
-
-    sobol_m_error = np.empty(len(labels), dtype=np.float64)
-    for i in range(len(labels)):
-        # print(f"Sobol Main Simulation = {first_order_sobol_indices[i][0]} \n")
-        # print(f"Sobol Main Analytical = {sobol_m_analytical[i][0]:.6f} \n")
-        sobol_m_error[i] = sobol_m_analytical[i][0] - first_order_sobol_indices[i][0]
-        print(f"Sobol Main Error = {sobol_m_error[i]:.6f} \n")
-
-    #####################################
-    # Saving
-    #####################################
-    # gPCE = op.get_gPCE()
-    fileName = f"gpce.pkl"
-    gpceFileName = str(outputModelDir / fileName)
-    with open(gpceFileName, 'wb') as handle:
-        pickle.dump(gPCE, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
-    fileName = f"pce_polys.pkl"
-    pcePolysFileName = str(outputModelDir / fileName)
-    with open(pcePolysFileName, 'wb') as handle:
-        pickle.dump(expansion, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
-    temp = f"results.txt"
-    save_file = outputModelDir / temp
-    fp = open(save_file, "w")
-    fp.write(f'E: {expectedInterp},\n Var: {varianceInterp}, \n '
-             f'First order Sobol indices: {first_order_sobol_indices} \n; '
-             f'Total order Sobol indices: {total_order_sobol_indices} \n')
-    fp.close()
-
-
-def _compute_gpce_chaospy_ishigami(a, b, labels, my_model, joint, q, p, rule, sparse, outputModelDir,
-                                   can_model_evaluate_all_vector_nodes=True):
-    """
-        # TODO From this point on SparseSpACE can again come to play, instead of chaospy - think if it makes sense!
-    """
-    quads = cp.generate_quadrature(q, joint, rule=rule, sparse=sparse)
-    nodes, weights = quads
-
-    # evaluate surrogate
-    if can_model_evaluate_all_vector_nodes:
-        evaluations = my_model(nodes.T)
-    else:
-        evaluations = np.array([my_model(node) for node in nodes.T])
-
-    expansion = cp.generate_expansion(p, joint)
-    gPCE = cp.fit_quadrature(expansion, nodes, weights, evaluations)
-    # TODO add point collocation with regression!
-
-    expectedInterp = cp.E(gPCE, joint)
-    varianceInterp = cp.Var(gPCE, joint)
-    first_order_sobol_indices = cp.Sens_m(gPCE, joint)
-    total_order_sobol_indices = cp.Sens_t(gPCE, joint)
-
-    print("expectation = ", expectedInterp, ", variance = ", varianceInterp)
-    print("First order Sobol indices: ", first_order_sobol_indices)
-    print("Total order Sobol indices: ", total_order_sobol_indices)
-
-    sobol_m_analytical, sobol_t_analytical = get_analytical_sobol_indices(a, b)
-
-    # Sobol_t_error = sobol_t_analytical - total_order_sobol_indices
-    # Sobol_m_error = sobol_m_analytical - first_order_sobol_indices
-    # print("Sobol_t_error: {}".format(Sobol_t_error, ".6f"))
-    # print("Sobol_m_error: {}".format(Sobol_m_error, ".6f"))
-
-    sobol_t_error = np.empty(len(labels), dtype=np.float64)
-    for i in range(len(labels)):
-        # print(f"Sobol Total Simulation = {total_order_sobol_indices[i][0]} \n")
-        # print(f"Sobol Total Analytical = {sobol_t_analytical[i][0]:.6f} \n")
-        sobol_t_error[i] = sobol_t_analytical[i][0] - total_order_sobol_indices[i][0]
-        print(f"Sobol Total Error = {sobol_t_error[i]:.6f} \n")
-
-    sobol_m_error = np.empty(len(labels), dtype=np.float64)
-    for i in range(len(labels)):
-        # print(f"Sobol Main Simulation = {first_order_sobol_indices[i][0]} \n")
-        # print(f"Sobol Main Analytical = {sobol_m_analytical[i][0]:.6f} \n")
-        sobol_m_error[i] = sobol_m_analytical[i][0] - first_order_sobol_indices[i][0]
-        print(f"Sobol Main Error = {sobol_m_error[i]:.6f} \n")
-
-    #####################################
-    # Saving
-    #####################################
-    # gPCE = op.get_gPCE()
-    fileName = f"gpce.pkl"
-    gpceFileName = str(outputModelDir / fileName)
-    with open(gpceFileName, 'wb') as handle:
-        pickle.dump(gPCE, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
-    fileName = f"pce_polys.pkl"
-    pcePolysFileName = str(outputModelDir / fileName)
-    with open(pcePolysFileName, 'wb') as handle:
-        pickle.dump(expansion, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
-    temp = f"results.txt"
-    save_file = outputModelDir / temp
-    fp = open(save_file, "w")
-    fp.write(f'E: {expectedInterp},\n Var: {varianceInterp}, \n '
-             f'First order Sobol indices: {first_order_sobol_indices} \n; '
-             f'Total order Sobol indices: {total_order_sobol_indices} \n')
-    fp.close()
+    # TODO From this point on SparseSpACE can again come to play, instead of chaospy quad - think if it makes sense!?
+    _compute_gpce_chaospy_ishigami(a_model_param=a_model_param, b_model_param=b_model_param, labels=labels,
+                                   my_model=adaptiveCombiInstanceSingleDim, joint=joint,
+                                   q=q, p=p, rule=rule, sparse=sparse,
+                                   outputModelDir=outputModelDir, can_model_evaluate_all_vector_nodes=True)
 
 
 def compute_gpce_sparsespace(build_sg_for_e_and_var=True, modified_basis=False,
@@ -424,9 +313,6 @@ def compute_gpce_sparsespace(build_sg_for_e_and_var=True, modified_basis=False,
                                               do_plot=plotting)
     else:
         combiinstance.perform_operation(1, lmax)
-        # TODO Can StandardCombi go with performSpatiallyAdaptiv?
-        # combiinstance.performSpatiallyAdaptiv(1, lmax, error_operator, tol=tolerance, max_evaluations=max_evals,
-        #                                       do_plot=plotting)
 
     if plotting:
         combiinstance.print_resulting_sparsegrid(markersize=10)
@@ -490,12 +376,31 @@ def compute_gpce_sparsespace(build_sg_for_e_and_var=True, modified_basis=False,
         fp.close()
 
 
+def var4_compute_lej_sg_surrogate_and_gpce(a_model_param=7, b_model_param=0.1, modified_basis=False, spatiallyAdaptive=True,
+                                           plotting=True, outputModelDir="./",
+                                           lmax=2, max_evals=2000, tolerance=10 ** -5,
+                                           rule='gaussian', sparse=False, q=7, p=6):
+    # TODO finish this!
+    x1 = cp.Uniform(-math.pi, math.pi)
+    x2 = cp.Uniform(-math.pi, math.pi)
+    x3 = cp.Uniform(-math.pi, math.pi)
+    joint = cp.J(x1, x2, x3)
+    labels = [param_name.strip() for param_name in ["x1", "x2", "x3"]]
+
+    leja_surrogate = None
+    _compute_gpce_chaospy_ishigami(a_model_param=a_model_param, b_model_param=b_model_param,
+                                   labels=labels, my_model=leja_surrogate, joint=joint,
+                                   q=q, p=p, rule=rule, sparse=sparse,
+                                   outputModelDir=outputModelDir, can_model_evaluate_all_vector_nodes=True)
+
+
 if __name__ == "__main__":
 
     plotting = False
     scratch_dir = pathlib.Path("/work/ga45met")
-    # outputModelDir = scratch_dir / "ishigami_runs" / "ishigami_sg_ss_ct_nonmodified_var2_l_4_p_8_q_11_max_2000"
-    outputModelDir = scratch_dir / "ishigami_runs" / "ishigami_sg_ss_adaptive_nonmodified_parallel_gpce_var3_l_2_p_8_max_2000"
+    # outputModelDir = scratch_dir / "ishigami_runs" / "ishigami_sg_ss_ct_nonmodified_var2_l_2_p_8_q_11_max_2000"
+    outputModelDir = scratch_dir / "ishigami_runs" / "ishigami_sg_ss_adaptive_nonmodified_var2_l_2_p_8_q_11_max_2000"
+    # outputModelDir = scratch_dir / "ishigami_runs" / "ishigami_sg_ss_adaptive_nonmodified_parallel_gpce_var3_l_2_p_8_max_2000"
     # outputModelDir = scratch_dir / "ishigami_runs" / "ishigami_sg_var2_l_2_p_6_max_2000"
     outputModelDir.mkdir(parents=True, exist_ok=True)
 
@@ -508,23 +413,23 @@ if __name__ == "__main__":
 
     # compute_gpce_chaospy(a=7, b=0.1, outputModelDir=outputModelDir, rule=rule, sparse=sparse, q=q, p=p)
 
-    lmax = 2 #4
-    max_evals = 2000 #4000
+    lmax = 2  # 4
+    max_evals = 2000  # 4000
     tolerance = 10 ** -5
 
-    # compute_surrogate_sparsespace_and_gpce(a=7, b=0.1, modified_basis=False, spatiallyAdaptive=False,
-    #                                        plotting=plotting, outputModelDir=outputModelDir,
-    #                                        lmax=lmax, max_evals=max_evals, tolerance=tolerance,
-    #                                        rule=rule, sparse=sparse, q=q, p=p)
+    compute_surrogate_sparsespace_and_gpce(a_model_param=7, b_model_param=0.1, modified_basis=False, spatiallyAdaptive=True,
+                                           plotting=plotting, outputModelDir=outputModelDir,
+                                           lmax=lmax, max_evals=max_evals, tolerance=tolerance,
+                                           rule=rule, sparse=sparse, q=q, p=p)
 
-    # compute_surrogate_sparsespace_and_gpce(a=7, b=0.1, modified_basis=True, spatiallyAdaptive=False,
+    # compute_surrogate_sparsespace_and_gpce(a_model_param=7, b_model_param=0.1, modified_basis=True, spatiallyAdaptive=False,
     #                                        plotting=True, outputModelDir=outputModelDir,
     #                                        lmax=lmax, max_evals=max_evals, tolerance=tolerance,
     #                                        rule=rule, sparse=sparse, q=q, p=p)
 
-    compute_gpce_sparsespace(build_sg_for_e_and_var=False, modified_basis=False, parallelIntegrator=True,
-                             spatiallyAdaptive=True, plotting=plotting, outputModelDir=outputModelDir,
-                             lmax=lmax, max_evals=max_evals, tolerance=tolerance, p=p)
+    # compute_gpce_sparsespace(build_sg_for_e_and_var=False, modified_basis=False, parallelIntegrator=True,
+    #                          spatiallyAdaptive=True, plotting=plotting, outputModelDir=outputModelDir,
+    #                          lmax=lmax, max_evals=max_evals, tolerance=tolerance, p=p)
 
     # compute_gpce_sparsespace(build_sg_for_e_and_var=True, modified_basis=True, parallelIntegrator=False,
     #                          spatiallyAdaptive=False, plotting=plotting, outputModelDir=outputModelDir,
