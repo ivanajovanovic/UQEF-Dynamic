@@ -1,0 +1,108 @@
+{
+    "time_settings":
+    {
+      "start_day": 1,
+      "start_month": 6,
+      "start_year": 2013,
+      "start_hour": 0,
+      "start_minute": 0,
+
+      "end_day": 10,
+      "end_month": 6,
+      "end_year": 2013,
+      "end_hour": 0,
+      "end_minute": 0,
+
+      "timestep": 5,
+      "resolution": "daily",
+      "cut_runs": "False",
+      "warm_up_duration": 53
+    },
+  "model_settings": {},
+  "model_paths": {},
+  "parameters": [
+    {
+      "name": "TT",
+      "distribution": "Uniform",
+      "lower": -4.0,
+      "upper": 4.0,
+      "default": 0.0
+    },
+    {
+      "name": "C0",
+      "distribution": "Uniform",
+      "lower": 0.0,
+      "upper": 10.0
+    },
+    {
+      "name": "ETF",
+      "distribution": "Uniform",
+      "lower": 0.0,
+      "upper": 1.0,
+      "default": 0.0
+    },
+    {
+      "name": "LP",
+      "distribution": "Uniform",
+      "lower": 0.0,
+      "upper": 1.0,
+      "default": 0.0
+    },
+    {
+      "name": "FC",
+      "distribution": "Uniform",
+      "lower": 50.0,
+      "upper": 500.0,
+      "default": 0.0
+    },
+    {
+      "name": "beta",
+      "distribution": "Uniform",
+      "lower": 1.0,
+      "upper": 3.0,
+      "default": 0.0
+    },
+    {
+      "name": "FRAC",
+      "distribution": "Uniform",
+      "lower": 0.1,
+      "upper": 0.9,
+      "default": 0.0
+    },
+    {
+      "name": "K1",
+      "distribution": "Uniform",
+      "lower": 0.05,
+      "upper": 1.0,
+      "default": 0.0
+    },
+    {
+      "name": "alpha",
+      "distribution": "Uniform",
+      "lower": 1.0,
+      "upper": 3.0,
+      "default": 0.0
+    },
+    {
+      "name": "K2",
+      "distribution": "Uniform",
+      "lower": 0.0,
+      "upper": 0.05,
+      "default": 0.0
+    },
+    {
+      "name": "UBAS",
+      "distribution": "None",
+      "lower": 1.0,
+      "upper": 3.0,
+      "default": 1.0
+    },
+    {
+      "name": "PM",
+      "distribution": "None",
+      "lower": 0.5,
+      "upper": 2.0,
+      "default": 1.0
+    }
+  ]
+}
