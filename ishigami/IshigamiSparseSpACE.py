@@ -93,8 +93,13 @@ def get_analytical_sobol_indices(a_model_param=7, b_model_param=0.1):
 
 
 def _compute_gpce_chaospy_ishigami(a_model_param, b_model_param, labels, my_model, joint, q, p, rule, sparse, outputModelDir,
-                                   can_model_evaluate_all_vector_nodes=True):
+                                   can_model_evaluate_all_vector_nodes=True, transformation=False):
     # TODO Introduction of this function has slowed down the execution!
+    # TODO Add transformation of points and pdf (joint) - Ionut
+    if transformation: # TODO two types of transformation: Ionut and UQEF/Chaospy!
+        joint_standard = cp.J(cp.Uniform(), cp.Uniform(), cp.Uniform())
+        # TODO
+
     quads = cp.generate_quadrature(q, joint, rule=rule, sparse=sparse)
     nodes, weights = quads
 
@@ -104,9 +109,8 @@ def _compute_gpce_chaospy_ishigami(a_model_param, b_model_param, labels, my_mode
     else:
         evaluations = np.array([my_model(node) for node in nodes.T])
 
-    expansion = cp.generate_expansion(p, joint)
+    expansion = cp.generate_expansion(p, joint) # TODO Normalized polynomials!?
     gPCE = cp.fit_quadrature(expansion, nodes, weights, evaluations)
-    # TODO add point collocation with regression!
 
     expectedInterp = cp.E(gPCE, joint)
     varianceInterp = cp.Var(gPCE, joint)
@@ -164,6 +168,7 @@ def _compute_gpce_chaospy_ishigami(a_model_param, b_model_param, labels, my_mode
 
 
 def compute_gpce_chaospy(a_model_param=7, b_model_param=0.1, outputModelDir="./", rule='gaussian', sparse=True, q=7, p=6):
+    # TODO think about transformation!
     x1 = cp.Uniform(-math.pi, math.pi)
     x2 = cp.Uniform(-math.pi, math.pi)
     x3 = cp.Uniform(-math.pi, math.pi)
@@ -184,6 +189,8 @@ def compute_surrogate_sparsespace_and_gpce(a_model_param=7, b_model_param=0.1, m
                                            rule='gaussian', sparse=False, q=7, p=6):
     """
     Var 2 - Compute gPCE coefficients by integrating the (SG) surrogate
+    SG surrogate computed based on SparseSpACE
+    gPCE coefficients - chaospy - TODO think about transformation!
     """
     x1 = cp.Uniform(-math.pi, math.pi)
     x2 = cp.Uniform(-math.pi, math.pi)
@@ -202,6 +209,7 @@ def compute_surrogate_sparsespace_and_gpce(a_model_param=7, b_model_param=0.1, m
         # grid = GlobalTrapezoidalGridWeighted(a, b, boundary=False, modified_basis=True)
     else:
         grid = GlobalTrapezoidalGrid(a=a, b=b, modified_basis=False, boundary=True)
+        # TODO Try: grid = GlobalTrapezoidalGrid(a=a, b=b, modified_basis=False, boundary=False)
         # grid = GlobalTrapezoidalGridWeighted(a, b, boundary=True)
 
     operation = Integration(f=f, grid=grid, dim=dim)
@@ -240,20 +248,22 @@ def compute_surrogate_sparsespace_and_gpce(a_model_param=7, b_model_param=0.1, m
     #                                q=q, p=p, rule=rule, sparse=sparse,
     #                                outputModelDir=outputModelDir, can_model_evaluate_all_vector_nodes=True)
 
+    # TODO - Transformation? - the same story as in _compute_gpce_chaospy_ishigami
     quads = cp.generate_quadrature(q, joint, rule=rule, sparse=sparse)
     nodes, weights = quads
 
     # evaluate surrogate
     evaluations = combiinstance(nodes.T)
 
-    expansion = cp.generate_expansion(p, joint)
+    expansion = cp.generate_expansion(p, joint) # TODO Normalized polynomials!? - the same story as in _compute_gpce_chaospy_ishigami
     gPCE = cp.fit_quadrature(expansion, nodes, weights, evaluations)
-    # TODO add point collocation with regression!
 
     expectedInterp = cp.E(gPCE, joint)
     varianceInterp = cp.Var(gPCE, joint)
     first_order_sobol_indices = cp.Sens_m(gPCE, joint)
     total_order_sobol_indices = cp.Sens_t(gPCE, joint)
+    first_order_sobol_indices = np.squeeze(first_order_sobol_indices)
+    total_order_sobol_indices = np.squeeze(total_order_sobol_indices)
 
     print("expectation = ", expectedInterp, ", variance = ", varianceInterp)
     print("First order Sobol indices: ", first_order_sobol_indices)
@@ -268,18 +278,21 @@ def compute_surrogate_sparsespace_and_gpce(a_model_param=7, b_model_param=0.1, m
     # print("Sobol_m_error: {}".format(Sobol_m_error, ".6f"))
     # # print(f"Sobol Main Error = {Sobol_m_error:.6f} \n")
 
-    sobol_t_error = np.empty(len(labels), dtype=np.float64)
+    # sobol_t_error = np.empty(len(labels), dtype=np.float64)
+    sobol_t_error = sobol_t_analytical - total_order_sobol_indices
     for i in range(len(labels)):
         # print(f"Sobol Total Simulation = {total_order_sobol_indices[i][0]} \n")
         # print(f"Sobol Total Analytical = {sobol_t_analytical[i]:.6f} \n")
-        sobol_t_error[i] = sobol_t_analytical[i] - total_order_sobol_indices[i][0]
+        # sobol_t_error[i] = sobol_t_analytical[i] - total_order_sobol_indices[i][0]
         print(f"Sobol Total Error = {sobol_t_error[i]:.6f} \n")
     #
-    sobol_m_error = np.empty(len(labels), dtype=np.float64)
+
+    # sobol_m_error = np.empty(len(labels), dtype=np.float64)
+    sobol_m_error = sobol_m_analytical - first_order_sobol_indices
     for i in range(len(labels)):
         # print(f"Sobol Main Simulation = {first_order_sobol_indices[i][0]} \n")
         # print(f"Sobol Main Analytical = {sobol_m_analytical[i]:.6f} \n")
-        sobol_m_error[i] = sobol_m_analytical[i] - first_order_sobol_indices[i][0]
+        # sobol_m_error[i] = sobol_m_analytical[i] - first_order_sobol_indices[i][0]
         print(f"Sobol Main Error = {sobol_m_error[i]:.6f} \n")
 
     #####################################
@@ -312,7 +325,7 @@ def compute_surrogate_sparsespace_and_gpce_analytically(a_model_param=7, b_model
                                            rule='gaussian', sparse=False, q=7, p=6):
     """
     Var 2.2 (For Markus this is var 3) - Compute gPCE coefficients by integrating the (SG) surrogate analytically
-    The gPCE coefficients are calulcated as follows:
+    The gPCE coefficients are calculated as follows:
     $c_n = \int_{(0,1)^d} f_{interp}^{nonlin}(T_{nonlin}(u)\phi_n(T_{nonlin}(u))du =
      \sum_{l, i} \alpha_{l,i}\prod_{j=1}^{d}\int_0^1\phi_j(F^{-1}(u_j))\psi_{l_j, i_j}(u_j)du_j$
      where $T_{nonlin} = (F^{-1}(u_1),...,F^{-1}(u_d))$
@@ -460,6 +473,7 @@ def compute_gpce_sparsespace(build_sg_for_e_and_var=True, modified_basis=False,
                              parallelIntegrator=False, spatiallyAdaptive=True,
                              plotting=False, outputModelDir="./", lmax=2, max_evals=2000, tolerance=10 ** -5, p=6):
     """
+    This method relys on current implementation of UncertaintyQuantification Operation in SparseSpACE
     If build_sg_for_e_and_var == True
     ---> Build one SG surrogate to approximate E and Var
     Else
@@ -599,10 +613,10 @@ def compute_gpce_sparsespace(build_sg_for_e_and_var=True, modified_basis=False,
         fp.close()
 
 
-def var4_compute_leja_sg_surrogate_and_gpce(a_model_param=7, b_model_param=0.1, modified_basis=False,
-                                            spatiallyAdaptive=True, plotting=True, outputModelDir="./",
-                                            lmax=2, max_evals=2000, tolerance=10 ** -5,
-                                            rule='gaussian', sparse=False, q=7, p=6):
+def compute_leja_sg_surrogate_and_gpce(a_model_param=7, b_model_param=0.1, modified_basis=False,
+                                       spatiallyAdaptive=True, plotting=True, outputModelDir="./",
+                                       lmax=2, max_evals=2000, tolerance=10 ** -5,
+                                       rule='gaussian', sparse=False, q=7, p=6):
     # TODO finish this!
     x1 = cp.Uniform(-math.pi, math.pi)
     x2 = cp.Uniform(-math.pi, math.pi)
@@ -619,33 +633,34 @@ def var4_compute_leja_sg_surrogate_and_gpce(a_model_param=7, b_model_param=0.1, 
 
 if __name__ == "__main__":
 
-    plotting = False
+    plotting = True
     scratch_dir = pathlib.Path("/work/ga45met")
-    # outputModelDir = scratch_dir / "ishigami_runs" / "ishigami_sg_ss_ct_nonmodified_var2_l_2_p_8_q_11_max_2000"
+    outputModelDir = scratch_dir / "ishigami_runs" / "ishigami_sg_ss_ct_modified_var2_l_2_p_8_q_9_max_1000"
     # outputModelDir = scratch_dir / "ishigami_runs" / "ishigami_sg_ss_adaptive_nonmodified_var2_l_2_p_8_q_11_max_2000"
-    outputModelDir = scratch_dir / "ishigami_runs" / "ishigami_sg_ss_adaptive_nonmodified_parallel_gpce_var3_l_2_p_8_max_2000"
+    # outputModelDir = scratch_dir / "ishigami_runs" / "ishigami_sg_ss_adaptive_nonmodified_parallel_gpce_var3_l_2_p_8_max_2000"
     # outputModelDir = scratch_dir / "ishigami_runs" / "ishigami_sg_var2_l_2_p_6_max_2000"
     outputModelDir.mkdir(parents=True, exist_ok=True)
 
     simulation_time_start = time.time()
 
+    # parameters for chaopsy quadrature...
     rule = 'gaussian'
     sparse = False
-    q = 11
+    q = 9
     p = 8
 
     # Var 1 #
     # compute_gpce_chaospy(a=7, b=0.1, outputModelDir=outputModelDir, rule=rule, sparse=sparse, q=q, p=p)
 
     lmax = 2  # 4
-    max_evals = 2000  # 4000
+    max_evals = 1000  # 4000
     tolerance = 10 ** -5
 
     # Var 2 #
-    # compute_surrogate_sparsespace_and_gpce(a_model_param=7, b_model_param=0.1, modified_basis=False, spatiallyAdaptive=True,
-    #                                        plotting=plotting, outputModelDir=outputModelDir,
-    #                                        lmax=lmax, max_evals=max_evals, tolerance=tolerance,
-    #                                        rule=rule, sparse=sparse, q=q, p=p)
+    compute_surrogate_sparsespace_and_gpce(a_model_param=7, b_model_param=0.1, modified_basis=True, spatiallyAdaptive=True,
+                                           plotting=plotting, outputModelDir=outputModelDir,
+                                           lmax=lmax, max_evals=max_evals, tolerance=tolerance,
+                                           rule=rule, sparse=sparse, q=q, p=p)
 
     # compute_surrogate_sparsespace_and_gpce(a_model_param=7, b_model_param=0.1, modified_basis=True, spatiallyAdaptive=False,
     #                                        plotting=True, outputModelDir=outputModelDir,
@@ -660,15 +675,15 @@ if __name__ == "__main__":
     # rule=rule, sparse=sparse, q=q, p=p)
 
     # Var 3#
-    compute_gpce_sparsespace(build_sg_for_e_and_var=False, modified_basis=False, parallelIntegrator=True,
-                             spatiallyAdaptive=True, plotting=plotting, outputModelDir=outputModelDir,
-                             lmax=lmax, max_evals=max_evals, tolerance=tolerance, p=p)
+    # compute_gpce_sparsespace(build_sg_for_e_and_var=False, modified_basis=False, parallelIntegrator=True,
+    #                          spatiallyAdaptive=True, plotting=plotting, outputModelDir=outputModelDir,
+    #                          lmax=lmax, max_evals=max_evals, tolerance=tolerance, p=p)
 
     # compute_gpce_sparsespace(build_sg_for_e_and_var=True, modified_basis=True, parallelIntegrator=False,
     #                          spatiallyAdaptive=False, plotting=plotting, outputModelDir=outputModelDir,
     #                          lmax=lmax, max_evals=max_evals, tolerance=tolerance)
 
-    # TODO Seems as this is not working - when building SG surrogate to fit computaton of c_n!
+    # TODO Seems as this is not working - when building SG surrogate to fit computation of c_n!
     # compute_gpce_sparsespace(build_sg_for_e_and_var=False, modified_basis=True, parallelIntegrator=False,
     #                          spatiallyAdaptive=True, plotting=plotting, outputModelDir=outputModelDir,
     #                          lmax=lmax, max_evals=max_evals, tolerance=tolerance)

@@ -58,8 +58,8 @@ class IshigamiModel(Model):
             parameter = parameters[ip]
 
             args = self.a, self.b
-            self.x = parameter[0], parameter[1], parameter[2]
-            f_result = model(args, self.x)
+            x = parameter[0], parameter[1], parameter[2]
+            f_result = model(args, x)
 
             end = time.time()
             runtime = end - start
