@@ -27,7 +27,7 @@
     "read_date_from_saved_data_dir": "True",
     "get_saved_simulations": "True",
     "run_unaltered_sim": "True",
-    "raise_exception_on_model_break": "True",
+    "raise_exception_on_model_break": "False",
     "max_retries": 10
   },
   "model_paths": {
@@ -69,12 +69,13 @@
     "type_of_output": "Abfluss Messung + Vorhersage",
     "type_of_output_measured": "Ground Truth",
     "station_calibration_postproc": "MARI",
-    "station_model_runs": "all",
+    "station_for_model_runs": "all",
     "post_processing_for_all_stations": "False",
     "dailyOutput": "False",
     "run_and_save_simulations": "True",
     "calculate_GoF":"True",
-    "objective_function":"all"
+    "objective_function":"all",
+    "always_save_original_model_runs": "False"
   },
   "model_run_settings": {
     "QOI":"Q",

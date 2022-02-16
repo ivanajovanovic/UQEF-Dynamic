@@ -7,7 +7,7 @@
       "start_hour": 0,
       "start_minute": 0,
 
-      "end_day": 15,
+      "end_day": 1,
       "end_month": 6,
       "end_year": 2013,
       "end_hour": 0,
@@ -72,10 +72,10 @@
     "station_model_runs": "all",
     "post_processing_for_all_stations": "False",
     "dailyOutput": "False",
-    "run_and_save_simulations": "False",
+    "run_and_save_simulations": "True",
     "calculate_GoF":"True",
     "objective_function":"all",
-    "always_save_original_model_runs": "False"
+    "always_save_original_model_runs": "True"
   },
   "model_run_settings": {
     "QOI":"Q",
@@ -96,30 +96,6 @@
       "cut_limits":"False"
   },
   "parameters": [
-    {
-      "name":"EQD",
-      "type":"tape35",
-      "distribution":"Uniform",
-      "lower": 0,
-      "upper": 1,
-      "lower_limit": 50,
-      "upper_limit": 5000,
-      "depends_on":"EQI",
-      "direction":"decreasing",
-      "default": 450.0
-    },
-    {
-      "name": "EQD2",
-      "type": "tape35",
-      "distribution": "Uniform",
-      "lower": 0,
-      "upper": 1,
-      "lower_limit": 10,
-      "upper_limit": 1000,
-      "depends_on":"EQD",
-      "direction":"decreasing",
-      "default": 250.0
-    },
     {
       "name": "A2",
       "type": "tape35",
@@ -156,6 +132,30 @@
     }
   ],
   "unused_parameters" : [
+    {
+      "name":"EQD",
+      "type":"tape35",
+      "distribution":"Uniform",
+      "lower": 0,
+      "upper": 1,
+      "lower_limit": 50,
+      "upper_limit": 5000,
+      "depends_on":"EQI",
+      "direction":"decreasing",
+      "default": 450.0
+    },
+    {
+      "name": "EQD2",
+      "type": "tape35",
+      "distribution": "Uniform",
+      "lower": 0,
+      "upper": 1,
+      "lower_limit": 10,
+      "upper_limit": 1000,
+      "depends_on":"EQD",
+      "direction":"decreasing",
+      "default": 250.0
+    },
     {
       "name": "KG",
       "type": "tape35",
