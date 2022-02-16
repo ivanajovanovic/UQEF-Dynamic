@@ -2,7 +2,8 @@ import chaospy as cp
 import numpy as np
 import pandas as pd
 
-from saltelliSobolIndicesHelpingFunctions import *
+# from saltelliSobolIndicesHelpingFunctions import *
+from . import saltelliSobolIndicesHelpingFunctions
 
 def _my_parallel_calc_stats_for_MC(keyIter_chunk, qoi_values_chunk, numEvaluations, store_qoi_data_in_stat_dict=False):
     results = []
@@ -105,10 +106,10 @@ def _my_parallel_calc_stats_for_mc_saltelli(keyIter_chunk, qoi_values_chunk, num
             local_result_dict["P90"] = local_result_dict["P90"][0]
 
         if compute_Sobol_t:
-            local_result_dict["Sobol_t"] = _Sens_t_sample(
+            local_result_dict["Sobol_t"] = saltelliSobolIndicesHelpingFunctions._Sens_t_sample(
                 qoi_values_saltelli, dim, numEvaluations, code=4)
         if compute_Sobol_m:
-            local_result_dict["Sobol_m"] = _Sens_m_sample(
+            local_result_dict["Sobol_m"] = saltelliSobolIndicesHelpingFunctions._Sens_m_sample(
                 qoi_values_saltelli, dim, numEvaluations, code=4)
 
         results.append((key, local_result_dict))
