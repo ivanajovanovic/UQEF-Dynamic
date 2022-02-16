@@ -28,8 +28,9 @@ from LarsimUtilityFunctions import larsimConfigurationSettings
 import LarsimUtilityFunctions.larsimPaths as paths
 from LarsimUtilityFunctions.larsimModel import LarsimConfigurations
 
-#from Larsim-UQ.common import saltelliSobolIndicesHelpingFunctions
+#from UQEFPP.common import saltelliSobolIndicesHelpingFunctions
 from common import saltelliSobolIndicesHelpingFunctions
+from common import parallelStatistics
 from common import colors
 
 # from numba import jit, prange
@@ -159,32 +160,38 @@ class LarsimSamples(object):
             self.dict_of_matrix_c_eigen_decomposition = None
 
     def save_samples_to_file(self, file_path='./'):
+        file_path = str(file_path)
         if self.df_simulation_result is not None:
             self.df_simulation_result.to_pickle(
                 os.path.abspath(os.path.join(file_path, "df_all_simulations.pkl")), compression="gzip")
 
     def save_index_parameter_values(self, file_path='./'):
+        file_path = str(file_path)
         if self.df_index_parameter_values is not None:
             self.df_index_parameter_values.to_pickle(
                 os.path.abspath(os.path.join(file_path, "df_all_index_parameter_values.pkl")), compression="gzip")
 
     def save_index_parameter_gof_values(self, file_path='./'):
+        file_path = str(file_path)
         if self.df_index_parameter_gof_values is not None:
             self.df_index_parameter_gof_values.to_pickle(
                 os.path.abspath(os.path.join(file_path, "df_all_index_parameter_gof_values.pkl")), compression="gzip")
 
     def save_time_samples_to_file(self, file_path='./'):
+        file_path = str(file_path)
         if self.df_time_discharges is not None:
             self.df_time_discharges.to_pickle(
                 os.path.abspath(os.path.join(file_path, "df_all_time_simulations.pkl")), compression="gzip")
 
     def save_dict_of_approx_matrix_c(self, file_path='./'):
+        file_path = str(file_path)
         if self.dict_of_matrix_c_eigen_decomposition is not None:
             fileName = os.path.abspath(os.path.join(file_path, "dict_of_approx_matrix_c.pkl"))
             with open(fileName, 'wb') as handle:
                 pickle.dump(self.dict_of_approx_matrix_c, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     def save_dict_of_matrix_c_eigen_decomposition(self, file_path='./'):
+        file_path = str(file_path)
         if self.dict_of_matrix_c_eigen_decomposition is not None:
             fileName = os.path.abspath(os.path.join(file_path, "dict_of_matrix_c_eigen_decomposition.pkl"))
             with open(fileName, 'wb') as handle:
@@ -385,6 +392,7 @@ class LarsimStatistics(Statistics):
         # important for Statistics computation, i.e., parsing the results DF
         #####################################
         # TODO for now only a single self.qoi_column is supported, but multiple stations!
+        #  Change this so that only a single station is assumed
 
         self.qoi_column = kwargs.get('qoi_column', self.larsimConfObject.qoi_column)
 
@@ -416,10 +424,10 @@ class LarsimStatistics(Statistics):
         self._is_Sobol_m_computed = False
         self._is_Sobol_m2_computed = False
 
+        self.timesteps = None
         self.timesteps_min = None
         self.timesteps_max = None
         self.numbTimesteps = None
-        self.timesteps = None
         self.pdTimesteps = None
         self.number_of_unique_index_runs = None
         self.numEvaluations = None
@@ -478,6 +486,13 @@ class LarsimStatistics(Statistics):
         self.work_package_indexes = kwargs.get('work_package_indexes') if 'work_package_indexes' in kwargs else None
 
         self.samples = LarsimSamples(rawSamples, configurationObject=self.larsimConfObject)
+
+        # TODO - not sure if this is ineed needed
+        if self.samples.df_simulation_result is not None:
+            self.samples.df_simulation_result.sort_values(
+                by=["Index_run", "TimeStamp"], axis=0, ascending=True, inplace=True, kind='quicksort', na_position='last'
+            )
+
         if self.save_samples:
             self.samples.save_samples_to_file(self.workingDir)
             self.samples.save_index_parameter_values(self.workingDir)
@@ -560,7 +575,7 @@ class LarsimStatistics(Statistics):
             if executor is not None:  # master process
                 solver_time_start = time.time()
                 if regression:
-                    chunk_results_it = executor.map(_my_parallel_calc_stats_for_gPCE,
+                    chunk_results_it = executor.map(parallelStatistics._my_parallel_calc_stats_for_gPCE,
                                                     keyIter_chunk,
                                                     list_of_simulations_df_chunk,
                                                     distChunks,
@@ -574,7 +589,7 @@ class LarsimStatistics(Statistics):
                                                     chunksize=self.mpi_chunksize,
                                                     unordered=self.unordered)
                 else:
-                    chunk_results_it = executor.map(_my_parallel_calc_stats_for_MC,
+                    chunk_results_it = executor.map(parallelStatistics._my_parallel_calc_stats_for_MC,
                                                     keyIter_chunk,
                                                     list_of_simulations_df_chunk,
                                                     numEvaluations_chunk,
@@ -627,7 +642,7 @@ class LarsimStatistics(Statistics):
         with futures.MPICommExecutor(MPI.COMM_WORLD, root=0) as executor:
             if executor is not None:  # master process
                 solver_time_start = time.time()
-                chunk_results_it = executor.map(_my_parallel_calc_stats_for_gPCE,
+                chunk_results_it = executor.map(parallelStatistics._my_parallel_calc_stats_for_gPCE,
                                                 keyIter_chunk,
                                                 list_of_simulations_df_chunk,
                                                 distChunks,
@@ -680,7 +695,7 @@ class LarsimStatistics(Statistics):
         with futures.MPICommExecutor(MPI.COMM_WORLD, root=0) as executor:
             if executor is not None:  # master process
                 solver_time_start = time.time()
-                chunk_results_it = executor.map(_my_parallel_calc_stats_for_mc_saltelli,
+                chunk_results_it = executor.map(parallelStatistics._my_parallel_calc_stats_for_mc_saltelli,
                                                 keyIter_chunk,
                                                 list_of_simulations_df_chunk,
                                                 numEvaluations_chunk,
@@ -759,8 +774,8 @@ class LarsimStatistics(Statistics):
             if self.store_qoi_data_in_stat_dict:
                 self.result_dict[key]["QoI"] = qoi_values
             if regression:
-                self.qoi_gPCE = cp.fit_regression(polynomial_expansion, nodes, qoi_values)
-                self._calc_stats_for_gPCE(dist, key)
+                qoi_gPCE = cp.fit_regression(polynomial_expansion, nodes, qoi_values)
+                self._calc_stats_for_gPCE(dist, key, qoi_gPCE)
             else:
                 # self.result_dict[key]["E"] = np.sum(qoi_values, axis=0, dtype=np.float64)/ numEvaluations
                 self.result_dict[key]["E"] = np.mean(qoi_values, 0)
@@ -822,6 +837,7 @@ class LarsimStatistics(Statistics):
             dist = simulationNodes.joinedStandardDists
         else:
             dist = simulationNodes.joinedDists
+
         weights = simulationNodes.weights
         polynomial_expansion = cp.generate_expansion(order, dist, rule=poly_rule, normed=poly_normed)
 
@@ -834,17 +850,19 @@ class LarsimStatistics(Statistics):
             if self.store_qoi_data_in_stat_dict:
                 self.result_dict[key]["QoI"] = qoi_values
             if regression:
-                self.qoi_gPCE = cp.fit_regression(polynomial_expansion, nodes, qoi_values)
+                qoi_gPCE = cp.fit_regression(polynomial_expansion, nodes, qoi_values)
             else:
-                self.qoi_gPCE = cp.fit_quadrature(polynomial_expansion, nodes, weights, qoi_values)
-            self._calc_stats_for_gPCE(dist, key)
+                qoi_gPCE = cp.fit_quadrature(polynomial_expansion, nodes, weights, qoi_values)
+            self._calc_stats_for_gPCE(dist, key, qoi_gPCE)
 
         print(f"[LARSIM STAT INFO] calcStatisticsForSc function is done!")
 
-    def _calc_stats_for_gPCE(self, dist, key, qoi_gPCE=None):
+    def _calc_stats_for_gPCE(self, dist, key, qoi_gPCE):
         if qoi_gPCE is None:
             qoi_gPCE = self.qoi_gPCE
+
         numPercSamples = 10 ** 5
+
         self.result_dict[key]["gPCE"] = qoi_gPCE
         self.result_dict[key]["E"] = float(cp.E(qoi_gPCE, dist))
         self.result_dict[key]["Var"] = float(cp.Var(qoi_gPCE, dist))
@@ -870,7 +888,7 @@ class LarsimStatistics(Statistics):
         if self._compute_Sobol_m:
             self.result_dict[key]["Sobol_m"] = cp.Sens_m(qoi_gPCE, dist)
         if self._compute_Sobol_m2:
-            self.result_dict[key]["Sobol_m2"] = cp.Sens_m2(qoi_gPCE, dist) # second order sensitivity indices
+            self.result_dict[key]["Sobol_m2"] = cp.Sens_m2(qoi_gPCE, dist)  # second order sensitivity indices
 
     def calcStatisticsForSaltelli(self, rawSamples, timesteps,
                             simulationNodes, numEvaluations, order, regression, poly_normed, poly_rule, solverTimes,
@@ -1067,11 +1085,11 @@ class LarsimStatistics(Statistics):
 
         print(f"[LARSIM STAT INFO] _plotStatisticsDict_plotly function is called!")
 
-        if uq_method is None:
-            if self.uq_method is None:
-                raise Exception("_plotStatisticsDict_plotly - Please specify uq_method argument!")
-            else:
-                uq_method = self.uq_method
+        # if uq_method is None:
+        #     if self.uq_method is None:
+        #         raise Exception("_plotStatisticsDict_plotly - Please specify uq_method argument!")
+        #     else:
+        #         uq_method = self.uq_method
 
         #TODO Access to timesteps in a two different ways, e.g. one for QoI one for Q
         if recalculateTimesteps:
@@ -1139,25 +1157,25 @@ class LarsimStatistics(Statistics):
         if self._is_Sobol_m_computed:
             for i in range(len(self.labels)):
                 name = self.labels[i] + "_S_m"
-                if uq_method == "saltelli":
-                    fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.result_dict[key]["Sobol_m"][i][0] for key in keyIter],
-                                             name=name, legendgroup=self.labels[i], line_color=colors.COLORS[i]),
-                                  row=sobol_m_row, col=1)
-                else:
-                    fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.result_dict[key]["Sobol_m"][i] for key in keyIter],
-                                             name=name, legendgroup=self.labels[i], line_color=colors.COLORS[i]),
-                                  row=sobol_m_row, col=1)
+                # if uq_method == "saltelli":
+                #     fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.result_dict[key]["Sobol_m"][i][0] for key in keyIter],
+                #                              name=name, legendgroup=self.labels[i], line_color=colors.COLORS[i]),
+                #                   row=sobol_m_row, col=1)
+                # else:
+                fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.result_dict[key]["Sobol_m"][i] for key in keyIter],
+                                         name=name, legendgroup=self.labels[i], line_color=colors.COLORS[i]),
+                              row=sobol_m_row, col=1)
         if self._is_Sobol_t_computed:
             for i in range(len(self.labels)):
                 name = self.labels[i] + "_S_t"
-                if uq_method == "saltelli":
-                    fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.result_dict[key]["Sobol_t"][i][0] for key in keyIter],
-                                             name=name, legendgroup=self.labels[i], line_color=colors.COLORS[i]),
-                                  row=sobol_t_row, col=1)
-                else:
-                    fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.result_dict[key]["Sobol_t"][i] for key in keyIter],
-                                             name=name, legendgroup=self.labels[i], line_color=colors.COLORS[i]),
-                                  row=sobol_t_row, col=1)
+                # if uq_method == "saltelli":
+                #     fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.result_dict[key]["Sobol_t"][i][0] for key in keyIter],
+                #                              name=name, legendgroup=self.labels[i], line_color=colors.COLORS[i]),
+                #                   row=sobol_t_row, col=1)
+                # else:
+                fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.result_dict[key]["Sobol_t"][i] for key in keyIter],
+                                         name=name, legendgroup=self.labels[i], line_color=colors.COLORS[i]),
+                              row=sobol_t_row, col=1)
 
         # TODO - Make additional plots - each parameter independently with color + normalized Q measured
 
@@ -1190,7 +1208,7 @@ class LarsimStatistics(Statistics):
     def _compute_number_of_rows_for_plotting(self, starting_row):
         sobol_t_row = sobol_m_row = None
         if self._is_Sobol_t_computed and self._is_Sobol_m_computed:
-            n_rows = 5
+            n_rows = 4
             sobol_m_row = starting_row+2
             sobol_t_row = starting_row+3
         elif self._is_Sobol_t_computed:
@@ -1201,7 +1219,7 @@ class LarsimStatistics(Statistics):
             sobol_m_row = starting_row+2
         else:
             n_rows = 2
-        return n_rows, sobol_t_row, sobol_m_row,
+        return n_rows, sobol_t_row, sobol_m_row
 
     def _plotStatisticsDict_plotter(self, unalatered=False, measured=False, station="MARI",
                                     recalculateTimesteps=False, window_title='Larsim Forward UQ & SA - MARI',
@@ -1212,13 +1230,13 @@ class LarsimStatistics(Statistics):
                    fileNameIdentIsFullName=False, **kwargs):
 
         fileName = "statistics_dictionary_qoi_" + self.qoi_column + ".pkl"
-        statFileName = os.path.abspath(os.path.join(self.workingDir, fileName))
+        statFileName = os.path.abspath(os.path.join(str(self.workingDir), fileName))
         with open(statFileName, 'wb') as handle:
             pickle.dump(self.result_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
         if self.active_scores_dict is not None:
             fileName = "active_scores_dict.pkl"
-            statFileName = os.path.abspath(os.path.join(self.workingDir, fileName))
+            statFileName = os.path.abspath(os.path.join(str(self.workingDir), fileName))
             with open(statFileName, 'wb') as handle:
                 pickle.dump(self.active_scores_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
@@ -1276,19 +1294,19 @@ class LarsimStatistics(Statistics):
 
         if self._is_Sobol_m_computed:
             for i in range(len(self.labels)):
-                if uq_method == "saltelli":
-                    sobol_m_time_series = [self.result_dict[key]["Sobol_m"][i][0] for key in keyIter]
-                else:
-                    sobol_m_time_series = [self.result_dict[key]["Sobol_m"][i] for key in keyIter]
+                # if uq_method == "saltelli":
+                #     sobol_m_time_series = [self.result_dict[key]["Sobol_m"][i][0] for key in keyIter]
+                # else:
+                sobol_m_time_series = [self.result_dict[key]["Sobol_m"][i] for key in keyIter]
                 list_of_columns.append(sobol_m_time_series)
                 temp = "sobol_m_" + self.labels[i]
                 list_of_columns_names.append(temp)
         if self._is_Sobol_t_computed:
             for i in range(len(self.labels)):
-                if uq_method == "saltelli":
-                    sobol_t_time_series = [self.result_dict[key]["Sobol_t"][i][0] for key in keyIter]
-                else:
-                    sobol_t_time_series = [self.result_dict[key]["Sobol_t"][i] for key in keyIter]
+                # if uq_method == "saltelli":
+                #     sobol_t_time_series = [self.result_dict[key]["Sobol_t"][i][0] for key in keyIter]
+                # else:
+                sobol_t_time_series = [self.result_dict[key]["Sobol_t"][i] for key in keyIter]
                 list_of_columns.append(sobol_t_time_series)
                 temp = "sobol_t_" + self.labels[i]
                 list_of_columns_names.append(temp)
@@ -1389,10 +1407,10 @@ class LarsimStatistics(Statistics):
 
         list_of_df_over_parameters = []
         for i in range(len(self.labels)):
-            if uq_method == "saltelli":
-                si_single_param = [self.result_dict[key][si_type][i][0] for key in keyIter]
-            else:
-                si_single_param = [self.result_dict[key][si_type][i] for key in keyIter]
+            # if uq_method == "saltelli":
+            #     si_single_param = [self.result_dict[key][si_type][i][0] for key in keyIter]
+            # else:
+            si_single_param = [self.result_dict[key][si_type][i] for key in keyIter]
             df_temp = pd.DataFrame(list(zip(si_single_param, self.pdTimesteps)),
                                    columns=[si_type + "_" + self.labels[i], 'TimeStamp'])
             list_of_df_over_parameters.append(df_temp)
@@ -1421,20 +1439,22 @@ class LarsimStatistics(Statistics):
         station = self._check_station_argument(station)
         keyIter = list(itertools.product([station, ], self.pdTimesteps))
         for i in range(len(self.labels)):
-            if uq_method == "saltelli":
-                fig.add_trace(
-                    go.Scatter(x=self.pdTimesteps, y=[self.result_dict[key][si_type][i][0] for key in keyIter],
-                               name=self.labels[i], legendgroup=self.labels[i], line_color=colors.COLORS[i]))
-            else:
-                fig.add_trace(
-                    go.Scatter(x=self.pdTimesteps, y=[self.result_dict[key][si_type][i] for key in keyIter],
-                               name=self.labels[i], legendgroup=self.labels[i], line_color=colors.COLORS[i]))
+            # if uq_method == "saltelli":
+            #     fig.add_trace(
+            #         go.Scatter(x=self.pdTimesteps, y=[self.result_dict[key][si_type][i][0] for key in keyIter],
+            #                    name=self.labels[i], legendgroup=self.labels[i], line_color=colors.COLORS[i]))
+            # else:
+            fig.add_trace(
+                go.Scatter(x=self.pdTimesteps, y=[self.result_dict[key][si_type][i] for key in keyIter],
+                           name=self.labels[i], legendgroup=self.labels[i], line_color=colors.COLORS[i]))
 
         return fig
 
     def plot_si_and_normalized_measured_time_signal(self, si_df=None,
                                                     df_statistics_station=None, station=None, si_type="Sobol_t",
-                                                    measured_norm_columns_name="measured_norm", uq_method="sc"):
+                                                    measured_norm_columns_name="measured_norm", uq_method="sc",
+                                                    plot_precipitation=False
+                                                    ):
         station = self._check_station_argument(station)
         si_columns = [x for x in si_df.columns.tolist() if x != 'measured']
 
@@ -1446,6 +1466,8 @@ class LarsimStatistics(Statistics):
         fig.add_trace(go.Scatter(x=df_statistics_station['TimeStamp'],
                                  y=df_statistics_station[measured_norm_columns_name],
                                  fill='tozeroy', name="Normalized Q[m^3/s]"))
+        if plot_precipitation:
+            self._add_precipitation_to_graph(fig)
         return fig
 
     ###################################################################################################################
@@ -1508,3 +1530,53 @@ class LarsimStatistics(Statistics):
                 scores_vect.append(temp)
             dict_of_active_scores[key] = scores_vect
         return dict_of_active_scores
+
+    def _add_precipitation_to_graph(self, fig):
+        n_lila_local_file = self.workingDir / 'master_configuration' / "station-n.lila"
+        df_n = larsimInputOutputUtilities.any_lila_parser_toPandas(n_lila_local_file)
+        df_n = larsimDataPostProcessing.get_time_vs_station_values_df(df_n)
+        df_n = larsimDataPostProcessing.parse_df_based_on_time(df_n, (self.timesteps_min,
+                                                                      self.timesteps_max
+                                                                      ))
+        df_n.set_index("TimeStamp", inplace=True)
+        mean_n = df_n.mean(axis=1)
+        max_n = df_n.max(axis=1)
+        max_N = max(list(df_n.max()))
+
+        fig.add_trace(go.Scatter(x=df_n.index, \
+                                 y=max_n, \
+                                 text=max_n, \
+                                 name="N_Max",
+                                 yaxis="y2", ))
+        fig.update_layout(
+            xaxis=dict(
+                autorange=True,
+                range=[self.timesteps_min, self.timesteps_max],
+                type="date"
+            ),
+            yaxis=dict(
+                side="left",
+                domain=[0, 0.7],
+                mirror=True,
+                tickfont={"color": "#d62728"},
+                tickmode="auto",
+                ticks="inside",
+                titlefont={"color": "#d62728"},
+            ),
+            yaxis2=dict(
+                anchor="x",
+                domain=[0.7, 1],
+                mirror=True,
+                range=[max_N, 0],
+                side="right",
+                tickfont={"color": '#1f77b4'},
+                nticks=3,
+                tickmode="auto",
+                ticks="inside",
+                titlefont={"color": '#1f77b4'},
+                title="Precipitation [mm/h]",
+                type="linear",
+            )
+        )
+
+        return fig

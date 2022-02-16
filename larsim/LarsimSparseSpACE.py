@@ -92,11 +92,11 @@ class LarsimFunction(Function):
 
 local_debugging = True
 if local_debugging:
-    sourceDir = pathlib.Path('/work/ga45met/mnt/linux_cluster_2/Larsim-UQ')
+    sourceDir = pathlib.Path('/work/ga45met/mnt/linux_cluster_2/UQEFPP')
     inputModelDir = pathlib.Path(osp.abspath(osp.join(larsimPaths.data_dir, 'Larsim-data')))  # larsimPaths.larsim_data_path
     scratch_dir = pathlib.Path("/work/ga45met")
     outputModelDir = outputResultDir = workingDir = scratch_dir / "larsim_runs" / 'larsim_sg_lognse_modified_basis'  # "Larsim_runs"
-    config_file = pathlib.Path('/work/ga45met/mnt/linux_cluster_2/Larsim-UQ/configurations_Larsim/configurations_larsim_high_flow_small_sg.json')
+    config_file = pathlib.Path('/work/ga45met/mnt/linux_cluster_2/UQEFPP/configurations_Larsim/configurations_larsim_high_flow_small_sg.json')
     # LARSIM_REGEN_DATA_FILES_PATH = pathlib.Path("/home/ga45met/Repositories/Larsim/Larsim-data/WHM Regen/data_files")
     # TODO save config_file!!!
 
@@ -111,11 +111,11 @@ if local_debugging:
 
     #####################################
     # node_names = []
-    # for parameter_config in configuration_object["parameters"]:
+    # for parameter_config in configurationObject["parameters"]:
     #     node_names.append(parameter_config["name"])
     # simulationNodes = uqef.nodes.Nodes(node_names)
     #
-    # for parameter_config in configuration_object["parameters"]:
+    # for parameter_config in configurationObject["parameters"]:
     #     if parameter_config["distribution"] == "None":
     #         simulationNodes.setValue(parameter_config["name"], parameter_config["default"])
     #     else:
