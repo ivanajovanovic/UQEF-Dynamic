@@ -22,7 +22,7 @@
     },
   "model_settings": {
     "basis": "Oldman_Basin",
-    "plotting": "False",
+    "plotting": "True",
     "writing_results_to_a_file": "False"
   },
   "model_paths": {
@@ -43,34 +43,6 @@
     "objective_function":["MAE", "MSE", "RMSE", "NRMSE", "NSE", "LogNSE", "KGE"]
   },
   "parameters": [
-    {
-      "name": "TT",
-      "distribution": "Uniform",
-      "lower": -4.0,
-      "upper": 4.0,
-      "default": 0.0
-    },
-    {
-      "name": "C0",
-      "distribution": "Uniform",
-      "lower": 0.0,
-      "upper": 10.0,
-      "default": 5.0
-    },
-    {
-      "name": "ETF",
-      "distribution": "Uniform",
-      "lower": 0.0,
-      "upper": 1.0,
-      "default": 0.5
-    },
-    {
-      "name": "LP",
-      "distribution": "Uniform",
-      "lower": 0.0,
-      "upper": 1.0,
-      "default": 0.5
-    },
     {
       "name": "FC",
       "distribution": "Uniform",
@@ -115,6 +87,34 @@
     }
   ],
   "unused_parameters": [
+    {
+      "name": "TT",
+      "distribution": "Uniform",
+      "lower": -4.0,
+      "upper": 4.0,
+      "default": 0.0
+    },
+    {
+      "name": "C0",
+      "distribution": "Uniform",
+      "lower": 0.0,
+      "upper": 10.0,
+      "default": 5.0
+    },
+    {
+      "name": "ETF",
+      "distribution": "Uniform",
+      "lower": 0.0,
+      "upper": 1.0,
+      "default": 0.5
+    },
+    {
+      "name": "LP",
+      "distribution": "Uniform",
+      "lower": 0.0,
+      "upper": 1.0,
+      "default": 0.5
+    },
     {
       "name": "UBAS",
       "distribution": "None",
