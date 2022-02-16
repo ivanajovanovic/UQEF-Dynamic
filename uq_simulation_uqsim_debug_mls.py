@@ -75,12 +75,12 @@ if local_debugging:
     uqsim.args.outputResultDir = str(uqsim.args.outputResultDir)  # for now reast of the code expects path in the string
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
 
-    #uqsim.args.config_file = "/home/ga45met/Repositories/Larsim/Larsim-UQ/configurations_Larsim/configurations_larsim_master_lai.json"
-    # uqsim.args.config_file = '/work/ga45met/mnt/linux_cluster_2/Larsim-UQ/configurations_Larsim/configurations_larsim_high_flow_small.json'
+    #uqsim.args.config_file = "/home/ga45met/Repositories/Larsim/UQEFPP/configurations_Larsim/configurations_larsim_master_lai.json"
+    # uqsim.args.config_file = '/work/ga45met/mnt/linux_cluster_2/UQEFPP/configurations_Larsim/configurations_larsim_high_flow_small.json'
     uqsim.args.config_file = pathlib.Path(
-        '/work/ga45met/mnt/linux_cluster_2/Larsim-UQ/configurations_Larsim/configurations_larsim_high_flow.json')
-    #uqsim.args.config_file = '/home/ga45met/mnt/linux_cluster_2/Larsim-UQ/configurations_Larsim/configurations_larsim_master_lai_small.json'
-    #uqsim.args.config_file = "/home/ga45met/Repositories/Larsim/Larsim-UQ/configurations_Larsim/configuration_larsim_updated_lai_jun.json"
+        '/work/ga45met/mnt/linux_cluster_2/UQEFPP/configurations_Larsim/configurations_larsim_high_flow.json')
+    #uqsim.args.config_file = '/home/ga45met/mnt/linux_cluster_2/UQEFPP/configurations_Larsim/configurations_larsim_master_lai_small.json'
+    #uqsim.args.config_file = "/home/ga45met/Repositories/Larsim/UQEFPP/configurations_Larsim/configuration_larsim_updated_lai_jun.json"
 
     uqsim.args.sampleFromStandardDist = True
     uqsim.args.transformToStandardDist = True
@@ -129,13 +129,13 @@ if uqsim.is_master() and not uqsim.is_restored():
 # if uqsim.is_master() and not uqsim.is_restored():
 #     def initialModelSetUp():
 #         models = {
-#             "larsim": (lambda: larsimModel.LarsimModelSetUp(configurationObject=uqsim.configuration_object,
+#             "larsim": (lambda: larsimModel.LarsimModelSetUp(configurationObject=uqsim.configurationObject,
 #                                                             inputModelDir=uqsim.args.inputModelDir,
 #                                                             workingDir=uqsim.args.workingDir,
 #                                                             sourceDir=uqsim.args.sourceDir))
-#            ,"oscillator"     : (lambda: LinearDampedOscillatorModel.LinearDampedOscillatorModelSetUp(uqsim.configuration_object))
-#            ,"ishigami"       : (lambda: IshigamiModel.IshigamiModelSetUp(uqsim.configuration_object))
-#            ,"productFunction": (lambda: ProductFunctionModel.ProductFunctionModelSetUp(uqsim.configuration_object))
+#            ,"oscillator"     : (lambda: LinearDampedOscillatorModel.LinearDampedOscillatorModelSetUp(uqsim.configurationObject))
+#            ,"ishigami"       : (lambda: IshigamiModel.IshigamiModelSetUp(uqsim.configurationObject))
+#            ,"productFunction": (lambda: ProductFunctionModel.ProductFunctionModelSetUp(uqsim.configurationObject))
 #         }
 #         models[uqsim.args.model]()
 #     initialModelSetUp()
@@ -213,7 +213,7 @@ if uqsim.is_master():
 if uqsim.is_master():
     if local_debugging_nodes:
         # # experiment by Ivana - remove
-        # print(uqsim.configuration_object["tuples_parameters_info"])
+        # print(uqsim.configurationObject["tuples_parameters_info"])
 
         # Do the initial set-up
         larsimConfigurationsObject = larsimModel.LarsimConfigurations(configurationObject=uqsim.configuration_object)
@@ -254,7 +254,7 @@ if uqsim.is_master():
         # are different from uqsim.simulation.parameters
         # plot position of the final parameters
         if "tuples_parameters_info" not in uqsim.configuration_object:
-            print(f"uqsim.configuration_object was not updated together with model.configurationObject")
+            print(f"uqsim.configurationObject was not updated together with model.configurationObject")
             larsimConfigurationSettings.update_configurationObject_with_parameters_info(uqsim.configuration_object)
         list_of_parameters_dict = []
         for parameter in local_parameters:  # local_simulation_parameters
@@ -331,11 +331,11 @@ if uqsim.is_master():
             processed_sample_results.save_dict_of_matrix_c_eigen_decomposition(uqsim.args.outputResultDir)
 
 #####################################
-# save uqsim.configuration_object
+# save uqsim.configurationObject
 #####################################
 
 if uqsim.is_master():
-    fileName = pathlib.Path(uqsim.args.outputResultDir) / "configuration_object"
+    fileName = pathlib.Path(uqsim.args.outputResultDir) / "configurationObject"
     with open(fileName, 'wb') as f:
         dill.dump(uqsim.configuration_object, f)
 

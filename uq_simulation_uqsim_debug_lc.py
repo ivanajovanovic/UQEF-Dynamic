@@ -37,51 +37,61 @@ from productFunction import ProductFunctionStatistics
 from LarsimUtilityFunctions import larsimModel
 from LarsimUtilityFunctions import larsimConfigurationSettings
 
+from hbv_sask import HBVSASKModelUQ
+from hbv_sask import HBVSASKStatistics
+
 sys.path.insert(0, os.getcwd())
 
 # instantiate UQsim
 uqsim = uqef.UQsim()
 
 #####################################
-#####################################
 # change args locally for testing and debugging
+#####################################
+
 local_debugging = True
 if local_debugging:
+    # this is only relevant for Larsim model
     local_debugging_nodes = False  # True
     exit_after_debugging_nodes = False
     save_solver_results = False  # True
 
-    uqsim.args.model = "ishigami"  # "larsim"
+    uqsim.args.model = "hbvsask"  # "larsim", "ishigami"
 
     uqsim.args.uncertain = "all"
     uqsim.args.chunksize = 1
 
-    uqsim.args.uq_method = "sc"  # "sc" | "saltelli" | "mc" | "ensemble"
-    uqsim.args.mc_numevaluations = 1000
-    uqsim.args.sampling_rule = "random"  # | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
-    uqsim.args.sc_q_order = 6  # 11 7 #10 3
-    uqsim.args.sc_p_order = 8  # 8 6 #8 6
+    uqsim.args.uq_method = "mc"  # "sc" | "saltelli" | "mc" | "ensemble"
+    uqsim.args.mc_numevaluations = 10000
+    uqsim.args.sampling_rule = "halton"  # | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
+    uqsim.args.sc_q_order = 5  # 11 7 #10 3
+    uqsim.args.sc_p_order = 4  # 8 6 #8 6
     uqsim.args.sc_quadrature_rule = "p"  # "clenshaw_curtis", "patterson", "G"
 
-    uqsim.args.read_nodes_from_file = True
-    l = 10
+    uqsim.args.read_nodes_from_file = False
+    l = 5
     path_to_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/sparse_grid_nodes_weights")
-    uqsim.args.parameters_file = path_to_file / f"KPU_d3_l{l}.asc" # f"KPU_d3_l{l}.asc"
+    uqsim.args.parameters_file = path_to_file / f"KPU_d10_l{l}.asc" # f"KPU_d3_l{l}.asc"
+    uqsim.args.parameters_setup_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEFPP/configurations/KPU_HBV_d10.json")
 
     uqsim.args.sc_poly_rule = "three_terms_recurrence"  # "gram_schmidt" | "three_terms_recurrence" | "cholesky"
     uqsim.args.sc_poly_normed = True  # True
     uqsim.args.sc_sparse_quadrature = True  # True
     uqsim.args.regression = False
 
-    uqsim.args.inputModelDir = os.path.abspath(os.path.join('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2','Larsim-data'))
-    uqsim.args.sourceDir = os.path.abspath(os.path.join('/dss/dsshome1/lxc0C/ga45met2', 'Repositories', 'Larsim-UQ'))
+    # uqsim.args.inputModelDir = os.path.abspath(os.path.join('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2','Larsim-data'))
+    uqsim.args.inputModelDir = pathlib.Path("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/HBV-SASK-data")
+    # uqsim.args.sourceDir = os.path.abspath(os.path.join('/dss/dsshome1/lxc0C/ga45met2', 'Repositories', 'UQEFPP'))
+    uqsim.args.sourceDir = pathlib.Path("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/HBV-SASK-data")
     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_ensemble_2'))
-    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "ishigami_runs", "new_runs", 'ishigami_run_sc_sg_kpu_p8_q10'))
+    # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "ishigami_runs", "new_runs", 'ishigami_run_sc_sg_kpu_p8_q10'))
+    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs", 'mc_10000_halton_d_10_2006'))
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
-    #uqsim.args.config_file = "/dss/dsshome1/lxc0C/ga45met2/Repositories/Larsim-UQ/configurations_Larsim/configuration_larsim_uqsim_cm2_v4.json" #"configuration_larsim_uqsim.json"
-    #uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/Larsim-UQ/configurations_Larsim/configurations_larsim_master_lai_small.json'
-    # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/Larsim-UQ/configurations_Larsim/configurations_larsim_boundery_values_mls.json'
-    uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/Larsim-UQ/configurations/configuration_ishigami.json'
+    #uqsim.args.config_file = "/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEFPP/configurations_Larsim/configuration_larsim_uqsim_cm2_v4.json" #"configuration_larsim_uqsim.json"
+    #uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEFPP/configurations_Larsim/configurations_larsim_master_lai_small.json'
+    # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEFPP/configurations_Larsim/configurations_larsim_boundery_values_mls.json'
+    # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEFPP/configurations/configuration_ishigami.json'
+    uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEFPP/configurations/configuration_hbv.json'
 
     uqsim.args.sampleFromStandardDist = True  # True
     uqsim.args.transformToStandardDist = True  # True
@@ -92,9 +102,9 @@ if local_debugging:
     uqsim.args.uqsim_store_to_file = False
 
     uqsim.args.disable_statistics = False
-    uqsim.args.parallel_statistics = False  # True
-    uqsim.args.compute_Sobol_t = True  # True
-    uqsim.args.compute_Sobol_m = True  # True
+    uqsim.args.parallel_statistics = True
+    uqsim.args.compute_Sobol_t = False
+    uqsim.args.compute_Sobol_m = False
 
     uqsim.args.num_cores = 1
 
@@ -105,7 +115,8 @@ if local_debugging:
 #####################################
 
 if uqsim.is_master() and not uqsim.is_restored():
-    if not os.path.isdir(uqsim.args.outputResultDir): subprocess.run(["mkdir", "-p", uqsim.args.outputResultDir])
+    if not os.path.isdir(uqsim.args.outputResultDir):
+        subprocess.run(["mkdir", "-p", uqsim.args.outputResultDir])
     print("outputResultDir: {}".format(uqsim.args.outputResultDir))
 
 # Set the working folder where all the model runs related output and files will be written
@@ -140,6 +151,15 @@ uqsim.models.update({"oscillator"     : (lambda: LinearDampedOscillatorModel.Lin
 uqsim.models.update({"ishigami"       : (lambda: IshigamiModel.IshigamiModel(
     configurationObject=uqsim.configuration_object))})
 uqsim.models.update({"productFunction": (lambda: ProductFunctionModel.ProductFunctionModel(uqsim.configuration_object))})
+uqsim.models.update({"hbvsask"         : (lambda: HBVSASKModelUQ.HBVSASKModelUQ(
+    configurationObject=uqsim.configuration_object,
+    inputModelDir=uqsim.args.inputModelDir,
+    workingDir=uqsim.args.workingDir,
+    disable_statistics=uqsim.args.disable_statistics,
+    uq_method=uqsim.args.uq_method,
+    writing_results_to_a_file=False,
+    plotting=True
+))})
 
 #####################################
 # register statistics
@@ -167,6 +187,20 @@ uqsim.statistics.update({"ishigami"       : (lambda: IshigamiStatistics.Ishigami
     compute_Sobol_m=uqsim.args.compute_Sobol_m
 ))})
 uqsim.statistics.update({"productFunction": (lambda: ProductFunctionStatistics.ProductFunctionStatistics(uqsim.configuration_object))})
+uqsim.statistics.update({"hbvsask"         : (lambda: HBVSASKStatistics.HBVSASKStatistics(
+    configurationObject=uqsim.configuration_object,
+    workingDir=uqsim.args.workingDir,
+    sampleFromStandardDist=uqsim.args.sampleFromStandardDist,
+    store_qoi_data_in_stat_dict=False,
+    parallel_statistics=uqsim.args.parallel_statistics,
+    mpi_chunksize=uqsim.args.mpi_chunksize,
+    unordered=False,
+    uq_method=uqsim.args.uq_method,
+    compute_Sobol_t=uqsim.args.compute_Sobol_t,
+    compute_Sobol_m=uqsim.args.compute_Sobol_m,
+    qoi_column="Q_cms",
+    inputModelDir=uqsim.args.inputModelDir
+))})
 
 #####################################
 # setup
@@ -191,13 +225,19 @@ if uqsim.is_master():
     with open(argsFileName, 'wb') as handle:
         pickle.dump(uqsim.args, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
+# save initially configurationObject if program breaks during simulation
+if uqsim.is_master():
+    fileName = pathlib.Path(uqsim.args.outputResultDir) / "configurationObject"
+    with open(fileName, 'wb') as f:
+        dill.dump(uqsim.configuration_object, f)
+        
 #####################################
 # check-up (for Larsim model)
 #####################################
 
 if uqsim.is_master():
     if uqsim.args.model == "larsim" and local_debugging_nodes:
-        # print(uqsim.configuration_object["tuples_parameters_info"])
+        # print(uqsim.configurationObject["tuples_parameters_info"])
 
         # play with different sampling rules...
         larsimConfigurationsObject = larsimModel.LarsimConfigurations(configurationObject=uqsim.configuration_object)
@@ -222,7 +262,7 @@ if uqsim.is_master():
         # are different from uqsim.simulation.parameters
         # plot position of the final parameters
         if "tuples_parameters_info" not in uqsim.configuration_object:
-            print(f"uqsim.configuration_object was not updated together with model.configurationObject")
+            print(f"uqsim.configurationObject was not updated together with model.configurationObject")
             larsimConfigurationSettings.update_configurationObject_with_parameters_info(uqsim.configuration_object)
         list_of_parameters_dict = []
         local_master_dir = pathlib.Path(osp.abspath(osp.join(uqsim.args.workingDir, 'master_configuration')))
@@ -279,11 +319,11 @@ if uqsim.is_master():
             processed_sample_results.save_dict_of_matrix_c_eigen_decomposition(uqsim.args.outputResultDir)
 
 #####################################
-# save uqsim.configuration_object
+# re-save uqsim.configurationObject
 #####################################
 
 if uqsim.is_master():
-    fileName = pathlib.Path(uqsim.args.outputResultDir) / "configuration_object"
+    fileName = pathlib.Path(uqsim.args.outputResultDir) / "configurationObject"
     with open(fileName, 'wb') as f:
         dill.dump(uqsim.configuration_object, f)
 
@@ -295,6 +335,9 @@ uqsim.calc_statistics()
 uqsim.save_statistics()
 if uqsim.args.model == "larsim":
     uqsim.plot_statistics(display=False, plot_measured_timeseries=True, plot_unalteres_timeseries=False)
+elif uqsim.args.model == "hbvsask":
+    uqsim.plot_statistics(display=False, plot_measured_timeseries=True, plot_unalteres_timeseries=False,
+                          measured_df_column_to_draw="streamflow", measured_df_timestamp_column="index")
 else:
     uqsim.plot_statistics(display=False)
 
