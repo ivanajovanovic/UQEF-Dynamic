@@ -15,6 +15,7 @@
 
       "run_full_timespan":"False",
       "spin_up_length":1095,
+      "simulation_length": 365,
       "resolution": "daily",
 
       "cut_runs": "False",
@@ -22,7 +23,7 @@
     },
   "model_settings": {
     "basis": "Oldman_Basin",
-    "plotting": "True",
+    "plotting": "False",
     "writing_results_to_a_file": "False"
   },
   "model_paths": {

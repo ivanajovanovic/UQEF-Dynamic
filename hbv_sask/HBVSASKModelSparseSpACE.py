@@ -27,7 +27,7 @@ class HBVSASKFunction(Function):
         self.dim = dim
         self.param_names = param_names
         self.qoi = qoi
-        self.gof = gof
+        self.gof = gof # likelihood function
 
         self.writing_results_to_a_file = kwargs.get("writing_results_to_a_file", False)
         self.plotting = kwargs.get("plotting", False)
@@ -107,7 +107,7 @@ if local_debugging:
 
     #####################################
     qoi = "Q"  # "Q" "GoF"
-    gof = "calculateLogNSE"   # "calculateRMSE" "calculateNSE"  "None"
+    gof = "calculateRMSE"   # "calculateRMSE" "calculateNSE"  "None"
     operation = "UncertaintyQuantification"  # "Interpolation"
     problem_function = HBVSASKFunction(
         configurationObject=configuration_object,

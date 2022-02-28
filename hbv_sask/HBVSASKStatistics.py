@@ -694,8 +694,9 @@ class HBVSASKStatistics(Statistics):
 
         fig.update_layout(height=600, width=1000, title_text=window_title)
 
-        print(f"[HVB STAT INFO] _plotStatisticsDict_plotly function is almost over!")
+        print(f"[HVB STAT INFO] _plotStatisticsDict_plotly function is almost over, just to save the plot!")
 
+        # filename = pathlib.Path(filename)
         plot(fig, filename=filename, auto_open=display)
         return fig
 

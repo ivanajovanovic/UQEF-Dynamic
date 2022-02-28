@@ -13,7 +13,7 @@
       "end_hour": 0,
       "end_minute": 0,
 
-      "run_full_timespan":"False",
+      "run_full_timespan":"True",
       "spin_up_length":1095,
       "resolution": "daily",
 

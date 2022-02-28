@@ -62,10 +62,10 @@ class HBVSASKModel(object):
             self.plotting = strtobool(self.configurationObject["model_settings"].get("plotting", True))
 
         # self.initial_condition_file = self.inputModelDir_basis / "initial_condition.inp"
-        initial_condition_file = kwargs.get("initial_condition_file", "state_df.pkl")
-        # initial_condition_file = kwargs.get("initial_condition_file", "state_const_df.pkl")
+        # initial_condition_file = kwargs.get("initial_condition_file", "state_df.pkl")
+        initial_condition_file = kwargs.get("initial_condition_file", "state_const_df.pkl")
         if self.run_full_timespan:  # TODO
-            initial_condition_file = "state_const_df.pkl"
+            initial_condition_file = kwargs.get("initial_condition_file", "state_const_df.pkl")
         monthly_data_inp = kwargs.get("monthly_data_inp", "monthly_data.inp")
         precipitation_temperature_inp = kwargs.get("precipitation_temperature_inp", "Precipitation_Temperature.inp")
         streamflow_inp = kwargs.get("streamflow_inp", "streamflow.inp")
