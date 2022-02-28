@@ -51,6 +51,7 @@ samples = joint.sample(100)
 
 #####################################
 # Set of Utilty Functions
+# originally in he notebook - SG_SparseSpace/Experimenting_with_Sparse_Quadrature_Points.ipynb
 #####################################
 
 def generate_table_single_rule_over_dim_and_orders_sparse_and_nonsparse(rule, dists, dim, q_orders, growth=None):

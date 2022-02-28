@@ -30,10 +30,10 @@ import uqef
 
 
 class LarsimFunction(Function):
-    def __init__(self, config_file, param_names=None, qoi="Q", gof="calculateNSE"):
+    def __init__(self, configurationObject, param_names=None, qoi="Q", gof="calculateNSE"):
         super().__init__()
         self.larsimModelObject = larsimModel.LarsimModel(
-            configurationObject=config_file,
+            configurationObject=configurationObject,
             inputModelDir=inputModelDir,
             workingDir=outputModelDir,
             sourceDir=sourceDir
@@ -62,7 +62,7 @@ class LarsimFunction(Function):
         self.global_eval_counter += 1
         params = {param_name: coord for coord, param_name in zip(coordinates, self.param_names)}
 
-        larsim_res = self.larsimModelObject.run(
+        results_array = self.larsimModelObject.run(
             parameters=[params, ],
             i_s=[self.global_eval_counter, ],
             take_direct_value=True,
@@ -73,19 +73,22 @@ class LarsimFunction(Function):
 
         if self.qoi == "Q":
             df = larsimDataPostProcessing.filterResultForStationAndTypeOfOutpu(
-                resultsDataFrame=larsim_res[0][0]["result_time_series"],
+                resultsDataFrame=results_array[0][0]["result_time_series"],
                 station=self.larsimModelObject.larsimConfObject.station_of_Interest,
                 type_of_output=self.larsimModelObject.larsimConfObject.type_of_output_of_Interest
             )
             return np.array(df['Value'])
             # TODO take just last time-step
         elif self.qoi == "GoF":
-            if self.gof == "calculateRMSE":  # TODO change this - hard-coded for now...
-                temp = larsim_res[0][0]['gof_df'][self.gof].values
-                temp = 1000 - temp
-                return np.array(temp)
+            if self.gof in results_array[0][0]['gof_df'].columns:
+                if self.gof == "calculateRMSE":  # TODO change this - hard-coded for now...
+                    temp = results_array[0][0]['gof_df'][self.gof].values
+                    temp = 1000 - temp
+                    return np.array(temp)
+                else:
+                    return np.array(results_array[0][0]['gof_df'][self.gof].values)
             else:
-                return np.array(larsim_res[0][0]['gof_df'][self.gof].values)
+                return None
         else:
             raise Exception(f"Not implemented")
 
@@ -152,7 +155,7 @@ if local_debugging:
     qoi = "GoF"  # "Q" "GoF"
     gof = "calculateLogNSE"   # "calculateRMSE" "calculateNSE"  "None"
     operation = "UncertaintyQuantification"  # "Interpolation"
-    problem_function = LarsimFunction(config_file=config_file, qoi=qoi, gof=gof)
+    problem_function = LarsimFunction(configurationObject=config_file, qoi=qoi, gof=gof)
 
     op = UncertaintyQuantification(problem_function, distributions, a, b)
     # grid = GaussLegendreGrid(a, b, op)
