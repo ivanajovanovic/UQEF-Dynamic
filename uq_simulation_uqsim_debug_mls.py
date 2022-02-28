@@ -11,7 +11,7 @@ from distutils.util import strtobool
 
 import uqef
 
-from larsim import LarsimModel
+from larsim import LarsimModelUQ
 from larsim import LarsimStatistics
 
 from linearDampedOscillator import LinearDampedOscillatorModel
@@ -144,7 +144,7 @@ if uqsim.is_master() and not uqsim.is_restored():
 # register model
 #####################################
 
-uqsim.models.update({"larsim"         : (lambda: LarsimModel.LarsimModelUQ(
+uqsim.models.update({"larsim"         : (lambda: LarsimModelUQ.LarsimModelUQ(
     configurationObject=uqsim.configuration_object,
     inputModelDir=uqsim.args.inputModelDir,
     workingDir=uqsim.args.workingDir,
