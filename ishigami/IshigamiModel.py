@@ -1,9 +1,9 @@
-from uqef.model import Model
-
+import json
 import numpy as np
 import time
 from math import pow
 
+# from uqef.model import Model
 
 def model(p, x):
     a, b = p
@@ -25,11 +25,15 @@ class IshigamiModelSetUp():
         pass
 
 
-class IshigamiModel(Model):
-    def __init__(self, configurationObject):
-        Model.__init__(self)
+class IshigamiModel(object):
+    def __init__(self, configurationObject,  *args, **kwargs):
+        # Model.__init__(self)
 
-        self.configurationObject = configurationObject
+        if isinstance(configurationObject, dict):
+            self.configurationObject = configurationObject
+        else:
+            with open(configurationObject) as f:
+                self.configurationObject = json.load(f)
 
         self.a = self.configurationObject["other_model_parameters"]["a"]
         self.b = self.configurationObject["other_model_parameters"]["b"]
