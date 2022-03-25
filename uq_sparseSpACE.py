@@ -20,8 +20,8 @@ cwd = pathlib.Path(os.getcwd())
 # print(cwd)
 parent = cwd.parent.absolute()
 # print(parent)
-sys.path.insert(0, parent)
-# sys.path.insert(0, os.getcwd())
+# sys.path.insert(0, parent)
+sys.path.insert(0, os.getcwd())
 
 from sparseSpACE.Function import *
 from sparseSpACE.spatiallyAdaptiveSingleDimension2 import *
@@ -30,8 +30,8 @@ from sparseSpACE.GridOperation import *
 from sparseSpACE.StandardCombi import *
 from sparseSpACE.Integrator import *
 
-from sparse import sparseSpACE_functions
-from sparse import Sparse_Quadrature
+from sparse_utility import sparseSpACE_functions
+from sparse_utility import Sparse_Quadrature
 # from sparseSpACE_functions import *
 # from Sparse_Quadrature import *
 
@@ -42,40 +42,113 @@ rank = MPI.COMM_WORLD.Get_rank()
 def transformSamples(samples, distribution_r, distribution_q):
     return distribution_q.inv(distribution_r.fwd(samples))
 
-# Var 0 - TODO Add MC 10^4 for computing reference value...
 
-# Var 1
-def compute_gpce_chaospy(model, param_names, dists, joint, jointStandard, dim, a, b, plotting=False,
-                         writing_results_to_a_file=False, outputModelDir="./", rule='gaussian', sparse=True, q=7, p=6,
-                         poly_rule="three_terms_recurrence", poly_normed=False, sampleFromStandardDist=False,
-                         can_model_evaluate_all_vector_nodes=False, vector_model_output=False, **kwargs):
-    """
-    This is all that UQEF+UQEFPP do in short, when uq_method=sc
-    - sparse vs. non-sparse
-    - model output single vs. vector
-    - transformation vs. not
-    - question weather there is analytical values
-    """
+# Var 0 - MC method for computing reference values for mean and/or variance...
+def compute_mc_quantity(model, param_names, dists, joint, jointStandard, dim, a, b, numSamples, rule="R",
+                        sampleFromStandardDist=False, can_model_evaluate_all_vector_nodes=False,
+                        read_nodes_from_file=False, **kwargs):
+    print(f"\n==VAR0: MC Computation Chaospy==")
     labels = [param_name.strip() for param_name in param_names]
-
-    growth = True if (rule == "c" and not sparse) else False
-
-    compute_Sobol_m = kwargs.get('compute_Sobol_m', True)
-    compute_Sobol_t = kwargs.get('compute_Sobol_t', True)
-
-    get_analytical_mean = kwargs.get('get_analytical_mean', False)
-    get_analytical_var = kwargs.get('get_analytical_var', False)
-    get_analytical_Sobol_m = kwargs.get('get_analytical_Sobol_m', False)
-    get_analytical_Sobol_t = kwargs.get('get_analytical_Sobol_t', False)
+    stochastic_dim = len(param_names)
 
     if sampleFromStandardDist:
         dist = jointStandard
     else:
         dist = joint
 
-    # TODO add option for reading nodes and weights from a file, e.g., sparse-grids.de
-    quads = cp.generate_quadrature(q, dist, rule=rule, growth=growth, sparse=sparse)
-    nodes, weights = quads
+    if read_nodes_from_file:
+        parameters_file_name = kwargs.get('parameters_file_name', None)
+        if parameters_file_name is None:
+            raise
+        nodes_and_weights_array = np.loadtxt(parameters_file_name, delimiter=',')
+        nodes = nodes_and_weights_array[:, :stochastic_dim].T
+    else:
+        nodes = dist.sample(size=numSamples, rule=rule).round(4)
+    nodes = np.array(nodes)
+
+    if sampleFromStandardDist:
+        parameters = transformSamples(nodes, jointStandard, joint)
+    else:
+        parameters = nodes
+
+    start_time_model_evaluations = time.time()
+    if can_model_evaluate_all_vector_nodes:
+        evaluations = model(parameters.T)
+    else:
+        evaluations = np.array([model(parameter) for parameter in parameters.T])
+    end_time_model_evaluations = time.time()
+
+    time_model_evaluations = end_time_model_evaluations - start_time_model_evaluations
+    numEvaluations = len(parameters.T)  # len(evaluations)
+
+    print(f"Needed time for model evaluations is: {time_model_evaluations} \n"
+          f"for {numEvaluations} number of full model runs;")
+
+    compute_mean = kwargs.get('compute_mean', True)
+    compute_var = kwargs.get('compute_var', True)
+
+    start_time_computing_statistics = time.time()
+    expectedInterp = None
+    varianceInterp = None
+    if compute_mean:
+        expectedInterp = np.mean(evaluations)
+        print(f"MC_expectation = {expectedInterp}")
+    if compute_var:
+        varianceInterp = np.sum((evaluations - expectedInterp) ** 2, axis=0, dtype=np.float64) / (numEvaluations - 1)
+        print(f"MC_variance = {varianceInterp}")
+    end_time_computing_statistics = time.time()
+    time_computing_statistics = end_time_computing_statistics - start_time_computing_statistics
+    print(f"Needed time for computing statistics is: {time_computing_statistics};\n")
+
+    return expectedInterp, varianceInterp
+
+
+# Var 1
+def compute_gpce_chaospy(model, param_names, dists, joint, jointStandard, dim, a, b, plotting=False,
+                         writing_results_to_a_file=False, outputModelDir="./", rule='gaussian', sparse=True, q=7, p=6,
+                         poly_rule="three_terms_recurrence", poly_normed=False, sampleFromStandardDist=False,
+                         can_model_evaluate_all_vector_nodes=False, vector_model_output=False,
+                         read_nodes_from_file=False, **kwargs):
+    """
+    This is all that UQEF+UQEFPP do in short, when uq_method=sc
+    - sparse_utility vs. non-sparse_utility
+    - model output single vs. vector
+    - transformation vs. not
+    - question weather there is analytical values
+    """
+    print(f"\n==VAR1: gPCE Chaospy==")
+
+    labels = [param_name.strip() for param_name in param_names]
+    stochastic_dim = len(param_names)
+
+    growth = True if (rule == "c" and not sparse) else False
+
+    compute_mean = kwargs.get('compute_mean', True)
+    compute_var = kwargs.get('compute_var', True)
+    compute_Sobol_m = kwargs.get('compute_Sobol_m', False)
+    compute_Sobol_t = kwargs.get('compute_Sobol_t', False)
+
+    # get_analytical_mean = kwargs.get('get_analytical_mean', False)
+    # get_analytical_var = kwargs.get('get_analytical_var', False)
+    # get_analytical_Sobol_m = kwargs.get('get_analytical_Sobol_m', False)
+    # get_analytical_Sobol_t = kwargs.get('get_analytical_Sobol_t', False)
+
+    if sampleFromStandardDist:
+        dist = jointStandard
+    else:
+        dist = joint
+
+    if read_nodes_from_file:
+        parameters_file_name = kwargs.get('parameters_file_name', None)
+        if parameters_file_name is None:
+            raise
+        nodes_and_weights_array = np.loadtxt(parameters_file_name, delimiter=',')
+        nodes = nodes_and_weights_array[:, :stochastic_dim].T
+        weights = nodes_and_weights_array[:, stochastic_dim]
+        # if sampleFromStandardDist assumption is that nodes come from jointStandard!!!
+    else:
+        quads = cp.generate_quadrature(q, dist, rule=rule, growth=growth, sparse=sparse)
+        nodes, weights = quads
 
     # __restore__cpu_affinity()
     nodes = np.array(nodes)
@@ -86,7 +159,11 @@ def compute_gpce_chaospy(model, param_names, dists, joint, jointStandard, dim, a
     else:
         parameters = nodes
 
+    print(f"Model will be evaluated in the following parameters\n: {parameters};")
+
+    # Note: nodes and parameters are of shape dxq
     # evaluate model
+    # TODO Parallelization of this part is the main benefit of UQEF for complex models
     start_time_model_evaluations = time.time()
     if can_model_evaluate_all_vector_nodes:
         evaluations = model(parameters.T)
@@ -97,28 +174,42 @@ def compute_gpce_chaospy(model, param_names, dists, joint, jointStandard, dim, a
     time_model_evaluations = end_time_model_evaluations - start_time_model_evaluations
     number_full_model_evaluations = len(parameters.T)
 
+    print(f"Needed time for model evaluations is: {time_model_evaluations} \n"
+          f"for {number_full_model_evaluations} number of full model runs;")
+
     start_time_producing_gpce = time.time()
     expansion = cp.generate_expansion(p, dist, rule=poly_rule, normed=poly_normed)
     gPCE = cp.fit_quadrature(expansion, nodes, weights, evaluations)
     end_time_producing_gpce = time.time()
 
     time_producing_gpce = end_time_producing_gpce - start_time_producing_gpce
+    print(f"Needed time for producing gPCE is: {time_producing_gpce};")
 
-    expectedInterp = cp.E(gPCE, dist)
-    varianceInterp = cp.Var(gPCE, dist)
-    print("expectation = ", expectedInterp, ", variance = ", varianceInterp)
+    # TODO Think of computing these quantities on your own!
+    start_time_computing_statistics = time.time()
+    expectedInterp = None
+    varianceInterp = None
     first_order_sobol_indices = None
     total_order_sobol_indices = None
+    if compute_mean:
+        expectedInterp = cp.E(gPCE, dist)
+        print(f"gPCE_mean = {expectedInterp}")
+    if compute_var:
+        varianceInterp = cp.Var(gPCE, dist)
+        print(f"gPCE_variance = {varianceInterp}")
     if compute_Sobol_m:
         first_order_sobol_indices = cp.Sens_m(gPCE, dist)
-        print("First order Sobol indices: ", first_order_sobol_indices)
+        print("gPCE First order Sobol indices: ", first_order_sobol_indices)
     if compute_Sobol_t:
         total_order_sobol_indices = cp.Sens_t(gPCE, dist)
-        print("Total order Sobol indices: ", total_order_sobol_indices)
+        print("gPCE Total order Sobol indices: ", total_order_sobol_indices)
+    end_time_computing_statistics = time.time()
+    time_computing_statistics = end_time_computing_statistics - start_time_computing_statistics
 
-    print(f'time_model_evaluations: {time_model_evaluations}\n')
-    print(f'time_producing_gpce: {time_producing_gpce} \n')
-    print(f'number_full_model_evaluations: {number_full_model_evaluations}')
+    # print(f'time_model_evaluations: {time_model_evaluations}')
+    # print(f'time_producing_gpce: {time_producing_gpce}')
+    # print(f'number_full_model_evaluations: {number_full_model_evaluations}')
+    print(f"Needed time for computing statistics is: {time_computing_statistics};\n")
 
     #####################################
     # Saving
@@ -138,38 +229,15 @@ def compute_gpce_chaospy(model, param_names, dists, joint, jointStandard, dim, a
         fileName = f"results.txt"
         statFileName = str(outputModelDir / fileName)
         fp = open(statFileName, "w")
-        fp.write(f'E: {expectedInterp},\n Var: {varianceInterp}, \n '
-                 f'First order Sobol indices: {first_order_sobol_indices} \n; '
-                 f'Total order Sobol indices: {total_order_sobol_indices} \n'
-                 f'time_model_evaluations: {time_model_evaluations}\n'
-                 f'time_producing_gpce: {time_producing_gpce} \n'
-                 f'number_full_model_evaluations: {number_full_model_evaluations}')
+        fp.write(f'E: {expectedInterp}\n')
+        fp.write(f'Var: {varianceInterp}\n')
+        fp.write(f'First order Sobol indices: {first_order_sobol_indices}\n')
+        fp.write(f'Total order Sobol indices: {total_order_sobol_indices}\n')
+        fp.write(f'number_full_model_evaluations: {number_full_model_evaluations}\n')
+        fp.write(f'time_model_evaluations: {time_model_evaluations}\n')
+        fp.write(f'time_producing_gpce: {time_producing_gpce}\n')
+        fp.write(f'time_computing_statistics: {time_computing_statistics}')
         fp.close()
-    #####################################
-    # TODO access to analytical values and compare them with computed
-
-    # sobol_m_analytical, sobol_t_analytical = get_analytical_sobol_indices(a_model_param, b_model_param)
-    #
-    # # Sobol_t_error = sobol_t_analytical - total_order_sobol_indices
-    # # Sobol_m_error = sobol_m_analytical - first_order_sobol_indices
-    # # print("Sobol_t_error: {}".format(Sobol_t_error, ".6f"))
-    # # # print(f"Sobol Total Error = {Sobol_t_error:.6f} \n")
-    # # print("Sobol_m_error: {}".format(Sobol_m_error, ".6f"))
-    # # # print(f"Sobol Main Error = {Sobol_m_error:.6f} \n")
-    #
-    # sobol_t_error = np.empty(len(labels), dtype=np.float64)
-    # for i in range(len(labels)):
-    #     # print(f"Sobol Total Simulation = {total_order_sobol_indices[i][0]} \n")
-    #     # print(f"Sobol Total Analytical = {sobol_t_analytical[i]:.6f} \n")
-    #     sobol_t_error[i] = sobol_t_analytical[i] - total_order_sobol_indices[i][0]
-    #     print(f"Sobol Total Error = {sobol_t_error[i]:.6f} \n")
-    # #
-    # sobol_m_error = np.empty(len(labels), dtype=np.float64)
-    # for i in range(len(labels)):
-    #     # print(f"Sobol Main Simulation = {first_order_sobol_indices[i][0]} \n")
-    #     # print(f"Sobol Main Analytical = {sobol_m_analytical[i]:.6f} \n")
-    #     sobol_m_error[i] = sobol_m_analytical[i] - first_order_sobol_indices[i][0]
-    #     print(f"Sobol Main Error = {sobol_m_error[i]:.6f} \n")
 
     return gPCE, expectedInterp, varianceInterp, first_order_sobol_indices, total_order_sobol_indices
 
@@ -228,7 +296,7 @@ def compute_surrogate_sparsespace_and_gpce(model, param_names, dists, joint, joi
     # TODO From this point on SparseSpACE can again come to play, instead of chaospy quad - think if it makes sense!?
     # _compute_gpce_chaospy_ishigami(a_model_param=a_model_param, b_model_param=b_model_param, labels=labels,
     #                                my_model=combiinstance, joint=joint,
-    #                                q=q, p=p, rule=rule, sparse=sparse,
+    #                                q=q, p=p, rule=rule, sparse_utility=sparse_utility,
     #                                outputModelDir=outputModelDir, can_model_evaluate_all_vector_nodes=True)
 
     # TODO - Transformation? - the same story as in _compute_gpce_chaospy_ishigami
@@ -446,73 +514,85 @@ def compute_gpce_sparsespace(build_sg_for_e_and_var=True, modified_basis=False,
         fp.close()
 
 
-# utility for genz
-b_1 = 1.5 # 9.0
+# utility for Genz Family of Functions
+b_1 = 1.5  # 9.0
 b_2 = 7.2
 b_3 = 1.85
 b_4 = 7.03
 b_5 = 20.4
 b_6 = 4.3
-def generate_and_scale_coeff_and_weights(dim, b, w_norm=1):
-    coeffs = cp.Uniform(0, 1).sample(dim)
-    l1 = norm(coeffs, 1)
+#
+def generate_and_scale_coeff_and_weights(dim, b, w_norm=1, anisotropic=False):
+    coeffs = cp.Uniform(0, 1).sample(dim)  # TODO Think of using some quasiMC method
+    l1 = np.linalg.norm(coeffs, 1)
     coeffs = coeffs * b / l1
-    # coeffs = np.array([coeff*np.exp(i/dim) for coeff, i in zip(coeffs,range(1,dim+1))])  # less isotropic - conrad and marzouk
+    if anisotropic:
+        coeffs = np.array([coeff*np.exp(i/dim) for coeff, i in zip(coeffs, range(1,dim+1))])  # less isotropic
     weights = cp.Uniform(0,1).sample(dim)
-    l1 = norm(weights, 1)
+    l1 = np.linalg.norm(weights, 1)
     weights = weights * w_norm / l1
     return coeffs, weights
 
 
 if __name__ == "__main__":
 
-    model = "corner_peak"  #"hbvsask"
+    dictionary_with_inf_about_the_run = dict()
+
+    #####################################
+    # Initial Model Setup
+    #####################################
+
+    model = "corner_peak"  # "hbvsask"
     list_of_models = ["hbvsask", "larsim", "ishigami", "gfunction", "zabarras2d", "zabarras3d",
                       "corner_peak", "product_peak", "discontinuous"]
     # Additional Genz Options: GenzOszillatory, GenzDiscontinious2, GenzC0, GenzGaussian
 
+    dictionary_with_inf_about_the_run["model"] = model
+
     assert(model in list_of_models)
 
-    can_model_evaluate_all_vector_nodes = False
-    has_analyitic_mean = False
-    has_analyitic_var = False
-    has_analyitic_first_sobol = False
-    has_analyitic_total_sobol = False
+    can_model_evaluate_all_vector_nodes = False  # set to True if eval_vectorized is implemented
 
-    current_output_folder = "sg_ss_ct_modified_var2_l_2_p_4_q_5_max_2000"
-    scratch_dir = pathlib.Path("/work/ga45met")
+    current_output_folder = "sg_gaussian_5d_kpu_l_10_p_4"  # "sg_ss_ct_modified_var2_l_2_p_4_q_5_max_2000"
+    scratch_dir = cwd  # pathlib.Path("/work/ga45met")
     inputModelDir = None
     outputModelDir = None
     config_file = None
+
     if model == "larsim":
         inputModelDir = pathlib.Path("/work/ga45met/Larsim-data")
-        outputModelDir = scratch_dir / "larsim_runs" / current_output_folder
+        outputModelDir = scratch_dir / "sg_anaysis" / "larsim_runs" / current_output_folder
         config_file = pathlib.Path(
             '/work/ga45met/mnt/linux_cluster_2/UQEFPP/configurations_Larsim/configurations_larsim_high_flow_small_sg.json')
     elif model == "hbvsask":
         inputModelDir = pathlib.Path("/work/ga45met/Hydro_Models/HBV-SASK-data")
-        outputModelDir = scratch_dir / "hbvsask_runs" / current_output_folder
+        outputModelDir = scratch_dir / "sg_anaysis" / "hbvsask_runs" / current_output_folder
         config_file = pathlib.Path(
             '/work/ga45met/mnt/linux_cluster_2/UQEFPP/configurations/configuration_hbv.json')
     elif model == "ishigami":
-        outputModelDir = scratch_dir / "ishigami_runs" / current_output_folder
+        outputModelDir = scratch_dir / "sg_anaysis" / "ishigami_runs" / current_output_folder
         config_file = pathlib.Path('/work/ga45met/mnt/linux_cluster_2/UQEFPP/configurations/configuration_ishigami.json')
     elif model == "gfunction":
-        outputModelDir = scratch_dir / "gfunction_runs" / current_output_folder
+        outputModelDir = scratch_dir / "sg_anaysis" / "gfunction_runs" / current_output_folder
     elif model == "zabarras2d":
-        outputModelDir = scratch_dir / "zabarras2d_runs" / current_output_folder
+        outputModelDir = scratch_dir / "sg_anaysis" / "zabarras2d_runs" / current_output_folder
     elif model == "zabarras3d":
-        outputModelDir = scratch_dir / "zabarras3d_runs" / current_output_folder
+        outputModelDir = scratch_dir / "sg_anaysis" / "zabarras3d_runs" / current_output_folder
     elif model == "corner_peak":
-        outputModelDir = scratch_dir / "corner_peak" / current_output_folder
+        outputModelDir = scratch_dir / "sg_anaysis" / "corner_peak" / current_output_folder
     elif model == "product_peak":
-        outputModelDir = scratch_dir / "product_peak" / current_output_folder
+        outputModelDir = scratch_dir / "sg_anaysis" / "product_peak" / current_output_folder
     elif model == "discontinuous":
-        outputModelDir = scratch_dir / "discontinuous" / current_output_folder
+        outputModelDir = scratch_dir / "sg_anaysis" / "discontinuous" / current_output_folder
 
     outputModelDir.mkdir(parents=True, exist_ok=True)
 
-    ##################
+    dictionary_with_inf_about_the_run["config_file"] = str(config_file)
+    dictionary_with_inf_about_the_run["outputModelDir"] = str(outputModelDir)
+
+    #####################################
+    # Setting the 'stochastic part'
+    #####################################
 
     dim = 0
     param_names = []
@@ -526,6 +606,9 @@ if __name__ == "__main__":
             configurationObject = json.load(f)
     else:
         configurationObject = None
+
+    coeffs = None
+    weights = None
 
     # in case the set-up of the model is done via some configuration_file
     if configurationObject is not None \
@@ -573,6 +656,7 @@ if __name__ == "__main__":
             dim = 5
             coeffs, _ = generate_and_scale_coeff_and_weights(dim=dim, b=b_3)
             # coeffs = [float(1) for _ in range(dim)]
+            can_model_evaluate_all_vector_nodes = True
         elif model == "product_peak":
             param_names = ["x0", "x1", "x2"]
             a = [0.0, 0.0, 0.0]
@@ -581,6 +665,7 @@ if __name__ == "__main__":
             coeffs, weights = generate_and_scale_coeff_and_weights(dim=dim, b=dim)
             # coeffs = [float(3) for _ in range(dim)]
             # midpoint = [0.5 for _ in range(dim)]
+            can_model_evaluate_all_vector_nodes = True
         elif model == "discontinuous":
             param_names = ["x0", "x1", "x2"]
             a = [0.0, 0.0, 0.0]
@@ -602,8 +687,8 @@ if __name__ == "__main__":
     standardDists = []
     standardDists_min_one_one = []
     standardDists_zero_one = []
-    joinedDists = None
-    joinedStandardDists = None
+    # joinedDists = None
+    # joinedStandardDists = None
     for single_param_dist_config_dict in distributions_list_of_dicts:
         cp_dist_signature = inspect.signature(getattr(cp, single_param_dist_config_dict["distribution"]))
         dist_parameters_values = []
@@ -616,14 +701,41 @@ if __name__ == "__main__":
     joinedDists = cp.J(*dists)
     joinedStandardDists = cp.J(*standardDists)
 
-    ##################
-    # Creation of Model Object
-    ##################
-    qoi = "Q"  # "Q" "GoF"
-    gof = "calculateLogNSE"   # "calculateRMSE" "calculateNSE"  "None"
-    operation = "UncertaintyQuantification"  # "Interpolation"
+    dictionary_with_inf_about_the_run["param_names"] = param_names
+    dictionary_with_inf_about_the_run["a"] = a
+    dictionary_with_inf_about_the_run["b"] = b
+    dictionary_with_inf_about_the_run["coeffs"] = coeffs
+    dictionary_with_inf_about_the_run["weights"] = weights
+
+    #####################################
+    # Creation of Model Object and setting up the purpose of model run, i.e.,
+    # building surrogate model or doing UQ analysis
+    #####################################
+    # setting default values for some 'configuration' parameters
+    compute_mean = True
+    compute_var = True
+    compute_Sobol_m = False
+    compute_Sobol_t = False
+
+    get_analytical_mean = False
+    get_analytical_var = False
+    get_analytical_Sobol_m = False
+    get_analytical_Sobol_t = False
+
+    has_analyitic_mean = False
+    has_analyitic_var = False
+    has_analyitic_first_sobol = False
+    has_analyitic_total_sobol = False
+
+    surrogate_model = None
+
+    qoi = "model_output"
+    operation = "UncertaintyQuantification"  # "Interpolation" "both"
+    dictionary_with_inf_about_the_run["operation"] = operation
 
     if model == "larsim":
+        qoi = "Q"  # "Q" "GoF"
+        gof = "calculateLogNSE"  # "calculateRMSE" "calculateNSE"  "None"
         problem_function = sparseSpACE_functions.LarsimFunction(
             configurationObject=configurationObject,
             inputModelDir=inputModelDir,
@@ -631,7 +743,14 @@ if __name__ == "__main__":
             qoi=qoi,
             gof=gof
         )
+        dictionary_with_inf_about_the_run["qoi"] = qoi
+        dictionary_with_inf_about_the_run["gof"] = gof
+        if operation == "UncertaintyQuantification":
+            compute_Sobol_m = True
+            compute_Sobol_t = True
     elif model == "hbvsask":
+        qoi = "Q"  # "Q" "GoF"
+        gof = "calculateLogNSE"  # "calculateRMSE" "calculateNSE"  "None"
         problem_function = sparseSpACE_functions.HBVSASKFunction(
             configurationObject=configurationObject,
             inputModelDir=inputModelDir,
@@ -643,12 +762,23 @@ if __name__ == "__main__":
             writing_results_to_a_file=False,
             plotting=False
         )
+        dictionary_with_inf_about_the_run["qoi"] = qoi
+        dictionary_with_inf_about_the_run["gof"] = gof
+        if operation == "UncertaintyQuantification":
+            compute_Sobol_m = True
+            compute_Sobol_t = True
     elif model == "ishigami":
         problem_function = sparseSpACE_functions.IshigamiFunction(
             configurationObject=configurationObject
         )
+        if operation == "UncertaintyQuantification":
+            compute_Sobol_m = True
+            compute_Sobol_t = True
     elif model == "gfunction":
         problem_function = sparseSpACE_functions.GFunction(dim=3)
+        if operation == "UncertaintyQuantification":
+            compute_Sobol_m = True
+            compute_Sobol_t = True
     elif model == "zabarras2d":
         problem_function = sparseSpACE_functions.FunctionUQ2D()
     elif model == "zabarras3d":
@@ -660,27 +790,66 @@ if __name__ == "__main__":
     elif model == "discontinuous":
         problem_function = GenzDiscontinious(coeffs, weights)  # TODO ubiquitous
 
-    ##################
-    # Running the SG Simulation
+    get_analytical_mean = get_analytical_mean and compute_mean and has_analyitic_mean
+    get_analytical_var = get_analytical_var and compute_var and has_analyitic_var
+    get_analytical_Sobol_m = get_analytical_Sobol_m and compute_Sobol_m and has_analyitic_first_sobol
+    get_analytical_Sobol_t = get_analytical_Sobol_t and compute_Sobol_t and has_analyitic_total_sobol
 
-    writing_results_to_a_file = False
-    plotting = False #True
+    #####################################
+    # Running the SG Simulation
+    #####################################
+
+    writing_results_to_a_file = True
+    plotting = False  # True
 
     # parameters for chaopsy quadrature, similar setup to uqef(pp)...
     quadrature_rule = 'gaussian'
     sparse = False
     q_order = 10
-    p_order = 9
+    p_order = 4
     poly_rule = "three_terms_recurrence"  # "gram_schmidt" | "three_terms_recurrence" | "cholesky"
-    poly_normed = False #True
+    poly_normed = False  # True
     sparse_quadrature = False  # False
     sampling_rule = "random"  # | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
     sampleFromStandardDist = True
 
-    # read_nodes_from_file = False
+    read_nodes_from_file = True
+    path_to_file = pathlib.Path("/work/ga45met/sparseSpACE/sparse_grid_nodes_weights")
     # path_to_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/sparse_grid_nodes_weights")
-    # parameters_file = path_to_file / f"KPU_d5_l{l}.asc" # f"KPU_d3_l{l}.asc"
+    l = 10
+    parameters_file_name = path_to_file / f"KPU_d{dim}_l{l}.asc" # f"KPU_d3_l{l}.asc"
     # parameters_setup_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEFPP/configurations_Larsim/KPU_Larsim_d5.json")
+
+    simulation_time_start = time.time()
+
+    # Var 1 #
+    gPCE, approximated_mean, approximated_var, first_order_sobol_indices, total_order_sobol_indices = \
+        compute_gpce_chaospy(
+            model=problem_function, param_names=param_names, dists=dists, joint=joinedDists,
+            jointStandard=joinedStandardDists, dim=dim, a=a, b=b, plotting=plotting,
+            writing_results_to_a_file=writing_results_to_a_file, outputModelDir=outputModelDir,
+            rule=quadrature_rule, sparse=sparse_quadrature, q=q_order, p=p_order, poly_rule=poly_rule,
+            poly_normed=poly_normed, sampleFromStandardDist=sampleFromStandardDist,
+            can_model_evaluate_all_vector_nodes=can_model_evaluate_all_vector_nodes,
+            read_nodes_from_file=read_nodes_from_file, parameters_file_name=parameters_file_name,
+            compute_mean=compute_mean, compute_var=compute_var,
+            compute_Sobol_m=compute_Sobol_m, compute_Sobol_t=compute_Sobol_t
+        )
+
+    # in this case gPCE is a surrogate you can evaluate!
+    surrogate_model = gPCE
+
+    dictionary_with_sg_setup = dict()
+    dictionary_with_sg_setup["quadrature_rule"] = quadrature_rule
+    dictionary_with_sg_setup["sparse_quadrature"] = sparse_quadrature
+    dictionary_with_sg_setup["q_order"] = q_order
+    dictionary_with_sg_setup["p_order"] = p_order
+    dictionary_with_sg_setup["poly_rule"] = poly_rule
+    dictionary_with_sg_setup["poly_normed"] = poly_normed
+    dictionary_with_sg_setup["sampleFromStandardDist"] = sampleFromStandardDist
+    dictionary_with_sg_setup["read_nodes_from_file"] = read_nodes_from_file
+    dictionary_with_sg_setup["parameters_file_name"] = str(parameters_file_name)
+    dictionary_with_inf_about_the_run["dictionary_with_sg_setup"] = dictionary_with_sg_setup
 
     # parameters for SparseSpACE
     lmax = 2  # 4
@@ -695,18 +864,6 @@ if __name__ == "__main__":
     filename_refinement_graph = str(outputModelDir / "output_refinement_graph.png")
     filename_combi_scheme_plot = str(outputModelDir / "output_combi_scheme.png")
     filename_sparse_grid_plot = str(outputModelDir / "output_sg_graph.png")
-
-    simulation_time_start = time.time()
-
-    # Var 1 #
-    gPCE, expectedInterp, varianceInterp, first_order_sobol_indices, total_order_sobol_indices = \
-        compute_gpce_chaospy(model=problem_function, param_names=param_names, dists=dists, joint=joinedDists,
-                             jointStandard=joinedStandardDists, dim=dim, a=a, b=b, plotting=plotting,
-                             writing_results_to_a_file=writing_results_to_a_file, outputModelDir=outputModelDir,
-                             rule=quadrature_rule, sparse=sparse_quadrature, q=q_order, p=p_order, poly_rule=poly_rule,
-                             poly_normed=poly_normed, sampleFromStandardDist=sampleFromStandardDist,
-                             can_model_evaluate_all_vector_nodes=can_model_evaluate_all_vector_nodes
-                             )
 
     # Var 2 #
     # compute_surrogate_sparsespace_and_gpce(
@@ -727,20 +884,19 @@ if __name__ == "__main__":
     #     max_evals=max_evals,
     #     tolerance=tolerance,
     #     rule=quadrature_rule,
-    #     sparse=sparse_quadrature,
+    #     sparse_utility=sparse_quadrature,
     #     q=q_order,
     #     p=p_order,
     #     sampleFromStandardDist=sampleFromStandardDist,
     #     can_model_evaluate_all_vector_nodes=can_model_evaluate_all_vector_nodes
     # )
 
-
     # Var 3
     # compute_surrogate_sparsespace_and_gpce_analytically(
     # a_model_param=7, b_model_param=0.1, modified_basis=True, spatiallyAdaptive=False,
     # plotting=True, outputModelDir=outputModelDir,
     # lmax=lmax, max_evals=max_evals, tolerance=tolerance,
-    # rule=rule, sparse=sparse, q=q, p=p)
+    # rule=rule, sparse_utility=sparse_utility, q=q, p=p)
 
     # Var 4
     # compute_gpce_sparsespace(build_sg_for_e_and_var=False, modified_basis=False, parallelIntegrator=True,
@@ -759,9 +915,179 @@ if __name__ == "__main__":
     #                          spatiallyAdaptive=False, plotting=plotting, outputModelDir=outputModelDir,
     #                          lmax=lmax, max_evals=max_evals, tolerance=tolerance)
 
+    #####################################
+    # Access to analytical values and compare them with computed
+    #####################################
+
+    #####################################
+    # E = model - surrogate_model
+    #####################################
+    print(f"\n==Error==")
+    # Evaluate surrogate model and a certain number of new points, and compute error
+    # Ideas come from:
+    # P. Conrad and Y. Marzouk: "ADAPTIVE SMOLYAK PSEUDOSPECTRAL APPROXIMATIONS"
+    # V. Barthelmann, E. Novak, and K. Ritter: "HIGH DIMENSIONAL POLYNOMIAL INTERPOLATION ON SPARSE GRIDS"
+    numSamples_for_checking = 10**4
+    mc_rule_for_checking = "R"  # sampling_rule
+    error_type = "mean"  # "mean" "l2" | "max" "l1"
+    mc_nodes = joinedStandardDists.sample(size=numSamples_for_checking, rule=mc_rule_for_checking).round(4)
+    mc_nodes = np.array(mc_nodes)
+
+    if sampleFromStandardDist:
+        mc_parameters = transformSamples(mc_nodes, joinedStandardDists, joinedDists)
+    else:
+        mc_parameters = mc_nodes
+
+    # TODO Interesting to see if it will be more memory efficient if I would evaluate surrogate_model
+    #  inside of the sub-routine and not transfer it around...
+    # surrogate_evaluations = surrogate_model(mc_nodes.T)  # Var 1 - surrogate_model=gPCE;
+    # surrogate_evaluations = np.array([surrogate_model(nodes) for nodes in mc_nodes.T])
+    reevaluation_surrogate_model_start_time = time.time()
+    # TODO - This will probably change once the output is 2D (HBV, Larsim)
+    surrogate_evaluations = np.empty([mc_nodes.shape[1], ])
+    i = 0
+    for sample in mc_nodes.T:
+        surrogate_evaluations[i] = surrogate_model(*sample)
+        i += 1
+    reevaluation_surrogate_model_end_time = time.time()
+    reevaluation_surrogate_model_duration = reevaluation_surrogate_model_end_time - reevaluation_surrogate_model_start_time
+    print(f"re evaluation surrogate model duration: {reevaluation_surrogate_model_duration}")
+    # print(f"mc_nodes.shape - {mc_nodes.shape}; "
+    #       f"\n type(surrogate_model) - {type(surrogate_model)};  "
+    #       f"\n surrogate_model.shape - {surrogate_model.shape};")
+    # print(f"type surrogate_evaluations : {type(surrogate_evaluations)}; shape {surrogate_evaluations.shape}")
+
+    reevaluation_model_start_time = time.time()
+    if can_model_evaluate_all_vector_nodes:
+        true_model_evaluations = problem_function(mc_parameters.T)
+        true_model_evaluations = np.reshape(true_model_evaluations, true_model_evaluations.shape[0])  # TODO - This will probably change once the output is 2D (HBV, Larsim)
+    else:
+        true_model_evaluations = np.array([problem_function(parameter) for parameter in mc_parameters.T])
+    reevaluation_model_end_time = time.time()
+    reevaluation_model_duration = reevaluation_model_end_time - reevaluation_model_start_time
+    print(f"re evaluation model duration: {reevaluation_model_duration}")
+    # print(f"mc_parameters.shape - {mc_parameters.shape}; "
+    #       f"\n type(problem_function) - {type(problem_function)};")
+    # print(f"type true_model_evaluations : {type(true_model_evaluations)}; shape {true_model_evaluations.shape}")
+
+    # error_l1 = None
+    # error_l2 = None
+    # if error_type == "max" or error_type == "l1" or error_type == "L1":
+    error_l1 = np.max(np.abs(true_model_evaluations - surrogate_evaluations))
+    # elif error_type == "mean" or error_type == "l2" or error_type == "L2":
+    # error_l2 = np.sqrt(np.sum((true_model_evaluations - surrogate_evaluations)**2))
+    error_l2 = np.linalg.norm(true_model_evaluations - surrogate_evaluations, ord=2)
+
+    # else:
+    #     raise Exception(f"error_type-{error_type} is not supported!!!")
+
+    dictionary_with_inf_about_the_run["reevaluation_surrogate_model_duration"] = reevaluation_surrogate_model_duration
+    dictionary_with_inf_about_the_run["reevaluation_model_duration"] = reevaluation_model_duration
+
+    dictionary_with_inf_about_the_run["error_model_l1"] = error_l1
+    dictionary_with_inf_about_the_run["error_model_l2"] = error_l2
+
+    print(f"Max surrogate_evaluations: {max(surrogate_evaluations)}; Min surrogate_evaluations: {min(surrogate_evaluations)};")
+    print(f"Max true_model_evaluations: {max(true_model_evaluations)}; Min true_model_evaluations: {min(true_model_evaluations)};")
+    print(f"L1 Error = {error_l1} \nL2 Error = {error_l2}")
+
+    #####################################
+    # E = model_mean - approximated_mean
+    #####################################
+    print(f"\n==Mean and Var Error==")
+
+    if compute_mean and approximated_mean is not None:
+        if has_analyitic_mean:
+            analytical_mean = problem_function.getAnalyticSolutionIntegral(a, b)
+        else:
+            numSamples = 10 ** 5
+            print(f"Computing MC based mean on {numSamples} samples, sampled rule - {sampling_rule}")
+            analytical_mean, analytical_var = compute_mc_quantity(
+                model=problem_function, param_names=param_names, dists=dists,
+                joint=joinedDists, jointStandard=joinedStandardDists, dim=dim, a=a, b=b,
+                numSamples=numSamples, rule=sampling_rule, sampleFromStandardDist=sampleFromStandardDist,
+                can_model_evaluate_all_vector_nodes=can_model_evaluate_all_vector_nodes,
+                read_nodes_from_file=False, compute_mean=True, compute_var=compute_var
+            )
+            if analytical_mean is not None:
+                has_analyitic_mean = True
+            if compute_var and analytical_var is not None:
+                has_analyitic_var = True
+        print(f"analytical_mean = {analytical_mean} \n"
+              f"approximated_mean = {approximated_mean} \n"
+              f"Error in mean = {abs(analytical_mean - approximated_mean)} \n")
+        # TODO - This will probably change once the output is 2D (HBV, Larsim)
+        dictionary_with_inf_about_the_run["error_mean"] = abs(analytical_mean - approximated_mean)
+
+    if compute_var and approximated_var is not None:
+        if not has_analyitic_var:
+            numSamples = 10 ** 5
+            print(f"Computing MC based mean on {numSamples} samples, sampled rule - {sampling_rule}")
+            analytical_mean, analytical_var = compute_mc_quantity(
+                model=problem_function, param_names=param_names, dists=dists,
+                joint=joinedDists, jointStandard=joinedStandardDists, dim=dim, a=a, b=b,
+                numSamples=numSamples, rule=sampling_rule, sampleFromStandardDist=sampleFromStandardDist,
+                can_model_evaluate_all_vector_nodes=can_model_evaluate_all_vector_nodes,
+                read_nodes_from_file=False, compute_mean=compute_mean, compute_var=True
+            )
+            if compute_mean and analytical_mean is not None:
+                has_analyitic_mean = True
+            if analytical_var is not None:
+                has_analyitic_var = True
+        print(f"analytical_var = {analytical_var} \n"
+              f"approximated_var = {approximated_var} \n"
+              f"Error in var = {abs(analytical_var - approximated_var)} \n")
+        # TODO - This will probably change once the output is 2D (HBV, Larsim)
+        dictionary_with_inf_about_the_run["error_var"] = abs(analytical_var - approximated_var)
+
+    #####################################
+    # TODO - Do the same thing as above for Sobol Indices
+
+    # sobol_m_analytical, sobol_t_analytical = get_analytical_sobol_indices(a_model_param, b_model_param)
+    #
+    # # Sobol_t_error = sobol_t_analytical - total_order_sobol_indices
+    # # Sobol_m_error = sobol_m_analytical - first_order_sobol_indices
+    # # print("Sobol_t_error: {}".format(Sobol_t_error, ".6f"))
+    # # # print(f"Sobol Total Error = {Sobol_t_error:.6f} \n")
+    # # print("Sobol_m_error: {}".format(Sobol_m_error, ".6f"))
+    # # # print(f"Sobol Main Error = {Sobol_m_error:.6f} \n")
+    #
+    # sobol_t_error = np.empty(len(labels), dtype=np.float64)
+    # for i in range(len(labels)):
+    #     # print(f"Sobol Total Simulation = {total_order_sobol_indices[i][0]} \n")
+    #     # print(f"Sobol Total Analytical = {sobol_t_analytical[i]:.6f} \n")
+    #     sobol_t_error[i] = sobol_t_analytical[i] - total_order_sobol_indices[i][0]
+    #     print(f"Sobol Total Error = {sobol_t_error[i]:.6f} \n")
+    # #
+    # sobol_m_error = np.empty(len(labels), dtype=np.float64)
+    # for i in range(len(labels)):
+    #     # print(f"Sobol Main Simulation = {first_order_sobol_indices[i][0]} \n")
+    #     # print(f"Sobol Main Analytical = {sobol_m_analytical[i]:.6f} \n")
+    #     sobol_m_error[i] = sobol_m_analytical[i] - first_order_sobol_indices[i][0]
+    #     print(f"Sobol Main Error = {sobol_m_error[i]:.6f} \n")
+
+    #####################################
+    # Plotting graphs for convergence
+    #####################################
+
+    #####################################
+    # Saving the final dictionary
+    #####################################
+
     simulation_time_end = time.time()
     simulation_time = simulation_time_end - simulation_time_start
     print("simulation time: {} sec".format(simulation_time))
+
+    dictionary_with_inf_about_the_run["simulation_time"] = simulation_time
+
+    # dictionary_with_inf_about_the_run_path = str(outputModelDir / "dictionary_with_inf_about_the_run.json")
+    dictionary_with_inf_about_the_run_path = str(outputModelDir / "dictionary_with_inf_about_the_run.pkl")
+    with open(dictionary_with_inf_about_the_run_path, "wb") as handle:
+    # with open(dictionary_with_inf_about_the_run_path, "w") as handle:
+        pickle.dump(dictionary_with_inf_about_the_run, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        # json.dump(dictionary_with_inf_about_the_run, handle)
+
+
 
 
 # # TODO
@@ -769,7 +1095,7 @@ if __name__ == "__main__":
 #                                            spatiallyAdaptive=True,
 #                                            plotting=True, outputModelDir="./",
 #                                            lmax=2, max_evals=2000, tolerance=10 ** -5,
-#                                            rule='gaussian', sparse=False, q=7, p=6):
+#                                            rule='gaussian', sparse_utility=False, q=7, p=6):
 #     """
 #     Var 2.2 (For Markus this is var 4) - Compute gPCE coefficients by integrating the (SG) surrogate analytically
 #     The gPCE coefficients are calculated as follows:
@@ -919,7 +1245,7 @@ if __name__ == "__main__":
 # def compute_leja_sg_surrogate_and_gpce(a_model_param=7, b_model_param=0.1, modified_basis=False,
 #                                        spatiallyAdaptive=True, plotting=True, outputModelDir="./",
 #                                        lmax=2, max_evals=2000, tolerance=10 ** -5,
-#                                        rule='gaussian', sparse=False, q=7, p=6):
+#                                        rule='gaussian', sparse_utility=False, q=7, p=6):
 #     x1 = cp.Uniform(-math.pi, math.pi)
 #     x2 = cp.Uniform(-math.pi, math.pi)
 #     x3 = cp.Uniform(-math.pi, math.pi)
@@ -929,5 +1255,5 @@ if __name__ == "__main__":
 #     leja_surrogate = None
 #     _compute_gpce_chaospy_ishigami(a_model_param=a_model_param, b_model_param=b_model_param,
 #                                    labels=labels, my_model=leja_surrogate, joint=joint,
-#                                    q=q, p=p, rule=rule, sparse=sparse,
+#                                    q=q, p=p, rule=rule, sparse_utility=sparse_utility,
 #                                    outputModelDir=outputModelDir, can_model_evaluate_all_vector_nodes=True)

@@ -227,13 +227,13 @@ def generate_table_single_rule_over_dim_and_orders_sparse_and_nonsparse(rule, di
         table.append(["*", "*", "*", "*"])
         for q_i, order in enumerate(q_orders):
             table.append([rule, dim[dist_i], order, num_nodes[dist_i][q_i][0], num_nodes[dist_i][q_i][1]])
-    print(tabulate(table, headers=["rule", "dim", "q", "#nodes sparse tensor", "#nodes full tensor"], numalign="right"))
+    print(tabulate(table, headers=["rule", "dim", "q", "#nodes sparse_utility tensor", "#nodes full tensor"], numalign="right"))
 
 
 def generate_table_single_rule_over_dim_and_orders(rule, dists, dim, q_orders, sparse=True, growth=None):
     num_nodes = np.zeros((len(dists), len(q_orders), 1), dtype=np.int32)
 
-    table_column_name = "#nodes sparse tensor" if sparse else "#nodes full tensor"
+    table_column_name = "#nodes sparse_utility tensor" if sparse else "#nodes full tensor"
 
     if growth is None:
         growth = True if rule == "c" else False
@@ -270,9 +270,9 @@ def plot_2d_matrix_of_nodes_over_orders(rule, dist, orders, sparse=False, growth
         sns.set(style="ticks", color_codes=True)
         g = sns.pairplot(df_nodes_weights, vars=list(dict_for_plotting.keys()), corner=True)
         if growth:
-            title = f"{rule} points chaospy; order = {order}; sparse={str(sparse)}; #nodes={abscissas.shape[0]}; growth=True"
+            title = f"{rule} points chaospy; order = {order}; sparse_utility={str(sparse)}; #nodes={abscissas.shape[0]}; growth=True"
         else:
-            title = f"{rule} points chaospy; order = {order}; sparse={str(sparse)}; #nodes={abscissas.shape[0]}"
+            title = f"{rule} points chaospy; order = {order}; sparse_utility={str(sparse)}; #nodes={abscissas.shape[0]}"
         plt.title(title, loc='left')
         plt.show()
 
@@ -301,7 +301,7 @@ def generate_table_over_rules_orders_for_single_dim(rules, dist, dim, q_orders, 
             table.append([r, q, num_nodes[r_i][q_i][0], num_nodes[r_i][q_i][1], "ok" if ok else "nok"])
 
     print(tabulate(table,
-                   headers=["rule", "q", "#nodes full tensor", "#nodes sparse", "#nodes sparse < #nodes full tensor"],
+                   headers=["rule", "q", "#nodes full tensor", "#nodes sparse_utility", "#nodes sparse_utility < #nodes full tensor"],
                    numalign="right"))
 
 #####################################
