@@ -19,6 +19,11 @@ from sparseSpACE.Integrator import *
 import chaospy as cp
 # import uqef
 
+import os
+import sys
+# cwd = pathlib.Path(os.getcwd())
+# sys.path.insert(0, cwd.parent.absolute())
+
 from ishigami import IshigamiModel
 
 # from larsim import LarsimModelUQ

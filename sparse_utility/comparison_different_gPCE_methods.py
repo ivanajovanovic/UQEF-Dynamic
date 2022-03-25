@@ -494,6 +494,7 @@ def add_category(function_info):
     pickle.dump(errors_to_plot, pickle_errors_to_plot_out)
     pickle_errors_to_plot_out.close()
 
+
 def initiate_function_infos():
     dict_function_infos = {}
 

@@ -17,7 +17,11 @@ import uqef
 import os
 import sys
 cwd = pathlib.Path(os.getcwd())
-sys.path.insert(0, cwd.parent.absolute())
+# print(cwd)
+parent = cwd.parent.absolute()
+# print(parent)
+sys.path.insert(0, parent)
+# sys.path.insert(0, os.getcwd())
 
 from sparseSpACE.Function import *
 from sparseSpACE.spatiallyAdaptiveSingleDimension2 import *
@@ -27,6 +31,9 @@ from sparseSpACE.StandardCombi import *
 from sparseSpACE.Integrator import *
 
 from sparse import sparseSpACE_functions
+from sparse import Sparse_Quadrature
+# from sparseSpACE_functions import *
+# from Sparse_Quadrature import *
 
 comm = MPI.COMM_WORLD
 rank = MPI.COMM_WORLD.Get_rank()
@@ -35,12 +42,13 @@ rank = MPI.COMM_WORLD.Get_rank()
 def transformSamples(samples, distribution_r, distribution_q):
     return distribution_q.inv(distribution_r.fwd(samples))
 
+# Var 0 - TODO Add MC 10^4 for computing reference value...
+
 # Var 1
-def compute_gpce_chaospy(model, param_names, dists, joint, jointStandard, dim, a, b,
-                         plotting=False, writing_results_to_a_file=False, outputModelDir="./",
-                         rule='gaussian', sparse=True, q=7, p=6,
-                         poly_rule="three_terms_recurrence", poly_normed=False,
-                         sampleFromStandardDist=False, can_model_evaluate_all_vector_nodes=False, **kwargs):
+def compute_gpce_chaospy(model, param_names, dists, joint, jointStandard, dim, a, b, plotting=False,
+                         writing_results_to_a_file=False, outputModelDir="./", rule='gaussian', sparse=True, q=7, p=6,
+                         poly_rule="three_terms_recurrence", poly_normed=False, sampleFromStandardDist=False,
+                         can_model_evaluate_all_vector_nodes=False, vector_model_output=False, **kwargs):
     """
     This is all that UQEF+UQEFPP do in short, when uq_method=sc
     - sparse vs. non-sparse
@@ -52,11 +60,20 @@ def compute_gpce_chaospy(model, param_names, dists, joint, jointStandard, dim, a
 
     growth = True if (rule == "c" and not sparse) else False
 
+    compute_Sobol_m = kwargs.get('compute_Sobol_m', True)
+    compute_Sobol_t = kwargs.get('compute_Sobol_t', True)
+
+    get_analytical_mean = kwargs.get('get_analytical_mean', False)
+    get_analytical_var = kwargs.get('get_analytical_var', False)
+    get_analytical_Sobol_m = kwargs.get('get_analytical_Sobol_m', False)
+    get_analytical_Sobol_t = kwargs.get('get_analytical_Sobol_t', False)
+
     if sampleFromStandardDist:
         dist = jointStandard
     else:
         dist = joint
 
+    # TODO add option for reading nodes and weights from a file, e.g., sparse-grids.de
     quads = cp.generate_quadrature(q, dist, rule=rule, growth=growth, sparse=sparse)
     nodes, weights = quads
 
@@ -70,24 +87,38 @@ def compute_gpce_chaospy(model, param_names, dists, joint, jointStandard, dim, a
         parameters = nodes
 
     # evaluate model
+    start_time_model_evaluations = time.time()
     if can_model_evaluate_all_vector_nodes:
         evaluations = model(parameters.T)
     else:
         evaluations = np.array([model(parameter) for parameter in parameters.T])
+    end_time_model_evaluations = time.time()
 
-    # TODO what if model output is a vector?
+    time_model_evaluations = end_time_model_evaluations - start_time_model_evaluations
+    number_full_model_evaluations = len(parameters.T)
 
+    start_time_producing_gpce = time.time()
     expansion = cp.generate_expansion(p, dist, rule=poly_rule, normed=poly_normed)
     gPCE = cp.fit_quadrature(expansion, nodes, weights, evaluations)
+    end_time_producing_gpce = time.time()
+
+    time_producing_gpce = end_time_producing_gpce - start_time_producing_gpce
 
     expectedInterp = cp.E(gPCE, dist)
     varianceInterp = cp.Var(gPCE, dist)
-    first_order_sobol_indices = cp.Sens_m(gPCE, dist)
-    total_order_sobol_indices = cp.Sens_t(gPCE, dist)
-
     print("expectation = ", expectedInterp, ", variance = ", varianceInterp)
-    print("First order Sobol indices: ", first_order_sobol_indices)
-    print("Total order Sobol indices: ", total_order_sobol_indices)
+    first_order_sobol_indices = None
+    total_order_sobol_indices = None
+    if compute_Sobol_m:
+        first_order_sobol_indices = cp.Sens_m(gPCE, dist)
+        print("First order Sobol indices: ", first_order_sobol_indices)
+    if compute_Sobol_t:
+        total_order_sobol_indices = cp.Sens_t(gPCE, dist)
+        print("Total order Sobol indices: ", total_order_sobol_indices)
+
+    print(f'time_model_evaluations: {time_model_evaluations}\n')
+    print(f'time_producing_gpce: {time_producing_gpce} \n')
+    print(f'number_full_model_evaluations: {number_full_model_evaluations}')
 
     #####################################
     # Saving
@@ -104,8 +135,18 @@ def compute_gpce_chaospy(model, param_names, dists, joint, jointStandard, dim, a
         with open(pcePolysFileName, 'wb') as handle:
             pickle.dump(expansion, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
+        fileName = f"results.txt"
+        statFileName = str(outputModelDir / fileName)
+        fp = open(statFileName, "w")
+        fp.write(f'E: {expectedInterp},\n Var: {varianceInterp}, \n '
+                 f'First order Sobol indices: {first_order_sobol_indices} \n; '
+                 f'Total order Sobol indices: {total_order_sobol_indices} \n'
+                 f'time_model_evaluations: {time_model_evaluations}\n'
+                 f'time_producing_gpce: {time_producing_gpce} \n'
+                 f'number_full_model_evaluations: {number_full_model_evaluations}')
+        fp.close()
     #####################################
-    # TODO access to analytical values
+    # TODO access to analytical values and compare them with computed
 
     # sobol_m_analytical, sobol_t_analytical = get_analytical_sobol_indices(a_model_param, b_model_param)
     #
@@ -129,14 +170,8 @@ def compute_gpce_chaospy(model, param_names, dists, joint, jointStandard, dim, a
     #     # print(f"Sobol Main Analytical = {sobol_m_analytical[i]:.6f} \n")
     #     sobol_m_error[i] = sobol_m_analytical[i] - first_order_sobol_indices[i][0]
     #     print(f"Sobol Main Error = {sobol_m_error[i]:.6f} \n")
-    #
-    # temp = f"results.txt"
-    # save_file = outputModelDir / temp
-    # fp = open(save_file, "w")
-    # fp.write(f'E: {expectedInterp},\n Var: {varianceInterp}, \n '
-    #          f'First order Sobol indices: {first_order_sobol_indices} \n; '
-    #          f'Total order Sobol indices: {total_order_sobol_indices} \n')
-    # fp.close()
+
+    return gPCE, expectedInterp, varianceInterp, first_order_sobol_indices, total_order_sobol_indices
 
 
 # Var 3
@@ -411,11 +446,31 @@ def compute_gpce_sparsespace(build_sg_for_e_and_var=True, modified_basis=False,
         fp.close()
 
 
+# utility for genz
+b_1 = 1.5 # 9.0
+b_2 = 7.2
+b_3 = 1.85
+b_4 = 7.03
+b_5 = 20.4
+b_6 = 4.3
+def generate_and_scale_coeff_and_weights(dim, b, w_norm=1):
+    coeffs = cp.Uniform(0, 1).sample(dim)
+    l1 = norm(coeffs, 1)
+    coeffs = coeffs * b / l1
+    # coeffs = np.array([coeff*np.exp(i/dim) for coeff, i in zip(coeffs,range(1,dim+1))])  # less isotropic - conrad and marzouk
+    weights = cp.Uniform(0,1).sample(dim)
+    l1 = norm(weights, 1)
+    weights = weights * w_norm / l1
+    return coeffs, weights
+
+
 if __name__ == "__main__":
 
-    model = "hbvsask"
+    model = "corner_peak"  #"hbvsask"
     list_of_models = ["hbvsask", "larsim", "ishigami", "gfunction", "zabarras2d", "zabarras3d",
                       "corner_peak", "product_peak", "discontinuous"]
+    # Additional Genz Options: GenzOszillatory, GenzDiscontinious2, GenzC0, GenzGaussian
+
     assert(model in list_of_models)
 
     can_model_evaluate_all_vector_nodes = False
@@ -462,6 +517,7 @@ if __name__ == "__main__":
     dim = 0
     param_names = []
     distributions_list_of_dicts = []
+    distributionsForSparseSpace = []
     a = []
     b = []
 
@@ -506,22 +562,33 @@ if __name__ == "__main__":
             a = [-1.0, -1.0, -1.0]  # [-2.5, -2, 5]
             b = [1.0, 1.0, 1.0]  # [2.5, 2, 15]
         elif model == "corner_peak":
-            param_names = ["x0", "x1", "x2"]
-            a = [0.0, 0.0, 0.0]
-            b = [1.0, 1.0, 1.0]
-            coeffs = [float(1) for _ in range(dim)]
+            # param_names = ["x0", "x1", "x2"]
+            # a = [0.0, 0.0, 0.0]
+            # b = [1.0, 1.0, 1.0]
+            # dim = 3
+            # coeffs, _ = generate_and_scale_coeff_and_weights(dim, b_3)
+            param_names = ["x0", "x1", "x2", "x3", "x4"]
+            a = [0.0, 0.0, 0.0, 0.0, 0.0]
+            b = [1.0, 1.0, 1.0, 1.0, 1.0]
+            dim = 5
+            coeffs, _ = generate_and_scale_coeff_and_weights(dim=dim, b=b_3)
+            # coeffs = [float(1) for _ in range(dim)]
         elif model == "product_peak":
             param_names = ["x0", "x1", "x2"]
             a = [0.0, 0.0, 0.0]
             b = [1.0, 1.0, 1.0]
-            coeffs = [float(3) for _ in range(dim)]
-            midpoint = [0.5 for _ in range(dim)]
+            dim = 3
+            coeffs, weights = generate_and_scale_coeff_and_weights(dim=dim, b=dim)
+            # coeffs = [float(3) for _ in range(dim)]
+            # midpoint = [0.5 for _ in range(dim)]
         elif model == "discontinuous":
             param_names = ["x0", "x1", "x2"]
             a = [0.0, 0.0, 0.0]
             b = [1.0, 1.0, 1.0]
-            coeffs = [float(1) for _ in range(dim)]
-            midpoint = [0.5 for _ in range(dim)]
+            dim = 3
+            coeffs, weights = generate_and_scale_coeff_and_weights(dim=dim, b=b_6)
+            # coeffs = [float(1) for _ in range(dim)]
+            # midpoint = [0.5 for _ in range(dim)]
             can_model_evaluate_all_vector_nodes = True
         dim = len(param_names)
         distributions_list_of_dicts = [{"distribution": "Uniform", "lower": a[i], "upper": b[i]} for i in range(dim)]
@@ -557,7 +624,7 @@ if __name__ == "__main__":
     operation = "UncertaintyQuantification"  # "Interpolation"
 
     if model == "larsim":
-        problem_function = LarsimFunction(
+        problem_function = sparseSpACE_functions.LarsimFunction(
             configurationObject=configurationObject,
             inputModelDir=inputModelDir,
             workingDir=outputModelDir,
@@ -565,7 +632,7 @@ if __name__ == "__main__":
             gof=gof
         )
     elif model == "hbvsask":
-        problem_function = HBVSASKFunction(
+        problem_function = sparseSpACE_functions.HBVSASKFunction(
             configurationObject=configurationObject,
             inputModelDir=inputModelDir,
             workingDir=outputModelDir,
@@ -577,36 +644,36 @@ if __name__ == "__main__":
             plotting=False
         )
     elif model == "ishigami":
-        problem_function = IshigamiFunction(
+        problem_function = sparseSpACE_functions.IshigamiFunction(
             configurationObject=configurationObject
         )
     elif model == "gfunction":
-        problem_function = GFunction(dim=3)
+        problem_function = sparseSpACE_functions.GFunction(dim=3)
     elif model == "zabarras2d":
-        problem_function = FunctionUQ2D()
+        problem_function = sparseSpACE_functions.FunctionUQ2D()
     elif model == "zabarras3d":
-        problem_function = FunctionUQ3D()
+        problem_function = sparseSpACE_functions.FunctionUQ3D()
     elif model == "corner_peak":
         problem_function = GenzCornerPeak(coeffs)
     elif model == "product_peak":
-        problem_function = GenzProductPeak(coeffs, midpoint)
+        problem_function = GenzProductPeak(coeffs, weights)
     elif model == "discontinuous":
-        problem_function = GenzDiscontinious(coeffs, midpoint)  # TODO ubiquitous
+        problem_function = GenzDiscontinious(coeffs, weights)  # TODO ubiquitous
 
     ##################
     # Running the SG Simulation
 
     writing_results_to_a_file = False
-    plotting = True
+    plotting = False #True
 
     # parameters for chaopsy quadrature, similar setup to uqef(pp)...
     quadrature_rule = 'gaussian'
     sparse = False
-    q_order = 5
-    p_order = 4
+    q_order = 10
+    p_order = 9
     poly_rule = "three_terms_recurrence"  # "gram_schmidt" | "three_terms_recurrence" | "cholesky"
-    poly_normed = False
-    sparse_quadrature = True  # False
+    poly_normed = False #True
+    sparse_quadrature = False  # False
     sampling_rule = "random"  # | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
     sampleFromStandardDist = True
 
@@ -632,53 +699,40 @@ if __name__ == "__main__":
     simulation_time_start = time.time()
 
     # Var 1 #
-    compute_gpce_chaospy(
-        model=problem_function,
-        param_names=param_names,
-        dists=dists,
-        joint=joinedDists,
-        jointStandard=joinedStandardDists,
-        dim=dim,
-        a=a,
-        b=b,
-        plotting=plotting,
-        writing_results_to_a_file=writing_results_to_a_file,
-        outputModelDir=outputModelDir,
-        rule=quadrature_rule,
-        sparse=sparse_quadrature,
-        q=q_order,
-        p=p_order,
-        poly_rule=poly_rule,
-        poly_normed=poly_normed,
-        sampleFromStandardDist=sampleFromStandardDist,
-        can_model_evaluate_all_vector_nodes=can_model_evaluate_all_vector_nodes
-    )
+    gPCE, expectedInterp, varianceInterp, first_order_sobol_indices, total_order_sobol_indices = \
+        compute_gpce_chaospy(model=problem_function, param_names=param_names, dists=dists, joint=joinedDists,
+                             jointStandard=joinedStandardDists, dim=dim, a=a, b=b, plotting=plotting,
+                             writing_results_to_a_file=writing_results_to_a_file, outputModelDir=outputModelDir,
+                             rule=quadrature_rule, sparse=sparse_quadrature, q=q_order, p=p_order, poly_rule=poly_rule,
+                             poly_normed=poly_normed, sampleFromStandardDist=sampleFromStandardDist,
+                             can_model_evaluate_all_vector_nodes=can_model_evaluate_all_vector_nodes
+                             )
 
     # Var 2 #
-    compute_surrogate_sparsespace_and_gpce(
-        model=problem_function,
-        param_names=param_names,
-        dists=dists,
-        joint=joinedDists,
-        jointStandard=joinedStandardDists,
-        dim=dim,
-        a=a,
-        b=b,
-        modified_basis=modified_basis,
-        boundery_points=boundery_points,
-        spatiallyAdaptive=spatiallyAdaptive,
-        plotting=plotting,
-        outputModelDir=outputModelDir,
-        lmax=lmax,
-        max_evals=max_evals,
-        tolerance=tolerance,
-        rule=quadrature_rule,
-        sparse=sparse_quadrature,
-        q=q_order,
-        p=p_order,
-        sampleFromStandardDist=sampleFromStandardDist,
-        can_model_evaluate_all_vector_nodes=can_model_evaluate_all_vector_nodes
-    )
+    # compute_surrogate_sparsespace_and_gpce(
+    #     model=problem_function,
+    #     param_names=param_names,
+    #     dists=dists,
+    #     joint=joinedDists,
+    #     jointStandard=joinedStandardDists,
+    #     dim=dim,
+    #     a=a,
+    #     b=b,
+    #     modified_basis=modified_basis,
+    #     boundery_points=boundery_points,
+    #     spatiallyAdaptive=spatiallyAdaptive,
+    #     plotting=plotting,
+    #     outputModelDir=outputModelDir,
+    #     lmax=lmax,
+    #     max_evals=max_evals,
+    #     tolerance=tolerance,
+    #     rule=quadrature_rule,
+    #     sparse=sparse_quadrature,
+    #     q=q_order,
+    #     p=p_order,
+    #     sampleFromStandardDist=sampleFromStandardDist,
+    #     can_model_evaluate_all_vector_nodes=can_model_evaluate_all_vector_nodes
+    # )
 
 
     # Var 3

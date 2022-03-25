@@ -50,7 +50,7 @@ joint_standard_min_1_1 = cp.J(cp.Uniform(lower=-1, upper=1), cp.Uniform(lower=-1
 samples = joint.sample(100)
 
 #####################################
-# Set of Utilty Functions
+# Set of Utility Functions
 # originally in he notebook - SG_SparseSpace/Experimenting_with_Sparse_Quadrature_Points.ipynb
 #####################################
 
