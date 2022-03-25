@@ -13,9 +13,9 @@
       "end_hour": 0,
       "end_minute": 0,
 
-      "run_full_timespan":"False",
+      "run_full_timespan":"True",
       "spin_up_length":1095,
-      "simulation_length": 365,
+      "simulation_length": 7300,
       "resolution": "daily",
 
       "cut_runs": "False",
@@ -45,50 +45,6 @@
   },
   "parameters": [
     {
-      "name": "FC",
-      "distribution": "Uniform",
-      "lower": 50.0,
-      "upper": 500.0,
-      "default": 100
-    },
-    {
-      "name": "beta",
-      "distribution": "Uniform",
-      "lower": 1.0,
-      "upper": 3.0,
-      "default": 2.0
-    },
-    {
-      "name": "FRAC",
-      "distribution": "Uniform",
-      "lower": 0.1,
-      "upper": 0.9,
-      "default": 0.5
-    },
-    {
-      "name": "K1",
-      "distribution": "Uniform",
-      "lower": 0.05,
-      "upper": 1.0,
-      "default": 0.5
-    },
-    {
-      "name": "alpha",
-      "distribution": "Uniform",
-      "lower": 1.0,
-      "upper": 3.0,
-      "default": 2.0
-    },
-    {
-      "name": "K2",
-      "distribution": "Uniform",
-      "lower": 0.0,
-      "upper": 0.05,
-      "default": 0.025
-    }
-  ],
-  "unused_parameters": [
-    {
       "name": "TT",
       "distribution": "Uniform",
       "lower": -4.0,
@@ -108,6 +64,50 @@
       "lower": 0.0,
       "upper": 1.0,
       "default": 0.5
+    },
+    {
+      "name": "FC",
+      "distribution": "Uniform",
+      "lower": 50.0,
+      "upper": 500.0,
+      "default": 100
+    },
+    {
+      "name": "FRAC",
+      "distribution": "Uniform",
+      "lower": 0.1,
+      "upper": 0.9,
+      "default": 0.5
+    },
+    {
+      "name": "K2",
+      "distribution": "Uniform",
+      "lower": 0.0,
+      "upper": 0.05,
+      "default": 0.025
+    }
+  ],
+  "unused_parameters": [
+    {
+      "name": "beta",
+      "distribution": "Uniform",
+      "lower": 1.0,
+      "upper": 3.0,
+      "default": 2.0
+    },
+    {
+      "name": "K1",
+      "distribution": "Uniform",
+      "lower": 0.05,
+      "upper": 1.0,
+      "default": 0.5
+    },
+    {
+      "name": "alpha",
+      "distribution": "Uniform",
+      "lower": 1.0,
+      "upper": 3.0,
+      "default": 2.0
     },
     {
       "name": "LP",
