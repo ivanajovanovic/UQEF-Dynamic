@@ -89,7 +89,7 @@ def _plot_streamflow_and_precipitation(input_data_df, simulated_data_df=None, in
             tickfont={"color": "#d62728"},
             tickmode="auto",
             ticks="inside",
-            title="Q []",
+            title="Q [cm/s]",
             titlefont={"color": "#d62728"},
         ),
         yaxis2=dict(
