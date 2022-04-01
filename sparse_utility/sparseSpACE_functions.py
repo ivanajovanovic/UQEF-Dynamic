@@ -48,7 +48,7 @@ class Function_Info(object):
         self.b = b
         self.distributions = distributions
         self.distributions_for_sparSpace = distributions_for_sparSpace
-        self.joint_distributions = chaospy.J(*distributions)
+        self.joint_distributions = cp.J(*distributions)
         self.path_Error = path_Error
         self.mean_analytical = mean_analytical
         self.variance_analytical = variance_analytical
@@ -79,8 +79,8 @@ class IshigamiFunction(Function):
         value_of_interest = result_tuple[0][0]
         return value_of_interest  # np.array(value_of_interest)
 
-    @staticmethod
-    def _get_analytical_sobol_indices(**kwargs):
+    # @staticmethod
+    def get_analytical_sobol_indices(self, **kwargs):
         sobol_m_analytical, sobol_t_analytical = self.ishigamiModelObject.get_analytical_sobol_indices()
         return sobol_m_analytical, sobol_t_analytical
 
@@ -422,7 +422,7 @@ def initiate_function_infos():
     function_object = IshigamiFunction(configurationObject, dim=3)
     mean = 3.5
     variance = 13.844587940719254
-    distributions = [chaospy.Uniform(-math.pi, math.pi) for _ in range(3)]
+    distributions = [cp.Uniform(-math.pi, math.pi) for _ in range(3)]
     distributionsForSparseSpace = [("Uniform", -math.pi, math.pi) for _ in range(3)]
     function_info_ishigami = Function_Info(
         function=function_object, dim=3, a=a, b=b,
@@ -442,7 +442,7 @@ def initiate_function_infos():
     function_object = GFunction(dim=3)
     mean = function_object.get_expectation()
     variance = function_object.get_variance()
-    distributions = [chaospy.Uniform(0, 1) for _ in range(3)]
+    distributions = [cp.Uniform(0, 1) for _ in range(3)]
     distributionsForSparseSpace = [("Uniform", 0, 1) for _ in range(3)]
     function_info_gfunction = Function_Info(
         function=function_object, dim=3, a=a, b=b,
