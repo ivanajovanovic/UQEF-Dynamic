@@ -290,10 +290,12 @@ def Pseudo_Spectral_with_CombinationTechnique(function_info, gridName, adaptive,
     number_points = combiObject.get_total_num_points()
 
     if time_series:
+        # TODO Ivana-note: Why always order 1?
         gauss_quads = chaospy.generate_quadrature(1, function_info.joint_distributions, rule='gaussian', sparse=False)
         nodes, weights = gauss_quads
         print("number quadrature points: ", len(nodes[0]))
         gauss_evals_Interpolation = combiObject(nodes.T)
+        # TODO Ivana-note: Why always order 1?
         expansion = chaospy.generate_expansion(1, function_info.joint_distributions)
         gauss_model_approx = chaospy.fit_quadrature(expansion, nodes, weights, gauss_evals_Interpolation)
 
