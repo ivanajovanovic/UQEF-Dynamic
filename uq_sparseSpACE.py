@@ -359,7 +359,7 @@ def compute_surrogate_sparsespace_and_gpce(model, param_names, dists, joint, joi
                                            surrogate_model_of_interest="gPCE", plotting=False,
                                            writing_results_to_a_file=False, outputModelDir="./", gridName="Trapezoidal",
                                            lmax=2, max_evals=2000, tolerance=10 ** -5, modified_basis=False,
-                                           boundery_points=False, spatiallyAdaptive=False, rule='gaussian',
+                                           boundary_points=False, spatiallyAdaptive=False, rule='gaussian',
                                            sparse=False, q=7, p=6, poly_rule="three_terms_recurrence",
                                            poly_normed=False, sampleFromStandardDist=False,
                                            can_model_evaluate_all_vector_nodes=False, vector_model_output=False,
@@ -391,19 +391,19 @@ def compute_surrogate_sparsespace_and_gpce(model, param_names, dists, joint, joi
     if spatiallyAdaptive:
         if gridName == 'BSpline_p3':
             p_bsplines = kwargs.get('p_bsplines', 3)
-            grid = GlobalBSplineGrid(a=a, b=b, modified_basis=modified_basis, boundary=boundery_points, p=p_bsplines)
+            grid = GlobalBSplineGrid(a=a, b=b, modified_basis=modified_basis, boundary=boundary_points, p=p_bsplines)
         elif gridName == 'TrapezoidalWeighted':
-            grid = GlobalTrapezoidalGridWeighted(a=a, b=b, modified_basis=modified_basis, boundary=boundery_points)
+            grid = GlobalTrapezoidalGridWeighted(a=a, b=b, modified_basis=modified_basis, boundary=boundary_points)
         else:
-            grid = GlobalTrapezoidalGrid(a=a, b=b, modified_basis=modified_basis, boundary=boundery_points)
+            grid = GlobalTrapezoidalGrid(a=a, b=b, modified_basis=modified_basis, boundary=boundary_points)
     else:
         if gridName == 'Trapezoidal':
-            grid = TrapezoidalGrid(a=a, b=b, modified_basis=modified_basis, boundary=boundery_points)
+            grid = TrapezoidalGrid(a=a, b=b, modified_basis=modified_basis, boundary=boundary_points)
         elif gridName == 'Leja' or gridName == 'LejaNormal':   # for actual comparisons use LejaNormal
-            grid = LejaGrid(a=a, b=b, boundary=boundery_points)
+            grid = LejaGrid(a=a, b=b, boundary=boundary_points)
         elif gridName == 'BSpline_p3':
             p_bsplines = kwargs.get('p_bsplines', 3)
-            grid = BSplineGrid(a=a, b=b, boundary=boundery_points, p=p_bsplines)
+            grid = BSplineGrid(a=a, b=b, boundary=boundary_points, p=p_bsplines)
 
     operation = Integration(f=model, grid=grid, dim=dim)
 
@@ -414,8 +414,8 @@ def compute_surrogate_sparsespace_and_gpce(model, param_names, dists, joint, joi
         # TODO or?
         # combiinstance = SpatiallyAdaptiveSingleDimensions2(a, b, margin=0.8, operation=operation)
     else:
-        combiinstance = StandardCombi(np.ones(dim) * a, np.ones(dim) * b, operation=operation, norm=2)
-        # combiinstance = StandardCombi(a, b, operation=operation)  # Markus
+        # combiinstance = StandardCombi(np.ones(dim) * a, np.ones(dim) * b, operation=operation, norm=2)
+        combiinstance = StandardCombi(a, b, operation=operation)  # Markus
 
     if plotting:
         plot_file = kwargs.get('plot_file', str(outputModelDir / "output.png"))
@@ -462,6 +462,7 @@ def compute_surrogate_sparsespace_and_gpce(model, param_names, dists, joint, joi
 
     if surrogate_model_of_interest.lower() != "gpce":
         # This is varaiante when only the computation of SG surrogate is of importance
+        # TODO check if operation.calculate_expectation_and_variance(combiinstance) exists for operation==Integration
         return combiinstance, None, None, None, None, None
     else:
         #####################################
@@ -470,156 +471,164 @@ def compute_surrogate_sparsespace_and_gpce(model, param_names, dists, joint, joi
         #     q = 2*2*order
         #     p = 2*order-1
         #
-        gPCE, expectedInterp, varianceInterp, first_order_sobol_indices, total_order_sobol_indices = \
-          compute_gpce_chaospy(model=combiinstance, param_names=param_names, dists=dists, joint=joint,
-                               jointStandard=jointStandard, dim=dim, a=a, b=b, plotting=plotting,
-                               writing_results_to_a_file=writing_results_to_a_file, outputModelDir=outputModelDir,
-                               rule=rule, sparse=sparse, q=q, p=p, poly_rule=poly_rule, poly_normed=poly_normed,
-                               sampleFromStandardDist=True, can_model_evaluate_all_vector_nodes=True,
-                               vector_model_output=vector_model_output, read_nodes_from_file=read_nodes_from_file,
-                               **kwargs)
+        # gPCE, expectedInterp, varianceInterp, first_order_sobol_indices, total_order_sobol_indices = \
+        #   compute_gpce_chaospy(model=combiinstance, param_names=param_names, dists=dists, joint=joint,
+        #                        jointStandard=jointStandard, dim=dim, a=a, b=b, plotting=plotting,
+        #                        writing_results_to_a_file=writing_results_to_a_file, outputModelDir=outputModelDir,
+        #                        rule=rule, sparse=sparse, q=q, p=p, poly_rule=poly_rule, poly_normed=poly_normed,
+        #                        sampleFromStandardDist=True, can_model_evaluate_all_vector_nodes=True,
+        #                        vector_model_output=vector_model_output, read_nodes_from_file=read_nodes_from_file,
+        #                        **kwargs)
 
         #####################################
-        # growth = True if (rule == "c" and not sparse) else False
-        #
-        # if sampleFromStandardDist:
-        #     dist = jointStandard
-        # else:
-        #     dist = joint
-        #
-        # if read_nodes_from_file:
-        #     parameters_file_name = kwargs.get('parameters_file_name', None)
-        #     parameters_setup_file_name = kwargs.get('parameters_setup_file_name', None)
-        #     nodes, weights, jointDistOfNodesFromFile = _read_nodes_weights_dist_from_file(
-        #         parameters_file_name, parameters_setup_file_name, stochastic_dim)
-        #     nodes = transformSamples_lin_or_nonlin(nodes, jointDistOfNodesFromFile, dist, linear=True)
-        # else:
-        #     nodes, weights = cp.generate_quadrature(q, dist, rule=rule, growth=growth, sparse=sparse)
-        #
-        # # __restore__cpu_affinity()
-        # nodes = np.array(nodes)
-        # weights = np.array(weights)
-        #
-        # if sampleFromStandardDist:
-        #     parameters = transformSamples(nodes, jointStandard, joint)
-        # else:
-        #     parameters = nodes
-        #
-        # # Note: nodes and parameters are of shape dxq
-        # # evaluate model
-        # # TODO Parallelization of this part is the main benefit of UQEF for complex models
-        # start_time_model_evaluations = time.time()
-        # if can_model_evaluate_all_vector_nodes:
-        #     evaluations = combiinstance(parameters.T)
-        # else:
-        #     evaluations = np.array([combiinstance(parameter) for parameter in parameters.T])
-        # end_time_model_evaluations = time.time()
-        #
-        # time_model_evaluations = end_time_model_evaluations - start_time_model_evaluations
-        # number_surrogate_model_evaluations = len(parameters.T)
-        #
-        # print(f"Needed time for surrogate model evaluations is: {time_model_evaluations} \n"
-        #       f"for {number_surrogate_model_evaluations} number of surrogate model  runs;")
-        #
-        # start_time_producing_gpce = time.time()
-        # expansion = cp.generate_expansion(order=p, dist=dist, rule=poly_rule, normed=poly_normed)
-        # gPCE = cp.fit_quadrature(expansion, nodes, weights, evaluations)
-        # end_time_producing_gpce = time.time()
-        #
-        # time_producing_gpce = end_time_producing_gpce - start_time_producing_gpce
-        # print(f"Needed time for producing gPCE of a surrogate model is: {time_producing_gpce};")
-        #
-        # start_time_computing_statistics = time.time()
-        # expectedInterp = None
-        # varianceInterp = None
-        # first_order_sobol_indices = None
-        # total_order_sobol_indices = None
-        # if compute_mean:
-        #     expectedInterp = cp.E(gPCE, dist)
-        #     print(f"SG_Surrogate + gPCE_mean = {expectedInterp}")
-        # if compute_var:
-        #     varianceInterp = cp.Var(gPCE, dist)
-        #     print(f"SG_Surrogate + gPCE_variance = {varianceInterp}")
-        # if compute_Sobol_m:
-        #     first_order_sobol_indices = cp.Sens_m(gPCE, dist)
-        #     print("SG_Surrogate + gPCE First order Sobol indices: ", first_order_sobol_indices)
-        #     first_order_sobol_indices = np.squeeze(first_order_sobol_indices)
-        # if compute_Sobol_t:
-        #     total_order_sobol_indices = cp.Sens_t(gPCE, dist)
-        #     print("SG_Surrogate + gPCE Total order Sobol indices: ", total_order_sobol_indices)
-        #     total_order_sobol_indices = np.squeeze(total_order_sobol_indices)
-        # end_time_computing_statistics = time.time()
-        # time_computing_statistics = end_time_computing_statistics - start_time_computing_statistics
-        #
-        # if writing_results_to_a_file:
-        #     # gPCE = op.get_gPCE()
-        #     fileName = f"gpce.pkl"
-        #     gpceFileName = str(outputModelDir / fileName)
-        #     with open(gpceFileName, 'wb') as handle:
-        #         pickle.dump(gPCE, handle, protocol=pickle.HIGHEST_PROTOCOL)
-        #
-        #     fileName = f"pce_polys.pkl"
-        #     pcePolysFileName = str(outputModelDir / fileName)
-        #     with open(pcePolysFileName, 'wb') as handle:
-        #         pickle.dump(expansion, handle, protocol=pickle.HIGHEST_PROTOCOL)
-        #
-        #     fileName = f"results.txt"
-        #     statFileName = str(outputModelDir / fileName)
-        #     fp = open(statFileName, "w")
-        #     fp.write(f'E: {expectedInterp}\n')
-        #     fp.write(f'Var: {varianceInterp}\n')
-        #     fp.write(f'First order Sobol indices: {first_order_sobol_indices}\n')
-        #     fp.write(f'Total order Sobol indices: {total_order_sobol_indices}\n')
-        #     fp.write(f'number_surrogate_model_evaluations: {number_surrogate_model_evaluations}\n')
-        #     fp.write(f'surrogate time_model_evaluations: {time_model_evaluations}\n')
-        #     fp.write(f'time_producing_gpce: {time_producing_gpce}\n')
-        #     fp.write(f'time_computing_statistics: {time_computing_statistics}')
-        #     fp.close()
+        growth = True if (rule == "c" and not sparse) else False
+
+        if sampleFromStandardDist:
+            dist = jointStandard
+        else:
+            dist = joint
+
+        if read_nodes_from_file:
+            parameters_file_name = kwargs.get('parameters_file_name', None)
+            parameters_setup_file_name = kwargs.get('parameters_setup_file_name', None)
+            nodes, weights, jointDistOfNodesFromFile = _read_nodes_weights_dist_from_file(
+                parameters_file_name, parameters_setup_file_name, stochastic_dim)
+            nodes = transformSamples_lin_or_nonlin(nodes, jointDistOfNodesFromFile, dist, linear=True)
+        else:
+            nodes, weights = cp.generate_quadrature(q, dist, rule=rule, growth=growth, sparse=sparse)
+
+        # __restore__cpu_affinity()
+        nodes = np.array(nodes)
+        weights = np.array(weights)
+
+        if sampleFromStandardDist:
+            parameters = transformSamples(nodes, jointStandard, joint)
+        else:
+            parameters = nodes
+
+        # Note: nodes and parameters are of shape dxq
+        # evaluate model
+        # TODO Parallelization of this part is the main benefit of UQEF for complex models
+        start_time_model_evaluations = time.time()
+        if can_model_evaluate_all_vector_nodes:
+            evaluations = combiinstance(parameters.T)
+        else:
+            evaluations = np.array([combiinstance(parameter) for parameter in parameters.T])
+        end_time_model_evaluations = time.time()
+
+        time_model_evaluations = end_time_model_evaluations - start_time_model_evaluations
+        number_surrogate_model_evaluations = len(parameters.T)
+
+        print(f"Needed time for surrogate model evaluations is: {time_model_evaluations} \n"
+              f"for {number_surrogate_model_evaluations} number of surrogate model  runs;")
+
+        start_time_producing_gpce = time.time()
+        expansion = cp.generate_expansion(order=p, dist=dist, rule=poly_rule, normed=poly_normed)
+        gPCE = cp.fit_quadrature(expansion, nodes, weights, evaluations)
+        end_time_producing_gpce = time.time()
+
+        time_producing_gpce = end_time_producing_gpce - start_time_producing_gpce
+        print(f"Needed time for producing gPCE of a surrogate model is: {time_producing_gpce};")
+
+        start_time_computing_statistics = time.time()
+        expectedInterp = None
+        varianceInterp = None
+        first_order_sobol_indices = None
+        total_order_sobol_indices = None
+        if compute_mean:
+            expectedInterp = cp.E(gPCE, dist)
+            print(f"SG_Surrogate + gPCE_mean = {expectedInterp}")
+        if compute_var:
+            varianceInterp = cp.Var(gPCE, dist)
+            print(f"SG_Surrogate + gPCE_variance = {varianceInterp}")
+        if compute_Sobol_m:
+            first_order_sobol_indices = cp.Sens_m(gPCE, dist)
+            print("SG_Surrogate + gPCE First order Sobol indices: ", first_order_sobol_indices)
+            first_order_sobol_indices = np.squeeze(first_order_sobol_indices)
+        if compute_Sobol_t:
+            total_order_sobol_indices = cp.Sens_t(gPCE, dist)
+            print("SG_Surrogate + gPCE Total order Sobol indices: ", total_order_sobol_indices)
+            total_order_sobol_indices = np.squeeze(total_order_sobol_indices)
+        end_time_computing_statistics = time.time()
+        time_computing_statistics = end_time_computing_statistics - start_time_computing_statistics
+
+        if writing_results_to_a_file:
+            fileName = f"gpce.pkl"
+            gpceFileName = str(outputModelDir / fileName)
+            with open(gpceFileName, 'wb') as handle:
+                pickle.dump(gPCE, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+            fileName = f"pce_polys.pkl"
+            pcePolysFileName = str(outputModelDir / fileName)
+            with open(pcePolysFileName, 'wb') as handle:
+                pickle.dump(expansion, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+            fileName = f"results.txt"
+            statFileName = str(outputModelDir / fileName)
+            fp = open(statFileName, "w")
+            fp.write(f'E: {expectedInterp}\n')
+            fp.write(f'Var: {varianceInterp}\n')
+            fp.write(f'First order Sobol indices: {first_order_sobol_indices}\n')
+            fp.write(f'Total order Sobol indices: {total_order_sobol_indices}\n')
+            fp.write(f'number_surrogate_model_evaluations: {number_surrogate_model_evaluations}\n')
+            fp.write(f'surrogate time_model_evaluations: {time_model_evaluations}\n')
+            fp.write(f'time_producing_gpce: {time_producing_gpce}\n')
+            fp.write(f'time_computing_statistics: {time_computing_statistics}')
+            fp.close()
         #####################################
         return combiinstance, gPCE, expectedInterp, varianceInterp, first_order_sobol_indices, total_order_sobol_indices
 
 
 # Var 4
-def compute_gpce_sparsespace(build_sg_for_e_and_var=True, modified_basis=False,
-                             parallelIntegrator=False, spatiallyAdaptive=True,
-                             plotting=False, outputModelDir="./", lmax=2, max_evals=2000, tolerance=10 ** -5, p=6):
+def compute_gpce_sparsespace(model, param_names, dists, dim, a, b,
+                             surrogate_model_of_interest="gPCE", plotting=False,
+                             writing_results_to_a_file=False, outputModelDir="./", gridName="Trapezoidal",
+                             lmax=2, max_evals=2000, tolerance=10 ** -5, modified_basis=False,
+                             boundary_points=False, spatiallyAdaptive=False, p=6,
+                             build_sg_for_e_and_var=True, parallelIntegrator=False, **kwargs):
     """
-    This method relies on current implementation of UncertaintyQuantification Operation in SparseSpACE
+    Var 4 - This method relies on current implementation of UncertaintyQuantification Operation in SparseSpACE
     If build_sg_for_e_and_var == True
-    ---> Build one SG surrogate to approximate E and Var (Note: Markus var 2)
+    ---> Build one SG surrogate to approximate E and Var
     Else
     --> Build one SG surrogate to approximate all N coefficients of the gPCE expansion - Erroneous!
     """
-    config_file = pathlib.Path(
-        '/work/ga45met/mnt/linux_cluster_2/Larsim-UQ/configurations/configuration_ishigami.json')
+    print(f"\n==VAR4: gPCE computed directly using SG integration methods from SparseSpACE==")
 
-    with open(config_file) as f:
-        configuration_object = json.load(f)
-    #####################################
-    try:
-        params = configuration_object["parameters"]
-    except KeyError as e:
-        print(f"Ishigami Statistics: parameters key does "
-              f"not exists in the configurationObject{e}")
-        raise
-    param_names = [param["name"] for param in params]
     labels = [param_name.strip() for param_name in param_names]
-    dim = len(params)  # TODO take only uncertain paramters into account
-    distributions = [(param["distribution"], param["lower"], param["upper"]) for param in params]  # TODO this will be distributionsForSparseSpace
+    stochastic_dim = len(param_names)
+    # dim = stochastic_dim
 
-    a = np.array([param["lower"] for param in params])
-    b = np.array([param["upper"] for param in params])
-    #####################################
-    polynomial_degree_max = p
+    if build_sg_for_e_and_var:
+        surrogate_model_of_interest = "sg"
 
-    problem_function = sparseSpACE_functions.IshigamiFunction(configurationObject=configuration_object, dim=dim)
-    timesteps = 1
-    op = UncertaintyQuantification(problem_function, distributions, a, b)
+    if not build_sg_for_e_and_var:
+        # in case you are computing gPCE indices
+        compute_mean = kwargs.get('compute_mean', True)
+        compute_var = kwargs.get('compute_var', True)
+        compute_Sobol_m = kwargs.get('compute_Sobol_m', False)
+        compute_Sobol_t = kwargs.get('compute_Sobol_t', False)
 
-    if modified_basis:
-        grid = GlobalTrapezoidalGridWeighted(a, b, op, boundary=False, modified_basis=True)
+    # distributions = dists = distributionsForSparseSpace
+    # problem_function = model
+    # polynomial_degree_max = p
+
+    if spatiallyAdaptive:
+        if gridName == 'BSpline_p3':
+            p_bsplines = kwargs.get('p_bsplines', 3)
+            grid = GlobalBSplineGrid(a=a, b=b, modified_basis=modified_basis, boundary=boundary_points, p=p_bsplines)
+        elif gridName == 'TrapezoidalWeighted':
+            grid = GlobalTrapezoidalGridWeighted(a=a, b=b, modified_basis=modified_basis, boundary=boundary_points)
+        else:
+            grid = GlobalTrapezoidalGrid(a=a, b=b, modified_basis=modified_basis, boundary=boundary_points)
     else:
-        grid = GlobalTrapezoidalGridWeighted(a, b, op, boundary=True)
+        if gridName == 'Trapezoidal':
+            grid = TrapezoidalGrid(a=a, b=b, modified_basis=modified_basis, boundary=boundary_points)
+        elif gridName == 'Leja' or gridName == 'LejaNormal':   # for actual comparisons use LejaNormal
+            grid = LejaGrid(a=a, b=b, boundary=boundary_points)
+        elif gridName == 'BSpline_p3':
+            p_bsplines = kwargs.get('p_bsplines', 3)
+            grid = BSplineGrid(a=a, b=b, boundary=boundary_points, p=p_bsplines)
 
     if parallelIntegrator:
         grid.integrator = IntegratorParallelArbitraryGrid(grid)  # TODO
@@ -627,101 +636,136 @@ def compute_gpce_sparsespace(build_sg_for_e_and_var=True, modified_basis=False,
     # The grid initialization requires the weight functions from the
     # operation; since currently the adaptive refinement takes the grid from
     # the operation, it has to be passed here
-    op.set_grid(grid)
+    operation = UncertaintyQuantification(model, dists, a, b)
+    operation.set_grid(grid)
 
     # Select the function for which the grid is refined
     if build_sg_for_e_and_var:
         # the expectation and variance calculation via the moments
-        op.set_expectation_variance_Function()
+        operation.set_expectation_variance_Function()
     else:
-        op.set_PCE_Function(polynomial_degree_max)
+        operation.set_PCE_Function(p)
 
     if spatiallyAdaptive:
-        # combiinstance = SpatiallyAdaptiveSingleDimensions2(a, b, operation=op, norm=2)
-        combiinstance = SpatiallyAdaptiveSingleDimensions2(
-            a, b, operation=op, norm=2, grid_surplusses=grid)
+        errorOperator = ErrorCalculatorSingleDimVolumeGuided()
+        combiinstance = SpatiallyAdaptiveSingleDimensions2(a, b, operation=operation,  norm=2, margin=0.8, grid_surplusses=grid)
     else:
-        combiinstance = StandardCombi(a, b, operation=op, norm=2)
+        # combiinstance = StandardCombi(np.ones(dim) * a, np.ones(dim) * b, operation=operation, norm=2)
+        combiinstance = StandardCombi(a, b, operation=operation, norm=2)  # Markus
 
     if plotting:
-        plot_file = str(outputModelDir / "output.png")
-        filename_contour_plot = str(outputModelDir / "output_contour_plot.png")
-        filename_combi_scheme_plot = str(outputModelDir / "output_combi_scheme.png")
-        filename_refinement_graph = str(outputModelDir / "output_refinement_graph.png")
-        filename_sparse_grid_plot = str(outputModelDir / "output_sg_graph.png")
+        plot_file = kwargs.get('plot_file', str(outputModelDir / "output.png"))
+        filename_contour_plot = kwargs.get('filename_contour_plot', str(outputModelDir / "output_contour_plot.png"))
+        filename_combi_scheme_plot = kwargs.get('filename_combi_scheme_plot', str(outputModelDir / "output_combi_scheme.png"))
+        filename_refinement_graph = kwargs.get('filename_refinement_graph', str(outputModelDir / "output_refinement_graph.png"))
+        filename_sparse_grid_plot = kwargs.get('filename_sparse_grid_plot', str(outputModelDir / "output_sg_graph.png"))
         combiinstance.filename_contour_plot = filename_contour_plot
         combiinstance.filename_refinement_graph = filename_refinement_graph
         combiinstance.filename_combi_scheme_plot = filename_combi_scheme_plot
         combiinstance.filename_sparse_grid_plot = filename_sparse_grid_plot
 
+    start_time_building_sg_surrogate = time.time()
     if spatiallyAdaptive:
-        error_operator = ErrorCalculatorSingleDimVolumeGuided()
-        combiinstance.performSpatiallyAdaptiv(1, lmax, error_operator, tol=tolerance, max_evaluations=max_evals,
-                                              do_plot=plotting)
+        # Markus
+        # if dim > 3:
+        #     lmax = 2
+        # else:
+        #     lmax = 3
+        combiinstance.performSpatiallyAdaptiv(1, lmax, errorOperator, tol=tolerance, do_plot=plotting,
+                                                               max_evaluations=max_evals)
+        # print("integral: ", operation.integral)
     else:
+        minimum_level = 1  # Markus
         combiinstance.perform_operation(1, lmax)
+        # combiinstance.perform_operation(minimum_level, lmax+1, model)  # Markus
+    end_time_building_sg_surrogate = time.time()
+    time_building_sg_surrogate = end_time_building_sg_surrogate - start_time_building_sg_surrogate
 
     if plotting:
         combiinstance.print_resulting_sparsegrid(markersize=10)
 
-    #####################################
+    number_full_model_evaluations = combiinstance.get_total_num_points()
+    print(f"Needed time for building SG surrogate is: {time_building_sg_surrogate} \n"
+          f"for {number_full_model_evaluations} number of full model runs;")
 
+    if writing_results_to_a_file:
+        fileName = f"results.txt"
+        statFileName = str(outputModelDir / fileName)
+        fp = open(statFileName, "w")
+        fp.write(f"time_building_sg_surrogate: {time_building_sg_surrogate}\n")
+        fp.write(f'number_full_model_evaluations: {number_full_model_evaluations}\n')
+        fp.close()
+
+    #####################################
+    expectedInterp = None
+    varianceInterp = None
+    first_order_sobol_indices = None
+    total_order_sobol_indices = None
+
+    start_time_computing_statistics = time.time()
     if build_sg_for_e_and_var:
-        (E,), (Var,) = op.calculate_expectation_and_variance(combiinstance)
-        print(f"E: {E}, Var: {Var}")
+        if compute_mean or compute_var:
+            (expectedInterp,), (varianceInterp,) = operation.calculate_expectation_and_variance(combiinstance)
+            print(f"E estimated via SparseSpACE SG Integration = {expectedInterp}")
+            print(f"Var estimated via SparseSpACE SG Integration = {varianceInterp}")
     else:
         # Create the PCE approximation; it is saved internally in the operation
-        op.calculate_PCE(polynomial_degrees=polynomial_degree_max, combiinstance=combiinstance)  # restrict_degrees
+        start_time_producing_gpce = time.time()
+        operation.calculate_PCE(polynomial_degrees=p, combiinstance=combiinstance)  # restrict_degrees
+        end_time_producing_gpce = time.time()
+        time_producing_gpce = end_time_producing_gpce - start_time_producing_gpce
+        print(f"Needed time for approximating all integral when computing gPCE: {time_producing_gpce};")
+        # Calculate the expectation, variance, and Sobol indices with the PCE coefficients
+        if compute_mean or compute_var:
+            # (expectedInterp,), (varianceInterp,) = op.calculate_expectation_and_variance(combiinstance, use_combiinstance_solution=False)
+            (expectedInterp,), (varianceInterp,) = operation.get_expectation_and_variance_PCE()
+            print(f"E estimated via SparseSpACE SG Integration + gPCE = {expectedInterp}")
+            print(f"Var estimated via SparseSpACE SG Integration + gPCE = {varianceInterp}")
+        if compute_Sobol_m:
+            first_order_sobol_indices = operation.get_first_order_sobol_indices()
+            print("SG Integration when computing gPCE indices - First order Sobol indices: ", first_order_sobol_indices)
+        if compute_Sobol_t:
+            total_order_sobol_indices = operation.get_total_order_sobol_indices()
+            print("SG Integration when computing gPCE indices - Total order Sobol indices: ", total_order_sobol_indices)
 
-        # Calculate the expectation, variance with the PCE coefficients
-        # (E,), (Var,) = op.calculate_expectation_and_variance(combiinstance, use_combiinstance_solution=False)
-        (E,), (Var,) = op.get_expectation_and_variance_PCE()
-        print(f"E: {E}, Var: {Var}")
+    end_time_computing_statistics = time.time()
+    time_computing_statistics = end_time_computing_statistics - start_time_computing_statistics
 
-        # Calculate sobol indices with the PCE coefficients
-        si_first = op.get_first_order_sobol_indices()
-        si_total = op.get_total_order_sobol_indices()
+    #####################################
+    # Saving and plotting
+    #####################################
+    if writing_results_to_a_file:
+        if not build_sg_for_e_and_var:
+            # gPCE = operation.get_gPCE()
+            fileName = f"gpce.pkl"
+            gpceFileName = str(outputModelDir / fileName)
+            with open(gpceFileName, 'wb') as handle:
+                pickle.dump(operation.gPCE, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-        #####################################
-        # Saving and plotting
-        #####################################
+            fileName = f"pce_polys.pkl"
+            pcePolysFileName = str(outputModelDir / fileName)
+            with open(pcePolysFileName, 'wb') as handle:
+                pickle.dump(operation.pce_polys, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-        # gPCE = op.get_gPCE()
-        fileName = f"gpce.pkl"
-        gpceFileName = str(outputModelDir / fileName)
-        with open(gpceFileName, 'wb') as handle:
-            pickle.dump(op.gPCE, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
-        fileName = f"pce_polys.pkl"
-        pcePolysFileName = str(outputModelDir / fileName)
-        with open(pcePolysFileName, 'wb') as handle:
-            pickle.dump(op.pce_polys, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
-        # print(f"First order Sobol indices: {si_first.shape} \n {si_first}")
-        # print(f"Total order Sobol indices: {si_total.shape} \n {si_total}")
-
-        sobol_m_analytical, sobol_t_analytical = problem_function.ishigamiModelObject.get_analytical_sobol_indices()
-        for i in range(len(labels)):
-            print(f"Sobol's Total Index for parameter {labels[i]} is: \n")
-            print(f"Sobol Total Simulation = {si_total[i][0]} \n")
-            print(f"Sobol Total Analytical = {sobol_t_analytical[i]:.6f} \n")
-            error = sobol_t_analytical[i] - si_total[i][0]
-            print(f"Sobol Total Error = {error:.6f} \n")
-
-        for i in range(len(labels)):
-            print(f"Sobol's Main Index for parameter {labels[i]} is: \n")
-            print(f"Sobol Main Simulation = {si_first[i][0]} \n")
-            print(f"Sobol Main Analytical = {sobol_m_analytical[i]:.6f} \n")
-            error = sobol_m_analytical[i] - si_first[i][0]
-            print(f"Sobol Main Error = {error:.6f} \n")
-
-        temp = f"results.txt"
-        save_file = outputModelDir / temp
-        fp = open(save_file, "w")
-        fp.write(f'E: {E},\n Var: {Var}, \n '
-                 f'First order Sobol indices: {si_first} \n; '
-                 f'Total order Sobol indices: {si_total} \n')
+        fileName = f"results.txt"
+        statFileName = str(outputModelDir / fileName)
+        fp = open(statFileName, "w")
+        fp.write(f'E: {expectedInterp}\n')
+        fp.write(f'Var: {varianceInterp}\n')
+        fp.write(f'First order Sobol indices: {first_order_sobol_indices}\n')
+        fp.write(f'Total order Sobol indices: {total_order_sobol_indices}\n')
+        if not build_sg_for_e_and_var:
+            fp.write(f'time_producing_gpce: {time_producing_gpce}\n')
+        fp.write(f'time_computing_statistics: {time_computing_statistics}')
         fp.close()
+
+    if surrogate_model_of_interest.lower() != "gpce":
+        # This is varaiante when only the computation of SG surrogate is of importance
+        # TODO check if operation.calculate_expectation_and_variance(combiinstance) exists for operation==Integration
+        return combiinstance, None, expectedInterp, varianceInterp, None, None
+    else:
+        return combiinstance, operation.gPCE, expectedInterp, varianceInterp, first_order_sobol_indices, total_order_sobol_indices
+
 
 #####################################
 # Main part
@@ -1012,15 +1056,15 @@ def main_routine(model, current_output_folder, **kwargs):
     #####################################
 
     writing_results_to_a_file = True
-    plotting = False  # True
+    plotting = True  # True
 
     # parameters for chaopsy quadrature, similar setup to uqef(pp)...
     quadrature_rule = 'gaussian'
     sparse = False
-    q_order = 10
-    p_order = 4  # 7
+    q_order = 12 #5
+    p_order = 9 #4  # 7
     poly_rule = "three_terms_recurrence"  # "gram_schmidt" | "three_terms_recurrence" | "cholesky"
-    poly_normed = False  # True
+    poly_normed = True  # True
     sparse_quadrature = False  # False
     sampling_rule = "random"  # | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
     sampleFromStandardDist = True
@@ -1037,12 +1081,11 @@ def main_routine(model, current_output_folder, **kwargs):
     else:
         sampleFromStandardDist_when_evaluating_surrogate = False
 
-    read_nodes_from_file = True
+    read_nodes_from_file = False
     path_to_file = pathlib.Path("/work/ga45met/sparseSpACE/sparse_grid_nodes_weights")
     # path_to_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/sparse_grid_nodes_weights")
     l = 10
     parameters_file_name = path_to_file / f"KPU_d{dim}_l{l}.asc" # f"KPU_d3_l{l}.asc"
-    # parameters_setup_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEFPP/configurations_Larsim/KPU_Larsim_d5.json")
 
     dictionary_with_sg_setup = dict()
 
@@ -1057,8 +1100,13 @@ def main_routine(model, current_output_folder, **kwargs):
         dictionary_with_sg_setup["poly_normed"] = poly_normed
         dictionary_with_sg_setup["sampleFromStandardDist"] = sampleFromStandardDist
         dictionary_with_sg_setup["read_nodes_from_file"] = read_nodes_from_file
-        dictionary_with_sg_setup["parameters_file_name"] = str(parameters_file_name)
+        if read_nodes_from_file:
+            dictionary_with_sg_setup["parameters_file_name"] = str(parameters_file_name)
+            if parameters_setup_file_name is not None:
+                dictionary_with_sg_setup["parameters_setup_file_name"] = str(parameters_setup_file_name)
         dictionary_with_inf_about_the_run["dictionary_with_sg_setup"] = dictionary_with_sg_setup
+    elif variant == 4:
+        dictionary_with_sg_setup["p_order"] = p_order
 
     if variant == 1:
         # Var 1 #
@@ -1082,19 +1130,19 @@ def main_routine(model, current_output_folder, **kwargs):
     if variant == 2 or variant == 3 or variant == 4:
         # Var 2 | Var 3 | Var 4 - parameters for SparseSpACE
         gridName = "Trapezoidal"
-        lmax = 2  # 4
-        max_evals = 2000  # 4000
+        lmax = 4  # 4
+        max_evals = 4000  # 4000
         tolerance = 10 ** -5
         modified_basis = False
-        boundery_points = False
-        spatiallyAdaptive = True
+        boundary_points = True
+        spatiallyAdaptive = False
 
         dictionary_with_inf_about_the_run["gridName"] = gridName
         dictionary_with_inf_about_the_run["lmax"] = lmax
         dictionary_with_inf_about_the_run["max_evals"] = max_evals
         dictionary_with_inf_about_the_run["tolerance"] = tolerance
         dictionary_with_inf_about_the_run["modified_basis"] = modified_basis
-        dictionary_with_inf_about_the_run["boundery_points"] = boundery_points
+        dictionary_with_inf_about_the_run["boundary_points"] = boundary_points
         dictionary_with_inf_about_the_run["spatiallyAdaptive"] = spatiallyAdaptive
 
         plot_file = str(outputModelDir / "output.png")
@@ -1109,10 +1157,11 @@ def main_routine(model, current_output_folder, **kwargs):
             compute_surrogate_sparsespace_and_gpce(model=problem_function, param_names=param_names, dists=dists,
                                                    joint=joinedDists, jointStandard=joinedStandardDists, dim=dim, a=a,
                                                    b=b, surrogate_model_of_interest=surrogate_model_of_interest,
-                                                   plotting=plotting, writing_results_to_a_file=writing_results_to_a_file,
+                                                   plotting=plotting,
+                                                   writing_results_to_a_file=writing_results_to_a_file,
                                                    outputModelDir=outputModelDir, gridName=gridName, lmax=lmax,
                                                    max_evals=max_evals, tolerance=tolerance,
-                                                   modified_basis=modified_basis, boundery_points=boundery_points,
+                                                   modified_basis=modified_basis, boundary_points=boundary_points,
                                                    spatiallyAdaptive=spatiallyAdaptive, rule=quadrature_rule,
                                                    sparse=sparse_quadrature, q=q_order, p=p_order, poly_rule=poly_rule,
                                                    poly_normed=poly_normed,
@@ -1136,22 +1185,30 @@ def main_routine(model, current_output_folder, **kwargs):
     # lmax=lmax, max_evals=max_evals, tolerance=tolerance,
     # rule=rule, sparse_utility=sparse_utility, q=q, p=p)
 
-    # Var 4
-    # compute_gpce_sparsespace(build_sg_for_e_and_var=False, modified_basis=False, parallelIntegrator=True,
-    #                          spatiallyAdaptive=True, plotting=plotting, outputModelDir=outputModelDir,
-    #                          lmax=lmax, max_evals=max_evals, tolerance=tolerance, p=p)
+    if variant == 4:
+        build_sg_for_e_and_var = True
+        parallelIntegrator = True
 
-    # compute_gpce_sparsespace(build_sg_for_e_and_var=True, modified_basis=True, parallelIntegrator=False,
-    #                          spatiallyAdaptive=False, plotting=plotting, outputModelDir=outputModelDir,
-    #                          lmax=lmax, max_evals=max_evals, tolerance=tolerance)
+        dictionary_with_inf_about_the_run["build_sg_for_e_and_var"] = build_sg_for_e_and_var
+        dictionary_with_inf_about_the_run["parallelIntegrator"] = parallelIntegrator
 
-    # TODO Seems as this is not working - when building SG surrogate to fit computation of c_n!
-    # compute_gpce_sparsespace(build_sg_for_e_and_var=False, modified_basis=True, parallelIntegrator=False,
-    #                          spatiallyAdaptive=True, plotting=plotting, outputModelDir=outputModelDir,
-    #                          lmax=lmax, max_evals=max_evals, tolerance=tolerance)
-    # compute_gpce_sparsespace(build_sg_for_e_and_var=False, modified_basis=True, parallelIntegrator=False,
-    #                          spatiallyAdaptive=False, plotting=plotting, outputModelDir=outputModelDir,
-    #                          lmax=lmax, max_evals=max_evals, tolerance=tolerance)
+        combiinstance, gPCE, approximated_mean, approximated_var, first_order_sobol_indices, total_order_sobol_indices = \
+            compute_gpce_sparsespace(
+                model=problem_function, param_names=param_names, dists=distributionsForSparseSpace,
+                dim=dim, a=a, b=b, surrogate_model_of_interest=surrogate_model_of_interest,
+                plotting=plotting, writing_results_to_a_file=writing_results_to_a_file,
+                outputModelDir=outputModelDir, gridName=gridName, lmax=lmax, max_evals=max_evals,
+                tolerance=tolerance, modified_basis=modified_basis, boundary_points=boundary_points,
+                spatiallyAdaptive=spatiallyAdaptive, p=p_order,
+                build_sg_for_e_and_var=build_sg_for_e_and_var,
+                parallelIntegrator=parallelIntegrator,
+                compute_mean=compute_mean, compute_var=compute_var,
+                compute_Sobol_m=compute_Sobol_m, compute_Sobol_t=compute_Sobol_t
+            )
+        if not build_sg_for_e_and_var and surrogate_model_of_interest.lower() == "gpce":
+            surrogate_model = gPCE
+        else:
+            surrogate_model = combiinstance
 
     #####################################
     # Access the analytical values and compare them with computed
@@ -1160,7 +1217,7 @@ def main_routine(model, current_output_folder, **kwargs):
     #####################################
     # E = model - surrogate_model
     #####################################
-    print(f"\n==Error==")
+    print(f"\n==Model Error==")
     # Evaluate surrogate model and a certain number of new points, and compute error
     # Ideas come from:
     # P. Conrad and Y. Marzouk: "ADAPTIVE SMOLYAK PSEUDOSPECTRAL APPROXIMATIONS"
@@ -1201,7 +1258,8 @@ def main_routine(model, current_output_folder, **kwargs):
             i += 1
     reevaluation_surrogate_model_end_time = time.time()
     reevaluation_surrogate_model_duration = reevaluation_surrogate_model_end_time - reevaluation_surrogate_model_start_time
-    print(f"re evaluation surrogate model duration: {reevaluation_surrogate_model_duration}")
+    print(f"re evaluation surrogate model duration: {reevaluation_surrogate_model_duration} "
+          f"in {numSamples_for_checking} new MC points")
     # print(f"mc_nodes.shape - {mc_nodes.shape}; "
     #       f"\n type(surrogate_model) - {type(surrogate_model)};  "
     #       f"\n surrogate_model.shape - {surrogate_model.shape};")
@@ -1215,7 +1273,7 @@ def main_routine(model, current_output_folder, **kwargs):
         true_model_evaluations = np.array([problem_function(parameter) for parameter in mc_parameters.T])
     reevaluation_model_end_time = time.time()
     reevaluation_model_duration = reevaluation_model_end_time - reevaluation_model_start_time
-    print(f"re evaluation model duration: {reevaluation_model_duration}")
+    print(f"re evaluation model duration: {reevaluation_model_duration} in {numSamples_for_checking} new MC points")
     # print(f"mc_parameters.shape - {mc_parameters.shape}; "
     #       f"\n type(problem_function) - {type(problem_function)};")
     # print(f"type true_model_evaluations : {type(true_model_evaluations)}; shape {true_model_evaluations.shape}")
@@ -1245,9 +1303,8 @@ def main_routine(model, current_output_folder, **kwargs):
     # E = model_mean - approximated_mean
     # E = model_var - approximated_var
     #####################################
-    print(f"\n==Mean and Var Error==")
-
     if compute_mean and approximated_mean is not None:
+        print(f"\n==Mean Error==")
         if has_analyitic_mean:
             analytical_mean = problem_function.getAnalyticSolutionIntegral(a, b)
         else:
@@ -1272,6 +1329,7 @@ def main_routine(model, current_output_folder, **kwargs):
         dictionary_with_inf_about_the_run["error_mean"] = abs(analytical_mean - approximated_mean)
 
     if compute_var and approximated_var is not None:
+        print(f"\n==Var Error==")
         if not has_analyitic_var:
             numSamples = 10 ** 5
             print(f"Computing MC based mean on {numSamples} samples, sampled rule - {sampling_rule}")
@@ -1296,6 +1354,7 @@ def main_routine(model, current_output_folder, **kwargs):
     #####################################
     if (compute_Sobol_m and first_order_sobol_indices is not None) \
             and (compute_Sobol_t and total_order_sobol_indices is not None):
+        print(f"\n==Sobol Indices Error==")
         if has_analyitic_first_sobol and has_analyitic_total_sobol:
             sobol_m_analytical, sobol_t_analytical = problem_function.get_analytical_sobol_indices()
         else:
@@ -1399,13 +1458,16 @@ if __name__ == "__main__":
     #####################################
     # Initial Model Setup
     #####################################
-    number_of_functions = 5  # or 1, for example
-    model = "corner_peak"  # "ishigami" "corner_peak" "hbvsask"
+    number_of_functions = 1  # or 1, for example
+    model = "ishigami"  # "ishigami" "corner_peak" "hbvsask"
     list_of_models = ["hbvsask", "larsim", "ishigami", "gfunction", "zabarras2d", "zabarras3d",
                       "corner_peak", "product_peak", "discontinuous"]
     # Additional Genz Options: GenzOszillatory, GenzDiscontinious2, GenzC0, GenzGaussian
     assert(model in list_of_models)
-    current_output_folder = "sg_gaussian_5d_kpu_l_10_p4_new"  # "sg_ss_ct_modified_var2_l_2_p_4_q_5_max_2000"
+    current_output_folder = "sg_gaussian_3d_p9_q12_poly_normed"  # "sg_ss_ct_modified_var2_l_2_p_4_q_5_max_2000"
+    # current_output_folder = "var2_sg_trap_ct_boundery_l_4_p_4_q_5_max_4000"  # "sg_ss_ct_modified_var2_l_2_p_4_q_5_max_2000"
+
+    start_time = time.time()
 
     if number_of_functions > 1:
         if model in ["corner_peak", "product_peak", "discontinuous"]:
@@ -1426,12 +1488,16 @@ if __name__ == "__main__":
                 # dictionary_with_inf_about_the_run.append(dictionary_with_inf_about_the_run_single_model)
                 dictionary_with_inf_about_the_run[i] = dictionary_with_inf_about_the_run_single_model
                 outputModelDir = cwd
-                dictionary_with_inf_about_the_run_path = str(outputModelDir / "dictionary_with_inf_about_the_multiple_runs.pkl")
+                dictionary_with_inf_about_the_run_path = str(outputModelDir / "dictionary_with_inf_about_the_multiple_corner_peak_runs.pkl")
                 with open(dictionary_with_inf_about_the_run_path, "wb") as handle:
                     # with open(dictionary_with_inf_about_the_run_path, "w") as handle:
                     pickle.dump(dictionary_with_inf_about_the_run, handle, protocol=pickle.HIGHEST_PROTOCOL)
     else:
         dictionary_with_inf_about_the_run = main_routine(model, current_output_folder)
+
+    end_time = time.time()
+    duration = end_time - start_time
+    print(f"The whole run took {duration} for examing {number_of_functions} different functions")
 
 
 
