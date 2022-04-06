@@ -1,3 +1,10 @@
+"""
+Set of utility functions for experimenting with SG rules
+Many of these functions exist as well in common/utility.py
+
+@author: Ivana Jovanovic Buha
+"""
+
 import pathlib
 import pickle
 import numpy as np
@@ -159,6 +166,9 @@ def get_df_from_simulationNodes_list(simulationNodes_list):
     df_nodes = pd.DataFrame(my_ditc)
     return df_nodes
 
+#####################################
+# Plotting utility functions
+#####################################
 
 def plot_2d_matrix_static_from_list(simulationNodes_list, title="Plot nodes"):
     dfsimulationNodes = get_df_from_simulationNodes_list(simulationNodes_list)
@@ -245,6 +255,10 @@ def plot_2d_matrix_of_nodes_over_orders_with_weights(rule, dist, orders, sparse=
             title = f"{rule} points chaospy; order = {order}; sparse={str(sparse)}; #nodes={abscissas.shape[0]}"
         plt.title(title, loc='left')
         plt.show()
+
+#####################################
+# Transformation functions
+#####################################
 
 
 def transformation_of_parameters_var1(samples, distribution_r, distribution_q):

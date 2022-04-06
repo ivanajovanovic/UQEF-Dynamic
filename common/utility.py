@@ -1,3 +1,9 @@
+"""
+Set of utility functions for preparing and/or postprocessing data for UQ runs of different models
+
+@author: Ivana Jovanovic Buha
+"""
+
 import chaospy as cp
 import numpy as np
 import pandas as pd
@@ -206,7 +212,7 @@ def transformation_of_parameters_var2(samples, distribution_r, distribution_q):
     return _a + _b * samples
 
 #####################################
-# Utility for SG anaylsis
+# Utility for SG analysis
 #####################################
 
 def generate_table_single_rule_over_dim_and_orders_sparse_and_nonsparse(rule, dists, dim, q_orders, growth=None):
