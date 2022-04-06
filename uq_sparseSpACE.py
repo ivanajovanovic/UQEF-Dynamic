@@ -256,6 +256,7 @@ def compute_gpce_chaospy(model, param_names, dists, joint, jointStandard, dim, a
         print(f"shape of nodes after transform {nodes.shape}; min {nodes.min()}; max {nodes.max()}")
         print(f"shape of weights after transform {weights.shape}; min {weights.min()}; max {weights.max()}")
     else:
+        # TODO what if rule requires some special dist=jointStandard, e.g., c-c?
         nodes, weights = cp.generate_quadrature(q, dist, rule=rule, growth=growth, sparse=sparse)
         print(f"shape of quadrature nodes {nodes.shape}; min {nodes.min()}; max {nodes.max()}")
         print(f"shape of quadrature weights {weights.shape}; min {weights.min()}; max {weights.max()}")
@@ -268,6 +269,8 @@ def compute_gpce_chaospy(model, param_names, dists, joint, jointStandard, dim, a
         parameters = transformSamples(nodes, jointStandard, joint)
     else:
         parameters = nodes
+
+    # TODO - add option to save nodes, weights, parameters
 
     print(f"Model will be evaluated in the following parameters\n: {parameters};")
 
@@ -495,6 +498,7 @@ def compute_surrogate_sparsespace_and_gpce(model, param_names, dists, joint, joi
                 parameters_file_name, parameters_setup_file_name, stochastic_dim)
             nodes = transformSamples_lin_or_nonlin(nodes, jointDistOfNodesFromFile, dist, linear=True)
         else:
+            # TODO what if rule requires some special dist=jointStandard, e.g., c-c?
             nodes, weights = cp.generate_quadrature(q, dist, rule=rule, growth=growth, sparse=sparse)
 
         # __restore__cpu_affinity()
@@ -505,6 +509,8 @@ def compute_surrogate_sparsespace_and_gpce(model, param_names, dists, joint, joi
             parameters = transformSamples(nodes, jointStandard, joint)
         else:
             parameters = nodes
+
+        # TODO - add option to save nodes, weights, parameters
 
         # Note: nodes and parameters are of shape dxq
         # evaluate model
@@ -602,12 +608,10 @@ def compute_gpce_sparsespace(model, param_names, dists, dim, a, b,
     if build_sg_for_e_and_var:
         surrogate_model_of_interest = "sg"
 
-    if not build_sg_for_e_and_var:
-        # in case you are computing gPCE indices
-        compute_mean = kwargs.get('compute_mean', True)
-        compute_var = kwargs.get('compute_var', True)
-        compute_Sobol_m = kwargs.get('compute_Sobol_m', False)
-        compute_Sobol_t = kwargs.get('compute_Sobol_t', False)
+    compute_mean = kwargs.get('compute_mean', True)
+    compute_var = kwargs.get('compute_var', True)
+    compute_Sobol_m = kwargs.get('compute_Sobol_m', False)
+    compute_Sobol_t = kwargs.get('compute_Sobol_t', False)
 
     # distributions = dists = distributionsForSparseSpace
     # problem_function = model
@@ -631,6 +635,7 @@ def compute_gpce_sparsespace(model, param_names, dists, dim, a, b,
             grid = BSplineGrid(a=a, b=b, boundary=boundary_points, p=p_bsplines)
 
     if parallelIntegrator:
+        print(f"==VAR4: Parallel Integration is being used")
         grid.integrator = IntegratorParallelArbitraryGrid(grid)  # TODO
 
     # The grid initialization requires the weight functions from the
@@ -800,18 +805,23 @@ def main_routine(model, current_output_folder, **kwargs):
         outputModelDir = scratch_dir / "sg_anaysis" / "ishigami_runs" / current_output_folder
         config_file = scratch_dir / "configurations" / 'configuration_ishigami.json'
         parameters_setup_file_name = scratch_dir /"configurations"/ f"KPU_ishigami_d3.json"
-    elif model == "gfunction":
-        outputModelDir = scratch_dir / "sg_anaysis" / "gfunction_runs" / current_output_folder
-    elif model == "zabarras2d":
-        outputModelDir = scratch_dir / "sg_anaysis" / "zabarras2d_runs" / current_output_folder
-    elif model == "zabarras3d":
-        outputModelDir = scratch_dir / "sg_anaysis" / "zabarras3d_runs" / current_output_folder
-    elif model == "corner_peak":
-        outputModelDir = scratch_dir / "sg_anaysis" / "corner_peak" / current_output_folder
-    elif model == "product_peak":
-        outputModelDir = scratch_dir / "sg_anaysis" / "product_peak" / current_output_folder
-    elif model == "discontinuous":
-        outputModelDir = scratch_dir / "sg_anaysis" / "discontinuous" / current_output_folder
+    else:
+        outputModelDir = scratch_dir / "sg_anaysis" / model / current_output_folder
+    # elif model == "gfunction":
+    #     outputModelDir = scratch_dir / "sg_anaysis" / "gfunction_runs" / current_output_folder
+    # elif model == "zabarras2d":
+    #     outputModelDir = scratch_dir / "sg_anaysis" / "zabarras2d_runs" / current_output_folder
+    # elif model == "zabarras3d":
+    #     outputModelDir = scratch_dir / "sg_anaysis" / "zabarras3d_runs" / current_output_folder
+    # elif model == "corner_peak":
+    #     outputModelDir = scratch_dir / "sg_anaysis" / "corner_peak" / current_output_folder
+    # elif model == "product_peak":
+    #     outputModelDir = scratch_dir / "sg_anaysis" / "product_peak" / current_output_folder
+    # elif model == "discontinuous":
+    #     outputModelDir = scratch_dir / "sg_anaysis" / "discontinuous" / current_output_folder
+    # elif model=="gaussian":
+    #     outputModelDir = scratch_dir / "sg_anaysis" / "gaussian" / current_output_folder
+
 
     outputModelDir.mkdir(parents=True, exist_ok=True)
 
@@ -873,7 +883,7 @@ def main_routine(model, current_output_folder, **kwargs):
             param_names = ["x0", "x1", "x2"]
             a = [-1.0, -1.0, -1.0]  # [-2.5, -2, 5]
             b = [1.0, 1.0, 1.0]  # [2.5, 2, 15]
-        elif model == "corner_peak":
+        elif model in ["corner_peak", "product_peak", "oscillatory", "gaussian", "discontinuous"]:
             # param_names = ["x0", "x1", "x2"]
             # a = [0.0, 0.0, 0.0]
             # b = [1.0, 1.0, 1.0]
@@ -883,38 +893,17 @@ def main_routine(model, current_output_folder, **kwargs):
             a = [0.0, 0.0, 0.0, 0.0, 0.0]
             b = [1.0, 1.0, 1.0, 1.0, 1.0]
             dim = 5
+            anisotropic = True
             if "coeffs" in kwargs:
                 coeffs = kwargs["coeffs"]
+                weights = None
+                if "weights" in kwargs:
+                    weights = kwargs["weights"]
             else:
-                coeffs, _ = generate_and_scale_coeff_and_weights(dim=dim, b=b_3)
+                coeffs, weights = generate_and_scale_coeff_and_weights(dim=dim, b=b_3, anisotropic=anisotropic)
             # coeffs = [float(1) for _ in range(dim)]
             can_model_evaluate_all_vector_nodes = True
-        elif model == "product_peak":
-            param_names = ["x0", "x1", "x2"]
-            a = [0.0, 0.0, 0.0]
-            b = [1.0, 1.0, 1.0]
-            dim = 3
-            if "coeffs" in kwargs and "weights" in kwargs:
-                coeffs = kwargs["coeffs"]
-                weights = kwargs["weights"]
-            else:
-                coeffs, weights = generate_and_scale_coeff_and_weights(dim=dim, b=dim)
-            # coeffs = [float(3) for _ in range(dim)]
-            # midpoint = [0.5 for _ in range(dim)]
-            can_model_evaluate_all_vector_nodes = True
-        elif model == "discontinuous":
-            param_names = ["x0", "x1", "x2"]
-            a = [0.0, 0.0, 0.0]
-            b = [1.0, 1.0, 1.0]
-            dim = 3
-            if "coeffs" in kwargs and "weights" in kwargs:
-                coeffs = kwargs["coeffs"]
-                weights = kwargs["weights"]
-            else:
-                coeffs, weights = generate_and_scale_coeff_and_weights(dim=dim, b=dim)
-            # coeffs = [float(1) for _ in range(dim)]
-            # midpoint = [0.5 for _ in range(dim)]
-            can_model_evaluate_all_vector_nodes = True
+
         dim = len(param_names)
         distributions_list_of_dicts = [{"distribution": "Uniform", "lower": a[i], "upper": b[i]} for i in range(dim)]
         distributionsForSparseSpace = [("Uniform", a[i], b[i]) for i in range(dim)]
@@ -1038,12 +1027,16 @@ def main_routine(model, current_output_folder, **kwargs):
         problem_function = sparseSpACE_functions.FunctionUQ2D()
     elif model == "zabarras3d":
         problem_function = sparseSpACE_functions.FunctionUQ3D()
-    elif model == "corner_peak":
-        problem_function = GenzCornerPeak(coeffs)
     elif model == "product_peak":
-        problem_function = GenzProductPeak(coeffs, weights)
+        problem_function = GenzProductPeak(coefficients=coeffs, midpoint=weights)
+    elif model == "oscillatory":
+        problem_function = GenzOszillatory(coeffs=coeffs, offset=weights[0])
+    elif model == "corner_peak":
+        problem_function = GenzCornerPeak(coeffs=coeffs)
+    elif model == "gaussian":
+        problem_function = sparseSpACE_functions.GenzGaussian(midpoint=weights, coefficients=coeffs)  # TODO ubiquitous
     elif model == "discontinuous":
-        problem_function = GenzDiscontinious(coeffs, weights)  # TODO ubiquitous
+        problem_function = sparseSpACE_functions.GenzDiscontinious(coeffs=coeffs, border=weights)  # TODO ubiquitous
 
     # TODO This is probably unnecessary
     get_analytical_mean = get_analytical_mean and compute_mean and has_analyitic_mean
@@ -1055,24 +1048,32 @@ def main_routine(model, current_output_folder, **kwargs):
     # Running the SG Simulation
     #####################################
 
+    variant = 1
+    dictionary_with_inf_about_the_run["variant"] = variant
+
     writing_results_to_a_file = True
     plotting = True  # True
 
     # parameters for chaopsy quadrature, similar setup to uqef(pp)...
-    quadrature_rule = 'gaussian'
-    sparse = False
-    q_order = 12 #5
-    p_order = 9 #4  # 7
+    quadrature_rule = 'c'
+    sparse = True
+    q_order = 8 #5
+    p_order = 4 #4  # 7
     poly_rule = "three_terms_recurrence"  # "gram_schmidt" | "three_terms_recurrence" | "cholesky"
-    poly_normed = True  # True
-    sparse_quadrature = False  # False
+    poly_normed = False  # True
+    sparse_quadrature = True  # False
     sampling_rule = "random"  # | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
     sampleFromStandardDist = True
 
-    variant = 1
-    surrogate_model_of_interest = "gPCE"  # "sg"  this is relevant when sg surrogate is indeed computed, i.e., variant == 2 or 3 or 4
+    read_nodes_from_file = False
+    path_to_file = pathlib.Path("/work/ga45met/sparseSpACE/sparse_grid_nodes_weights")
+    # path_to_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/sparse_grid_nodes_weights")
+    l = 10
+    parameters_file_name = path_to_file / f"KPU_d{dim}_l{l}.asc" # f"KPU_d3_l{l}.asc"
 
-    dictionary_with_inf_about_the_run["variant"] = variant
+    surrogate_model_of_interest = "gpce" #"gPCE"  # "sg"  this is relevant when sg surrogate is indeed computed, i.e., variant == 2 or 3 or 4
+    if variant == 1:
+        surrogate_model_of_interest = "gpce"
     dictionary_with_inf_about_the_run["surrogate_model_of_interest"] = surrogate_model_of_interest
 
     if surrogate_model_of_interest.lower() == "gpce":
@@ -1080,12 +1081,6 @@ def main_routine(model, current_output_folder, **kwargs):
         sampleFromStandardDist_when_evaluating_surrogate = True
     else:
         sampleFromStandardDist_when_evaluating_surrogate = False
-
-    read_nodes_from_file = False
-    path_to_file = pathlib.Path("/work/ga45met/sparseSpACE/sparse_grid_nodes_weights")
-    # path_to_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/sparse_grid_nodes_weights")
-    l = 10
-    parameters_file_name = path_to_file / f"KPU_d{dim}_l{l}.asc" # f"KPU_d3_l{l}.asc"
 
     dictionary_with_sg_setup = dict()
 
@@ -1130,12 +1125,12 @@ def main_routine(model, current_output_folder, **kwargs):
     if variant == 2 or variant == 3 or variant == 4:
         # Var 2 | Var 3 | Var 4 - parameters for SparseSpACE
         gridName = "Trapezoidal"
-        lmax = 4  # 4
-        max_evals = 4000  # 4000
+        lmax = 2  # 4
+        max_evals = 10000  # 4000
         tolerance = 10 ** -5
         modified_basis = False
         boundary_points = True
-        spatiallyAdaptive = False
+        spatiallyAdaptive = True
 
         dictionary_with_inf_about_the_run["gridName"] = gridName
         dictionary_with_inf_about_the_run["lmax"] = lmax
@@ -1187,6 +1182,8 @@ def main_routine(model, current_output_folder, **kwargs):
 
     if variant == 4:
         build_sg_for_e_and_var = True
+        if build_sg_for_e_and_var:
+            surrogate_model_of_interest = "sg"
         parallelIntegrator = True
 
         dictionary_with_inf_about_the_run["build_sg_for_e_and_var"] = build_sg_for_e_and_var
@@ -1217,87 +1214,97 @@ def main_routine(model, current_output_folder, **kwargs):
     #####################################
     # E = model - surrogate_model
     #####################################
-    print(f"\n==Model Error==")
-    # Evaluate surrogate model and a certain number of new points, and compute error
-    # Ideas come from:
-    # P. Conrad and Y. Marzouk: "ADAPTIVE SMOLYAK PSEUDOSPECTRAL APPROXIMATIONS"
-    # V. Barthelmann, E. Novak, and K. Ritter: "HIGH DIMENSIONAL POLYNOMIAL INTERPOLATION ON SPARSE GRIDS"
-    numSamples_for_checking = 10**4
-    mc_rule_for_checking = "R"  # sampling_rule
-    error_type = "mean"  # "mean" "l2" | "max" "l1"
+    if variant != 4:
+        print(f"\n==Model Error==")
+        # Evaluate surrogate model and a certain number of new points, and compute error
+        # Ideas come from:
+        # P. Conrad and Y. Marzouk: "ADAPTIVE SMOLYAK PSEUDOSPECTRAL APPROXIMATIONS"
+        # V. Barthelmann, E. Novak, and K. Ritter: "HIGH DIMENSIONAL POLYNOMIAL INTERPOLATION ON SPARSE GRIDS"
+        numSamples_for_checking = 10**5
+        mc_rule_for_checking = "R"  # sampling_rule
+        error_type = "mean"  # "mean" "l2" | "max" "l1"
 
-    dictionary_with_inf_about_the_run["comparison_surrogate_vs_model_numSamples"] = numSamples_for_checking
-    dictionary_with_inf_about_the_run["comparison_surrogate_vs_model_mc_rule"] = mc_rule_for_checking
-    dictionary_with_inf_about_the_run["comparison_surrogate_vs_model_error_type"] = error_type
+        dictionary_with_inf_about_the_run["comparison_surrogate_vs_model_numSamples"] = numSamples_for_checking
+        dictionary_with_inf_about_the_run["comparison_surrogate_vs_model_mc_rule"] = mc_rule_for_checking
+        dictionary_with_inf_about_the_run["comparison_surrogate_vs_model_error_type"] = error_type
 
-    if sampleFromStandardDist:
-        mc_nodes = joinedStandardDists.sample(size=numSamples_for_checking, rule=mc_rule_for_checking).round(4)
-        mc_nodes = np.array(mc_nodes)
-        mc_parameters = transformSamples(mc_nodes, joinedStandardDists, joinedDists)
-    else:
-        mc_nodes = joinedDists.sample(size=numSamples_for_checking, rule=mc_rule_for_checking).round(4)
-        mc_nodes = np.array(mc_nodes)
-        mc_parameters = mc_nodes
+        if sampleFromStandardDist:
+            mc_nodes = joinedStandardDists.sample(size=numSamples_for_checking, rule=mc_rule_for_checking).round(4)
+            mc_nodes = np.array(mc_nodes)
+            mc_parameters = transformSamples(mc_nodes, joinedStandardDists, joinedDists)
+        else:
+            mc_nodes = joinedDists.sample(size=numSamples_for_checking, rule=mc_rule_for_checking).round(4)
+            mc_nodes = np.array(mc_nodes)
+            mc_parameters = mc_nodes
 
-    # TODO Interesting to see if it will be more memory efficient if I would evaluate surrogate_model
-    #  inside of the sub-routine and not transfer it around...
-    # surrogate_evaluations = surrogate_model(mc_nodes.T)  # Var 1 - surrogate_model=gPCE;
-    # surrogate_evaluations = np.array([surrogate_model(nodes) for nodes in mc_nodes.T])
-    reevaluation_surrogate_model_start_time = time.time()
-    # TODO - This will probably change once the output is 2D (HBV, Larsim)
-    # TODO - ask if surrogate_model can evaluate all vector nodes at once
-    surrogate_evaluations = np.empty([mc_nodes.shape[1], ])
-    i = 0
-    if sampleFromStandardDist_when_evaluating_surrogate:
-        for sample in mc_nodes.T:
-            surrogate_evaluations[i] = surrogate_model(*sample)
-            i += 1
-    else:
-        for sample in mc_parameters.T:
-            surrogate_evaluations[i] = surrogate_model(*sample)
-            i += 1
-    reevaluation_surrogate_model_end_time = time.time()
-    reevaluation_surrogate_model_duration = reevaluation_surrogate_model_end_time - reevaluation_surrogate_model_start_time
-    print(f"re evaluation surrogate model duration: {reevaluation_surrogate_model_duration} "
-          f"in {numSamples_for_checking} new MC points")
-    # print(f"mc_nodes.shape - {mc_nodes.shape}; "
-    #       f"\n type(surrogate_model) - {type(surrogate_model)};  "
-    #       f"\n surrogate_model.shape - {surrogate_model.shape};")
-    # print(f"type surrogate_evaluations : {type(surrogate_evaluations)}; shape {surrogate_evaluations.shape}")
+        # TODO Interesting to see if it will be more memory efficient if I would evaluate surrogate_model
+        #  inside of the sub-routine and not transfer it around...
+        # surrogate_evaluations = surrogate_model(mc_nodes.T)  # Var 1 - surrogate_model=gPCE;
+        # surrogate_evaluations = np.array([surrogate_model(nodes) for nodes in mc_nodes.T])
+        reevaluation_surrogate_model_start_time = time.time()
+        # TODO - This will probably change once the output is 2D (HBV, Larsim)
+        # TODO - ask if surrogate_model can evaluate all vector nodes at once
+        surrogate_evaluations = np.empty([mc_nodes.shape[1], ])
+        i = 0
+        if sampleFromStandardDist_when_evaluating_surrogate:
+            for sample in mc_nodes.T:
+                if surrogate_model_of_interest.lower() == "gpce":
+                    surrogate_evaluations[i] = surrogate_model(*sample)
+                else:
+                    surrogate_evaluations[i] = surrogate_model(sample)
+                i += 1
+        else:
+            for sample in mc_parameters.T:
+                if surrogate_model_of_interest.lower() == "gpce":
+                    surrogate_evaluations[i] = surrogate_model(*sample)
+                else:
+                    print(surrogate_model(sample).shape)
+                    surrogate_evaluations[i] = surrogate_model(sample)
+                i += 1
+        surrogate_evaluations = np.array(surrogate_evaluations)
 
-    reevaluation_model_start_time = time.time()
-    if can_model_evaluate_all_vector_nodes:
-        true_model_evaluations = problem_function(mc_parameters.T)
-        true_model_evaluations = np.reshape(true_model_evaluations, true_model_evaluations.shape[0])  # TODO - This will probably change once the output is 2D (HBV, Larsim)
-    else:
-        true_model_evaluations = np.array([problem_function(parameter) for parameter in mc_parameters.T])
-    reevaluation_model_end_time = time.time()
-    reevaluation_model_duration = reevaluation_model_end_time - reevaluation_model_start_time
-    print(f"re evaluation model duration: {reevaluation_model_duration} in {numSamples_for_checking} new MC points")
-    # print(f"mc_parameters.shape - {mc_parameters.shape}; "
-    #       f"\n type(problem_function) - {type(problem_function)};")
-    # print(f"type true_model_evaluations : {type(true_model_evaluations)}; shape {true_model_evaluations.shape}")
+        reevaluation_surrogate_model_end_time = time.time()
+        reevaluation_surrogate_model_duration = reevaluation_surrogate_model_end_time - reevaluation_surrogate_model_start_time
+        print(f"re evaluation surrogate model duration: {reevaluation_surrogate_model_duration} "
+              f"in {numSamples_for_checking} new MC points")
+        # print(f"mc_nodes.shape - {mc_nodes.shape}; "
+        #       f"\n type(surrogate_model) - {type(surrogate_model)};  "
+        #       f"\n surrogate_model.shape - {surrogate_model.shape};")
+        # print(f"type surrogate_evaluations : {type(surrogate_evaluations)}; shape {surrogate_evaluations.shape}")
 
-    # error_l1 = None
-    # error_l2 = None
-    # if error_type == "max" or error_type == "l1" or error_type == "L1":
-    error_l1 = np.max(np.abs(true_model_evaluations - surrogate_evaluations))
-    # elif error_type == "mean" or error_type == "l2" or error_type == "L2":
-    # error_l2 = np.sqrt(np.sum((true_model_evaluations - surrogate_evaluations)**2))
-    error_l2 = np.linalg.norm(true_model_evaluations - surrogate_evaluations, ord=2)
+        reevaluation_model_start_time = time.time()
+        if can_model_evaluate_all_vector_nodes:
+            true_model_evaluations = problem_function(mc_parameters.T)
+            true_model_evaluations = np.reshape(true_model_evaluations, true_model_evaluations.shape[0])  # TODO - This will probably change once the output is 2D (HBV, Larsim)
+        else:
+            true_model_evaluations = np.array([problem_function(parameter) for parameter in mc_parameters.T])
+        reevaluation_model_end_time = time.time()
+        reevaluation_model_duration = reevaluation_model_end_time - reevaluation_model_start_time
+        print(f"re evaluation model duration: {reevaluation_model_duration} in {numSamples_for_checking} new MC points")
+        # print(f"mc_parameters.shape - {mc_parameters.shape}; "
+        #       f"\n type(problem_function) - {type(problem_function)};")
+        # print(f"type true_model_evaluations : {type(true_model_evaluations)}; shape {true_model_evaluations.shape}")
 
-    # else:
-    #     raise Exception(f"error_type-{error_type} is not supported!!!")
+        # error_l1 = None
+        # error_l2 = None
+        # if error_type == "max" or error_type == "l1" or error_type == "L1":
+        error_l1 = np.max(np.abs(true_model_evaluations - surrogate_evaluations))
+        # elif error_type == "mean" or error_type == "l2" or error_type == "L2":
+        # error_l2 = np.sqrt(np.sum((true_model_evaluations - surrogate_evaluations)**2))
+        error_l2 = np.linalg.norm(true_model_evaluations - surrogate_evaluations, ord=2)
 
-    dictionary_with_inf_about_the_run["reevaluation_surrogate_model_duration"] = reevaluation_surrogate_model_duration
-    dictionary_with_inf_about_the_run["reevaluation_model_duration"] = reevaluation_model_duration
+        # else:
+        #     raise Exception(f"error_type-{error_type} is not supported!!!")
 
-    dictionary_with_inf_about_the_run["error_model_l1"] = error_l1
-    dictionary_with_inf_about_the_run["error_model_l2"] = error_l2
+        dictionary_with_inf_about_the_run["reevaluation_surrogate_model_duration"] = reevaluation_surrogate_model_duration
+        dictionary_with_inf_about_the_run["reevaluation_model_duration"] = reevaluation_model_duration
 
-    print(f"Max surrogate_evaluations: {max(surrogate_evaluations)}; Min surrogate_evaluations: {min(surrogate_evaluations)};")
-    print(f"Max true_model_evaluations: {max(true_model_evaluations)}; Min true_model_evaluations: {min(true_model_evaluations)};")
-    print(f"L1 Error = {error_l1} \nL2 Error = {error_l2}")
+        dictionary_with_inf_about_the_run["error_model_l1"] = error_l1
+        dictionary_with_inf_about_the_run["error_model_l2"] = error_l2
+
+        print(f"Max surrogate_evaluations: {max(surrogate_evaluations)}; Min surrogate_evaluations: {min(surrogate_evaluations)};")
+        print(f"Max true_model_evaluations: {max(true_model_evaluations)}; Min true_model_evaluations: {min(true_model_evaluations)};")
+        print(f"L1 Error = {error_l1} \nL2 Error = {error_l2}")
 
     #####################################
     # E = model_mean - approximated_mean
@@ -1458,19 +1465,28 @@ if __name__ == "__main__":
     #####################################
     # Initial Model Setup
     #####################################
-    number_of_functions = 1  # or 1, for example
-    model = "ishigami"  # "ishigami" "corner_peak" "hbvsask"
+    number_of_functions = 5  # or 1, for example
+    model = "corner_peak"  # "ishigami" "corner_peak" "hbvsask"
     list_of_models = ["hbvsask", "larsim", "ishigami", "gfunction", "zabarras2d", "zabarras3d",
-                      "corner_peak", "product_peak", "discontinuous"]
+                      "oscillatory", "product_peak", "corner_peak", "gaussian", "discontinuous"]
     # Additional Genz Options: GenzOszillatory, GenzDiscontinious2, GenzC0, GenzGaussian
     assert(model in list_of_models)
-    current_output_folder = "sg_gaussian_3d_p9_q12_poly_normed"  # "sg_ss_ct_modified_var2_l_2_p_4_q_5_max_2000"
+
+    # uncomment if you want to run analysis for Genz functions...
+    list_of_genz_functions = ["oscillatory", "product_peak", "corner_peak", "gaussian", "continous", "discontinuous"]
+    path_to_saved_all_genz_functions = pathlib.Path("/work/ga45met/Backup/UQEFPP/sg_anaysis/genz_functions")
+    read_saved_genz_functions = True
+    anisotropic = True
+
+    # current_output_folder = "sg_gaussian_3d_p9_q12_poly_normed"  # "sg_ss_ct_modified_var2_l_2_p_4_q_5_max_2000"
     # current_output_folder = "var2_sg_trap_ct_boundery_l_4_p_4_q_5_max_4000"  # "sg_ss_ct_modified_var2_l_2_p_4_q_5_max_2000"
+    # current_output_folder = "var4_ct_trap_adaptive_boundary_modified_l_2_max_4000_saved_aniso"  # "sg_ss_ct_modified_var2_l_2_p_4_q_5_max_2000"
+    current_output_folder = "sg_cc_5d_l2_sparse_p4_q8_saved_aniso"
 
     start_time = time.time()
 
     if number_of_functions > 1:
-        if model in ["corner_peak", "product_peak", "discontinuous"]:
+        if model in list_of_genz_functions:
             # Hard-coded
             dim = 5
             all_coeffs = np.empty(shape=(number_of_functions, dim))
@@ -1479,7 +1495,17 @@ if __name__ == "__main__":
             from collections import defaultdict
             dictionary_with_inf_about_the_run = defaultdict(dict)
             for i in range(number_of_functions):
-                single_coeffs, single_weights = generate_and_scale_coeff_and_weights(dim=dim, b=b_3)
+                if read_saved_genz_functions:
+                    if anisotropic:
+                        path_to_saved_genz_functions = str(path_to_saved_all_genz_functions / model / f"coeffs_weights_anisotropic_{dim}d_{i}.npy")
+                    else:
+                        path_to_saved_genz_functions = str(path_to_saved_all_genz_functions / model / f"coeffs_weights_{dim}d_{i}.npy")
+                    with open(path_to_saved_genz_functions, 'rb') as f:
+                        coeffs_weights = np.load(f)
+                        single_coeffs = coeffs_weights[0]
+                        single_weights = coeffs_weights[1]
+                else:
+                    single_coeffs, single_weights = generate_and_scale_coeff_and_weights(dim=dim, b=b_3, anisotropic=anisotropic)
                 all_coeffs[i] = single_coeffs
                 all_weights[i] = single_weights
                 current_output_folder_single_model = f"{current_output_folder}_model_{i}"
