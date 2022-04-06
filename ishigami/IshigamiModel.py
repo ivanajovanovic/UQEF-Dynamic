@@ -35,8 +35,21 @@ class IshigamiModel(object):
             with open(configurationObject) as f:
                 self.configurationObject = json.load(f)
 
-        self.a = self.configurationObject["other_model_parameters"]["a"]
-        self.b = self.configurationObject["other_model_parameters"]["b"]
+        if "a" in kwargs:
+            self.a = kwargs['a']
+        else:
+            try:
+                self.a = self.configurationObject["other_model_parameters"]["a"]
+            except KeyError:
+                self.a = 7
+
+        if "b" in kwargs:
+            self.b = kwargs['b']
+        else:
+            try:
+                self.b = self.configurationObject["other_model_parameters"]["b"]
+            except KeyError:
+                self.b = 0.1
 
         self.t = [0, ]
         self.t_interest = 0.0
@@ -78,15 +91,22 @@ class IshigamiModel(object):
     def get_analytical_sobol_indices(self):
         v = self.a**2/8 + (self.b*np.pi**4)/5 + (self.b**2*np.pi**8)/18 + 0.5
         vm1 = 0.5*(1+(self.b*np.pi**4)/5)**2
+        vm1 = (self.b*np.pi**4)/5 + ((self.b**2)*np.pi**8)/50 + 0.5  # Sudret
         vm2 = self.a**2/8
-        vm3 = 0
+        vm3 = 0.0
+        vm12 = 0.0
+        vm23 = 0.0
+        vm13 = 8 * self.b ** 2 * np.pi ** 8 / 225
+        vm123 = 0.0
+
         sm1 = vm1/v
         sm2 = vm2/v
         sm3 = vm3/v
 
-        vt1 = 0.5*(1+(self.b*np.pi**4)/5)**2 + 8*self.b**2*np.pi**8/225
-        vt2 = self.a**2/8
-        vt3 = 8*self.b**2*np.pi**8/225
+        vt1 = vm1 + vm13
+        vt2 = vm2
+        vt3 = vm13
+
         st1 = vt1/v
         st2 = vt2/v
         st3 = vt3/v
