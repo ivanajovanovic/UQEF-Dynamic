@@ -408,6 +408,7 @@ def compute_surrogate_sparsespace_and_gpce(model, param_names, dists, joint, joi
             p_bsplines = kwargs.get('p_bsplines', 3)
             grid = BSplineGrid(a=a, b=b, boundary=boundary_points, p=p_bsplines)
 
+    # TODO Ask Obi - Integration is the same as Interpolation???
     operation = Integration(f=model, grid=grid, dim=dim)
 
     if spatiallyAdaptive:
@@ -800,7 +801,7 @@ def main_routine(model, current_output_folder, **kwargs):
         inputModelDir = pathlib.Path("/work/ga45met/Hydro_Models/HBV-SASK-data")
         outputModelDir = scratch_dir / "sg_anaysis" / "hbvsask_runs" / current_output_folder
         config_file = scratch_dir / "configurations" / 'configuration_hbv_6D.json'
-        parameters_setup_file_name = scratch_dir /"configurations"/ f"KPU_HBV_d6.json"
+        parameters_setup_file_name = scratch_dir / "configurations" / f"KPU_HBV_d6.json"
     elif model == "ishigami":
         outputModelDir = scratch_dir / "sg_anaysis" / "ishigami_runs" / current_output_folder
         config_file = scratch_dir / "configurations" / 'configuration_ishigami.json'
@@ -845,9 +846,6 @@ def main_routine(model, current_output_folder, **kwargs):
             configurationObject = json.load(f)
     else:
         configurationObject = None
-
-    coeffs = None
-    weights = None
 
     # in case the set-up of the model is done via some configuration_file
     if configurationObject is not None \
@@ -903,6 +901,8 @@ def main_routine(model, current_output_folder, **kwargs):
                 coeffs, weights = generate_and_scale_coeff_and_weights(dim=dim, b=b_3, anisotropic=anisotropic)
             # coeffs = [float(1) for _ in range(dim)]
             can_model_evaluate_all_vector_nodes = True
+            dictionary_with_inf_about_the_run["coeffs"] = coeffs
+            dictionary_with_inf_about_the_run["weights"] = weights
 
         dim = len(param_names)
         distributions_list_of_dicts = [{"distribution": "Uniform", "lower": a[i], "upper": b[i]} for i in range(dim)]
@@ -937,8 +937,6 @@ def main_routine(model, current_output_folder, **kwargs):
     dictionary_with_inf_about_the_run["param_names"] = param_names
     dictionary_with_inf_about_the_run["a"] = a
     dictionary_with_inf_about_the_run["b"] = b
-    dictionary_with_inf_about_the_run["coeffs"] = coeffs
-    dictionary_with_inf_about_the_run["weights"] = weights
 
     #####################################
     # Creation of Model Object and setting up the purpose of model run, i.e.,
