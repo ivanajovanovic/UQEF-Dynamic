@@ -88,6 +88,7 @@ if local_debugging:
     distributions = []
     a = []
     b = []
+    param_names = []
     for single_param in configuration_object["parameters"]:
         param_names.append(single_param["name"])
         if single_param["distribution"] != "None":
