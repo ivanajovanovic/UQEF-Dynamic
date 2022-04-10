@@ -322,9 +322,42 @@ class FunctionUQ3D(Function):
         return integrate.tplquad(f, start[2], end[2], lambda x: start[1], lambda x: end[1], lambda x, y: start[0],
                                  lambda x, y: end[0])[0]
 
-# discontinuous
+
+class GenzGaussian(Function):
+    def __init__(self, midpoint, coefficients):
+        super().__init__()
+        self.midpoint = midpoint
+        self.coefficients = coefficients
+
+    def eval(self, coordinates):
+        dim = len(coordinates)
+        assert (dim == len(self.coefficients))
+        summation = 0.0
+        for d in range(dim):
+            summation -= (self.coefficients[d] ** 2) * (coordinates[d] - self.midpoint[d]) ** 2
+        return np.exp(summation)
+
+    def eval_vectorized(self, coordinates: Sequence[Sequence[float]]):
+        result = np.exp(-1 * np.inner((coordinates - self.midpoint) ** 2, (self.coefficients ** 2)))
+        self.check_vectorization(coordinates, result)
+        return result
+
+    # def getAnalyticSolutionIntegral(self, start, end):
+    #     dim = len(start)
+    #     # print lowerBounds,upperBounds,coefficients, midpoints
+    #     result = 1.0
+    #     sqPiHalve = np.sqrt(np.pi) * 0.5
+    #     for d in range(dim):
+    #         result = result * (
+    #                 sqPiHalve * scipy.special.erf(np.sqrt(self.coefficients[d]) * (end[d] - self.midpoint[d])) -
+    #                 sqPiHalve * scipy.special.erf(
+    #             np.sqrt(self.coefficients[d]) * (start[d] - self.midpoint[d]))) / np.sqrt(self.coefficients[d])
+    #     return result
+
+
+# corrected discontinuous based on Conrad and Marzouk
 class GenzDiscontinious(Function):
-    def __init__(self, coeffs, border, **kwargs):
+    def __init__(self, coeffs, border):
         super().__init__()
         self.coeffs = coeffs
         self.border = border
@@ -335,13 +368,13 @@ class GenzDiscontinious(Function):
         for d in range(self.dim):
             if coordinates[d] >= self.border[d]:
                 return 0.0
-            result -= self.coeffs[d] * coordinates[d]
+            result = self.coeffs[d] * coordinates[d]
         return np.exp(result)
 
     def eval_vectorized(self, coordinates: Sequence[Sequence[float]]):
         result = np.zeros(np.shape(coordinates)[:-1])
         filter = np.all(coordinates < self.border, axis=-1)
-        result[filter] = np.exp(-1 * np.inner(coordinates[filter], self.coeffs))
+        result[filter] = np.exp(np.inner(coordinates[filter], self.coeffs))
         self.check_vectorization(coordinates, result)
         return result
 
@@ -353,7 +386,7 @@ class GenzDiscontinious(Function):
                 return 0.0
             else:
                 end[d] = min(end[d], self.border[d])
-                result *= (np.exp(-self.coeffs[d] * start[d]) - np.exp(-self.coeffs[d] * end[d])) / self.coeffs[d]
+                result *= (np.exp(self.coeffs[d] * end[d]) - np.exp(self.coeffs[d] * start[d])) / self.coeffs[d]
         return result
 
 
@@ -411,72 +444,6 @@ class FunctionNonlinearScaledUnitCube(Function):
             return distribution_q.inv(samples)
         else:
             return distribution_q.inv(distribution_r.fwd(samples))
-
-
-class GenzGaussian(Function):
-    def __init__(self, midpoint, coefficients):
-        super().__init__()
-        self.midpoint = midpoint
-        self.coefficients = coefficients
-
-    def eval(self, coordinates):
-        dim = len(coordinates)
-        assert (dim == len(self.coefficients))
-        summation = 0.0
-        for d in range(dim):
-            summation -= (self.coefficients[d] ** 2) * (coordinates[d] - self.midpoint[d]) ** 2
-        return np.exp(summation)
-
-    def eval_vectorized(self, coordinates: Sequence[Sequence[float]]):
-        result = np.exp(-1 * np.inner((coordinates - self.midpoint) ** 2, (self.coefficients ** 2)))
-        self.check_vectorization(coordinates, result)
-        return result
-
-    # def getAnalyticSolutionIntegral(self, start, end):
-    #     dim = len(start)
-    #     # print lowerBounds,upperBounds,coefficients, midpoints
-    #     result = 1.0
-    #     sqPiHalve = np.sqrt(np.pi) * 0.5
-    #     for d in range(dim):
-    #         result = result * (
-    #                 sqPiHalve * scipy.special.erf(np.sqrt(self.coefficients[d]) * (end[d] - self.midpoint[d])) -
-    #                 sqPiHalve * scipy.special.erf(
-    #             np.sqrt(self.coefficients[d]) * (start[d] - self.midpoint[d]))) / np.sqrt(self.coefficients[d])
-    #     return result
-
-
-class GenzDiscontinious(Function):
-    def __init__(self, coeffs, border):
-        super().__init__()
-        self.coeffs = coeffs
-        self.border = border
-        self.dim = len(coeffs)
-
-    def eval(self, coordinates):
-        result = 0
-        for d in range(self.dim):
-            if coordinates[d] >= self.border[d]:
-                return 0.0
-            result = self.coeffs[d] * coordinates[d]
-        return np.exp(result)
-
-    def eval_vectorized(self, coordinates: Sequence[Sequence[float]]):
-        result = np.zeros(np.shape(coordinates)[:-1])
-        filter = np.all(coordinates < self.border, axis=-1)
-        result[filter] = np.exp(np.inner(coordinates[filter], self.coeffs))
-        self.check_vectorization(coordinates, result)
-        return result
-
-    # def getAnalyticSolutionIntegral(self, start, end):
-    #     result = 1
-    #     end = list(end)
-    #     for d in range(self.dim):
-    #         if start[d] >= self.border[d]:
-    #             return 0.0
-    #         else:
-    #             end[d] = min(end[d], self.border[d])
-    #             result *= (np.exp(-self.coeffs[d] * start[d]) - np.exp(-self.coeffs[d] * end[d])) / self.coeffs[d]
-    #     return result
 
 
 def initiate_function_infos():
