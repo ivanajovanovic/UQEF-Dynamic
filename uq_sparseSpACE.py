@@ -220,6 +220,7 @@ def compute_gpce_chaospy_uqefpp(model, param_names, dists, joint, jointStandard,
     This method created a UQsim object and relays on routines from UQEF and UQEFPP
     input model: name of the model in string format
     """
+    # TODO Finish this function
     pass
 
 
@@ -389,12 +390,12 @@ def compute_gpce_chaospy(model, param_names, dists, joint, jointStandard, dim, a
 def compute_surrogate_sparsespace_and_gpce(model, param_names, dists, joint, jointStandard, dim, a, b,
                                            surrogate_model_of_interest="gPCE", plotting=False,
                                            writing_results_to_a_file=False, outputModelDir="./", gridName="Trapezoidal",
-                                           lmax=2, max_evals=2000, tolerance=10 ** -5, modified_basis=False,
-                                           boundary_points=False, spatiallyAdaptive=False, rule='gaussian',
-                                           sparse=False, q=7, p=6, poly_rule="three_terms_recurrence",
-                                           poly_normed=False, sampleFromStandardDist=False,
-                                           can_model_evaluate_all_vector_nodes=False, vector_model_output=False,
-                                           read_nodes_from_file=False, **kwargs):
+                                           lmin=1, lmax=2, max_evals=2000, tolerance=10 ** -2, modified_basis=False,
+                                           boundary_points=False, spatiallyAdaptive=False, grid_surplusses=None,
+                                           norm_spatiallyAdaptive=np.inf, rule='gaussian', sparse=False, q=7, p=6,
+                                           poly_rule="three_terms_recurrence", poly_normed=False,
+                                           sampleFromStandardDist=False, can_model_evaluate_all_vector_nodes=False,
+                                           vector_model_output=False, read_nodes_from_file=False, **kwargs):
     """
     Var 2 - Compute gPCE coefficients by integrating the (SG) surrogate
     SG surrogate computed based on SparseSpACE
@@ -445,9 +446,17 @@ def compute_surrogate_sparsespace_and_gpce(model, param_names, dists, joint, joi
         #     np.ones(dim) * a, np.ones(dim) * b, margin=0.8, operation=operation)
         # TODO or?
         # TODO Additional parameters norm=2, grid_surplusses=grid
-        combiinstance = SpatiallyAdaptiveSingleDimensions2(a, b, margin=0.8, operation=operation)
-        # TODO or?
+        # TODO if grid_surplusses=None (default does that leads to GlobalTrapezoidalGrid)
+        if grid_surplusses is None:
+            # default grid_surplusses = GlobalTrapezoidalGrid
+            combiinstance = SpatiallyAdaptiveSingleDimensions2(a, b, margin=0.8, operation=operation,
+                                                               norm=norm_spatiallyAdaptive)
+        else:
+            combiinstance = SpatiallyAdaptiveSingleDimensions2(a, b, margin=0.8, operation=operation,
+                                                               norm=norm_spatiallyAdaptive, grid_surplusses=grid)
+
         # combiinstance = SpatiallyAdaptiveSingleDimensions2(a, b, margin=0.8, operation=operation, norm=2, grid_surplusses=grid)
+        # combiinstance = SpatiallyAdaptiveSingleDimensions2(a, b, margin=0.8, operation=operation, norm=np.inf, grid_surplusses=grid)
     else:
         # combiinstance = StandardCombi(np.ones(dim) * a, np.ones(dim) * b, operation=operation, norm=2)
         combiinstance = StandardCombi(a, b, operation=operation)  # Markus
@@ -470,12 +479,12 @@ def compute_surrogate_sparsespace_and_gpce(model, param_names, dists, joint, joi
         #     lmax = 2
         # else:
         #     lmax = 3
-        combiinstance.performSpatiallyAdaptiv(1, lmax, errorOperator, tol=tolerance, do_plot=plotting,
+        combiinstance.performSpatiallyAdaptiv(lmin, lmax, errorOperator, tol=tolerance, do_plot=plotting,
                                                                max_evaluations=max_evals)
         # print("integral: ", operation.integral)
     else:
         minimum_level = 1  # Markus
-        combiinstance.perform_operation(1, lmax)
+        combiinstance.perform_operation(lmin, lmax)
         # combiinstance.perform_operation(minimum_level, lmax+1, model)  # Markus
     end_time_building_sg_surrogate = time.time()
     time_building_sg_surrogate = end_time_building_sg_surrogate - start_time_building_sg_surrogate
@@ -634,169 +643,168 @@ def compute_surrogate_sparsespace_and_gpce(model, param_names, dists, joint, joi
         return combiinstance, gPCE, expectedInterp, varianceInterp, first_order_sobol_indices, total_order_sobol_indices
 
 
-# Var 3
-#compute gPCE coefficients analytically on a piecewise linear interpolant constructed with standard CT or the single dimension refinement strategy
-def analytica_integration_with_surrogate(model, param_names, dists, dim, a, b,
-                             surrogate_model_of_interest="gPCE", plotting=False,
-                             writing_results_to_a_file=False, outputModelDir="./", gridName="Trapezoidal",
-                             lmax=2, max_evals=2000, tolerance=10 ** -5, modified_basis=False,
-                             boundary_points=False, spatiallyAdaptive=False, p=6,
-                             build_sg_for_e_and_var=True, parallelIntegrator=False, **kwargs):
-
-   #compute the one-dimensional integral
-    def computeIntegral(point_d, neighbours, distributions_d, pce_poly_1d, d):
-        if point_d <= 0 or max(0, neighbours[0]) >= min(1, point_d):
-            integralLeft = 0
-        elif (not boundary) and neighbours[0] == 0:
-            hatFunctionLeft = lambda x: 1
-            integrandLeft = lambda x: pce_poly_1d(function_info.ppfs[d](x)) * hatFunctionLeft(x)
-            integralLeft = integrate.fixed_quad(integrandLeft, max(0, neighbours[0]), min(1, point_d), n=7)[0]
-        else:
-            hatFunctionLeft = lambda x: (x - neighbours[0]) / (point_d - neighbours[0])
-            integrandLeft = lambda x: pce_poly_1d(function_info.ppfs[d](x)) * hatFunctionLeft(x)
-            integralLeft = integrate.fixed_quad(integrandLeft, max(0, neighbours[0]), min(1, point_d), n=7)[0]
-        if point_d >= 1 or max(0, point_d) >= min(1, neighbours[1]):
-            integralRight = 0
-        elif (not boundary) and neighbours[1] == 1:
-            hatFunctionRight = lambda x: 1
-            integrandRight = lambda x: pce_poly_1d(function_info.ppfs[d](x)) * hatFunctionRight(x)
-            integralRight = integrate.fixed_quad(integrandRight, max(0, point_d), min(1, neighbours[1]), n=7)[0]
-        else:
-            hatFunctionRight = lambda x: max(0,((x - neighbours[1]) / (point_d - neighbours[1]))[0])
-            hatFunctionRight = lambda x: (x - neighbours[1]) / (point_d - neighbours[1])
-            integrandRight = lambda x: pce_poly_1d(function_info.ppfs[d](x)) * hatFunctionRight(x)
-            integralRight = integrate.fixed_quad(integrandRight, max(0, point_d), min(1, neighbours[1]), n=7)[0]
-        return integralLeft + integralRight
-
-    def standard_hatfunction1D(u):
-        return [max(1 - abs(ui), 0) for ui in u]
-
-    def hatfunction_level1D_position(u, l, x):
-        return standard_hatfunction1D((u - x) / float(2) ** (-l))
-
-    f = function_info.function_unitCube
-    a = np.array([0 for d in range(function_info.dim)])
-    b = np.array([1 for d in range(function_info.dim)])
-    if adaptive:
-        errorOperator = ErrorCalculatorSingleDimVolumeGuided()
-        grid = GlobalTrapezoidalGrid(a=a, b=b, modified_basis = not boundary, boundary=boundary)
-        operation = Integration(f=f, grid=grid, dim=function_info.dim)
-        combiObject = StandardCombi(a, b, operation=operation)
-        combiObject = SpatiallyAdaptiveSingleDimensions2(np.ones(function_info.dim) * a, np.ones(function_info.dim) * b, operation=operation, margin=0.8)
-        tolerance = 0
-        plotting = False
-        if function_info.dim > 3:
-            maxim_level = 2
-        else:
-            maxim_level = 3
-        combiObject.performSpatiallyAdaptiv(1, maxim_level, errorOperator, tol=tolerance, do_plot=plotting,
-                                            max_evaluations=max_evals)
-        #combiObject.draw_refinement()
-        combiObject.print_resulting_combi_scheme(markersize=5)
-        print(operation.integral)
-        dictIntegrals_adaptive = {}
-        dictEvaluations = {}
-
-        #for adaptive
-        def getNeighbours(combiObject, coordinates1d, x):
-            if coordinates1d[0] > 0:
-                print("leftest: ", coordinates1d[0])
-            left_right = [0, 1]
-            index = np.where(coordinates1d == x)[0][0]
-            if not (index == 0):
-                left_right[0] = coordinates1d[index - 1]
-            if not (index == len(coordinates1d) - 1):
-                left_right[1] = coordinates1d[index + 1]
-            return left_right
-
-    else:
-        grid = TrapezoidalGrid(a=np.array([0 for d in range(function_info.dim)]), b=np.array([1 for d in range(function_info.dim)]), modified_basis=not boundary, boundary=boundary)
-        operation = Integration(f=f, grid=grid, dim=function_info.dim)
-        combiObject = StandardCombi(a=np.array([0 for d in range(function_info.dim)]), b=np.array([1 for d in range(function_info.dim)]), operation=operation)
-        minimum_level = 1
-        combiObject.perform_operation(minimum_level, maximum_level)
-        print("expectation: ", operation.integral)
-        dictIntegrals_not_adaptive = {}
-        dictEvaluations = {}
-
-    # extract the onedimensional orthogonal polynomials and order them in the same way chaospy does
-    number_points = combiObject.get_total_num_points()
-    expansion = chaospy.generate_expansion(polynomial_degrees, function_info.joint_distributions, normed=True)
-    pce_polys_1D = [None] * function_info.dim
-    for d in range(function_info.dim):
-        pce_polys_1D[d] = chaospy.expansion.stieltjes(polynomial_degrees, function_info.distributions[d], normed=True)
-    indices = numpoly.glexindex(start=0, stop=polynomial_degrees + 1, dimensions=function_info.dim,
-                                graded=True, reverse=True,
-                                cross_truncation=1.0)
-    polys = [None] * len(indices)
-    for i in range(len(indices)):
-        polys[i] = [pce_polys_1D[d][indices[i][d]] for d in range(function_info.dim)]
-
-    cn = [np.zeros(function_info.function.output_length()) for _ in polys]
-    for n, pce_poly in enumerate(polys):
-        for component_grid in combiObject.scheme:
-            if adaptive:
-                gridPointCoordsAsStripes, grid_point_levels, children_indices = combiObject.get_point_coord_for_each_dim(
-                    component_grid.levelvector)
-                points = combiObject.get_points_component_grid(component_grid.levelvector)
-                keyLevelvector = component_grid.levelvector
-                if keyLevelvector in dictEvaluations:
-                    evals = dictEvaluations[keyLevelvector]
-                else:
-                    evals = [function_info.function_unitCube(poin) for poin in points]
-                    dictEvaluations[keyLevelvector] = evals
-                integralCompGrid = 0
-            else:
-                points = combiObject.get_points_component_grid(component_grid.levelvector)
-                keyLevelvector = tuple(component_grid.levelvector.tolist())
-                if keyLevelvector in dictEvaluations:
-                    evals = dictEvaluations[keyLevelvector]
-                else:
-                    evals = combiObject(points)
-                    dictEvaluations[keyLevelvector] = evals
-                integralCompGrid = 0
-            for i, point in enumerate(points):
-                product = 1
-                for d in range(0, function_info.dim):
-                    if adaptive:
-                        neighbours = getNeighbours(combiObject, gridPointCoordsAsStripes[d], point[d])
-                        if (point[d], tuple(neighbours), indices[n][
-                            d], d) in dictIntegrals_adaptive:
-                            onedimensionalIntegral = dictIntegrals_adaptive[(point[d], tuple(neighbours), indices[n][d], d)]
-                        else:
-                            onedimensionalIntegral = computeIntegral(point[d],
-                                                                     neighbours, function_info.distributions[d],
-                                                                     pce_poly[d], d)
-                            dictIntegrals_adaptive[(point[d], tuple(neighbours), indices[n][d], d)] = onedimensionalIntegral
-                    else:
-                        if (point[d], component_grid.levelvector[d], indices[n][
-                            d], d) in dictIntegrals_not_adaptive:
-                            onedimensionalIntegral = dictIntegrals_not_adaptive[
-                                (point[d], component_grid.levelvector[d], indices[n][d], d)]
-                        else:
-                            neighbours = [max(0, point[d]-float(2)**(-component_grid.levelvector[d])), min(1, point[d]+float(2)**(-component_grid.levelvector[d]))]
-                            onedimensionalIntegral = computeIntegral(point[d], neighbours, function_info.distributions[d], pce_poly[d], d)
-                            dictIntegrals_not_adaptive[
-                                (point[d], component_grid.levelvector[d], indices[n][d], d)] = onedimensionalIntegral
-                    product = product * onedimensionalIntegral
-                integralCompGrid = integralCompGrid + product * evals[i]
-            cn[n] = cn[n] + component_grid.coefficient * integralCompGrid
-
-    expected, variance, first_order_sobol_indices = calculate_MeanVarianceSobol(cn, polynomial_degrees, function_info.dim)
-    print("variance: ", variance)
-    if store_result and not time_Series:
-        entry = (number_points, expected, variance, *first_order_sobol_indices)
-        storeResult(entry, 6 if adaptive else 5, function_info)
-    if time_Series:
-        plot_Times_series(function_info, variance, expected, first_order_sobol_indices)
-
+# # Var 3
+# #compute gPCE coefficients analytically on a piecewise linear interpolant constructed with standard CT or the single dimension refinement strategy
+# def analytica_integration_with_surrogate(model, param_names, dists, dim, a, b,
+#                              surrogate_model_of_interest="gPCE", plotting=False,
+#                              writing_results_to_a_file=False, outputModelDir="./", gridName="Trapezoidal",
+#                              lmax=2, max_evals=2000, tolerance=10 ** -5, modified_basis=False,
+#                              boundary_points=False, spatiallyAdaptive=False, p=6,
+#                              build_sg_for_e_and_var=True, parallelIntegrator=False, **kwargs):
+#
+#    #compute the one-dimensional integral
+#     def computeIntegral(point_d, neighbours, distributions_d, pce_poly_1d, d):
+#         if point_d <= 0 or max(0, neighbours[0]) >= min(1, point_d):
+#             integralLeft = 0
+#         elif (not boundary) and neighbours[0] == 0:
+#             hatFunctionLeft = lambda x: 1
+#             integrandLeft = lambda x: pce_poly_1d(function_info.ppfs[d](x)) * hatFunctionLeft(x)
+#             integralLeft = integrate.fixed_quad(integrandLeft, max(0, neighbours[0]), min(1, point_d), n=7)[0]
+#         else:
+#             hatFunctionLeft = lambda x: (x - neighbours[0]) / (point_d - neighbours[0])
+#             integrandLeft = lambda x: pce_poly_1d(function_info.ppfs[d](x)) * hatFunctionLeft(x)
+#             integralLeft = integrate.fixed_quad(integrandLeft, max(0, neighbours[0]), min(1, point_d), n=7)[0]
+#         if point_d >= 1 or max(0, point_d) >= min(1, neighbours[1]):
+#             integralRight = 0
+#         elif (not boundary) and neighbours[1] == 1:
+#             hatFunctionRight = lambda x: 1
+#             integrandRight = lambda x: pce_poly_1d(function_info.ppfs[d](x)) * hatFunctionRight(x)
+#             integralRight = integrate.fixed_quad(integrandRight, max(0, point_d), min(1, neighbours[1]), n=7)[0]
+#         else:
+#             hatFunctionRight = lambda x: max(0,((x - neighbours[1]) / (point_d - neighbours[1]))[0])
+#             hatFunctionRight = lambda x: (x - neighbours[1]) / (point_d - neighbours[1])
+#             integrandRight = lambda x: pce_poly_1d(function_info.ppfs[d](x)) * hatFunctionRight(x)
+#             integralRight = integrate.fixed_quad(integrandRight, max(0, point_d), min(1, neighbours[1]), n=7)[0]
+#         return integralLeft + integralRight
+#
+#     def standard_hatfunction1D(u):
+#         return [max(1 - abs(ui), 0) for ui in u]
+#
+#     def hatfunction_level1D_position(u, l, x):
+#         return standard_hatfunction1D((u - x) / float(2) ** (-l))
+#
+#     f = function_info.function_unitCube
+#     a = np.array([0 for d in range(function_info.dim)])
+#     b = np.array([1 for d in range(function_info.dim)])
+#     if adaptive:
+#         errorOperator = ErrorCalculatorSingleDimVolumeGuided()
+#         grid = GlobalTrapezoidalGrid(a=a, b=b, modified_basis = not boundary, boundary=boundary)
+#         operation = Integration(f=f, grid=grid, dim=function_info.dim)
+#         combiObject = StandardCombi(a, b, operation=operation)
+#         combiObject = SpatiallyAdaptiveSingleDimensions2(np.ones(function_info.dim) * a, np.ones(function_info.dim) * b, operation=operation, margin=0.8)
+#         tolerance = 0
+#         plotting = False
+#         if function_info.dim > 3:
+#             maxim_level = 2
+#         else:
+#             maxim_level = 3
+#         combiObject.performSpatiallyAdaptiv(1, maxim_level, errorOperator, tol=tolerance, do_plot=plotting,
+#                                             max_evaluations=max_evals)
+#         #combiObject.draw_refinement()
+#         combiObject.print_resulting_combi_scheme(markersize=5)
+#         print(operation.integral)
+#         dictIntegrals_adaptive = {}
+#         dictEvaluations = {}
+#
+#         #for adaptive
+#         def getNeighbours(combiObject, coordinates1d, x):
+#             if coordinates1d[0] > 0:
+#                 print("leftest: ", coordinates1d[0])
+#             left_right = [0, 1]
+#             index = np.where(coordinates1d == x)[0][0]
+#             if not (index == 0):
+#                 left_right[0] = coordinates1d[index - 1]
+#             if not (index == len(coordinates1d) - 1):
+#                 left_right[1] = coordinates1d[index + 1]
+#             return left_right
+#
+#     else:
+#         grid = TrapezoidalGrid(a=np.array([0 for d in range(function_info.dim)]), b=np.array([1 for d in range(function_info.dim)]), modified_basis=not boundary, boundary=boundary)
+#         operation = Integration(f=f, grid=grid, dim=function_info.dim)
+#         combiObject = StandardCombi(a=np.array([0 for d in range(function_info.dim)]), b=np.array([1 for d in range(function_info.dim)]), operation=operation)
+#         minimum_level = 1
+#         combiObject.perform_operation(minimum_level, maximum_level)
+#         print("expectation: ", operation.integral)
+#         dictIntegrals_not_adaptive = {}
+#         dictEvaluations = {}
+#
+#     # extract the onedimensional orthogonal polynomials and order them in the same way chaospy does
+#     number_points = combiObject.get_total_num_points()
+#     expansion = chaospy.generate_expansion(polynomial_degrees, function_info.joint_distributions, normed=True)
+#     pce_polys_1D = [None] * function_info.dim
+#     for d in range(function_info.dim):
+#         pce_polys_1D[d] = chaospy.expansion.stieltjes(polynomial_degrees, function_info.distributions[d], normed=True)
+#     indices = numpoly.glexindex(start=0, stop=polynomial_degrees + 1, dimensions=function_info.dim,
+#                                 graded=True, reverse=True,
+#                                 cross_truncation=1.0)
+#     polys = [None] * len(indices)
+#     for i in range(len(indices)):
+#         polys[i] = [pce_polys_1D[d][indices[i][d]] for d in range(function_info.dim)]
+#
+#     cn = [np.zeros(function_info.function.output_length()) for _ in polys]
+#     for n, pce_poly in enumerate(polys):
+#         for component_grid in combiObject.scheme:
+#             if adaptive:
+#                 gridPointCoordsAsStripes, grid_point_levels, children_indices = combiObject.get_point_coord_for_each_dim(
+#                     component_grid.levelvector)
+#                 points = combiObject.get_points_component_grid(component_grid.levelvector)
+#                 keyLevelvector = component_grid.levelvector
+#                 if keyLevelvector in dictEvaluations:
+#                     evals = dictEvaluations[keyLevelvector]
+#                 else:
+#                     evals = [function_info.function_unitCube(poin) for poin in points]
+#                     dictEvaluations[keyLevelvector] = evals
+#                 integralCompGrid = 0
+#             else:
+#                 points = combiObject.get_points_component_grid(component_grid.levelvector)
+#                 keyLevelvector = tuple(component_grid.levelvector.tolist())
+#                 if keyLevelvector in dictEvaluations:
+#                     evals = dictEvaluations[keyLevelvector]
+#                 else:
+#                     evals = combiObject(points)
+#                     dictEvaluations[keyLevelvector] = evals
+#                 integralCompGrid = 0
+#             for i, point in enumerate(points):
+#                 product = 1
+#                 for d in range(0, function_info.dim):
+#                     if adaptive:
+#                         neighbours = getNeighbours(combiObject, gridPointCoordsAsStripes[d], point[d])
+#                         if (point[d], tuple(neighbours), indices[n][
+#                             d], d) in dictIntegrals_adaptive:
+#                             onedimensionalIntegral = dictIntegrals_adaptive[(point[d], tuple(neighbours), indices[n][d], d)]
+#                         else:
+#                             onedimensionalIntegral = computeIntegral(point[d],
+#                                                                      neighbours, function_info.distributions[d],
+#                                                                      pce_poly[d], d)
+#                             dictIntegrals_adaptive[(point[d], tuple(neighbours), indices[n][d], d)] = onedimensionalIntegral
+#                     else:
+#                         if (point[d], component_grid.levelvector[d], indices[n][
+#                             d], d) in dictIntegrals_not_adaptive:
+#                             onedimensionalIntegral = dictIntegrals_not_adaptive[
+#                                 (point[d], component_grid.levelvector[d], indices[n][d], d)]
+#                         else:
+#                             neighbours = [max(0, point[d]-float(2)**(-component_grid.levelvector[d])), min(1, point[d]+float(2)**(-component_grid.levelvector[d]))]
+#                             onedimensionalIntegral = computeIntegral(point[d], neighbours, function_info.distributions[d], pce_poly[d], d)
+#                             dictIntegrals_not_adaptive[
+#                                 (point[d], component_grid.levelvector[d], indices[n][d], d)] = onedimensionalIntegral
+#                     product = product * onedimensionalIntegral
+#                 integralCompGrid = integralCompGrid + product * evals[i]
+#             cn[n] = cn[n] + component_grid.coefficient * integralCompGrid
+#
+#     expected, variance, first_order_sobol_indices = calculate_MeanVarianceSobol(cn, polynomial_degrees, function_info.dim)
+#     print("variance: ", variance)
+#     if store_result and not time_Series:
+#         entry = (number_points, expected, variance, *first_order_sobol_indices)
+#         storeResult(entry, 6 if adaptive else 5, function_info)
+#     if time_Series:
+#         plot_Times_series(function_info, variance, expected, first_order_sobol_indices)
+#
 
 # Var 4
-def compute_gpce_sparsespace(model, param_names, dists, dim, a, b,
-                             surrogate_model_of_interest="gPCE", plotting=False,
-                             writing_results_to_a_file=False, outputModelDir="./", gridName="Trapezoidal",
-                             lmax=2, max_evals=2000, tolerance=10 ** -5, modified_basis=False,
-                             boundary_points=False, spatiallyAdaptive=False, p=6,
+def compute_gpce_sparsespace(model, param_names, dists, dim, a, b, surrogate_model_of_interest="gPCE", plotting=False,
+                             writing_results_to_a_file=False, outputModelDir="./", gridName="Trapezoidal", lmin=1,
+                             lmax=2, max_evals=2000, tolerance=10 ** -2, modified_basis=False, boundary_points=False,
+                             spatiallyAdaptive=False, grid_surplusses=None, norm_spatiallyAdaptive=np.inf, p=6,
                              build_sg_for_e_and_var=True, parallelIntegrator=False, **kwargs):
     """
     Var 4 - This method relies on current implementation of UncertaintyQuantification Operation in SparseSpACE
@@ -842,7 +850,7 @@ def compute_gpce_sparsespace(model, param_names, dists, dim, a, b,
 
     if parallelIntegrator:
         print(f"==VAR4: Parallel Integration is being used")
-        grid.integrator = IntegratorParallelArbitraryGrid(grid)  # TODO
+        grid.integrator = IntegratorParallelArbitraryGrid(grid)
 
     # The grid initialization requires the weight functions from the
     # operation; since currently the adaptive refinement takes the grid from
@@ -859,7 +867,13 @@ def compute_gpce_sparsespace(model, param_names, dists, dim, a, b,
 
     if spatiallyAdaptive:
         errorOperator = ErrorCalculatorSingleDimVolumeGuided()
-        combiinstance = SpatiallyAdaptiveSingleDimensions2(a, b, operation=operation,  norm=2, margin=0.8, grid_surplusses=grid)
+        if grid_surplusses is None:
+            # default grid_surplusses = GlobalTrapezoidalGrid
+            combiinstance = SpatiallyAdaptiveSingleDimensions2(a, b, margin=0.8, operation=operation,
+                                                               norm=norm_spatiallyAdaptive)
+        else:
+            combiinstance = SpatiallyAdaptiveSingleDimensions2(a, b, margin=0.8, operation=operation,
+                                                               norm=norm_spatiallyAdaptive, grid_surplusses=grid)
     else:
         # combiinstance = StandardCombi(np.ones(dim) * a, np.ones(dim) * b, operation=operation, norm=2)
         combiinstance = StandardCombi(a, b, operation=operation, norm=2)  # Markus
@@ -882,12 +896,12 @@ def compute_gpce_sparsespace(model, param_names, dists, dim, a, b,
         #     lmax = 2
         # else:
         #     lmax = 3
-        combiinstance.performSpatiallyAdaptiv(1, lmax, errorOperator, tol=tolerance, do_plot=plotting,
+        combiinstance.performSpatiallyAdaptiv(lmin, lmax, errorOperator, tol=tolerance, do_plot=plotting,
                                                                max_evaluations=max_evals)
         # print("integral: ", operation.integral)
     else:
         minimum_level = 1  # Markus
-        combiinstance.perform_operation(1, lmax)
+        combiinstance.perform_operation(lmin, lmax)
         # combiinstance.perform_operation(minimum_level, lmax+1, model)  # Markus
     end_time_building_sg_surrogate = time.time()
     time_building_sg_surrogate = end_time_building_sg_surrogate - start_time_building_sg_surrogate
@@ -998,7 +1012,7 @@ def main_routine(model, current_output_folder, **kwargs):
 
     # default values, most likely will be overwritten later on based on settings for each model
     can_model_evaluate_all_vector_nodes = False  # set to True if eval_vectorized is implemented,
-    # though it is always inherited from sparseSpACE.Funnction Base class
+    # though it is always inherited from sparseSpACE.Function Base class
     inputModelDir = None
     outputModelDir = None
     config_file = None
@@ -1258,8 +1272,19 @@ def main_routine(model, current_output_folder, **kwargs):
     # Running the SG Simulation
     #####################################
 
-    variant = 1
+    variant = 2
     dictionary_with_inf_about_the_run["variant"] = variant
+
+    surrogate_model_of_interest = "sg"  # "gpce"  # "gPCE"  or "sg" this is relevant when sg surrogate is indeed computed, i.e., variant == 2 or 3 or 4
+    if variant == 1:
+        surrogate_model_of_interest = "gpce"
+    dictionary_with_inf_about_the_run["surrogate_model_of_interest"] = surrogate_model_of_interest
+
+    if surrogate_model_of_interest.lower() == "gpce":
+        # we are always building gPCE in a 'unit'/'standard' domain
+        sampleFromStandardDist_when_evaluating_surrogate = True
+    else:
+        sampleFromStandardDist_when_evaluating_surrogate = False
 
     writing_results_to_a_file = True
     plotting = True  # True
@@ -1267,7 +1292,7 @@ def main_routine(model, current_output_folder, **kwargs):
     # parameters for chaopsy quadrature, similar setup to uqef(pp)...
     quadrature_rule = 'c'
     sparse = True
-    q_order = 8 #5
+    q_order = 5 #5
     p_order = 4 #4  # 7
     poly_rule = "three_terms_recurrence"  # "gram_schmidt" | "three_terms_recurrence" | "cholesky"
     poly_normed = False  # True
@@ -1280,17 +1305,6 @@ def main_routine(model, current_output_folder, **kwargs):
     # path_to_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/sparse_grid_nodes_weights")
     l = 10
     parameters_file_name = path_to_file / f"KPU_d{dim}_l{l}.asc" # f"KPU_d3_l{l}.asc"
-
-    surrogate_model_of_interest = "gpce" #"gPCE"  # "sg"  this is relevant when sg surrogate is indeed computed, i.e., variant == 2 or 3 or 4
-    if variant == 1:
-        surrogate_model_of_interest = "gpce"
-    dictionary_with_inf_about_the_run["surrogate_model_of_interest"] = surrogate_model_of_interest
-
-    if surrogate_model_of_interest.lower() == "gpce":
-        # we are always building gPCE in a 'unit'/'standard' domain
-        sampleFromStandardDist_when_evaluating_surrogate = True
-    else:
-        sampleFromStandardDist_when_evaluating_surrogate = False
 
     dictionary_with_sg_setup = dict()
 
@@ -1309,9 +1323,9 @@ def main_routine(model, current_output_folder, **kwargs):
             dictionary_with_sg_setup["parameters_file_name"] = str(parameters_file_name)
             if parameters_setup_file_name is not None:
                 dictionary_with_sg_setup["parameters_setup_file_name"] = str(parameters_setup_file_name)
-        dictionary_with_inf_about_the_run["dictionary_with_sg_setup"] = dictionary_with_sg_setup
     elif variant == 4:
         dictionary_with_sg_setup["p_order"] = p_order
+    dictionary_with_inf_about_the_run["dictionary_with_sg_setup"] = dictionary_with_sg_setup
 
     if variant == 1:
         # Var 1 #
@@ -1334,15 +1348,21 @@ def main_routine(model, current_output_folder, **kwargs):
 
     if variant == 2 or variant == 3 or variant == 4:
         # Var 2 | Var 3 | Var 4 - parameters for SparseSpACE
-        gridName = "TrapezoidalWeighted"  # "Trapezoidal"
-        lmax = 2  # 4
-        max_evals = 10000  # 4000
-        tolerance = 10 ** -5  # or tolerance = 10 ** -20
+        gridName = "TrapezoidalWeighted"  # "Trapezoidal" | "TrapezoidalWeighted" | "BSpline_p3" | "Leja"
+        lmin = 2
+        lmax = 4  # 4
+        max_evals = 100000  # 4000
+        tolerance = 10 ** -2  # or tolerance = 10 ** -20
         modified_basis = False
         boundary_points = True
         spatiallyAdaptive = True
 
+        # these configuration parameters make sense when spatiallyAdaptive = True
+        grid_surplusses = "grid"  # None | "grid"
+        norm_spatiallyAdaptive = np.inf  # 2 | np.inf
+
         dictionary_with_inf_about_the_run["gridName"] = gridName
+        dictionary_with_inf_about_the_run["lmin"] = lmin
         dictionary_with_inf_about_the_run["lmax"] = lmax
         dictionary_with_inf_about_the_run["max_evals"] = max_evals
         dictionary_with_inf_about_the_run["tolerance"] = tolerance
@@ -1364,10 +1384,13 @@ def main_routine(model, current_output_folder, **kwargs):
                                                    b=b, surrogate_model_of_interest=surrogate_model_of_interest,
                                                    plotting=plotting,
                                                    writing_results_to_a_file=writing_results_to_a_file,
-                                                   outputModelDir=outputModelDir, gridName=gridName, lmax=lmax,
-                                                   max_evals=max_evals, tolerance=tolerance,
+                                                   outputModelDir=outputModelDir, gridName=gridName,
+                                                   lmin=lmin, lmax=lmax, max_evals=max_evals, tolerance=tolerance,
                                                    modified_basis=modified_basis, boundary_points=boundary_points,
-                                                   spatiallyAdaptive=spatiallyAdaptive, rule=quadrature_rule,
+                                                   spatiallyAdaptive=spatiallyAdaptive,
+                                                   grid_surplusses=grid_surplusses,
+                                                   norm_spatiallyAdaptive=norm_spatiallyAdaptive,
+                                                   rule=quadrature_rule,
                                                    sparse=sparse_quadrature, q=q_order, p=p_order, poly_rule=poly_rule,
                                                    poly_normed=poly_normed,
                                                    sampleFromStandardDist=sampleFromStandardDist,
@@ -1400,18 +1423,20 @@ def main_routine(model, current_output_folder, **kwargs):
         dictionary_with_inf_about_the_run["parallelIntegrator"] = parallelIntegrator
 
         combiinstance, gPCE, approximated_mean, approximated_var, first_order_sobol_indices, total_order_sobol_indices = \
-            compute_gpce_sparsespace(
-                model=problem_function, param_names=param_names, dists=distributionsForSparseSpace,
-                dim=dim, a=a, b=b, surrogate_model_of_interest=surrogate_model_of_interest,
-                plotting=plotting, writing_results_to_a_file=writing_results_to_a_file,
-                outputModelDir=outputModelDir, gridName=gridName, lmax=lmax, max_evals=max_evals,
-                tolerance=tolerance, modified_basis=modified_basis, boundary_points=boundary_points,
-                spatiallyAdaptive=spatiallyAdaptive, p=p_order,
-                build_sg_for_e_and_var=build_sg_for_e_and_var,
-                parallelIntegrator=parallelIntegrator,
-                compute_mean=compute_mean, compute_var=compute_var,
-                compute_Sobol_m=compute_Sobol_m, compute_Sobol_t=compute_Sobol_t
-            )
+            compute_gpce_sparsespace(model=problem_function, param_names=param_names, dists=distributionsForSparseSpace,
+                                     dim=dim, a=a, b=b, surrogate_model_of_interest=surrogate_model_of_interest,
+                                     plotting=plotting, writing_results_to_a_file=writing_results_to_a_file,
+                                     outputModelDir=outputModelDir, gridName=gridName,
+                                     lmin=lmin, lmax=lmax, max_evals=max_evals, tolerance=tolerance,
+                                     modified_basis=modified_basis, boundary_points=boundary_points,
+                                     spatiallyAdaptive=spatiallyAdaptive,
+                                     grid_surplusses=grid_surplusses,
+                                     norm_spatiallyAdaptive=norm_spatiallyAdaptive,
+                                     p=p_order,
+                                     build_sg_for_e_and_var=build_sg_for_e_and_var,
+                                     parallelIntegrator=parallelIntegrator, compute_mean=compute_mean,
+                                     compute_var=compute_var, compute_Sobol_m=compute_Sobol_m,
+                                     compute_Sobol_t=compute_Sobol_t)
         if not build_sg_for_e_and_var and surrogate_model_of_interest.lower() == "gpce":
             surrogate_model = gPCE
         else:
@@ -1438,6 +1463,7 @@ def main_routine(model, current_output_folder, **kwargs):
         dictionary_with_inf_about_the_run["comparison_surrogate_vs_model_mc_rule"] = mc_rule_for_checking
         dictionary_with_inf_about_the_run["comparison_surrogate_vs_model_error_type"] = error_type
 
+        # TODO Experiment with different sampling strategies
         if sampleFromStandardDist:
             mc_nodes = joinedStandardDists.sample(size=numSamples_for_checking, rule=mc_rule_for_checking).round(4)
             mc_nodes = np.array(mc_nodes)
@@ -1495,6 +1521,7 @@ def main_routine(model, current_output_folder, **kwargs):
         #       f"\n type(problem_function) - {type(problem_function)};")
         # print(f"type true_model_evaluations : {type(true_model_evaluations)}; shape {true_model_evaluations.shape}")
 
+        # when surrogate_model_of_interest == "sg" or "combiinstance" this will produce interpolation error like in Obi's paper
         # error_l1 = None
         # error_l2 = None
         # if error_type == "max" or error_type == "l1" or error_type == "L1":
@@ -1691,10 +1718,12 @@ if __name__ == "__main__":
     # current_output_folder = "sg_gaussian_3d_p9_q12_poly_normed"  # "sg_ss_ct_modified_var2_l_2_p_4_q_5_max_2000"
     # current_output_folder = "var2_sg_trap_ct_boundery_l_4_p_4_q_5_max_4000"  # "sg_ss_ct_modified_var2_l_2_p_4_q_5_max_2000"
     # current_output_folder = "var4_ct_trap_adaptive_boundary_modified_l_2_max_4000_saved_aniso"  # "sg_ss_ct_modified_var2_l_2_p_4_q_5_max_2000"
-    current_output_folder = "sg_cc_5d_l2_sparse_p4_q8_saved_aniso"
+    # current_output_folder = "sg_cc_5d_l2_sparse_p4_q8_saved_aniso"
+    current_output_folder = "va2_combi_trapweighted_boundary_nonmodif_adaptive_norm2_lmin2_lmax_4_maxeval_105_tol102"
 
     start_time = time.time()
 
+    # TODO Change for Genz that this is executed in this way whenever user wants that
     if number_of_functions > 1:
         if model in list_of_genz_functions:
             # Hard-coded
