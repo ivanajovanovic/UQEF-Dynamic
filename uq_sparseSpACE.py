@@ -135,7 +135,7 @@ def _read_nodes_weights_dist_from_file(parameters_file_name, parameters_setup_fi
         jointDistOfNodesFromFile = cp.J(*distsOfNodesFromFile)
     else:
         distsOfNodesFromFile = []
-        # by default, assumption is that read nodes have Uniform(0,1) distribution
+        # Hard-coded by default, assumption is that read nodes have Uniform(0,1) distribution
         for _ in range(dim):
             distsOfNodesFromFile.append(cp.Uniform())
             # distsOfNodesFromFile.append(cp.Uniform(lower=0.0, upper=1.0))
@@ -310,7 +310,7 @@ def compute_gpce_chaospy(model, param_names, dists, joint, jointStandard, dim, a
     if can_model_evaluate_all_vector_nodes:
         evaluations = model(parameters.T)
     else:
-        evaluations = np.array([model(parameter) for parameter in parameters.T])
+        evaluations = np.array([model(parameter) for parameter in parameters.T])  # TODO maybe this is problematic!!!
     end_time_model_evaluations = time.time()
 
     time_model_evaluations = end_time_model_evaluations - start_time_model_evaluations
@@ -392,10 +392,11 @@ def compute_surrogate_sparsespace_and_gpce(model, param_names, dists, joint, joi
                                            writing_results_to_a_file=False, outputModelDir="./", gridName="Trapezoidal",
                                            lmin=1, lmax=2, max_evals=2000, tolerance=10 ** -2, modified_basis=False,
                                            boundary_points=False, spatiallyAdaptive=False, grid_surplusses=None,
-                                           norm_spatiallyAdaptive=np.inf, rule='gaussian', sparse=False, q=7, p=6,
-                                           poly_rule="three_terms_recurrence", poly_normed=False,
-                                           sampleFromStandardDist=False, can_model_evaluate_all_vector_nodes=False,
-                                           vector_model_output=False, read_nodes_from_file=False, **kwargs):
+                                           norm_spatiallyAdaptive=np.inf, rebalancing=True, rule='gaussian',
+                                           sparse=False, q=7, p=6, poly_rule="three_terms_recurrence",
+                                           poly_normed=False, sampleFromStandardDist=False,
+                                           can_model_evaluate_all_vector_nodes=True, vector_model_output=False,
+                                           read_nodes_from_file=False, **kwargs):
     """
     Var 2 - Compute gPCE coefficients by integrating the (SG) surrogate
     SG surrogate computed based on SparseSpACE
@@ -407,6 +408,7 @@ def compute_surrogate_sparsespace_and_gpce(model, param_names, dists, joint, joi
              'PSP with surrogate, using Bsplines with degree 13, adaptive'
     gPCE coefficients - chaospy
       - the same set of options for chaospy.Quadrature as in compute_gpce_chaospy
+    can_model_evaluate_all_vector_nodes - refers to combiinstance, in the second step when building gPCE, seems as hast to be set to True
     """
     print(f"\n==VAR2: gPCE with Sparse surrogate==")
 
@@ -424,8 +426,11 @@ def compute_surrogate_sparsespace_and_gpce(model, param_names, dists, joint, joi
         if gridName == 'BSpline_p3':
             p_bsplines = kwargs.get('p_bsplines', 3)
             grid = GlobalBSplineGrid(a=a, b=b, modified_basis=modified_basis, boundary=boundary_points, p=p_bsplines)
-        elif gridName == 'TrapezoidalWeighted':
-            grid = GlobalTrapezoidalGridWeighted(a=a, b=b, modified_basis=modified_basis, boundary=boundary_points)
+        # elif gridName == 'TrapezoidalWeighted':
+        #     distributionsForSparseSpace =
+        #     operation_uq = UncertaintyQuantification(f=model, distributions=distributionsForSparseSpace, a=a, b=b, dim=dim)
+        #     grid = GlobalTrapezoidalGridWeighted(a=a, b=b, uq_operation=operation_uq,
+        #                                          modified_basis=modified_basis, boundary=boundary_points)
         else:
             grid = GlobalTrapezoidalGrid(a=a, b=b, modified_basis=modified_basis, boundary=boundary_points)
     else:
@@ -439,6 +444,7 @@ def compute_surrogate_sparsespace_and_gpce(model, param_names, dists, joint, joi
 
     # TODO Ask Obi - Integration is the same as Interpolation???
     operation = Integration(f=model, grid=grid, dim=dim)  # there is Interpolation(Integration)
+    # operation_uq.set_grid(grid)
 
     if spatiallyAdaptive:
         errorOperator = ErrorCalculatorSingleDimVolumeGuided()
@@ -450,10 +456,10 @@ def compute_surrogate_sparsespace_and_gpce(model, param_names, dists, joint, joi
         if grid_surplusses is None:
             # default grid_surplusses = GlobalTrapezoidalGrid
             combiinstance = SpatiallyAdaptiveSingleDimensions2(a, b, margin=0.8, operation=operation,
-                                                               norm=norm_spatiallyAdaptive)
+                                                               norm=norm_spatiallyAdaptive, rebalancing=rebalancing)
         else:
             combiinstance = SpatiallyAdaptiveSingleDimensions2(a, b, margin=0.8, operation=operation,
-                                                               norm=norm_spatiallyAdaptive, grid_surplusses=grid)
+                                                               norm=norm_spatiallyAdaptive, rebalancing=rebalancing, grid_surplusses=grid)
 
         # combiinstance = SpatiallyAdaptiveSingleDimensions2(a, b, margin=0.8, operation=operation, norm=2, grid_surplusses=grid)
         # combiinstance = SpatiallyAdaptiveSingleDimensions2(a, b, margin=0.8, operation=operation, norm=np.inf, grid_surplusses=grid)
@@ -573,9 +579,11 @@ def compute_surrogate_sparsespace_and_gpce(model, param_names, dists, joint, joi
         # TODO Parallelization of this part is the main benefit of UQEF for complex models
         # TODO This is different from Ionut's paper where SG surrogate model is build for [0,1]^d
         start_time_model_evaluations = time.time()
+        can_model_evaluate_all_vector_nodes = True
         if can_model_evaluate_all_vector_nodes:
             evaluations = combiinstance(parameters.T)
         else:
+            # TODO This won't work!
             evaluations = np.array([combiinstance(parameter) for parameter in parameters.T])
         end_time_model_evaluations = time.time()
 
@@ -804,8 +812,8 @@ def compute_surrogate_sparsespace_and_gpce(model, param_names, dists, joint, joi
 def compute_gpce_sparsespace(model, param_names, dists, dim, a, b, surrogate_model_of_interest="gPCE", plotting=False,
                              writing_results_to_a_file=False, outputModelDir="./", gridName="Trapezoidal", lmin=1,
                              lmax=2, max_evals=2000, tolerance=10 ** -2, modified_basis=False, boundary_points=False,
-                             spatiallyAdaptive=False, grid_surplusses=None, norm_spatiallyAdaptive=np.inf, p=6,
-                             build_sg_for_e_and_var=True, parallelIntegrator=False, **kwargs):
+                             spatiallyAdaptive=False, grid_surplusses=None, norm_spatiallyAdaptive=np.inf,
+                             rebalancing=True, p=6, build_sg_for_e_and_var=True, parallelIntegrator=False, **kwargs):
     """
     Var 4 - This method relies on current implementation of UncertaintyQuantification Operation in SparseSpACE
     If build_sg_for_e_and_var == True
@@ -831,12 +839,14 @@ def compute_gpce_sparsespace(model, param_names, dists, dim, a, b, surrogate_mod
     # problem_function = model
     # polynomial_degree_max = p
 
+    operation = UncertaintyQuantification(model, dists, a, b)
+
     if spatiallyAdaptive:
         if gridName == 'BSpline_p3':
             p_bsplines = kwargs.get('p_bsplines', 3)
             grid = GlobalBSplineGrid(a=a, b=b, modified_basis=modified_basis, boundary=boundary_points, p=p_bsplines)
         elif gridName == 'TrapezoidalWeighted':
-            grid = GlobalTrapezoidalGridWeighted(a=a, b=b, modified_basis=modified_basis, boundary=boundary_points)
+            grid = GlobalTrapezoidalGridWeighted(a=a, b=b, uq_operation=operation, modified_basis=modified_basis, boundary=boundary_points)
         else:
             grid = GlobalTrapezoidalGrid(a=a, b=b, modified_basis=modified_basis, boundary=boundary_points)
     else:
@@ -854,8 +864,7 @@ def compute_gpce_sparsespace(model, param_names, dists, dim, a, b, surrogate_mod
 
     # The grid initialization requires the weight functions from the
     # operation; since currently the adaptive refinement takes the grid from
-    # the operation, it has to be passed here
-    operation = UncertaintyQuantification(model, dists, a, b)
+    # the operation, it has to be passed here, though ambiguous what to create first: grid or operation
     operation.set_grid(grid)
 
     # Select the function for which the grid is refined
@@ -870,10 +879,11 @@ def compute_gpce_sparsespace(model, param_names, dists, dim, a, b, surrogate_mod
         if grid_surplusses is None:
             # default grid_surplusses = GlobalTrapezoidalGrid
             combiinstance = SpatiallyAdaptiveSingleDimensions2(a, b, margin=0.8, operation=operation,
-                                                               norm=norm_spatiallyAdaptive)
+                                                               norm=norm_spatiallyAdaptive, rebalancing=rebalancing)
         else:
             combiinstance = SpatiallyAdaptiveSingleDimensions2(a, b, margin=0.8, operation=operation,
-                                                               norm=norm_spatiallyAdaptive, grid_surplusses=grid)
+                                                               norm=norm_spatiallyAdaptive, rebalancing=rebalancing,
+                                                               grid_surplusses=grid)
     else:
         # combiinstance = StandardCombi(np.ones(dim) * a, np.ones(dim) * b, operation=operation, norm=2)
         combiinstance = StandardCombi(a, b, operation=operation, norm=2)  # Markus
@@ -1011,7 +1021,8 @@ def main_routine(model, current_output_folder, **kwargs):
     scratch_dir = cwd  # pathlib.Path("/work/ga45met")
 
     # default values, most likely will be overwritten later on based on settings for each model
-    can_model_evaluate_all_vector_nodes = False  # set to True if eval_vectorized is implemented,
+    # TODO Experiment with this!
+    can_model_evaluate_all_vector_nodes = True  # set to True if eval_vectorized is implemented,
     # though it is always inherited from sparseSpACE.Function Base class
     inputModelDir = None
     outputModelDir = None
@@ -1048,7 +1059,6 @@ def main_routine(model, current_output_folder, **kwargs):
     #     outputModelDir = scratch_dir / "sg_anaysis" / "discontinuous" / current_output_folder
     # elif model=="gaussian":
     #     outputModelDir = scratch_dir / "sg_anaysis" / "gaussian" / current_output_folder
-
 
     outputModelDir.mkdir(parents=True, exist_ok=True)
 
@@ -1088,7 +1098,7 @@ def main_routine(model, current_output_folder, **kwargs):
                 a.append(single_param["lower"])
                 b.append(single_param["upper"])
     else:
-        # TODO manual setup of params, param_names, dim, distributions, a, b; change this eventually
+        # TODO manual setup of params, param_names, dim, distributions, a, b; change this eventually. Hard-coded!
         if model == "ishigami":
             param_names = ["x0", "x1", "x2"]
             a = [-math.pi, -math.pi, -math.pi]
@@ -1272,10 +1282,12 @@ def main_routine(model, current_output_folder, **kwargs):
     # Running the SG Simulation
     #####################################
 
-    variant = 2
+    variant = kwargs.get('variant', 1)
     dictionary_with_inf_about_the_run["variant"] = variant
 
-    surrogate_model_of_interest = "sg"  # "gpce"  # "gPCE"  or "sg" this is relevant when sg surrogate is indeed computed, i.e., variant == 2 or 3 or 4
+    intermediate_surrogate = None
+
+    surrogate_model_of_interest = "gpce"  # "gpce"  # "gPCE"  or "sg" this is relevant when sg surrogate is indeed computed, i.e., variant == 2 or 3 or 4
     if variant == 1:
         surrogate_model_of_interest = "gpce"
     dictionary_with_inf_about_the_run["surrogate_model_of_interest"] = surrogate_model_of_interest
@@ -1290,20 +1302,20 @@ def main_routine(model, current_output_folder, **kwargs):
     plotting = True  # True
 
     # parameters for chaopsy quadrature, similar setup to uqef(pp)...
-    quadrature_rule = 'c'
-    sparse = True
-    q_order = 5 #5
-    p_order = 4 #4  # 7
+    quadrature_rule = kwargs.get('quadrature_rule', 'g')  #'c'
+    sparse = False # True
+    q_order = kwargs.get('q_order', 9) #9 #5
+    p_order = kwargs.get('p_order', 4) #4 #4  # 7
     poly_rule = "three_terms_recurrence"  # "gram_schmidt" | "three_terms_recurrence" | "cholesky"
-    poly_normed = False  # True
-    sparse_quadrature = True  # False
+    poly_normed = kwargs.get('poly_normed', False)   # True
+    sparse_quadrature = kwargs.get('sparse_quadrature', False)  #True  # False
     sampling_rule = "random"  # | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
     sampleFromStandardDist = True
 
-    read_nodes_from_file = False
+    read_nodes_from_file = kwargs.get('read_nodes_from_file', False)  #True
     path_to_file = pathlib.Path("/work/ga45met/sparseSpACE/sparse_grid_nodes_weights")
     # path_to_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/sparse_grid_nodes_weights")
-    l = 10
+    l = kwargs.get('l', 10)
     parameters_file_name = path_to_file / f"KPU_d{dim}_l{l}.asc" # f"KPU_d3_l{l}.asc"
 
     dictionary_with_sg_setup = dict()
@@ -1348,18 +1360,19 @@ def main_routine(model, current_output_folder, **kwargs):
 
     if variant == 2 or variant == 3 or variant == 4:
         # Var 2 | Var 3 | Var 4 - parameters for SparseSpACE
-        gridName = "TrapezoidalWeighted"  # "Trapezoidal" | "TrapezoidalWeighted" | "BSpline_p3" | "Leja"
+        gridName = "Trapezoidal"  # "Trapezoidal" | "TrapezoidalWeighted" | "BSpline_p3" | "Leja"
         lmin = 2
         lmax = 4  # 4
-        max_evals = 100000  # 4000
-        tolerance = 10 ** -2  # or tolerance = 10 ** -20
+        max_evals = 10**5  # 4000
+        tolerance = 10 ** -5  # or tolerance = 10 ** -20
         modified_basis = False
         boundary_points = True
         spatiallyAdaptive = True
+        rebalancing = True
 
         # these configuration parameters make sense when spatiallyAdaptive = True
-        grid_surplusses = "grid"  # None | "grid"
-        norm_spatiallyAdaptive = np.inf  # 2 | np.inf
+        grid_surplusses = "grid"  # None | "grid", Note: when gridName = "Trapezoidal" grid_surplusses=None is okay...
+        norm_spatiallyAdaptive = 2  # 2 | np.inf
 
         dictionary_with_inf_about_the_run["gridName"] = gridName
         dictionary_with_inf_about_the_run["lmin"] = lmin
@@ -1384,12 +1397,12 @@ def main_routine(model, current_output_folder, **kwargs):
                                                    b=b, surrogate_model_of_interest=surrogate_model_of_interest,
                                                    plotting=plotting,
                                                    writing_results_to_a_file=writing_results_to_a_file,
-                                                   outputModelDir=outputModelDir, gridName=gridName,
-                                                   lmin=lmin, lmax=lmax, max_evals=max_evals, tolerance=tolerance,
+                                                   outputModelDir=outputModelDir, gridName=gridName, lmin=lmin,
+                                                   lmax=lmax, max_evals=max_evals, tolerance=tolerance,
                                                    modified_basis=modified_basis, boundary_points=boundary_points,
-                                                   spatiallyAdaptive=spatiallyAdaptive,
-                                                   grid_surplusses=grid_surplusses,
+                                                   spatiallyAdaptive=spatiallyAdaptive, grid_surplusses=grid_surplusses,
                                                    norm_spatiallyAdaptive=norm_spatiallyAdaptive,
+                                                   rebalancing=rebalancing,
                                                    rule=quadrature_rule,
                                                    sparse=sparse_quadrature, q=q_order, p=p_order, poly_rule=poly_rule,
                                                    poly_normed=poly_normed,
@@ -1403,6 +1416,7 @@ def main_routine(model, current_output_folder, **kwargs):
 
         if surrogate_model_of_interest.lower() == "gpce":
             surrogate_model = gPCE
+            intermediate_surrogate = combiinstance
         else:
             surrogate_model = combiinstance
 
@@ -1426,19 +1440,18 @@ def main_routine(model, current_output_folder, **kwargs):
             compute_gpce_sparsespace(model=problem_function, param_names=param_names, dists=distributionsForSparseSpace,
                                      dim=dim, a=a, b=b, surrogate_model_of_interest=surrogate_model_of_interest,
                                      plotting=plotting, writing_results_to_a_file=writing_results_to_a_file,
-                                     outputModelDir=outputModelDir, gridName=gridName,
-                                     lmin=lmin, lmax=lmax, max_evals=max_evals, tolerance=tolerance,
-                                     modified_basis=modified_basis, boundary_points=boundary_points,
-                                     spatiallyAdaptive=spatiallyAdaptive,
-                                     grid_surplusses=grid_surplusses,
-                                     norm_spatiallyAdaptive=norm_spatiallyAdaptive,
-                                     p=p_order,
-                                     build_sg_for_e_and_var=build_sg_for_e_and_var,
+                                     outputModelDir=outputModelDir, gridName=gridName, lmin=lmin, lmax=lmax,
+                                     max_evals=max_evals, tolerance=tolerance, modified_basis=modified_basis,
+                                     boundary_points=boundary_points, spatiallyAdaptive=spatiallyAdaptive,
+                                     grid_surplusses=grid_surplusses, norm_spatiallyAdaptive=norm_spatiallyAdaptive,
+                                     rebalancing=rebalancing,
+                                     p=p_order, build_sg_for_e_and_var=build_sg_for_e_and_var,
                                      parallelIntegrator=parallelIntegrator, compute_mean=compute_mean,
                                      compute_var=compute_var, compute_Sobol_m=compute_Sobol_m,
                                      compute_Sobol_t=compute_Sobol_t)
         if not build_sg_for_e_and_var and surrogate_model_of_interest.lower() == "gpce":
             surrogate_model = gPCE
+            intermediate_surrogate = combiinstance
         else:
             surrogate_model = combiinstance
 
@@ -1449,99 +1462,140 @@ def main_routine(model, current_output_folder, **kwargs):
     #####################################
     # E = model - surrogate_model
     #####################################
-    if variant != 4:
-        print(f"\n==Model Error==")
-        # Evaluate surrogate model and a certain number of new points, and compute error
-        # Ideas come from:
-        # P. Conrad and Y. Marzouk: "ADAPTIVE SMOLYAK PSEUDOSPECTRAL APPROXIMATIONS"
-        # V. Barthelmann, E. Novak, and K. Ritter: "HIGH DIMENSIONAL POLYNOMIAL INTERPOLATION ON SPARSE GRIDS"
-        numSamples_for_checking = 10**5
-        mc_rule_for_checking = "R"  # sampling_rule
-        error_type = "mean"  # "mean" "l2" | "max" "l1"
+    print(f"\n==Model Error==")
+    # Evaluate surrogate model and a certain number of new points, and compute error
+    # Ideas come from:
+    # P. Conrad and Y. Marzouk: "ADAPTIVE SMOLYAK PSEUDOSPECTRAL APPROXIMATIONS"
+    # V. Barthelmann, E. Novak, and K. Ritter: "HIGH DIMENSIONAL POLYNOMIAL INTERPOLATION ON SPARSE GRIDS"
+    # TODO Experiment with this
+    numSamples_for_checking = 10**dim  # Note: Big Memory problem when more than 10**4 points?
+    mc_rule_for_checking = "r"  # sampling_rule or "g" or grid
+    error_type = "mean"  # "mean" "l2" | "max" "l1" not relevant for now...
 
-        dictionary_with_inf_about_the_run["comparison_surrogate_vs_model_numSamples"] = numSamples_for_checking
-        dictionary_with_inf_about_the_run["comparison_surrogate_vs_model_mc_rule"] = mc_rule_for_checking
-        dictionary_with_inf_about_the_run["comparison_surrogate_vs_model_error_type"] = error_type
+    dictionary_with_inf_about_the_run["comparison_surrogate_vs_model_numSamples"] = numSamples_for_checking
+    dictionary_with_inf_about_the_run["comparison_surrogate_vs_model_mc_rule"] = mc_rule_for_checking
+    dictionary_with_inf_about_the_run["comparison_surrogate_vs_model_error_type"] = error_type
 
-        # TODO Experiment with different sampling strategies
-        if sampleFromStandardDist:
-            mc_nodes = joinedStandardDists.sample(size=numSamples_for_checking, rule=mc_rule_for_checking).round(4)
-            mc_nodes = np.array(mc_nodes)
-            mc_parameters = transformSamples(mc_nodes, joinedStandardDists, joinedDists)
-        else:
-            mc_nodes = joinedDists.sample(size=numSamples_for_checking, rule=mc_rule_for_checking).round(4)
-            mc_nodes = np.array(mc_nodes)
-            mc_parameters = mc_nodes
+    # TODO Experiment with different sampling strategies
+    if sampleFromStandardDist:
+        mc_nodes = joinedStandardDists.sample(size=numSamples_for_checking, rule=mc_rule_for_checking).round(4)
+        mc_nodes = np.array(mc_nodes)
+        # mc_parameters = transformSamples(mc_nodes, joinedStandardDists, joinedDists)
+        mc_parameters = transformSamples_lin_or_nonlin(mc_nodes, joinedStandardDists, joinedDists, linear=False)
+    else:
+        mc_nodes = joinedDists.sample(size=numSamples_for_checking, rule=mc_rule_for_checking).round(4)
+        mc_nodes = np.array(mc_nodes)
+        mc_parameters = mc_nodes
 
-        # TODO Interesting to see if it will be more memory efficient if I would evaluate surrogate_model
-        #  inside of the sub-routine and not transfer it around...
-        # surrogate_evaluations = surrogate_model(mc_nodes.T)  # Var 1 - surrogate_model=gPCE;
-        # surrogate_evaluations = np.array([surrogate_model(nodes) for nodes in mc_nodes.T])
-        reevaluation_surrogate_model_start_time = time.time()
-        # TODO - This will probably change once the output is 2D (HBV, Larsim)
-        # TODO - ask if surrogate_model can evaluate all vector nodes at once
+    ######Re-evaluating Surrogate Model########
+    # TODO Interesting to see if it will be more memory efficient if I would evaluate surrogate_model
+    #  inside of the sub-routine and not transfer it around...
+    # surrogate_evaluations = surrogate_model(mc_nodes.T)  # Var 1 - surrogate_model=gPCE;
+    # surrogate_evaluations = np.array([surrogate_model(nodes) for nodes in mc_nodes.T])
+    reevaluation_surrogate_model_start_time = time.time()
+    # TODO - This will probably change once the output is 2D (HBV, Larsim)
+    # TODO - ask if surrogate_model can evaluate all vector nodes at once
+    # TODO - question if it make sense to check once again sampleFromStandardDist_when_evaluating_surrogate
+    if surrogate_model_of_interest.lower() == "gpce":
         surrogate_evaluations = np.empty([mc_nodes.shape[1], ])
         i = 0
         if sampleFromStandardDist_when_evaluating_surrogate:
             for sample in mc_nodes.T:
-                if surrogate_model_of_interest.lower() == "gpce":
-                    surrogate_evaluations[i] = surrogate_model(*sample)
-                else:
-                    surrogate_evaluations[i] = surrogate_model(sample)
+                surrogate_evaluations[i] = surrogate_model(*sample)
                 i += 1
         else:
             for sample in mc_parameters.T:
-                if surrogate_model_of_interest.lower() == "gpce":
-                    surrogate_evaluations[i] = surrogate_model(*sample)
-                else:
-                    print(surrogate_model(sample).shape)
-                    surrogate_evaluations[i] = surrogate_model(sample)
+                surrogate_evaluations[i] = surrogate_model(*sample)
                 i += 1
         surrogate_evaluations = np.array(surrogate_evaluations)
-
-        reevaluation_surrogate_model_end_time = time.time()
-        reevaluation_surrogate_model_duration = reevaluation_surrogate_model_end_time - reevaluation_surrogate_model_start_time
-        print(f"re evaluation surrogate model duration: {reevaluation_surrogate_model_duration} "
-              f"in {numSamples_for_checking} new MC points")
-        # print(f"mc_nodes.shape - {mc_nodes.shape}; "
-        #       f"\n type(surrogate_model) - {type(surrogate_model)};  "
-        #       f"\n surrogate_model.shape - {surrogate_model.shape};")
-        # print(f"type surrogate_evaluations : {type(surrogate_evaluations)}; shape {surrogate_evaluations.shape}")
-
-        reevaluation_model_start_time = time.time()
-        if can_model_evaluate_all_vector_nodes:
-            true_model_evaluations = problem_function(mc_parameters.T)
-            true_model_evaluations = np.reshape(true_model_evaluations, true_model_evaluations.shape[0])  # TODO - This will probably change once the output is 2D (HBV, Larsim)
+    else:
+        if sampleFromStandardDist_when_evaluating_surrogate:
+            surrogate_evaluations = np.array(surrogate_model(mc_nodes.T))
         else:
-            true_model_evaluations = np.array([problem_function(parameter) for parameter in mc_parameters.T])
-        reevaluation_model_end_time = time.time()
-        reevaluation_model_duration = reevaluation_model_end_time - reevaluation_model_start_time
-        print(f"re evaluation model duration: {reevaluation_model_duration} in {numSamples_for_checking} new MC points")
-        # print(f"mc_parameters.shape - {mc_parameters.shape}; "
-        #       f"\n type(problem_function) - {type(problem_function)};")
-        # print(f"type true_model_evaluations : {type(true_model_evaluations)}; shape {true_model_evaluations.shape}")
+            surrogate_evaluations = np.array(surrogate_model(mc_parameters.T))
+            surrogate_evaluations = np.reshape(surrogate_evaluations, surrogate_evaluations.shape[
+                0])  # TODO - This will probably change once the output is 2D (HBV, Larsim)
+    reevaluation_surrogate_model_end_time = time.time()
+    reevaluation_surrogate_model_duration = reevaluation_surrogate_model_end_time - reevaluation_surrogate_model_start_time
+    print(f"re evaluation surrogate model duration: {reevaluation_surrogate_model_duration} "
+          f"in {numSamples_for_checking} new MC points")
+    # print(f"mc_nodes.shape - {mc_nodes.shape}; "
+    #       f"\n type(surrogate_model) - {type(surrogate_model)};  "
+    #       f"\n surrogate_model.shape - {surrogate_model.shape};")
+    # print(f"type surrogate_evaluations : {type(surrogate_evaluations)}; shape {surrogate_evaluations.shape}")
 
-        # when surrogate_model_of_interest == "sg" or "combiinstance" this will produce interpolation error like in Obi's paper
-        # error_l1 = None
-        # error_l2 = None
-        # if error_type == "max" or error_type == "l1" or error_type == "L1":
-        error_l1 = np.max(np.abs(true_model_evaluations - surrogate_evaluations))
-        # elif error_type == "mean" or error_type == "l2" or error_type == "L2":
-        # error_l2 = np.sqrt(np.sum((true_model_evaluations - surrogate_evaluations)**2))
-        error_l2 = np.linalg.norm(true_model_evaluations - surrogate_evaluations, ord=2)
+    ######Re-evaluating Intermediate Surrogate Model########
+    intermediate_surrogate_evaluations = None
+    if intermediate_surrogate is not None:
+        # intermediate_surrogate is always combibinstance and is, for now, always evaluated in original nodes
+        reevaluation_intermediate_surrogate_model_start_time = time.time()
+        intermediate_surrogate_evaluations = np.array(intermediate_surrogate(mc_parameters.T))
+        # TODO - This will probably change once the output is 2D (HBV, Larsim)
+        intermediate_surrogate_evaluations = np.reshape(intermediate_surrogate_evaluations,
+                                                        intermediate_surrogate_evaluations.shape[0])
+        reevaluation_intermediate_surrogate_model_end_time = time.time()
+        reevaluation_intermediate_surrogate_model_duration = reevaluation_intermediate_surrogate_model_end_time - reevaluation_intermediate_surrogate_model_start_time
+        print(f"re evaluation intermediate surrogate model duration: {reevaluation_intermediate_surrogate_model_duration} "
+              f"in {numSamples_for_checking} new MC points")
 
-        # else:
-        #     raise Exception(f"error_type-{error_type} is not supported!!!")
+    ######Re-evaluating True Model########
+    reevaluation_model_start_time = time.time()
+    if can_model_evaluate_all_vector_nodes:
+        true_model_evaluations = problem_function(mc_parameters.T)
+        true_model_evaluations = np.reshape(true_model_evaluations, true_model_evaluations.shape[0])  # TODO - This will probably change once the output is 2D (HBV, Larsim)
+    else:
+        true_model_evaluations = np.array([problem_function(parameter) for parameter in mc_parameters.T])
+        # TODO Experiment with this
+        # true_model_evaluations = np.squeeze(true_model_evaluations)
+        true_model_evaluations = np.reshape(true_model_evaluations, true_model_evaluations.shape[0])
+    reevaluation_model_end_time = time.time()
+    reevaluation_model_duration = reevaluation_model_end_time - reevaluation_model_start_time
+    print(f"re evaluation model duration: {reevaluation_model_duration} in {numSamples_for_checking} new MC points")
+    # print(f"mc_parameters.shape - {mc_parameters.shape}; "
+    #       f"\n type(problem_function) - {type(problem_function)};")
+    # print(f"type true_model_evaluations : {type(true_model_evaluations)}; shape {true_model_evaluations.shape}")
 
-        dictionary_with_inf_about_the_run["reevaluation_surrogate_model_duration"] = reevaluation_surrogate_model_duration
-        dictionary_with_inf_about_the_run["reevaluation_model_duration"] = reevaluation_model_duration
+    print(f"DEBUGGING: surrogate_evaluations.shape: {surrogate_evaluations.shape}")
+    print(f"DEBUGGING: true_model_evaluations.shape: {true_model_evaluations.shape}")
 
-        dictionary_with_inf_about_the_run["error_model_l1"] = error_l1
-        dictionary_with_inf_about_the_run["error_model_l2"] = error_l2
+    # when surrogate_model_of_interest == "sg" or "combiinstance" this will produce interpolation error like in Obi's paper
+    # error_linf = None
+    # error_l2 = None
+    # if error_type == "max" or error_type == "l1" or error_type == "L1":
+    error_linf = np.max(np.abs(true_model_evaluations - surrogate_evaluations))
+    if intermediate_surrogate_evaluations is not None:
+        error_linf_intermediate_surrogate = np.max(np.abs(true_model_evaluations - intermediate_surrogate_evaluations))
+    # error_linf = np.linalg.norm(true_model_evaluations - surrogate_evaluations, ord=np.inf)
+    # elif error_type == "mean" or error_type == "l2" or error_type == "L2":
+    error_l2 = np.sqrt(np.sum((true_model_evaluations - surrogate_evaluations)**2))
+    if intermediate_surrogate_evaluations is not None:
+        error_l2_intermediate_surrogate = np.sqrt(np.sum((true_model_evaluations - intermediate_surrogate_evaluations) ** 2))
+    # error_l2 = np.linalg.norm(true_model_evaluations - surrogate_evaluations, ord=2)
 
-        print(f"Max surrogate_evaluations: {max(surrogate_evaluations)}; Min surrogate_evaluations: {min(surrogate_evaluations)};")
-        print(f"Max true_model_evaluations: {max(true_model_evaluations)}; Min true_model_evaluations: {min(true_model_evaluations)};")
-        print(f"L1 Error = {error_l1} \nL2 Error = {error_l2}")
+    # else:
+    #     raise Exception(f"error_type-{error_type} is not supported!!!")
+
+    dictionary_with_inf_about_the_run["reevaluation_surrogate_model_duration"] = reevaluation_surrogate_model_duration
+    dictionary_with_inf_about_the_run["reevaluation_model_duration"] = reevaluation_model_duration
+
+    dictionary_with_inf_about_the_run["error_model_linf"] = error_linf
+    dictionary_with_inf_about_the_run["error_model_l2"] = error_l2
+
+    if intermediate_surrogate is not None and intermediate_surrogate_evaluations is not None:
+        dictionary_with_inf_about_the_run["reevaluation_intermediate_surrogate_model_duration"] = reevaluation_intermediate_surrogate_model_duration
+        dictionary_with_inf_about_the_run["error_intermediate_surrogate_linf"] = error_linf_intermediate_surrogate
+        dictionary_with_inf_about_the_run["error_intermediate_surrogate_l2"] = error_l2_intermediate_surrogate
+
+    print(f"Max surrogate_evaluations: {max(surrogate_evaluations)}; Min surrogate_evaluations: {min(surrogate_evaluations)};")
+    print(f"Max true_model_evaluations: {max(true_model_evaluations)}; Min true_model_evaluations: {min(true_model_evaluations)};")
+    print(f"Linf Error = {error_linf} \nL2 Error = {error_l2}")
+
+    if intermediate_surrogate is not None and intermediate_surrogate_evaluations is not None:
+        print(
+            f"Max intermediate_surrogate_evaluations: {max(intermediate_surrogate_evaluations)}; "
+            f"Min intermediate_surrogate_evaluations: {min(intermediate_surrogate_evaluations)};")
+        print(f"Linf intermediate_surrogate Error = {error_linf_intermediate_surrogate} \n"
+              f"L2 intermediate_surrogate Error = {error_l2_intermediate_surrogate}")
 
     #####################################
     # E = model_mean - approximated_mean
@@ -1552,7 +1606,7 @@ def main_routine(model, current_output_folder, **kwargs):
         if has_analyitic_mean:
             analytical_mean = problem_function.getAnalyticSolutionIntegral(a, b)
         else:
-            numSamples = 10 ** 5
+            numSamples = 10 ** 5  # numSamples_for_checking
             print(f"Computing MC based mean on {numSamples} samples, sampled rule - {sampling_rule}")
             analytical_mean, analytical_var = compute_mc_quantity(
                 model=problem_function, param_names=param_names, dists=dists,
@@ -1575,7 +1629,7 @@ def main_routine(model, current_output_folder, **kwargs):
     if compute_var and approximated_var is not None:
         print(f"\n==Var Error==")
         if not has_analyitic_var:
-            numSamples = 10 ** 5
+            numSamples = 10 ** 5  # numSamples_for_checking
             print(f"Computing MC based mean on {numSamples} samples, sampled rule - {sampling_rule}")
             analytical_mean, analytical_var = compute_mc_quantity(
                 model=problem_function, param_names=param_names, dists=dists,
@@ -1702,12 +1756,9 @@ if __name__ == "__main__":
     #####################################
     # Initial Model Setup
     #####################################
-    number_of_functions = 5  # or 1, for example
-    model = "corner_peak"  # "ishigami" "corner_peak" "hbvsask"
     list_of_models = ["hbvsask", "larsim", "ishigami", "gfunction", "zabarras2d", "zabarras3d",
                       "oscillatory", "product_peak", "corner_peak", "gaussian", "discontinuous"]
     # Additional Genz Options: GenzOszillatory, GenzDiscontinious2, GenzC0, GenzGaussian
-    assert(model in list_of_models)
 
     # uncomment if you want to run analysis for Genz functions...
     list_of_genz_functions = ["oscillatory", "product_peak", "corner_peak", "gaussian", "continous", "discontinuous"]
@@ -1719,21 +1770,84 @@ if __name__ == "__main__":
     # current_output_folder = "var2_sg_trap_ct_boundery_l_4_p_4_q_5_max_4000"  # "sg_ss_ct_modified_var2_l_2_p_4_q_5_max_2000"
     # current_output_folder = "var4_ct_trap_adaptive_boundary_modified_l_2_max_4000_saved_aniso"  # "sg_ss_ct_modified_var2_l_2_p_4_q_5_max_2000"
     # current_output_folder = "sg_cc_5d_l2_sparse_p4_q8_saved_aniso"
-    current_output_folder = "va2_combi_trapweighted_boundary_nonmodif_adaptive_norm2_lmin2_lmax_4_maxeval_105_tol102"
+    # current_output_folder = "va2_gpce_trap_boundary_nonmodif_adaptive_norm2_lmin2_lmax_4_maxeval_105_tol105_g_q9_p7"
+    # current_output_folder = "va2_combi_trap_boundary_nonmodif_adaptive_norm2_lmin1_lmax_5_maxeval_104_tol105"
+    # current_output_folder = "var1_gpce_gl_p4_q9"  # q=5,7,9
+    # current_output_folder = "var1_gpce_gl_p6_q7"
+    # current_output_folder = "var1_gpce_gl_p8_q9"
 
-    start_time = time.time()
+    list_of_dict_run_setups = [
+        {"model": "ishigami", "list_of_function_ids": None, "current_output_folder": "var1_gpce_gl_p4_q5",
+         "variant": 1, "quadrature_rule": "g", "q_order": 5, "p_order": 4, "sparse_quadrature": False,
+         "read_nodes_from_file": False, 'l':10},
+        {"model": "ishigami", "list_of_function_ids": None, "current_output_folder": "var1_gpce_gl_p4_q7",
+         "variant": 1, "quadrature_rule": "g", "q_order": 7, "p_order": 4, "sparse_quadrature": False,
+         "read_nodes_from_file": False, 'l': 10},
+        {"model": "ishigami", "list_of_function_ids": None, "current_output_folder": "var1_gpce_gl_p4_q9",
+         "variant": 1, "quadrature_rule": "g", "q_order": 9, "p_order": 4, "sparse_quadrature": False,
+         "read_nodes_from_file": False, 'l': 10},
+        {"model": "ishigami", "list_of_function_ids": None, "current_output_folder": "var1_gpce_gl_p6_q7",
+         "variant": 1, "quadrature_rule": "g", "q_order": 7, "p_order": 6, "sparse_quadrature": False,
+         "read_nodes_from_file": False, 'l': 10},
+        {"model": "ishigami", "list_of_function_ids": None, "current_output_folder": "var1_gpce_gl_p8_q9",
+         "variant": 1, "quadrature_rule": "g", "q_order": 9, "p_order": 8, "sparse_quadrature": False,
+         "read_nodes_from_file": False, 'l': 10},
+    ]
 
-    # TODO Change for Genz that this is executed in this way whenever user wants that
-    if number_of_functions > 1:
-        if model in list_of_genz_functions:
+    # list_of_dict_run_setups = [
+    #     {"model": "ishigami", "list_of_function_ids": None, "current_output_folder": "var1_gpce_cc_p4_q9",
+    #      "variant": 1, "quadrature_rule": "c", "q_order": 9, "p_order": 4, "sparse_quadrature": True,
+    #      "read_nodes_from_file": False, 'l':10},
+    #     {"model": "ishigami", "list_of_function_ids": None, "current_output_folder": "var1_gpce_cc_p4_q9",
+    #      "variant": 1, "quadrature_rule": "c", "q_order": 9, "p_order": 4, "sparse_quadrature": True,
+    #      "read_nodes_from_file": False, 'l': 10},
+    #     {"model": "ishigami", "list_of_function_ids": None, "current_output_folder": "var1_gpce_cc_p4_q9",
+    #      "variant": 1, "quadrature_rule": "c", "q_order": 9, "p_order": 4, "sparse_quadrature": True,
+    #      "read_nodes_from_file": False, 'l': 10},
+    # ]
+    #
+    # list_of_dict_run_setups = [
+    #     {"model": "ishigami", "list_of_function_ids": None, "current_output_folder": "var1_gpce_kpu_p4_l",
+    #      "variant": 1, "quadrature_rule": "c", "q_order": 9, "p_order": 4, "sparse_quadrature": True,
+    #      "read_nodes_from_file": True, 'l':10},
+    #     {"model": "ishigami", "list_of_function_ids": None, "current_output_folder": "var1_gpce_kpu_p4_l",
+    #      "variant": 1, "quadrature_rule": "c", "q_order": 9, "p_order": 4, "sparse_quadrature": True,
+    #      "read_nodes_from_file": True, 'l': 10},
+    #     {"model": "ishigami", "list_of_function_ids": None, "current_output_folder": "var1_gpce_kpu_p4_l",
+    #      "variant": 1, "quadrature_rule": "c", "q_order": 9, "p_order": 4, "sparse_quadrature": True,
+    #      "read_nodes_from_file": True, 'l': 10},
+    # ]
+
+    for single_setup_dict in list_of_dict_run_setups:
+        model = single_setup_dict["model"]
+        assert(model in list_of_models)
+        list_of_function_ids = single_setup_dict.get("list_of_function_ids", None)
+        if model in list_of_genz_functions and list_of_function_ids is not None:
+            number_of_functions = len(list_of_function_ids)
+        else:
+            number_of_functions = 1
+
+        current_output_folder = single_setup_dict["current_output_folder"]
+        variant = single_setup_dict["variant"]
+        quadrature_rule = single_setup_dict["quadrature_rule"]
+        q_order = single_setup_dict["q_order"]
+        p_order = single_setup_dict["p_order"]
+        sparse_quadrature = single_setup_dict["sparse_quadrature"]
+        read_nodes_from_file = single_setup_dict["read_nodes_from_file"]
+        l = single_setup_dict["l"]
+
+        start_time = time.time()
+        # TODO Change for Genz that this is executed in this way whenever user wants that
+        if model in list_of_genz_functions and list_of_function_ids is not None:
             # Hard-coded
             dim = 5
-            all_coeffs = np.empty(shape=(number_of_functions, dim))
-            all_weights = np.empty(shape=(number_of_functions, dim))
+            # all_coeffs = np.empty(shape=(number_of_functions, dim))
+            # all_weights = np.empty(shape=(number_of_functions, dim))
             # problem_function_list = []
             from collections import defaultdict
             dictionary_with_inf_about_the_run = defaultdict(dict)
-            for i in range(number_of_functions):
+            # for i in range(number_of_functions):
+            for i in list_of_function_ids:
                 if read_saved_genz_functions:
                     if anisotropic:
                         path_to_saved_genz_functions = str(path_to_saved_all_genz_functions / model / f"coeffs_weights_anisotropic_{dim}d_{i}.npy")
@@ -1745,24 +1859,30 @@ if __name__ == "__main__":
                         single_weights = coeffs_weights[1]
                 else:
                     single_coeffs, single_weights = generate_and_scale_coeff_and_weights(dim=dim, b=b_3, anisotropic=anisotropic)
-                all_coeffs[i] = single_coeffs
-                all_weights[i] = single_weights
+                # all_coeffs[i] = single_coeffs
+                # all_weights[i] = single_weights
                 current_output_folder_single_model = f"{current_output_folder}_model_{i}"
                 dictionary_with_inf_about_the_run_single_model = main_routine(
-                    model, current_output_folder_single_model, coeffs=single_coeffs, weights=single_weights)
+                    model, current_output_folder_single_model, coeffs=single_coeffs, weights=single_weights,
+                    variant=variant, quadrature_rule=quadrature_rule, q_order=q_order, p_order=p_order,
+                    sparse_quadrature=sparse_quadrature, read_nodes_from_file=read_nodes_from_file, l=l
+                )
                 # dictionary_with_inf_about_the_run.append(dictionary_with_inf_about_the_run_single_model)
                 dictionary_with_inf_about_the_run[i] = dictionary_with_inf_about_the_run_single_model
-                outputModelDir = cwd
-                dictionary_with_inf_about_the_run_path = str(outputModelDir / "dictionary_with_inf_about_the_multiple_corner_peak_runs.pkl")
-                with open(dictionary_with_inf_about_the_run_path, "wb") as handle:
-                    # with open(dictionary_with_inf_about_the_run_path, "w") as handle:
-                    pickle.dump(dictionary_with_inf_about_the_run, handle, protocol=pickle.HIGHEST_PROTOCOL)
-    else:
-        dictionary_with_inf_about_the_run = main_routine(model, current_output_folder)
-
-    end_time = time.time()
-    duration = end_time - start_time
-    print(f"The whole run took {duration} for examing {number_of_functions} different functions")
+                # outputModelDir = cwd
+                # dictionary_with_inf_about_the_run_path = str(outputModelDir / "dictionary_with_inf_about_the_multiple_corner_peak_runs.pkl")
+                # with open(dictionary_with_inf_about_the_run_path, "wb") as handle:
+                #     # with open(dictionary_with_inf_about_the_run_path, "w") as handle:
+                #     pickle.dump(dictionary_with_inf_about_the_run, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        else:
+            dictionary_with_inf_about_the_run = main_routine(
+                model, current_output_folder,
+                variant=variant, quadrature_rule=quadrature_rule, q_order=q_order, p_order=p_order,
+                sparse_quadrature=sparse_quadrature, read_nodes_from_file=read_nodes_from_file, l=l
+            )
+        end_time = time.time()
+        duration = end_time - start_time
+        print(f"The whole run took {duration} for examing {number_of_functions} different functions")
 
 
 # TODO finish this!
