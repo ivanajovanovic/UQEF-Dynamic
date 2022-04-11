@@ -58,6 +58,15 @@ if __name__ == "__main__":
     #     {"model": "ishigami", "list_of_function_ids": None, "current_output_folder": "var1_gpce_gl_p8_q9",
     #      "variant": 1, "quadrature_rule": "g", "q_order": 9, "p_order": 8, "sparse_quadrature": False,
     #      "read_nodes_from_file": False, 'l': 10},
+    #     {"model": "ishigami", "list_of_function_ids": None, "current_output_folder": "var1_gpce_gl_p9_q9",
+    #      "variant": 1, "quadrature_rule": "g", "q_order": 9, "p_order": 9, "sparse_quadrature": False,
+    #      "read_nodes_from_file": False, 'l': 10},
+    #     {"model": "ishigami", "list_of_function_ids": None, "current_output_folder": "var1_gpce_gl_p9_q10",
+    #      "variant": 1, "quadrature_rule": "g", "q_order": 10, "p_order": 9, "sparse_quadrature": False,
+    #      "read_nodes_from_file": False, 'l': 10},
+    #     {"model": "ishigami", "list_of_function_ids": None, "current_output_folder": "var1_gpce_gl_p9_q11",
+    #      "variant": 1, "quadrature_rule": "g", "q_order": 11, "p_order": 9, "sparse_quadrature": False,
+    #      "read_nodes_from_file": False, 'l': 10}
     # ]
 
     # TODO Change this in 5D
@@ -178,129 +187,117 @@ if __name__ == "__main__":
     #      "read_nodes_from_file": True, 'l': 14}
     # ]
 
-    ######product_peak Var 1#######
-    # functions in the consideration: anisotropic 2 or 1
-    list_of_dict_run_setups = [
-        {"model": "product_peak", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_gl_p4_q4",
-         "variant": 1, "quadrature_rule": "g", "q_order": 4, "p_order": 4, "sparse_quadrature": False,
-         "read_nodes_from_file": False, 'l':10},
-        {"model": "product_peak", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_gl_p4_q6",
-         "variant": 1, "quadrature_rule": "g", "q_order": 6, "p_order": 4, "sparse_quadrature": False,
-         "read_nodes_from_file": False, 'l': 10},
-        {"model": "product_peak", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_gl_p4_q8",
-         "variant": 1, "quadrature_rule": "g", "q_order": 8, "p_order": 4, "sparse_quadrature": False,
-         "read_nodes_from_file": False, 'l': 10},
-        {"model": "product_peak", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_gl_p6_q6",
-         "variant": 1, "quadrature_rule": "g", "q_order": 6, "p_order": 6, "sparse_quadrature": False,
-         "read_nodes_from_file": False, 'l': 10},
-        {"model": "product_peak", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_gl_p6_q8",
-         "variant": 1, "quadrature_rule": "g", "q_order": 8, "p_order": 6, "sparse_quadrature": False,
-         "read_nodes_from_file": False, 'l': 10},
-        {"model": "product_peak", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_cc_p3_q7",
-         "variant": 1, "quadrature_rule": "c", "q_order": 7, "p_order": 3, "sparse_quadrature": True,
-         "read_nodes_from_file": False, 'l': 10},
-        {"model": "product_peak", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_cc_p4_q4",
-         "variant": 1, "quadrature_rule": "c", "q_order": 4, "p_order": 4, "sparse_quadrature": True,
-         "read_nodes_from_file": False, 'l': 10},
-        {"model": "product_peak", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_cc_p4_q6",
-         "variant": 1, "quadrature_rule": "c", "q_order": 6, "p_order": 4, "sparse_quadrature": True,
-         "read_nodes_from_file": False, 'l': 10},
-        {"model": "product_peak", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_cc_p4_q9",
-         "variant": 1, "quadrature_rule": "c", "q_order": 9, "p_order": 4, "sparse_quadrature": True,
-         "read_nodes_from_file": False, 'l': 10},
-        {"model": "product_peak", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_cc_p4_q11",
-         "variant": 1, "quadrature_rule": "c", "q_order": 11, "p_order": 4, "sparse_quadrature": True,
-         "read_nodes_from_file": False, 'l': 10},
-        {"model": "product_peak", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_cc_p6_q7",
-         "variant": 1, "quadrature_rule": "c", "q_order": 7, "p_order": 6, "sparse_quadrature": True,
-         "read_nodes_from_file": False, 'l': 10},
-        {"model": "product_peak", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_cc_p6_q11",
-         "variant": 1, "quadrature_rule": "c", "q_order": 11, "p_order": 6, "sparse_quadrature": True,
-         "read_nodes_from_file": False, 'l': 10},
-        {"model": "product_peak", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_cc_p6_q13",
-         "variant": 1, "quadrature_rule": "c", "q_order": 13, "p_order": 6, "sparse_quadrature": True,
-         "read_nodes_from_file": False, 'l': 10},
-        {"model": "product_peak", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_kpu_p4_l7",
-         "variant": 1, "quadrature_rule": "c", "q_order": 9, "p_order": 4, "sparse_quadrature": True,
-         "read_nodes_from_file": True, 'l': 7},
-        {"model": "product_peak", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_kpu_p4_l9",
-         "variant": 1, "quadrature_rule": "c", "q_order": 9, "p_order": 4, "sparse_quadrature": True,
-         "read_nodes_from_file": True, 'l': 9},
-        {"model": "product_peak", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_kpu_p4_l10",
-         "variant": 1, "quadrature_rule": "c", "q_order": 9, "p_order": 4, "sparse_quadrature": True,
-         "read_nodes_from_file": True, 'l': 10},
-        {"model": "product_peak", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_kpu_p6_l10",
-         "variant": 1, "quadrature_rule": "c", "q_order": 9, "p_order": 6, "sparse_quadrature": True,
-         "read_nodes_from_file": True, 'l': 10},
-        {"model": "product_peak", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_kpu_p6_l12",
-         "variant": 1, "quadrature_rule": "c", "q_order": 9, "p_order": 6, "sparse_quadrature": True,
-         "read_nodes_from_file": True, 'l': 12},
-        {"model": "product_peak", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_kpu_p6_l14",
-         "variant": 1, "quadrature_rule": "c", "q_order": 9, "p_order": 6, "sparse_quadrature": True,
-         "read_nodes_from_file": True, 'l': 14}
-    ]
-
-    ######discontinuous Var 1#######
-    # functions in the consideration: non-anisotropic 2 or 3
+    # ######product_peak Var 1#######
+    # # functions in the consideration: anisotropic 2 or 1
     # list_of_dict_run_setups = [
-    #     {"model": "discontinuous", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_gl_p4_q4",
+    #     {"model": "product_peak", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_gl_p4_q4",
     #      "variant": 1, "quadrature_rule": "g", "q_order": 4, "p_order": 4, "sparse_quadrature": False,
     #      "read_nodes_from_file": False, 'l':10},
-    #     {"model": "discontinuous", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_gl_p4_q6",
+    #     {"model": "product_peak", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_gl_p4_q6",
     #      "variant": 1, "quadrature_rule": "g", "q_order": 6, "p_order": 4, "sparse_quadrature": False,
     #      "read_nodes_from_file": False, 'l': 10},
-    #     {"model": "discontinuous", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_gl_p4_q8",
+    #     {"model": "product_peak", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_gl_p4_q8",
     #      "variant": 1, "quadrature_rule": "g", "q_order": 8, "p_order": 4, "sparse_quadrature": False,
     #      "read_nodes_from_file": False, 'l': 10},
-    #     {"model": "discontinuous", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_gl_p6_q6",
+    #     {"model": "product_peak", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_gl_p6_q6",
     #      "variant": 1, "quadrature_rule": "g", "q_order": 6, "p_order": 6, "sparse_quadrature": False,
     #      "read_nodes_from_file": False, 'l': 10},
-    #     {"model": "discontinuous", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_gl_p6_q8",
+    #     {"model": "product_peak", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_gl_p6_q8",
     #      "variant": 1, "quadrature_rule": "g", "q_order": 8, "p_order": 6, "sparse_quadrature": False,
     #      "read_nodes_from_file": False, 'l': 10},
-    #     {"model": "discontinuous", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_cc_p3_q7",
+    #     {"model": "product_peak", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_cc_p3_q7",
     #      "variant": 1, "quadrature_rule": "c", "q_order": 7, "p_order": 3, "sparse_quadrature": True,
     #      "read_nodes_from_file": False, 'l': 10},
-    #     {"model": "discontinuous", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_cc_p4_q4",
+    #     {"model": "product_peak", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_cc_p4_q4",
     #      "variant": 1, "quadrature_rule": "c", "q_order": 4, "p_order": 4, "sparse_quadrature": True,
     #      "read_nodes_from_file": False, 'l': 10},
-    #     {"model": "discontinuous", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_cc_p4_q6",
+    #     {"model": "product_peak", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_cc_p4_q6",
     #      "variant": 1, "quadrature_rule": "c", "q_order": 6, "p_order": 4, "sparse_quadrature": True,
     #      "read_nodes_from_file": False, 'l': 10},
-    #     {"model": "discontinuous", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_cc_p4_q9",
+    #     {"model": "product_peak", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_cc_p4_q9",
     #      "variant": 1, "quadrature_rule": "c", "q_order": 9, "p_order": 4, "sparse_quadrature": True,
     #      "read_nodes_from_file": False, 'l': 10},
-    #     {"model": "discontinuous", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_cc_p4_q11",
+    #     {"model": "product_peak", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_cc_p4_q11",
     #      "variant": 1, "quadrature_rule": "c", "q_order": 11, "p_order": 4, "sparse_quadrature": True,
     #      "read_nodes_from_file": False, 'l': 10},
-    #     {"model": "discontinuous", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_cc_p6_q7",
+    #     {"model": "product_peak", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_cc_p6_q7",
     #      "variant": 1, "quadrature_rule": "c", "q_order": 7, "p_order": 6, "sparse_quadrature": True,
     #      "read_nodes_from_file": False, 'l': 10},
-    #     {"model": "discontinuous", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_cc_p6_q11",
+    #     {"model": "product_peak", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_cc_p6_q11",
     #      "variant": 1, "quadrature_rule": "c", "q_order": 11, "p_order": 6, "sparse_quadrature": True,
     #      "read_nodes_from_file": False, 'l': 10},
-    #     {"model": "discontinuous", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_cc_p6_q13",
+    #     {"model": "product_peak", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_cc_p6_q13",
     #      "variant": 1, "quadrature_rule": "c", "q_order": 13, "p_order": 6, "sparse_quadrature": True,
     #      "read_nodes_from_file": False, 'l': 10},
-    #     {"model": "discontinuous", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_kpu_p4_l7",
+    #     {"model": "product_peak", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_kpu_p4_l7",
     #      "variant": 1, "quadrature_rule": "c", "q_order": 9, "p_order": 4, "sparse_quadrature": True,
     #      "read_nodes_from_file": True, 'l': 7},
-    #     {"model": "discontinuous", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_kpu_p4_l9",
+    #     {"model": "product_peak", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_kpu_p4_l9",
     #      "variant": 1, "quadrature_rule": "c", "q_order": 9, "p_order": 4, "sparse_quadrature": True,
     #      "read_nodes_from_file": True, 'l': 9},
-    #     {"model": "discontinuous", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_kpu_p4_l10",
+    #     {"model": "product_peak", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_kpu_p4_l10",
     #      "variant": 1, "quadrature_rule": "c", "q_order": 9, "p_order": 4, "sparse_quadrature": True,
     #      "read_nodes_from_file": True, 'l': 10},
-    #     {"model": "discontinuous", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_kpu_p6_l10",
+    #     {"model": "product_peak", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_kpu_p6_l10",
     #      "variant": 1, "quadrature_rule": "c", "q_order": 9, "p_order": 6, "sparse_quadrature": True,
     #      "read_nodes_from_file": True, 'l': 10},
-    #     {"model": "discontinuous", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_kpu_p6_l12",
+    #     {"model": "product_peak", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_kpu_p6_l12",
     #      "variant": 1, "quadrature_rule": "c", "q_order": 9, "p_order": 6, "sparse_quadrature": True,
     #      "read_nodes_from_file": True, 'l': 12},
-    #     {"model": "discontinuous", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_kpu_p6_l14",
+    #     {"model": "product_peak", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_kpu_p6_l14",
     #      "variant": 1, "quadrature_rule": "c", "q_order": 9, "p_order": 6, "sparse_quadrature": True,
     #      "read_nodes_from_file": True, 'l': 14}
     # ]
+
+    ######discontinuous Var 1#######
+    # functions in the consideration: non-anisotropic 2 or 3
+    list_of_dict_run_setups = [
+        {"model": "discontinuous", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_gl_p4_q4",
+         "variant": 1, "quadrature_rule": "g", "q_order": 4, "p_order": 4, "sparse_quadrature": False,
+         "read_nodes_from_file": False, 'l':10,
+         "compute_mean": False, "compute_var": False
+         },
+        {"model": "discontinuous", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_gl_p6_q6",
+         "variant": 1, "quadrature_rule": "g", "q_order": 6, "p_order": 6, "sparse_quadrature": False,
+         "read_nodes_from_file": False, 'l': 10,
+         "compute_mean": False, "compute_var": False
+         },
+        {"model": "discontinuous", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_gl_p6_q9",
+         "variant": 1, "quadrature_rule": "g", "q_order": 9, "p_order": 6, "sparse_quadrature": False,
+         "read_nodes_from_file": False, 'l': 10,
+         "compute_mean": False, "compute_var": False
+         },
+        {"model": "discontinuous", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_cc_p3_q7",
+         "variant": 1, "quadrature_rule": "c", "q_order": 7, "p_order": 3, "sparse_quadrature": True,
+         "read_nodes_from_file": False, 'l': 10,
+         "compute_mean": False, "compute_var": False
+         },
+        {"model": "discontinuous", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_cc_p4_q11",
+         "variant": 1, "quadrature_rule": "c", "q_order": 11, "p_order": 4, "sparse_quadrature": True,
+         "read_nodes_from_file": False, 'l': 10,
+         "compute_mean": False, "compute_var": False
+         },
+        {"model": "discontinuous", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_cc_p6_q13",
+         "variant": 1, "quadrature_rule": "c", "q_order": 13, "p_order": 6, "sparse_quadrature": True,
+         "read_nodes_from_file": False, 'l': 10,
+         "compute_mean": False, "compute_var": False
+         },
+        {"model": "discontinuous", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_kpu_p4_l7",
+         "variant": 1, "quadrature_rule": "c", "q_order": 7, "p_order": 4, "sparse_quadrature": True,
+         "read_nodes_from_file": True, 'l': 7,
+         "compute_mean": False, "compute_var": False
+         },
+        {"model": "discontinuous", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_kpu_p6_l10",
+         "variant": 1, "quadrature_rule": "c", "q_order": 10, "p_order": 6, "sparse_quadrature": True,
+         "read_nodes_from_file": True, 'l': 10,
+         "compute_mean": False, "compute_var": False
+         },
+        {"model": "discontinuous", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_kpu_p6_l14",
+         "variant": 1, "quadrature_rule": "c", "q_order": 14, "p_order": 6, "sparse_quadrature": True,
+         "read_nodes_from_file": True, 'l': 14,
+         "compute_mean": False, "compute_var": False
+         }
+    ]
 
     for single_setup_dict in list_of_dict_run_setups:
         model = single_setup_dict["model"]
@@ -319,6 +316,9 @@ if __name__ == "__main__":
         sparse_quadrature = single_setup_dict["sparse_quadrature"]
         read_nodes_from_file = single_setup_dict["read_nodes_from_file"]
         l = single_setup_dict["l"]
+
+        compute_mean = single_setup_dict.get("compute_mean", True)
+        compute_var = single_setup_dict.get("compute_var", True)
 
         start_time = time.time()
         # TODO Change for Genz that this is executed in this way whenever user wants that
@@ -352,7 +352,9 @@ if __name__ == "__main__":
                 dictionary_with_inf_about_the_run_single_model = main_routine(
                     model, current_output_folder_single_model, coeffs=single_coeffs, weights=single_weights,
                     variant=variant, quadrature_rule=quadrature_rule, q_order=q_order, p_order=p_order,
-                    sparse_quadrature=sparse_quadrature, read_nodes_from_file=read_nodes_from_file, l=l
+                    sparse_quadrature=sparse_quadrature, read_nodes_from_file=read_nodes_from_file, l=l,
+                    compute_mean=compute_mean,
+                    compute_var=compute_var
                 )
                 # dictionary_with_inf_about_the_run.append(dictionary_with_inf_about_the_run_single_model)
                 dictionary_with_inf_about_the_run[i] = dictionary_with_inf_about_the_run_single_model
@@ -365,7 +367,9 @@ if __name__ == "__main__":
             dictionary_with_inf_about_the_run = main_routine(
                 model, current_output_folder,
                 variant=variant, quadrature_rule=quadrature_rule, q_order=q_order, p_order=p_order,
-                sparse_quadrature=sparse_quadrature, read_nodes_from_file=read_nodes_from_file, l=l
+                sparse_quadrature=sparse_quadrature, read_nodes_from_file=read_nodes_from_file, l=l,
+                compute_mean=compute_mean,
+                compute_var=compute_var
             )
         end_time = time.time()
         duration = end_time - start_time

@@ -394,8 +394,8 @@ def compute_gpce_chaospy(model, param_names, dists, joint, jointStandard, dim, a
 def compute_surrogate_sparsespace_and_gpce(model, param_names, dists, joint, jointStandard, dim, a, b,
                                            surrogate_model_of_interest="gPCE", plotting=False,
                                            writing_results_to_a_file=False, outputModelDir="./", gridName="Trapezoidal",
-                                           lmin=1, lmax=2, max_evals=2000, tolerance=10 ** -2, modified_basis=False,
-                                           boundary_points=False, spatiallyAdaptive=False, grid_surplusses=None,
+                                           lmin=1, lmax=2, max_evals=10000, tolerance=10 ** -5, modified_basis=False,
+                                           boundary_points=True, spatiallyAdaptive=True, grid_surplusses=None,
                                            norm_spatiallyAdaptive=np.inf, rebalancing=True, rule='gaussian',
                                            sparse=False, q=7, p=6, poly_rule="three_terms_recurrence",
                                            poly_normed=False, sampleFromStandardDist=False,
@@ -815,8 +815,8 @@ def compute_surrogate_sparsespace_and_gpce(model, param_names, dists, joint, joi
 # Var 4
 def compute_gpce_sparsespace(model, param_names, dists, dim, a, b, surrogate_model_of_interest="gPCE", plotting=False,
                              writing_results_to_a_file=False, outputModelDir="./", gridName="Trapezoidal", lmin=1,
-                             lmax=2, max_evals=2000, tolerance=10 ** -2, modified_basis=False, boundary_points=False,
-                             spatiallyAdaptive=False, grid_surplusses=None, norm_spatiallyAdaptive=np.inf,
+                             lmax=2, max_evals=10000, tolerance=10 ** -5, modified_basis=False, boundary_points=True,
+                             spatiallyAdaptive=True, grid_surplusses=None, norm_spatiallyAdaptive=np.inf,
                              rebalancing=True, p=6, build_sg_for_e_and_var=True, parallelIntegrator=False, **kwargs):
     """
     Var 4 - This method relies on current implementation of UncertaintyQuantification Operation in SparseSpACE
@@ -849,8 +849,8 @@ def compute_gpce_sparsespace(model, param_names, dists, dim, a, b, surrogate_mod
         if gridName == 'BSpline_p3':
             p_bsplines = kwargs.get('p_bsplines', 3)
             grid = GlobalBSplineGrid(a=a, b=b, modified_basis=modified_basis, boundary=boundary_points, p=p_bsplines)
-        elif gridName == 'TrapezoidalWeighted':
-            grid = GlobalTrapezoidalGridWeighted(a=a, b=b, uq_operation=operation, modified_basis=modified_basis, boundary=boundary_points)
+        # elif gridName == 'TrapezoidalWeighted':
+        #     grid = GlobalTrapezoidalGridWeighted(a=a, b=b, uq_operation=operation, modified_basis=modified_basis, boundary=boundary_points)
         else:
             grid = GlobalTrapezoidalGrid(a=a, b=b, modified_basis=modified_basis, boundary=boundary_points)
     else:
@@ -1183,10 +1183,10 @@ def main_routine(model, current_output_folder, **kwargs):
     # building surrogate model or doing UQ analysis
     #####################################
     # setting default values for some 'configuration' parameters
-    compute_mean = True
-    compute_var = True
-    compute_Sobol_m = False
-    compute_Sobol_t = False
+    compute_mean = kwargs.get('compute_mean', True)
+    compute_var = kwargs.get('compute_var', True)
+    compute_Sobol_m = kwargs.get('compute_Sobol_m', False)
+    compute_Sobol_t = kwargs.get('compute_Sobol_t', False)
 
     has_analyitic_mean = False
     has_analyitic_var = False
@@ -1291,7 +1291,7 @@ def main_routine(model, current_output_folder, **kwargs):
 
     intermediate_surrogate = None
 
-    surrogate_model_of_interest = "gpce"  # "gpce"  # "gPCE"  or "sg" this is relevant when sg surrogate is indeed computed, i.e., variant == 2 or 3 or 4
+    surrogate_model_of_interest = kwargs.get('surrogate_model_of_interest', "gpce")  # "gpce"  # "gPCE"  or "sg" this is relevant when sg surrogate is indeed computed, i.e., variant == 2 or 3 or 4
     if variant == 1:
         surrogate_model_of_interest = "gpce"
     dictionary_with_inf_about_the_run["surrogate_model_of_interest"] = surrogate_model_of_interest
@@ -1335,6 +1335,7 @@ def main_routine(model, current_output_folder, **kwargs):
         dictionary_with_sg_setup["poly_normed"] = poly_normed
         dictionary_with_sg_setup["sampleFromStandardDist"] = sampleFromStandardDist
         dictionary_with_sg_setup["read_nodes_from_file"] = read_nodes_from_file
+        dictionary_with_sg_setup["l"] = l
         if read_nodes_from_file:
             dictionary_with_sg_setup["parameters_file_name"] = str(parameters_file_name)
             if parameters_setup_file_name is not None:
@@ -1364,19 +1365,19 @@ def main_routine(model, current_output_folder, **kwargs):
 
     if variant == 2 or variant == 3 or variant == 4:
         # Var 2 | Var 3 | Var 4 - parameters for SparseSpACE
-        gridName = "Trapezoidal"  # "Trapezoidal" | "TrapezoidalWeighted" | "BSpline_p3" | "Leja"
-        lmin = 2
-        lmax = 4  # 4
-        max_evals = 10**5  # 4000
-        tolerance = 10 ** -5  # or tolerance = 10 ** -20
-        modified_basis = False
-        boundary_points = True
-        spatiallyAdaptive = True
-        rebalancing = True
+        gridName = kwargs.get('gridName', "Trapezoidal")   # "Trapezoidal" | "TrapezoidalWeighted" | "BSpline_p3" | "Leja"
+        lmin = kwargs.get('lmin', 1)
+        lmax = kwargs.get('lmax', 2)
+        max_evals = kwargs.get('max_evals', 10**5)
+        tolerance = kwargs.get('tolerance', 10 ** -5)  # or tolerance = 10 ** -20
+        modified_basis = kwargs.get('modified_basis', False)
+        boundary_points = kwargs.get('boundary_points', True)
+        spatiallyAdaptive = kwargs.get('spatiallyAdaptive', True)
+        rebalancing = kwargs.get('rebalancing', True)
 
         # these configuration parameters make sense when spatiallyAdaptive = True
         grid_surplusses = "grid"  # None | "grid", Note: when gridName = "Trapezoidal" grid_surplusses=None is okay...
-        norm_spatiallyAdaptive = 2  # 2 | np.inf
+        norm_spatiallyAdaptive = kwargs.get('norm_spatiallyAdaptive', 2) # 2 | np.inf
 
         dictionary_with_inf_about_the_run["gridName"] = gridName
         dictionary_with_inf_about_the_run["lmin"] = lmin
@@ -1386,6 +1387,7 @@ def main_routine(model, current_output_folder, **kwargs):
         dictionary_with_inf_about_the_run["modified_basis"] = modified_basis
         dictionary_with_inf_about_the_run["boundary_points"] = boundary_points
         dictionary_with_inf_about_the_run["spatiallyAdaptive"] = spatiallyAdaptive
+        dictionary_with_inf_about_the_run["rebalancing"] = rebalancing
 
         plot_file = str(outputModelDir / "output.png")
         filename_contour_plot = str(outputModelDir / "output_contour_plot.png")
@@ -1432,7 +1434,7 @@ def main_routine(model, current_output_folder, **kwargs):
     # rule=rule, sparse_utility=sparse_utility, q=q, p=p)
 
     if variant == 4:
-        build_sg_for_e_and_var = True
+        build_sg_for_e_and_var = kwargs.get('build_sg_for_e_and_var', True)
         if build_sg_for_e_and_var:
             surrogate_model_of_interest = "sg"
         parallelIntegrator = True
@@ -1466,140 +1468,144 @@ def main_routine(model, current_output_folder, **kwargs):
     #####################################
     # E = model - surrogate_model
     #####################################
-    print(f"\n==Model Error==")
-    # Evaluate surrogate model and a certain number of new points, and compute error
-    # Ideas come from:
-    # P. Conrad and Y. Marzouk: "ADAPTIVE SMOLYAK PSEUDOSPECTRAL APPROXIMATIONS"
-    # V. Barthelmann, E. Novak, and K. Ritter: "HIGH DIMENSIONAL POLYNOMIAL INTERPOLATION ON SPARSE GRIDS"
-    # TODO Experiment with this
-    numSamples_for_checking = 10**dim  # Note: Big Memory problem when more than 10**4 points?
-    mc_rule_for_checking = "r"  # sampling_rule or "g" or grid
-    error_type = "mean"  # "mean" "l2" | "max" "l1" not relevant for now...
-
-    dictionary_with_inf_about_the_run["comparison_surrogate_vs_model_numSamples"] = numSamples_for_checking
-    dictionary_with_inf_about_the_run["comparison_surrogate_vs_model_mc_rule"] = mc_rule_for_checking
-    dictionary_with_inf_about_the_run["comparison_surrogate_vs_model_error_type"] = error_type
-
-    # TODO Experiment with different sampling strategies
-    if sampleFromStandardDist:
-        mc_nodes = joinedStandardDists.sample(size=numSamples_for_checking, rule=mc_rule_for_checking).round(4)
-        mc_nodes = np.array(mc_nodes)
-        # mc_parameters = transformSamples(mc_nodes, joinedStandardDists, joinedDists)
-        mc_parameters = transformSamples_lin_or_nonlin(mc_nodes, joinedStandardDists, joinedDists, linear=False)
-    else:
-        mc_nodes = joinedDists.sample(size=numSamples_for_checking, rule=mc_rule_for_checking).round(4)
-        mc_nodes = np.array(mc_nodes)
-        mc_parameters = mc_nodes
-
-    ######Re-evaluating Surrogate Model########
-    # TODO Interesting to see if it will be more memory efficient if I would evaluate surrogate_model
-    #  inside of the sub-routine and not transfer it around...
-    # surrogate_evaluations = surrogate_model(mc_nodes.T)  # Var 1 - surrogate_model=gPCE;
-    # surrogate_evaluations = np.array([surrogate_model(nodes) for nodes in mc_nodes.T])
-    reevaluation_surrogate_model_start_time = time.time()
-    # TODO - This will probably change once the output is 2D (HBV, Larsim)
-    # TODO - ask if surrogate_model can evaluate all vector nodes at once
-    # TODO - question if it make sense to check once again sampleFromStandardDist_when_evaluating_surrogate
-    if surrogate_model_of_interest.lower() == "gpce":
-        surrogate_evaluations = np.empty([mc_nodes.shape[1], ])
-        i = 0
-        if sampleFromStandardDist_when_evaluating_surrogate:
-            for sample in mc_nodes.T:
-                surrogate_evaluations[i] = surrogate_model(*sample)
-                i += 1
-        else:
-            for sample in mc_parameters.T:
-                surrogate_evaluations[i] = surrogate_model(*sample)
-                i += 1
-        surrogate_evaluations = np.array(surrogate_evaluations)
-    else:
-        if sampleFromStandardDist_when_evaluating_surrogate:
-            surrogate_evaluations = np.array(surrogate_model(mc_nodes.T))
-        else:
-            surrogate_evaluations = np.array(surrogate_model(mc_parameters.T))
-            surrogate_evaluations = np.reshape(surrogate_evaluations, surrogate_evaluations.shape[
-                0])  # TODO - This will probably change once the output is 2D (HBV, Larsim)
-    reevaluation_surrogate_model_end_time = time.time()
-    reevaluation_surrogate_model_duration = reevaluation_surrogate_model_end_time - reevaluation_surrogate_model_start_time
-    print(f"re evaluation surrogate model duration: {reevaluation_surrogate_model_duration} "
-          f"in {numSamples_for_checking} new MC points")
-    # print(f"mc_nodes.shape - {mc_nodes.shape}; "
-    #       f"\n type(surrogate_model) - {type(surrogate_model)};  "
-    #       f"\n surrogate_model.shape - {surrogate_model.shape};")
-    # print(f"type surrogate_evaluations : {type(surrogate_evaluations)}; shape {surrogate_evaluations.shape}")
-
-    ######Re-evaluating Intermediate Surrogate Model########
-    intermediate_surrogate_evaluations = None
-    if intermediate_surrogate is not None:
-        # intermediate_surrogate is always combibinstance and is, for now, always evaluated in original nodes
-        reevaluation_intermediate_surrogate_model_start_time = time.time()
-        intermediate_surrogate_evaluations = np.array(intermediate_surrogate(mc_parameters.T))
-        # TODO - This will probably change once the output is 2D (HBV, Larsim)
-        intermediate_surrogate_evaluations = np.reshape(intermediate_surrogate_evaluations,
-                                                        intermediate_surrogate_evaluations.shape[0])
-        reevaluation_intermediate_surrogate_model_end_time = time.time()
-        reevaluation_intermediate_surrogate_model_duration = reevaluation_intermediate_surrogate_model_end_time - reevaluation_intermediate_surrogate_model_start_time
-        print(f"re evaluation intermediate surrogate model duration: {reevaluation_intermediate_surrogate_model_duration} "
-              f"in {numSamples_for_checking} new MC points")
-
-    ######Re-evaluating True Model########
-    reevaluation_model_start_time = time.time()
-    if can_model_evaluate_all_vector_nodes:
-        true_model_evaluations = problem_function(mc_parameters.T)
-        true_model_evaluations = np.reshape(true_model_evaluations, true_model_evaluations.shape[0])  # TODO - This will probably change once the output is 2D (HBV, Larsim)
-    else:
-        true_model_evaluations = np.array([problem_function(parameter) for parameter in mc_parameters.T])
+    if variant!=4:
+        print(f"\n==Model Error==")
+        # Evaluate surrogate model and a certain number of new points, and compute error
+        # Ideas come from:
+        # P. Conrad and Y. Marzouk: "ADAPTIVE SMOLYAK PSEUDOSPECTRAL APPROXIMATIONS"
+        # V. Barthelmann, E. Novak, and K. Ritter: "HIGH DIMENSIONAL POLYNOMIAL INTERPOLATION ON SPARSE GRIDS"
         # TODO Experiment with this
-        # true_model_evaluations = np.squeeze(true_model_evaluations)
-        true_model_evaluations = np.reshape(true_model_evaluations, true_model_evaluations.shape[0])
-    reevaluation_model_end_time = time.time()
-    reevaluation_model_duration = reevaluation_model_end_time - reevaluation_model_start_time
-    print(f"re evaluation model duration: {reevaluation_model_duration} in {numSamples_for_checking} new MC points")
-    # print(f"mc_parameters.shape - {mc_parameters.shape}; "
-    #       f"\n type(problem_function) - {type(problem_function)};")
-    # print(f"type true_model_evaluations : {type(true_model_evaluations)}; shape {true_model_evaluations.shape}")
+        numSamples_for_checking = 10**dim  # Note: Big Memory problem when more than 10**4 points?
+        mc_rule_for_checking = "r"  # sampling_rule or "g" or grid
+        error_type = "mean"  # "mean" "l2" | "max" "l1" not relevant for now...
 
-    print(f"DEBUGGING: surrogate_evaluations.shape: {surrogate_evaluations.shape}")
-    print(f"DEBUGGING: true_model_evaluations.shape: {true_model_evaluations.shape}")
+        dictionary_with_inf_about_the_run["comparison_surrogate_vs_model_numSamples"] = numSamples_for_checking
+        dictionary_with_inf_about_the_run["comparison_surrogate_vs_model_mc_rule"] = mc_rule_for_checking
+        dictionary_with_inf_about_the_run["comparison_surrogate_vs_model_error_type"] = error_type
 
-    # when surrogate_model_of_interest == "sg" or "combiinstance" this will produce interpolation error like in Obi's paper
-    # error_linf = None
-    # error_l2 = None
-    # if error_type == "max" or error_type == "l1" or error_type == "L1":
-    error_linf = np.max(np.abs(true_model_evaluations - surrogate_evaluations))
-    if intermediate_surrogate_evaluations is not None:
-        error_linf_intermediate_surrogate = np.max(np.abs(true_model_evaluations - intermediate_surrogate_evaluations))
-    # error_linf = np.linalg.norm(true_model_evaluations - surrogate_evaluations, ord=np.inf)
-    # elif error_type == "mean" or error_type == "l2" or error_type == "L2":
-    error_l2 = np.sqrt(np.sum((true_model_evaluations - surrogate_evaluations)**2))
-    if intermediate_surrogate_evaluations is not None:
-        error_l2_intermediate_surrogate = np.sqrt(np.sum((true_model_evaluations - intermediate_surrogate_evaluations) ** 2))
-    # error_l2 = np.linalg.norm(true_model_evaluations - surrogate_evaluations, ord=2)
+        # TODO Experiment with different sampling strategies
+        if sampleFromStandardDist:
+            mc_nodes = joinedStandardDists.sample(size=numSamples_for_checking, rule=mc_rule_for_checking).round(4)
+            mc_nodes = np.array(mc_nodes)
+            # mc_parameters = transformSamples(mc_nodes, joinedStandardDists, joinedDists)
+            mc_parameters = transformSamples_lin_or_nonlin(mc_nodes, joinedStandardDists, joinedDists, linear=False)
+        else:
+            mc_nodes = joinedDists.sample(size=numSamples_for_checking, rule=mc_rule_for_checking).round(4)
+            mc_nodes = np.array(mc_nodes)
+            mc_parameters = mc_nodes
 
-    # else:
-    #     raise Exception(f"error_type-{error_type} is not supported!!!")
+        ######Re-evaluating Surrogate Model########
+        # TODO Interesting to see if it will be more memory efficient if I would evaluate surrogate_model
+        #  inside of the sub-routine and not transfer it around...
+        # surrogate_evaluations = surrogate_model(mc_nodes.T)  # Var 1 - surrogate_model=gPCE;
+        # surrogate_evaluations = np.array([surrogate_model(nodes) for nodes in mc_nodes.T])
+        reevaluation_surrogate_model_start_time = time.time()
+        # TODO - This will probably change once the output is 2D (HBV, Larsim)
+        # TODO - ask if surrogate_model can evaluate all vector nodes at once
+        # TODO - question if it make sense to check once again sampleFromStandardDist_when_evaluating_surrogate
+        if surrogate_model_of_interest.lower() == "gpce":
+            surrogate_evaluations = np.empty([mc_nodes.shape[1], ])
+            i = 0
+            if sampleFromStandardDist_when_evaluating_surrogate:
+                for sample in mc_nodes.T:
+                    surrogate_evaluations[i] = surrogate_model(*sample)
+                    i += 1
+            else:
+                for sample in mc_parameters.T:
+                    surrogate_evaluations[i] = surrogate_model(*sample)
+                    i += 1
+            surrogate_evaluations = np.array(surrogate_evaluations)
+        else:
+            if sampleFromStandardDist_when_evaluating_surrogate:
+                surrogate_evaluations = np.array(surrogate_model(mc_nodes.T))
+            else:
+                surrogate_evaluations = np.array(surrogate_model(mc_parameters.T))
+                surrogate_evaluations = np.reshape(surrogate_evaluations, surrogate_evaluations.shape[
+                    0])  # TODO - This will probably change once the output is 2D (HBV, Larsim)
+        reevaluation_surrogate_model_end_time = time.time()
+        reevaluation_surrogate_model_duration = reevaluation_surrogate_model_end_time - reevaluation_surrogate_model_start_time
+        print(f"re evaluation surrogate model duration: {reevaluation_surrogate_model_duration} "
+              f"in {numSamples_for_checking} new MC points")
+        # print(f"mc_nodes.shape - {mc_nodes.shape}; "
+        #       f"\n type(surrogate_model) - {type(surrogate_model)};  "
+        #       f"\n surrogate_model.shape - {surrogate_model.shape};")
+        # print(f"type surrogate_evaluations : {type(surrogate_evaluations)}; shape {surrogate_evaluations.shape}")
 
-    dictionary_with_inf_about_the_run["reevaluation_surrogate_model_duration"] = reevaluation_surrogate_model_duration
-    dictionary_with_inf_about_the_run["reevaluation_model_duration"] = reevaluation_model_duration
+        ######Re-evaluating Intermediate Surrogate Model########
+        intermediate_surrogate_evaluations = None
+        if intermediate_surrogate is not None:
+            # intermediate_surrogate is always combibinstance and is, for now, always evaluated in original nodes
+            reevaluation_intermediate_surrogate_model_start_time = time.time()
+            intermediate_surrogate_evaluations = np.array(intermediate_surrogate(mc_parameters.T))
+            # TODO - This will probably change once the output is 2D (HBV, Larsim)
+            intermediate_surrogate_evaluations = np.reshape(intermediate_surrogate_evaluations,
+                                                            intermediate_surrogate_evaluations.shape[0])
+            reevaluation_intermediate_surrogate_model_end_time = time.time()
+            reevaluation_intermediate_surrogate_model_duration = reevaluation_intermediate_surrogate_model_end_time - reevaluation_intermediate_surrogate_model_start_time
+            print(f"re evaluation intermediate surrogate model duration: {reevaluation_intermediate_surrogate_model_duration} "
+                  f"in {numSamples_for_checking} new MC points")
 
-    dictionary_with_inf_about_the_run["error_model_linf"] = error_linf
-    dictionary_with_inf_about_the_run["error_model_l2"] = error_l2
+        ######Re-evaluating True Model########
+        reevaluation_model_start_time = time.time()
+        if can_model_evaluate_all_vector_nodes:
+            true_model_evaluations = problem_function(mc_parameters.T)
+            true_model_evaluations = np.reshape(true_model_evaluations, true_model_evaluations.shape[0])  # TODO - This will probably change once the output is 2D (HBV, Larsim)
+        else:
+            true_model_evaluations = np.array([problem_function(parameter) for parameter in mc_parameters.T])
+            # TODO Experiment with this
+            # true_model_evaluations = np.squeeze(true_model_evaluations)
+            true_model_evaluations = np.reshape(true_model_evaluations, true_model_evaluations.shape[0])
+        reevaluation_model_end_time = time.time()
+        reevaluation_model_duration = reevaluation_model_end_time - reevaluation_model_start_time
+        print(f"re evaluation model duration: {reevaluation_model_duration} in {numSamples_for_checking} new MC points")
+        # print(f"mc_parameters.shape - {mc_parameters.shape}; "
+        #       f"\n type(problem_function) - {type(problem_function)};")
+        # print(f"type true_model_evaluations : {type(true_model_evaluations)}; shape {true_model_evaluations.shape}")
 
-    if intermediate_surrogate is not None and intermediate_surrogate_evaluations is not None:
-        dictionary_with_inf_about_the_run["reevaluation_intermediate_surrogate_model_duration"] = reevaluation_intermediate_surrogate_model_duration
-        dictionary_with_inf_about_the_run["error_intermediate_surrogate_linf"] = error_linf_intermediate_surrogate
-        dictionary_with_inf_about_the_run["error_intermediate_surrogate_l2"] = error_l2_intermediate_surrogate
+        print(f"DEBUGGING: surrogate_evaluations.shape: {surrogate_evaluations.shape}")
+        print(f"DEBUGGING: true_model_evaluations.shape: {true_model_evaluations.shape}")
 
-    print(f"Max surrogate_evaluations: {max(surrogate_evaluations)}; Min surrogate_evaluations: {min(surrogate_evaluations)};")
-    print(f"Max true_model_evaluations: {max(true_model_evaluations)}; Min true_model_evaluations: {min(true_model_evaluations)};")
-    print(f"Linf Error = {error_linf} \nL2 Error = {error_l2}")
+        # when surrogate_model_of_interest == "sg" or "combiinstance" this will produce interpolation error like in Obi's paper
+        # error_linf = None
+        # error_l2 = None
+        # if error_type == "max" or error_type == "l1" or error_type == "L1":
+        error_linf = np.max(np.abs(true_model_evaluations - surrogate_evaluations))
+        if intermediate_surrogate_evaluations is not None:
+            error_linf_intermediate_surrogate = np.max(np.abs(true_model_evaluations - intermediate_surrogate_evaluations))
+        # error_linf = np.linalg.norm(true_model_evaluations - surrogate_evaluations, ord=np.inf)
+        # elif error_type == "mean" or error_type == "l2" or error_type == "L2":
+        # error_l2 = np.sqrt(np.sum((true_model_evaluations - surrogate_evaluations)**2)) / math.sqrt(abs(numSamples_for_checking))
+        error_l2 = np.sqrt(np.sum((true_model_evaluations - surrogate_evaluations)**2))
+        if intermediate_surrogate_evaluations is not None:
+            error_l2_intermediate_surrogate = np.sqrt(np.sum((true_model_evaluations - intermediate_surrogate_evaluations) ** 2))
+            # error_l2_intermediate_surrogate = np.sqrt(
+            #     np.sum((true_model_evaluations - intermediate_surrogate_evaluations) ** 2)) / math.sqrt(abs(numSamples_for_checking))
+        # error_l2 = np.linalg.norm(true_model_evaluations - surrogate_evaluations, ord=2)
 
-    if intermediate_surrogate is not None and intermediate_surrogate_evaluations is not None:
-        print(
-            f"Max intermediate_surrogate_evaluations: {max(intermediate_surrogate_evaluations)}; "
-            f"Min intermediate_surrogate_evaluations: {min(intermediate_surrogate_evaluations)};")
-        print(f"Linf intermediate_surrogate Error = {error_linf_intermediate_surrogate} \n"
-              f"L2 intermediate_surrogate Error = {error_l2_intermediate_surrogate}")
+        # else:
+        #     raise Exception(f"error_type-{error_type} is not supported!!!")
+
+        dictionary_with_inf_about_the_run["reevaluation_surrogate_model_duration"] = reevaluation_surrogate_model_duration
+        dictionary_with_inf_about_the_run["reevaluation_model_duration"] = reevaluation_model_duration
+
+        dictionary_with_inf_about_the_run["error_model_linf"] = error_linf
+        dictionary_with_inf_about_the_run["error_model_l2"] = error_l2
+
+        if intermediate_surrogate is not None and intermediate_surrogate_evaluations is not None:
+            dictionary_with_inf_about_the_run["reevaluation_intermediate_surrogate_model_duration"] = reevaluation_intermediate_surrogate_model_duration
+            dictionary_with_inf_about_the_run["error_intermediate_surrogate_linf"] = error_linf_intermediate_surrogate
+            dictionary_with_inf_about_the_run["error_intermediate_surrogate_l2"] = error_l2_intermediate_surrogate
+
+        print(f"Max surrogate_evaluations: {max(surrogate_evaluations)}; Min surrogate_evaluations: {min(surrogate_evaluations)};")
+        print(f"Max true_model_evaluations: {max(true_model_evaluations)}; Min true_model_evaluations: {min(true_model_evaluations)};")
+        print(f"Linf Error = {error_linf} \nL2 Error = {error_l2}")
+
+        if intermediate_surrogate is not None and intermediate_surrogate_evaluations is not None:
+            print(
+                f"Max intermediate_surrogate_evaluations: {max(intermediate_surrogate_evaluations)}; "
+                f"Min intermediate_surrogate_evaluations: {min(intermediate_surrogate_evaluations)};")
+            print(f"Linf intermediate_surrogate Error = {error_linf_intermediate_surrogate} \n"
+                  f"L2 intermediate_surrogate Error = {error_l2_intermediate_surrogate}")
 
     #####################################
     # E = model_mean - approximated_mean
