@@ -50,6 +50,10 @@ b_4 = 7.03
 b_5 = 20.4
 b_6 = 4.3
 #
+genz_dict = {
+    "oscillatory":b_1, "product_peak":b_2, "corner_peak":b_3, "gaussian":b_4, "continous":b_5, "discontinuous":b_6
+}
+
 def generate_and_scale_coeff_and_weights(dim, b, w_norm=1, anisotropic=False):
     coeffs = cp.Uniform(0, 1).sample(dim)  # TODO Think of using some quasiMC method
     l1 = np.linalg.norm(coeffs, 1)
@@ -1776,47 +1780,12 @@ if __name__ == "__main__":
     # current_output_folder = "var1_gpce_gl_p6_q7"
     # current_output_folder = "var1_gpce_gl_p8_q9"
 
+    ######corner_peak Var 1#######
     list_of_dict_run_setups = [
-        {"model": "ishigami", "list_of_function_ids": None, "current_output_folder": "var1_gpce_gl_p4_q5",
-         "variant": 1, "quadrature_rule": "g", "q_order": 5, "p_order": 4, "sparse_quadrature": False,
-         "read_nodes_from_file": False, 'l':10},
-        {"model": "ishigami", "list_of_function_ids": None, "current_output_folder": "var1_gpce_gl_p4_q7",
-         "variant": 1, "quadrature_rule": "g", "q_order": 7, "p_order": 4, "sparse_quadrature": False,
-         "read_nodes_from_file": False, 'l': 10},
-        {"model": "ishigami", "list_of_function_ids": None, "current_output_folder": "var1_gpce_gl_p4_q9",
-         "variant": 1, "quadrature_rule": "g", "q_order": 9, "p_order": 4, "sparse_quadrature": False,
-         "read_nodes_from_file": False, 'l': 10},
-        {"model": "ishigami", "list_of_function_ids": None, "current_output_folder": "var1_gpce_gl_p6_q7",
-         "variant": 1, "quadrature_rule": "g", "q_order": 7, "p_order": 6, "sparse_quadrature": False,
-         "read_nodes_from_file": False, 'l': 10},
-        {"model": "ishigami", "list_of_function_ids": None, "current_output_folder": "var1_gpce_gl_p8_q9",
-         "variant": 1, "quadrature_rule": "g", "q_order": 9, "p_order": 8, "sparse_quadrature": False,
+        {"model": "corner_peak", "list_of_function_ids": [1, ], "current_output_folder": "var1_gpce_cc_p3_q7",
+         "variant": 1, "quadrature_rule": "c", "q_order": 7, "p_order": 3, "sparse_quadrature": True,
          "read_nodes_from_file": False, 'l': 10},
     ]
-
-    # list_of_dict_run_setups = [
-    #     {"model": "ishigami", "list_of_function_ids": None, "current_output_folder": "var1_gpce_cc_p4_q9",
-    #      "variant": 1, "quadrature_rule": "c", "q_order": 9, "p_order": 4, "sparse_quadrature": True,
-    #      "read_nodes_from_file": False, 'l':10},
-    #     {"model": "ishigami", "list_of_function_ids": None, "current_output_folder": "var1_gpce_cc_p4_q9",
-    #      "variant": 1, "quadrature_rule": "c", "q_order": 9, "p_order": 4, "sparse_quadrature": True,
-    #      "read_nodes_from_file": False, 'l': 10},
-    #     {"model": "ishigami", "list_of_function_ids": None, "current_output_folder": "var1_gpce_cc_p4_q9",
-    #      "variant": 1, "quadrature_rule": "c", "q_order": 9, "p_order": 4, "sparse_quadrature": True,
-    #      "read_nodes_from_file": False, 'l': 10},
-    # ]
-    #
-    # list_of_dict_run_setups = [
-    #     {"model": "ishigami", "list_of_function_ids": None, "current_output_folder": "var1_gpce_kpu_p4_l",
-    #      "variant": 1, "quadrature_rule": "c", "q_order": 9, "p_order": 4, "sparse_quadrature": True,
-    #      "read_nodes_from_file": True, 'l':10},
-    #     {"model": "ishigami", "list_of_function_ids": None, "current_output_folder": "var1_gpce_kpu_p4_l",
-    #      "variant": 1, "quadrature_rule": "c", "q_order": 9, "p_order": 4, "sparse_quadrature": True,
-    #      "read_nodes_from_file": True, 'l': 10},
-    #     {"model": "ishigami", "list_of_function_ids": None, "current_output_folder": "var1_gpce_kpu_p4_l",
-    #      "variant": 1, "quadrature_rule": "c", "q_order": 9, "p_order": 4, "sparse_quadrature": True,
-    #      "read_nodes_from_file": True, 'l': 10},
-    # ]
 
     for single_setup_dict in list_of_dict_run_setups:
         model = single_setup_dict["model"]
@@ -1829,12 +1798,13 @@ if __name__ == "__main__":
 
         current_output_folder = single_setup_dict["current_output_folder"]
         variant = single_setup_dict["variant"]
-        quadrature_rule = single_setup_dict["quadrature_rule"]
-        q_order = single_setup_dict["q_order"]
-        p_order = single_setup_dict["p_order"]
-        sparse_quadrature = single_setup_dict["sparse_quadrature"]
-        read_nodes_from_file = single_setup_dict["read_nodes_from_file"]
-        l = single_setup_dict["l"]
+
+        quadrature_rule = single_setup_dict.get("quadrature_rule", None)
+        q_order = single_setup_dict.get("q_order", None)
+        p_order = single_setup_dict.get("p_order", None)
+        sparse_quadrature = single_setup_dict.get("sparse_quadrature", None)
+        read_nodes_from_file = single_setup_dict.get("read_nodes_from_file", None)
+        l = single_setup_dict.get("l", None)
 
         start_time = time.time()
         # TODO Change for Genz that this is executed in this way whenever user wants that
@@ -1858,7 +1828,8 @@ if __name__ == "__main__":
                         single_coeffs = coeffs_weights[0]
                         single_weights = coeffs_weights[1]
                 else:
-                    single_coeffs, single_weights = generate_and_scale_coeff_and_weights(dim=dim, b=b_3, anisotropic=anisotropic)
+                    single_coeffs, single_weights = generate_and_scale_coeff_and_weights(
+                        dim=dim, b=genz_dict[model], anisotropic=anisotropic)
                 # all_coeffs[i] = single_coeffs
                 # all_weights[i] = single_weights
                 current_output_folder_single_model = f"{current_output_folder}_model_{i}"
