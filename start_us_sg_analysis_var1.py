@@ -252,31 +252,31 @@ if __name__ == "__main__":
     ######discontinuous Var 1#######
     # functions in the consideration: non-anisotropic 2 or 3
     list_of_dict_run_setups = [
-        {"model": "discontinuous", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_gl_p4_q4",
-         "variant": 1, "quadrature_rule": "g", "q_order": 4, "p_order": 4, "sparse_quadrature": False,
-         "read_nodes_from_file": False, 'l':10,
-         "compute_mean": False, "compute_var": False
-         },
-        {"model": "discontinuous", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_gl_p6_q6",
-         "variant": 1, "quadrature_rule": "g", "q_order": 6, "p_order": 6, "sparse_quadrature": False,
-         "read_nodes_from_file": False, 'l': 10,
-         "compute_mean": False, "compute_var": False
-         },
-        {"model": "discontinuous", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_gl_p6_q9",
-         "variant": 1, "quadrature_rule": "g", "q_order": 9, "p_order": 6, "sparse_quadrature": False,
-         "read_nodes_from_file": False, 'l': 10,
-         "compute_mean": False, "compute_var": False
-         },
-        {"model": "discontinuous", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_cc_p3_q7",
-         "variant": 1, "quadrature_rule": "c", "q_order": 7, "p_order": 3, "sparse_quadrature": True,
-         "read_nodes_from_file": False, 'l': 10,
-         "compute_mean": False, "compute_var": False
-         },
-        {"model": "discontinuous", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_cc_p4_q11",
-         "variant": 1, "quadrature_rule": "c", "q_order": 11, "p_order": 4, "sparse_quadrature": True,
-         "read_nodes_from_file": False, 'l': 10,
-         "compute_mean": False, "compute_var": False
-         },
+        # {"model": "discontinuous", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_gl_p4_q4",
+        #  "variant": 1, "quadrature_rule": "g", "q_order": 4, "p_order": 4, "sparse_quadrature": False,
+        #  "read_nodes_from_file": False, 'l':10,
+        #  "compute_mean": False, "compute_var": False
+        #  },
+        # {"model": "discontinuous", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_gl_p6_q6",
+        #  "variant": 1, "quadrature_rule": "g", "q_order": 6, "p_order": 6, "sparse_quadrature": False,
+        #  "read_nodes_from_file": False, 'l': 10,
+        #  "compute_mean": False, "compute_var": False
+        #  },
+        # {"model": "discontinuous", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_gl_p6_q9",
+        #  "variant": 1, "quadrature_rule": "g", "q_order": 9, "p_order": 6, "sparse_quadrature": False,
+        #  "read_nodes_from_file": False, 'l': 10,
+        #  "compute_mean": False, "compute_var": False
+        # #  },
+        # {"model": "discontinuous", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_cc_p3_q7",
+        #  "variant": 1, "quadrature_rule": "c", "q_order": 7, "p_order": 3, "sparse_quadrature": True,
+        #  "read_nodes_from_file": False, 'l': 10,
+        #  "compute_mean": False, "compute_var": False
+        #  },
+        # {"model": "discontinuous", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_cc_p4_q11",
+        #  "variant": 1, "quadrature_rule": "c", "q_order": 11, "p_order": 4, "sparse_quadrature": True,
+        #  "read_nodes_from_file": False, 'l': 10,
+        #  "compute_mean": False, "compute_var": False
+        #  },
         {"model": "discontinuous", "list_of_function_ids": [2,], "current_output_folder": "var1_gpce_cc_p6_q13",
          "variant": 1, "quadrature_rule": "c", "q_order": 13, "p_order": 6, "sparse_quadrature": True,
          "read_nodes_from_file": False, 'l': 10,

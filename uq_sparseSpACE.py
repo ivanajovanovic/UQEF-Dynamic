@@ -140,7 +140,7 @@ def _read_nodes_weights_dist_from_file(parameters_file_name, parameters_setup_fi
     else:
         distsOfNodesFromFile = []
         # Hard-coded by default, assumption is that read nodes have Uniform(0,1) distribution
-        for _ in range(dim):
+        for _ in range(stochastic_dim):
             distsOfNodesFromFile.append(cp.Uniform())
             # distsOfNodesFromFile.append(cp.Uniform(lower=0.0, upper=1.0))
         jointDistOfNodesFromFile = cp.J(*distsOfNodesFromFile)
@@ -225,6 +225,9 @@ def compute_gpce_chaospy_uqefpp(model, param_names, dists, joint, jointStandard,
     input model: name of the model in string format
     """
     # TODO Finish this function
+    print(f"\n==VAR1.0: gPCE Chaospy UQEF==")
+    uqsim = uqef.UQsim()
+
     pass
 
 
@@ -376,7 +379,7 @@ def compute_gpce_chaospy(model, param_names, dists, joint, jointStandard, dim, a
 
         fileName = f"results.txt"
         statFileName = str(outputModelDir / fileName)
-        fp = open(statFileName, "w")
+        fp = open(statFileName, "a")
         fp.write(f'E: {expectedInterp}\n')
         fp.write(f'Var: {varianceInterp}\n')
         fp.write(f'First order Sobol indices: {first_order_sobol_indices}\n')
@@ -499,8 +502,10 @@ def compute_surrogate_sparsespace_and_gpce(model, param_names, dists, joint, joi
     end_time_building_sg_surrogate = time.time()
     time_building_sg_surrogate = end_time_building_sg_surrogate - start_time_building_sg_surrogate
 
-    if plotting:
-        combiinstance.print_resulting_sparsegrid(markersize=10)
+    # if plotting:
+    #     combiinstance.print_resulting_sparsegrid(ticks=False, show_border=True)
+    #     combiinstance.print_resulting_combi_scheme(show_border=True, fill_boundary_points=True, fontsize=60, ticks=False)
+    #     combiinstance.draw_refinement(fontsize=60)
 
     number_full_model_evaluations = combiinstance.get_total_num_points()
     print(f"Needed time for building SG surrogate is: {time_building_sg_surrogate} \n"
@@ -509,7 +514,7 @@ def compute_surrogate_sparsespace_and_gpce(model, param_names, dists, joint, joi
     if writing_results_to_a_file:
         fileName = f"results.txt"
         statFileName = str(outputModelDir / fileName)
-        fp = open(statFileName, "w")
+        fp = open(statFileName, "a")
         fp.write(f"time_building_sg_surrogate: {time_building_sg_surrogate}\n")
         fp.write(f'number_full_model_evaluations: {number_full_model_evaluations}\n')
         fp.close()
@@ -641,7 +646,7 @@ def compute_surrogate_sparsespace_and_gpce(model, param_names, dists, joint, joi
 
             fileName = f"results.txt"
             statFileName = str(outputModelDir / fileName)
-            fp = open(statFileName, "w")
+            fp = open(statFileName, "a")
             fp.write(f'E: {expectedInterp}\n')
             fp.write(f'Var: {varianceInterp}\n')
             fp.write(f'First order Sobol indices: {first_order_sobol_indices}\n')
@@ -655,7 +660,7 @@ def compute_surrogate_sparsespace_and_gpce(model, param_names, dists, joint, joi
         return combiinstance, gPCE, expectedInterp, varianceInterp, first_order_sobol_indices, total_order_sobol_indices
 
 
-# # Var 3
+# # Var 2
 # #compute gPCE coefficients analytically on a piecewise linear interpolant constructed with standard CT or the single dimension refinement strategy
 # def analytica_integration_with_surrogate(model, param_names, dists, dim, a, b,
 #                              surrogate_model_of_interest="gPCE", plotting=False,
@@ -920,8 +925,10 @@ def compute_gpce_sparsespace(model, param_names, dists, dim, a, b, surrogate_mod
     end_time_building_sg_surrogate = time.time()
     time_building_sg_surrogate = end_time_building_sg_surrogate - start_time_building_sg_surrogate
 
-    if plotting:
-        combiinstance.print_resulting_sparsegrid(markersize=10)
+    # if plotting:
+    #     combiinstance.print_resulting_sparsegrid(ticks=False, show_border=True)
+    #     combiinstance.print_resulting_combi_scheme(show_border=True, fill_boundary_points=True, fontsize=60, ticks=False)
+    #     combiinstance.draw_refinement(fontsize=60)
 
     number_full_model_evaluations = combiinstance.get_total_num_points()
     print(f"Needed time for building SG surrogate is: {time_building_sg_surrogate} \n"
@@ -930,7 +937,7 @@ def compute_gpce_sparsespace(model, param_names, dists, dim, a, b, surrogate_mod
     if writing_results_to_a_file:
         fileName = f"results.txt"
         statFileName = str(outputModelDir / fileName)
-        fp = open(statFileName, "w")
+        fp = open(statFileName, "a")
         fp.write(f"time_building_sg_surrogate: {time_building_sg_surrogate}\n")
         fp.write(f'number_full_model_evaluations: {number_full_model_evaluations}\n')
         fp.close()
@@ -995,7 +1002,7 @@ def compute_gpce_sparsespace(model, param_names, dists, dim, a, b, surrogate_mod
 
         fileName = f"results.txt"
         statFileName = str(outputModelDir / fileName)
-        fp = open(statFileName, "w")
+        fp = open(statFileName, "a")
         fp.write(f'E: {expectedInterp}\n')
         fp.write(f'Var: {varianceInterp}\n')
         fp.write(f'First order Sobol indices: {first_order_sobol_indices}\n')
@@ -1468,7 +1475,7 @@ def main_routine(model, current_output_folder, **kwargs):
     #####################################
     # E = model - surrogate_model
     #####################################
-    if variant!=4:
+    if variant != 4:
         print(f"\n==Model Error==")
         # Evaluate surrogate model and a certain number of new points, and compute error
         # Ideas come from:
@@ -1860,21 +1867,3 @@ if __name__ == "__main__":
         end_time = time.time()
         duration = end_time - start_time
         print(f"The whole run took {duration} for examing {number_of_functions} different functions")
-
-
-# TODO finish this!
-# def compute_leja_sg_surrogate_and_gpce(a_model_param=7, b_model_param=0.1, modified_basis=False,
-#                                        spatiallyAdaptive=True, plotting=True, outputModelDir="./",
-#                                        lmax=2, max_evals=2000, tolerance=10 ** -5,
-#                                        rule='gaussian', sparse_utility=False, q=7, p=6):
-#     x1 = cp.Uniform(-math.pi, math.pi)
-#     x2 = cp.Uniform(-math.pi, math.pi)
-#     x3 = cp.Uniform(-math.pi, math.pi)
-#     joint = cp.J(x1, x2, x3)
-#     labels = [param_name.strip() for param_name in ["x1", "x2", "x3"]]
-#
-#     leja_surrogate = None
-#     _compute_gpce_chaospy_ishigami(a_model_param=a_model_param, b_model_param=b_model_param,
-#                                    labels=labels, my_model=leja_surrogate, joint=joint,
-#                                    q=q, p=p, rule=rule, sparse_utility=sparse_utility,
-#                                    outputModelDir=outputModelDir, can_model_evaluate_all_vector_nodes=True)
