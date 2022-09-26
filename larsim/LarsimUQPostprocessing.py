@@ -1,7 +1,5 @@
 # Set of functions to call if you want to execute some functionality of LarsimStatistics "afterward"
 # e.g., to compute statistics, to draw statistics
-# use this script to prototype the parallelization if statistics calculations
-# Assumes that nodes object (dictionary) and raw results dataframe are stored
 
 import chaospy as cp
 from collections import defaultdict
@@ -603,6 +601,7 @@ def _add_precipitation_to_graph(fig, master_configuration_folder, larsimStatisti
         )
     )
     return fig
+
 ###################################################################################################################
 # Refactor this
 ###################################################################################################################

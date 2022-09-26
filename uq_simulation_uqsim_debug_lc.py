@@ -69,13 +69,13 @@ if local_debugging:
     uqsim.args.sc_quadrature_rule = "p"  # "clenshaw_curtis", "patterson", "G"
 
     uqsim.args.read_nodes_from_file = True
-    l = 5
+    l = 7
     path_to_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/sparse_grid_nodes_weights")
     uqsim.args.parameters_file = path_to_file / f"KPU_d6_l{l}.asc" # f"KPU_d3_l{l}.asc"
     uqsim.args.parameters_setup_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEFPP/configurations/KPU_HBV_d6.json")
 
     uqsim.args.sc_poly_rule = "three_terms_recurrence"  # "gram_schmidt" | "three_terms_recurrence" | "cholesky"
-    uqsim.args.sc_poly_normed = True  # True
+    uqsim.args.sc_poly_normed = False  # True
     uqsim.args.sc_sparse_quadrature = True  # True
     uqsim.args.regression = False
 
@@ -85,7 +85,7 @@ if local_debugging:
     uqsim.args.sourceDir = pathlib.Path("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/HBV-SASK-data")
     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_ensemble_2'))
     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "ishigami_runs", "new_runs", 'ishigami_run_sc_sg_kpu_p8_q10'))
-    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs", 'sc_kpu_l_5_d_6_2006'))
+    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs", 'sc_kpu_l_7_d_6_p_4_2006'))
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
     #uqsim.args.config_file = "/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEFPP/configurations_Larsim/configuration_larsim_uqsim_cm2_v4.json" #"configuration_larsim_uqsim.json"
     #uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEFPP/configurations_Larsim/configurations_larsim_master_lai_small.json'
@@ -335,9 +335,9 @@ if uqsim.is_master():
 uqsim.calc_statistics()
 uqsim.save_statistics()
 if uqsim.args.model == "larsim":
-    uqsim.plot_statistics(display=False, plot_measured_timeseries=True, plot_unalteres_timeseries=False)
+    uqsim.plot_statistics(display=False, plot_measured_timeseries=True, plot_unaltered_timeseries=False)
 elif uqsim.args.model == "hbvsask":
-    uqsim.plot_statistics(display=False, plot_measured_timeseries=True, plot_unalteres_timeseries=False,
+    uqsim.plot_statistics(display=False, plot_measured_timeseries=True, plot_unaltered_timeseries=False,
                           measured_df_column_to_draw="streamflow", measured_df_timestamp_column="index")
 else:
     uqsim.plot_statistics(display=False)

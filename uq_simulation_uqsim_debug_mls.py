@@ -345,7 +345,7 @@ if uqsim.is_master():
 
 uqsim.calc_statistics()
 uqsim.save_statistics()
-uqsim.plot_statistics(display=False, plot_measured_timeseries=True, plot_unalteres_timeseries=True)
+uqsim.plot_statistics(display=False, plot_measured_timeseries=True, plot_unaltered_timeseries=True)
 
 # uqsim.args.uqsim_file = os.path.abspath(os.path.join(uqsim.args.outputResultDir, "uqsim.saved"))
 # uqsim.store_to_file()
