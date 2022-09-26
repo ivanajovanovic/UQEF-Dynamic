@@ -1048,20 +1048,20 @@ class LarsimStatistics(Statistics):
                     fileNameIdentIsFullName=False, safe=True, **kwargs):
 
         plot_measured_timeseries = kwargs.get('plot_measured_timeseries') \
-            if "plot_measured_timeseries" in kwargs else True
-        plot_unalteres_timeseries = kwargs.get('plot_unalteres_timeseries') \
-            if "plot_unalteres_timeseries" in kwargs else True
+            if "plot_measured_timeseries" in kwargs else False
+        plot_unaltered_timeseries = kwargs.get('plot_unaltered_timeseries') \
+            if "plot_unaltered_timeseries" in kwargs else False
         if self.timesteps_min is None or self.timesteps_max is None:
             if plot_measured_timeseries:
                 self.get_measured_data()
-            if plot_unalteres_timeseries:
+            if plot_unaltered_timeseries:
                 self.get_unaltered_run_data()
         else:
             # timestepRange = (pd.Timestamp(min(self.timesteps)), pd.Timestamp(max(self.timesteps)))
             timestepRange = (pd.Timestamp(self.timesteps_min), pd.Timestamp(self.timesteps_max))
             if plot_measured_timeseries:
                 self.get_measured_data(timestepRange=timestepRange)
-            if plot_unalteres_timeseries:
+            if plot_unaltered_timeseries:
                 self.get_unaltered_run_data(timestepRange=timestepRange)
 
         print(f"[LARSIM STAT INFO] plotResults function is called!")
