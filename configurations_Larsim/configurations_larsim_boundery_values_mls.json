@@ -80,7 +80,7 @@
   "model_run_settings":
   {
     "QOI":"Q",
-    "objective_function_qoi":"NSE",
+    "objective_function_qoi":"all",
     "mode":"continuous",
     "interval": 72,
     "min_periods": 24,

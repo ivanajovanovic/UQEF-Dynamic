@@ -3,19 +3,19 @@
     {
       "start_day": 1,
       "start_month": 10,
-      "start_year": 2002,
+      "start_year": 2003,
       "start_hour": 0,
       "start_minute": 0,
 
       "end_day": 30,
       "end_month": 9,
-      "end_year": 2006,
+      "end_year": 2007,
       "end_hour": 0,
       "end_minute": 0,
 
-      "run_full_timespan":"True",
+      "run_full_timespan":"False",
       "spin_up_length":1095,
-      "simulation_length": 7300,
+      "simulation_length": 365,
       "resolution": "daily",
 
       "cut_runs": "False",

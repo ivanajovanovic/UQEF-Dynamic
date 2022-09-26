@@ -7,8 +7,8 @@
       "start_hour": 0,
       "start_minute": 0,
 
-      "end_day": 31,
-      "end_month": 12,
+      "end_day": 30,
+      "end_month": 6,
       "end_year": 2013,
       "end_hour": 0,
       "end_minute": 0,
@@ -69,13 +69,14 @@
   {
     "type_of_output":"Abfluss Messung + Vorhersage",
     "type_of_output_measured":"Ground Truth",
-    "station_for_model_runs":"all",
+    "station_for_model_runs":"MARI",
     "station_calibration_postproc":"MARI",
-    "post_processing_for_all_stations":"True",
+    "post_processing_for_all_stations":"False",
     "dailyOutput":"False",
-    "run_and_save_simulations":"True",
+    "run_and_save_simulations":"False",
     "calculate_GoF":"True",
-    "objective_function":"all"
+    "objective_function":"all",
+    "always_save_original_model_runs": "False"
   },
   "model_run_settings":
   {
@@ -112,6 +113,30 @@
       "values_list": [50, 450.0, 1000]
     },
     {
+      "name": "EQD2",
+      "type": "tape35",
+      "distribution": "None",
+      "lower": 10,
+      "upper": 1000,
+      "lower_limit": 10,
+      "upper_limit": 1000,
+      "depends_on":"EQD",
+      "direction":"decreasing",
+      "default": 250.0,
+      "values_list": [10, 250.0, 500]
+    },
+    {
+      "name": "Dmax",
+      "type": "tape35",
+      "distribution": "None",
+      "lower": 0.06,
+      "upper": 10,
+      "lower_limit": 0.06,
+      "upper_limit": 10,
+      "default": 1.0,
+      "values_list": [0.06, 1.0, 10]
+    },
+    {
       "name": "beta",
       "type": "tape35",
       "distribution": "None",
@@ -138,30 +163,6 @@
     }
   ],
   "unused_parameters" : [
-    {
-      "name": "Dmax",
-      "type": "tape35",
-      "distribution": "None",
-      "lower": 0.06,
-      "upper": 10,
-      "lower_limit": 0.06,
-      "upper_limit": 10,
-      "default": 1.0,
-      "values_list": [0.06, 1.0, 10]
-    },
-    {
-      "name": "EQD2",
-      "type": "tape35",
-      "distribution": "None",
-      "lower": 10,
-      "upper": 1000,
-      "lower_limit": 10,
-      "upper_limit": 1000,
-      "depends_on":"EQD",
-      "direction":"decreasing",
-      "default": 250.0,
-      "values_list": [10, 250.0, 1000]
-    },
     {
       "name": "EQB",
       "type": "tape35",

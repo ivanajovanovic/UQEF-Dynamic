@@ -14,7 +14,7 @@
       "end_minute": 0,
 
       "timestep": 5,
-      "cut_runs": "False",
+      "cut_runs": "True",
       "warm_up_duration": 53
     },
   "model_settings": {
@@ -27,11 +27,11 @@
     "read_date_from_saved_data_dir": "True",
     "get_saved_simulations": "True",
     "run_unaltered_sim": "True",
-    "raise_exception_on_model_break": "False",
+    "raise_exception_on_model_break": "True",
     "max_retries": 10
   },
   "model_paths": {
-    "larsim_exe": "./Larsim-exe/larsim-linux-intel-1000.exe",
+    "larsim_exe": "Larsim-exe/larsim-linux-intel-1000.exe",
     "larsim_model_dir": "WHM Regen",
     "list_input_lila_files":
     [
@@ -156,6 +156,17 @@
     }
   ],
   "unused_parameters" : [
+    {
+      "name": "beta",
+      "type": "tape35",
+      "distribution": "Uniform",
+      "lower": 0.000002,
+      "upper": 0.1,
+      "lower_limit": 0.000002,
+      "upper_limit": 0.1,
+      "transformation":"log",
+      "default": 0.012
+    },
     {
       "name": "KG",
       "type": "tape35",

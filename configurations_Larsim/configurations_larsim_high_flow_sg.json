@@ -31,7 +31,7 @@
     "max_retries": 10
   },
   "model_paths": {
-    "larsim_exe": "./Larsim-exe/larsim-linux-intel-1000.exe",
+    "larsim_exe": "Larsim-exe/larsim-linux-intel-1000.exe",
     "larsim_model_dir": "WHM Regen",
     "list_input_lila_files":
     [
