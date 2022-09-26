@@ -245,6 +245,7 @@ class HBVSASKStatistics(Statistics):
         self.df_measured = None
         self.unaltered_computed = False
         self.groundTruth_computed = False
+        self.forcing_data_fetched = False
 
         self._is_Sobol_t_computed = False
         self._is_Sobol_m_computed = False
@@ -588,6 +589,25 @@ class HBVSASKStatistics(Statistics):
         self.df_unaltered = None
         self.unaltered_computed = False
 
+    def get_precipitation_temperature_input_data(self, time_column_name="TimeStamp",
+                          precipitation_column_name="precipitation", temperature_column_name="temperature", **kwargs):
+        precipitation_temperature_inp = kwargs.get("precipitation_temperature_inp", "Precipitation_Temperature.inp")
+        precipitation_temperature_inp = self.inputModelDir_basis / precipitation_temperature_inp
+
+        self.precipitation_temperature_df = hbv.read_precipitation_temperature(
+            precipitation_temperature_inp, time_column_name=time_column_name,
+            precipitation_column_name=precipitation_column_name, temperature_column_name=temperature_column_name
+        )
+
+        # Parse input based on some timeframe
+        if time_column_name in self.precipitation_temperature_df.columns:
+            self.precipitation_temperature_df = self.precipitation_temperature_df.loc[
+                (self.precipitation_temperature_df[time_column_name] >= self.timesteps_min) & (self.precipitation_temperature_df[time_column_name] <= self.timesteps_max)]
+        else:
+            self.precipitation_temperature_df = self.precipitation_temperature_df[self.timesteps_min:self.timesteps_max]
+
+        self.forcing_data_fetched = True
+
     ###################################################################################################################
 
     def plotResults(self, timestep=-1, display=False,
@@ -596,20 +616,33 @@ class HBVSASKStatistics(Statistics):
 
         plot_measured_timeseries = kwargs.get('plot_measured_timeseries', False)
         plot_unalteres_timeseries = kwargs.get('plot_unalteres_timeseries', False)
+        plot_forcing_timeseries = kwargs.get('plot_forcing_timeseries', False)
+        time_column_name = kwargs.get('time_column_name', "TimeStamp")
+
         if plot_measured_timeseries:
-            self.get_measured_data()
+            self.get_measured_data(
+                time_column_name=time_column_name,
+                streamflow_column_name=kwargs.get('measured_df_column_to_draw', "streamflow")
+            )
         if plot_unalteres_timeseries:
             self.get_unaltered_run_data()
+        if plot_forcing_timeseries:
+            self.get_precipitation_temperature_input_data(
+                time_column_name=time_column_name,
+                precipitation_column_name=kwargs.get('precipitation_df_column_to_draw', "precipitation"),
+                temperature_column_name=kwargs.get('temperature_df_column_to_draw', "temperature")
+            )
 
         single_fileName = self.generateFileName(fileName=fileName, fileNameIdent=".html",
                                                 directory=directory, fileNameIdentIsFullName=fileNameIdentIsFullName)
         fig = self._plotStatisticsDict_plotly(unalatered=self.unaltered_computed, measured=self.groundTruth_computed,
+                                              forcing=self.forcing_data_fetched,
                                               recalculateTimesteps=False, filename=single_fileName, display=display, **kwargs)
         if display:
             fig.show()
         print(f"[HBV STAT INFO] plotResults function is done!")
 
-    def _plotStatisticsDict_plotly(self, unalatered=False, measured=False, recalculateTimesteps=False,
+    def _plotStatisticsDict_plotly(self, unalatered=False, measured=False, forcing=False, recalculateTimesteps=False,
                                    window_title='HBVSASK Forward UQ & SA', filename="sim-plotly.html",
                                    display=False, **kwargs):
         pdTimesteps = self.pdTimesteps
@@ -618,8 +651,37 @@ class HBVSASKStatistics(Statistics):
         self._check_if_Sobol_m_computed(keyIter)
 
         starting_row = 1
-        n_rows, sobol_t_row, sobol_m_row = self._compute_number_of_rows_for_plotting(starting_row)
+        n_rows, starting_row, sobol_t_row, sobol_m_row = self._compute_number_of_rows_for_plotting(starting_row)
         fig = make_subplots(rows=n_rows, cols=1, print_grid=True, shared_xaxes=False)
+
+        if forcing and self.forcing_data_fetched:
+            # Temperature
+            column_to_draw = kwargs.get('temperature_df_column_to_draw', 'temperature')
+            timestamp_column = kwargs.get('temperature_df_timestamp_column', 'TimeStamp')
+            if timestamp_column == "index":
+                fig.add_trace(go.Scatter(x=self.precipitation_temperature_df.index,
+                                         y=self.precipitation_temperature_df[column_to_draw],
+                                         name="Temperature", line_color='green'),
+                              row=1, col=1)
+            else:
+                fig.add_trace(go.Scatter(x=self.precipitation_temperature_df[timestamp_column],
+                                         y=self.precipitation_temperature_df[column_to_draw],
+                                         name="Temperature", line_color='green'),
+                              row=1, col=1)
+
+            # Precipitation
+            column_to_draw = kwargs.get('precipitation_df_column_to_draw', 'precipitation')
+            timestamp_column = kwargs.get('precipitation_df_timestamp_column', 'TimeStamp')
+            if timestamp_column == "index":
+                fig.add_trace(go.Scatter(x=self.precipitation_temperature_df.index,
+                                         y=self.precipitation_temperature_df[column_to_draw],
+                                         name="Precipitation", line_color='blue'),
+                              row=2, col=1)
+            else:
+                fig.add_trace(go.Scatter(x=self.precipitation_temperature_df[timestamp_column],
+                                         y=self.precipitation_temperature_df[column_to_draw],
+                                         name="Precipitation", line_color='blue'),
+                              row=2, col=1)
 
         if unalatered and self.unaltered_computed:
             column_to_draw = self.qoi_column if self.qoi_column in self.df_unaltered.columns \
@@ -629,11 +691,11 @@ class HBVSASKStatistics(Statistics):
             if timestamp_column == "index":
                 fig.add_trace(go.Scatter(x=self.df_unaltered.index, y=self.df_unaltered[column_to_draw],
                                          name="Q (unaltered simulation)", line_color='deepskyblue'),
-                              row=1, col=1)
+                              row=starting_row, col=1)
             else:
                 fig.add_trace(go.Scatter(x=self.df_unaltered[timestamp_column], y=self.df_unaltered[column_to_draw],
                                          name="Q (unaltered simulation)", line_color='deepskyblue'),
-                              row=1, col=1)
+                              row=starting_row, col=1)
         if measured and self.groundTruth_computed:
             column_to_draw = self.qoi_column if self.qoi_column in self.df_measured.columns \
                 else kwargs.get('measured_df_column_to_draw', 'Value')
@@ -642,11 +704,11 @@ class HBVSASKStatistics(Statistics):
             if timestamp_column == "index":
                 fig.add_trace(go.Scatter(x=self.df_measured.index, y=self.df_measured[column_to_draw],
                                          name="Q (measured)", line_color='red'),
-                              row=1, col=1)
+                              row=starting_row, col=1)
             else:
                 fig.add_trace(go.Scatter(x=self.df_measured[timestamp_column], y=self.df_measured[column_to_draw],
                                          name="Q (measured)",line_color='red'),
-                              row=1, col=1)
+                              row=starting_row, col=1)
 
         fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.result_dict[key]["E"] for key in keyIter], name='E[QoI]',
                                  line_color='green', mode='lines'),
@@ -685,6 +747,9 @@ class HBVSASKStatistics(Statistics):
 
         fig.update_traces(mode='lines')
         #fig.update_xaxes(title_text="Time")
+        if forcing and self.forcing_data_fetched:
+            fig.update_yaxes(title_text="T [c]", side='right', showgrid=True, row=1, col=1)
+            fig.update_yaxes(title_text="N [mm/h]", side='right', showgrid=True, row=2, col=1)
         fig.update_yaxes(title_text=self.qoi_column, side='left', showgrid=True, row=starting_row, col=1)
         fig.update_yaxes(title_text="Std. Dev. [QoI]", side='left', showgrid=True, row=starting_row+1, col=1)
 
@@ -701,8 +766,10 @@ class HBVSASKStatistics(Statistics):
         plot(fig, filename=filename, auto_open=display)
         return fig
 
-    def _compute_number_of_rows_for_plotting(self, starting_row):
+    def _compute_number_of_rows_for_plotting(self, starting_row=1):
         sobol_t_row = sobol_m_row = None
+        if self.forcing_data_fetched:
+            starting_row += 2
         if self._is_Sobol_t_computed and self._is_Sobol_m_computed:
             n_rows = 4
             sobol_m_row = starting_row+2
@@ -715,7 +782,9 @@ class HBVSASKStatistics(Statistics):
             sobol_m_row = starting_row+2
         else:
             n_rows = 2
-        return n_rows, sobol_t_row, sobol_m_row
+        if self.forcing_data_fetched:
+            n_rows += 2
+        return n_rows, starting_row, sobol_t_row, sobol_m_row
     ###################################################################################################################
 
     def extract_mean_time_series(self):

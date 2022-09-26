@@ -134,6 +134,8 @@ class HBVSASKModel(object):
             except KeyError:
                 self.spin_up_length = 0  # 365*3
 
+        # note: one has to omit simulation_length both from kwargs and configurationObject
+        # if you want that run_full_timespan has an effect
         if "simulation_length" in kwargs:
             self.simulation_length = kwargs["simulation_length"]
         else:
