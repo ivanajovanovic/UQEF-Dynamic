@@ -5,7 +5,7 @@ import sys
 import time
 
 import LarsimUtilityFunctions.larsimPaths as paths
-from LarsimUtilityFunctions import larsimTimeUtility
+from LarsimUtilityFunctions import larsimTime
 from LarsimUtilityFunctions import larsimModel
 
 # from larsim import LarsimModel
@@ -28,7 +28,7 @@ def main():
         configurationObject = json.load(f)
     print(f"configurationObject: {configurationObject}")
     try:
-        time_settings_list = larsimTimeUtility.parse_datetime_configuration(configurationObject)
+        time_settings_list = larsimTime.parse_datetime_configuration(configurationObject)
     except KeyError as e:
         print(e)
 

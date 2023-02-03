@@ -1,7 +1,7 @@
 from uqef.model import Model
 from LarsimUtilityFunctions import larsimModel
 
-from LarsimUtilityFunctions import Utils as utils
+from LarsimUtilityFunctions import utils
 
 
 class LarsimModelUQ(larsimModel.LarsimModel, Model):

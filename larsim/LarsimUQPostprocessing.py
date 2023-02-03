@@ -24,7 +24,7 @@ import string as str
 from distutils.util import strtobool
 
 from LarsimUtilityFunctions import larsimDataPostProcessing
-from LarsimUtilityFunctions import larsimInputOutputUtilities
+from LarsimUtilityFunctions import larsimIO
 from LarsimUtilityFunctions import larsimPaths as paths
 
 from common import saltelliSobolIndicesHelpingFunctions
@@ -555,7 +555,7 @@ def redo_all_statistics(
 
 def _add_precipitation_to_graph(fig, master_configuration_folder, larsimStatisticsObject):
     n_lila_local_file = pathlib.Path(master_configuration_folder/"station-n.lila")
-    df_n = larsimInputOutputUtilities.any_lila_parser_toPandas(n_lila_local_file)
+    df_n = larsimIO.any_lila_parser_toPandas(n_lila_local_file)
     df_n = larsimDataPostProcessing.get_time_vs_station_values_df(df_n)
     df_n = larsimDataPostProcessing.parse_df_based_on_time(df_n, (larsimStatisticsObject.timesteps_min,
                                                                   larsimStatisticsObject.timesteps_max

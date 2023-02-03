@@ -23,8 +23,8 @@ import sys
 from uqef.stat import Statistics
 
 from LarsimUtilityFunctions import larsimDataPostProcessing
-from LarsimUtilityFunctions import larsimInputOutputUtilities
-from LarsimUtilityFunctions import larsimConfigurationSettings
+from LarsimUtilityFunctions import larsimIO
+from LarsimUtilityFunctions import larsimConfig
 import LarsimUtilityFunctions.larsimPaths as paths
 from LarsimUtilityFunctions.larsimModel import LarsimConfigurations
 
@@ -85,7 +85,7 @@ class LarsimSamples(object):
                                                                                      type_of_output=self.larsimConfObject.type_of_output_of_Interest,
                                                                                      station=self.larsimConfObject.station_of_Interest)
 
-            #larsimInputOutputUtilities._postProcessing_DataFrame_after_reading(df_single_result)
+            #larsimIO._postProcessing_DataFrame_after_reading(df_single_result)
             #simulation_start_timestamp = pd.Timestamp(df_single_result.TimeStamp.min()) + datetime.timedelta(hours=self.warm_up_duration)
             #df_single_result = larsimDataPostProcessing.parse_df_based_on_time(df_single_result, (simulation_start_timestamp, None))
 
@@ -94,7 +94,7 @@ class LarsimSamples(object):
 
         if list_of_single_df:
             self.df_simulation_result = pd.concat(list_of_single_df, ignore_index=True, sort=False, axis=0)
-            larsimInputOutputUtilities._postProcessing_DataFrame_after_reading(self.df_simulation_result)
+            larsimIO._postProcessing_DataFrame_after_reading(self.df_simulation_result)
             print(f"[LARSIM STAT INFO] Number of Unique TimeStamps (Hourly): "
                   f"{len(self.df_simulation_result.TimeStamp.unique())}")
             # TODO remove/refactor resample_time_series_df
@@ -996,7 +996,8 @@ class LarsimStatistics(Statistics):
                                                                                      dailyOutput=transform_measured_to_daily,
                                                                                      compression="gzip")
         else:
-            self.df_measured = larsimConfigurationSettings.extract_measured_discharge(
+            # TODO remove this, the path to mesured data is hardcoded
+            self.df_measured = larsimConfig.extract_measured_discharge(
                 timestepRange[0], timestepRange[1], index_run=0
             )
             self.df_measured = larsimDataPostProcessing.filterResultForStationAndTypeOfOutpu(self.df_measured,
@@ -1533,7 +1534,7 @@ class LarsimStatistics(Statistics):
 
     def _add_precipitation_to_graph(self, fig):
         n_lila_local_file = self.workingDir / 'master_configuration' / "station-n.lila"
-        df_n = larsimInputOutputUtilities.any_lila_parser_toPandas(n_lila_local_file)
+        df_n = larsimIO.any_lila_parser_toPandas(n_lila_local_file)
         df_n = larsimDataPostProcessing.get_time_vs_station_values_df(df_n)
         df_n = larsimDataPostProcessing.parse_df_based_on_time(df_n, (self.timesteps_min,
                                                                       self.timesteps_max
