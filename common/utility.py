@@ -5,10 +5,16 @@ Set of utility functions for preparing and/or postprocessing data for UQ runs of
 """
 
 import chaospy as cp
-import numpy as np
-import pandas as pd
+import datetime
 import matplotlib.pyplot as plt
+import numpy as np
+import os
+import os.path as osp
+import pandas as pd
+import pathlib
+from plotly.subplots import make_subplots
 import plotly.express as px
+import plotly.graph_objects as go
 import seaborn as sns
 from tabulate import tabulate
 
@@ -484,8 +490,153 @@ def calculateGoodnessofFit_simple(measuredDF, predictedDF, gof_list,
     return result
 
 ###################################################################################################################
+# Paths related functions
+###################################################################################################################
+
+
+class FileError(Exception):
+    def __init__(self, *args):
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        return repr(self.message)
+
+
+def _check_if_file_exists_pathlib(file: pathlib.PosixPath):
+    return file.exists()
+
+
+def _check_is_file_pathlib(file: pathlib.PosixPath):
+    return file.is_file()
+
+
+def check_if_file_exists_pathlib(file_path, message=None):
+    if not _check_is_file_pathlib(file_path) or not _check_if_file_exists_pathlib(file_path):
+        raise FileError(message)
+    else:
+        return True
+
+
+def _check_if_file_exists_str(file_path, message=None):
+    if not os.path.isfile(file_path):
+        raise FileError(message)
+    else:
+        return True
+
+
+def check_if_file_exists(file_path, message=None):
+    if message is None:
+        message = f'{file_path} is not a file, or it does not exists!'
+    if isinstance(file_path, str):
+        return _check_if_file_exists_str(file_path, message)
+    elif isinstance(file_path, pathlib.PosixPath):
+        return check_if_file_exists_pathlib(file_path, message)
+    else:
+        raise FileError(f"{file_path} is neither a pathlib object nor string!")
+
+
+def pathlib_to_from_str(path, transfrom_to='str'):
+    """
+    Take the input path and transform it to transfrom_to type
+    transfrom_to: 'str' or 'Path'
+    """
+    if transfrom_to == 'Path' and isinstance(path, str):
+        return pathlib.Path(path)
+    elif transfrom_to == 'str' and isinstance(path, pathlib.PosixPath):
+        return str(path)
+    elif (transfrom_to == 'str' and isinstance(path, str)) or (transfrom_to == 'Path' and
+                                                               isinstance(path, pathlib.PosixPath)):
+        return path
+    else:
+        raise ValueError(f"Error in pathlib_to_from_str fucnction got"
+                         f"unexpected argument; First argument should be of type string or pathlib.PosixPath")
+
+
+def _path_to_str(path):
+    return str(path)
+
+
+def _path_to_pathlib(path):
+    return pathlib.Path(path)
+
+
+def get_current_directory():
+    #return os.getcwd()
+    return pathlib.Path().cwd()
+
+
+def get_full_path_of_file(file: pathlib.PosixPath):
+    return file.resolve()
+
+
+def get_home_directory():
+    return pathlib.Path.home()
+
+###################################################################################################################
+# Time configurations
+###################################################################################################################
+
+
+def parse_datetime_configuration(time_settings_config):
+    """
+    Reads configuration dictionary and determines the start end end date of the simulation
+    """
+    if time_settings_config is None:
+        time_settings_config = dict()
+
+    if isinstance(time_settings_config, dict):
+        if "time_settings" in time_settings_config:
+            data = time_settings_config["time_settings"]
+        else:
+            data = time_settings_config
+        start_year = data.get("start_year", None)
+        start_month = data.get("start_month", None)
+        start_day = data.get("start_day", None)
+        start_hour = data.get("start_hour", None)
+        start_minute = data.get("start_minute", None)
+        end_year = data.get("end_year", None)
+        end_month = data.get("end_month", None)
+        end_day = data.get("end_day", None)
+        end_hour = data.get("end_hour", None)
+        end_minute = data.get("end_minute", None)
+    elif isinstance(time_settings_config, list) or isinstance(time_settings_config, tuple):
+        start_year, start_month, start_day, start_hour, start_minute, \
+        end_year, end_month, end_day, end_hour, end_minute = time_settings_config
+    else:
+        raise Exception(f"[Error] in parse_datetime_configuration: time_settings_config should be "
+                        f"dict, list or tuple storing start_year, start_month, etc.")
+
+    start_dt = datetime.datetime(year=start_year, month=start_month, day=start_day,
+                                 hour=start_hour, minute=start_minute)
+
+    end_dt = datetime.datetime(year=end_year, month=end_month, day=end_day,
+                               hour=end_hour, minute=end_minute)
+    return [start_dt, end_dt]
+
+
+###################################################################################################################
 # Reading saved data
 ###################################################################################################################
+
+
+def return_configuration_object(configurationObject):
+    if isinstance(configurationObject, str) or isinstance(configurationObject, pathlib.PosixPath):
+        try:
+            with open(configurationObject) as f:
+                return json.load(f)
+        except ValueError:
+            raise ValueError(
+                f"[Error] The .json file {configurationObject} "
+                f"which should be Configuration Object does not exist!\n")
+    elif isinstance(configurationObject, dict):
+        return configurationObject
+    else:
+        raise ValueError(
+            "[Error] You have to specify the Configuration Object or provide the path to the .json file!\n")
+
 
 def read_configuration_object_json(configurationObject, element=None):
     """
@@ -528,7 +679,7 @@ def _get_df_simulation_from_file(working_folder, df_all_simulations_name="df_all
 
 
 def _get_nodes_from_file(working_folder, dill_or_pickle="dill"):
-    working_folder = paths.pathlib_to_from_str(working_folder, transfrom_to='Path')
+    working_folder = pathlib_to_from_str(working_folder, transfrom_to='Path')
     nodes_dict = working_folder / 'nodes.simnodes'
     with open(nodes_dict, 'rb') as f:
         if dill_or_pickle == "dill":
