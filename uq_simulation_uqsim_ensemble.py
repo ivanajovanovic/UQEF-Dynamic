@@ -58,9 +58,10 @@ if local_debugging:
 
     uqsim.args.inputModelDir = os.path.abspath(os.path.join('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2','Larsim-data'))
     uqsim.args.sourceDir = os.path.abspath(os.path.join('/dss/dsshome1/lxc0C/ga45met2', 'Repositories', 'UQEFPP'))
-    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_ensemble_2013_all_tgb'))
+    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_ensemble_2013_may_lai_qoi_rmse'))
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
-    uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEFPP/configurations_Larsim/configurations_larsim_boundery_values.json'
+    # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEFPP/configurations_Larsim/configurations_larsim_boundery_values.json'
+    uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEFPP/configurations_Larsim/configurations_larsim_lai_boundery_values.json'
 
     uqsim.args.sampleFromStandardDist = False  # TODO Try with False|True
 

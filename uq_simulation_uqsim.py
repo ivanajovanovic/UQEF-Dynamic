@@ -55,12 +55,12 @@ if local_debugging:
     uqsim.args.uq_method = "sc"  # "sc" | "saltelli" | "mc" | "ensemble"
     uqsim.args.mc_numevaluations = 1000
     uqsim.args.sampling_rule = "random"  # | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
-    uqsim.args.sc_q_order = 8  # 7 #10 3
-    uqsim.args.sc_p_order = 4  # 4, 5, 6, 8
+    uqsim.args.sc_q_order = 6  # 7 #10 3
+    uqsim.args.sc_p_order = 3  # 4, 5, 6, 8
     uqsim.args.sc_quadrature_rule = "clenshaw_curtis"  # "p" "genz_keister_24" "leja"
 
     uqsim.args.read_nodes_from_file = True
-    l = 8  # 10
+    l = 6  # 10
     path_to_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/sparse_grid_nodes_weights")
     uqsim.args.parameters_file = path_to_file / f"KPU_d5_l{l}.asc" # f"KPU_d3_l{l}.asc"
     # uqsim.args.parameters_setup_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEFPP/configurations/KPU_HBV_d6.json")
@@ -78,7 +78,7 @@ if local_debugging:
     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_ensemble_2013_all_tgb'))
     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_lai_may_cc_q_6_p_4_stat_trial'))
     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs", 'sc_kpu_l_7_d_6_p_4_2007'))
-    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_sc_kpu_l_8_d_5_p_4_2013'))
+    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_sc_kpu_l_6_d_5_p_3_2013'))
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
     # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEFPP/configurations_Larsim/configurations_larsim_boundery_values.json'
     # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEFPP/configurations_Larsim/configurations_larsim_4_may.json'
