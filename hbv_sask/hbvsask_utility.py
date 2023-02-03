@@ -479,7 +479,7 @@ def HBV_SASK(forcing, long_term, par_values_dict, initial_condition_df, printing
 
     return flux, state
 
-
+# TODO, add code for a gradient mode
 def parameters_configuration(parameters, configurationObject, take_direct_value=False):
     parameters_dict = defaultdict()  # copy.deepcopy(DEFAULT_PAR_VALUES_DICT)
 

@@ -252,7 +252,7 @@ class HBVSASKModel(object):
         writing_results_to_a_file = kwargs.get("writing_results_to_a_file", self.writing_results_to_a_file)
         plotting = kwargs.get("plotting", self.plotting)
 
-        merge_output_with_measured_data = kwargs.get("merge_output_with_measured_data", True)
+        merge_output_with_measured_data = kwargs.get("merge_output_with_measured_data", False)
         if self.calculate_GoF:
             merge_output_with_measured_data = True
 
@@ -340,7 +340,7 @@ class HBVSASKModel(object):
             state_df.rename(columns={"index": self.time_column_name}, inplace=True)
 
             # TODO - Different QoI (e.g., some likelihood); Different purpose - ActiveSubspaces
-            # self.qoi = "GoF" | "Q"
+            # self.qoi = "GoF" | "Q" | ["Q_cms","AET"]
             # self.mode = "continuous" | "sliding_window" | "resampling"
             # self.compute_gradients = True | False
 
@@ -355,7 +355,9 @@ class HBVSASKModel(object):
             # Compute Metrics
             index_parameter_gof_DF = None
             if self.calculate_GoF:
-                index_parameter_gof_DF = self._calculate_GoF(measuredDF=flux_df, predictedDF=flux_df, parameters_dict=parameters_dict)
+                # TODO measuredDF should be self.time_series_data_df?
+                index_parameter_gof_DF = self._calculate_GoF(measuredDF=self.time_series_data_df, predictedDF=flux_df, parameters_dict=parameters_dict)
+                # index_parameter_gof_DF = self._calculate_GoF(measuredDF=flux_df, predictedDF=flux_df, parameters_dict=parameters_dict)
             result_dict["gof_df"] = index_parameter_gof_DF
 
             results_array.append((result_dict, runtime))
@@ -395,10 +397,10 @@ class HBVSASKModel(object):
 
     def _calculate_GoF(self, measuredDF, predictedDF, parameters_dict):
         """
-        Assumpiton - that predictedDF stores as well measured data
+        Assumption - that predictedDF stores as well measured data
         """
         gof_dict = utility.calculateGoodnessofFit_simple(
-            measuredDF=predictedDF,
+            measuredDF=measuredDF,
             predictedDF=predictedDF,
             gof_list=self.objective_function,
             measuredDF_time_column_name=self.time_column_name,

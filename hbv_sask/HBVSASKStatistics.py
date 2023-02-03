@@ -45,7 +45,7 @@ class HBVSASKSamples(object):
 
         try:
             calculate_GoF = strtobool(self.configurationObject["output_settings"]["calculate_GoF"])
-            compute_gradients = strtobool(self.configurationObject["model_run_settings"]["compute_gradients"])
+            compute_gradients = strtobool(self.configurationObject["simulation_settings"]["compute_gradients"])
         except KeyError:
             calculate_GoF = False
             compute_gradients = False
@@ -211,9 +211,13 @@ class HBVSASKStatistics(Statistics):
         self._compute_Sobol_m = kwargs.get('compute_Sobol_m', True)
         self._compute_Sobol_m2 = kwargs.get('compute_Sobol_m2', False)
 
-        self.qoi_column = kwargs.get('qoi_column', "Value")
-
         #####################################
+        # self.qoi_column = kwargs.get('qoi_column', "Value")
+        if "qoi_column" in kwargs:
+            self.qoi_column = kwargs['qoi_column']
+        else:
+            self.qoi_column = self.configurationObject["model_settings"].get("qoi_column", 'Value')
+
         if "run_full_timespan" in kwargs:
             self.run_full_timespan = kwargs['run_full_timespan']
         else:
@@ -302,7 +306,7 @@ class HBVSASKStatistics(Statistics):
         self.work_package_indexes = kwargs.get('work_package_indexes') if 'work_package_indexes' in kwargs else None
 
         try:
-            compute_gradients = strtobool(self.configurationObject["model_run_settings"]["compute_gradients"])
+            compute_gradients = strtobool(self.configurationObject["simulation_settings"]["compute_gradients"])
         except KeyError:
             compute_gradients = False
 
