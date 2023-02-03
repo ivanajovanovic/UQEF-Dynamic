@@ -1,19 +1,20 @@
 {
   "time_settings":
     {
-      "start_day": 15,
+      "start_day": 29,
       "start_month": 5,
       "start_year": 2013,
       "start_hour": 0,
       "start_minute": 0,
 
-      "end_day": 15,
+      "end_day": 10,
       "end_month": 6,
       "end_year": 2013,
       "end_hour": 0,
       "end_minute": 0,
 
-      "timestep": 5,
+      "timestep": 6,
+      "timestep_in_hours": "True",
       "cut_runs": "True",
       "warm_up_duration": 53
     },
@@ -26,7 +27,7 @@
     "get_measured_discharge": "True",
     "read_date_from_saved_data_dir": "True",
     "get_saved_simulations": "True",
-    "run_unaltered_sim": "True",
+    "run_unaltered_sim": "False",
     "raise_exception_on_model_break": "True",
     "max_retries": 10
   },
@@ -68,16 +69,16 @@
   "output_settings": {
     "type_of_output": "Abfluss Messung + Vorhersage",
     "type_of_output_measured": "Ground Truth",
-    "station_calibration_postproc": "MARI",
     "station_for_model_runs": "all",
-    "post_processing_for_all_stations": "False",
     "dailyOutput": "False",
     "run_and_save_simulations": "True",
     "calculate_GoF":"True",
     "objective_function":"all",
-    "always_save_original_model_runs": "False"
+    "always_save_original_model_runs": "False",
+    "station_calibration_postproc": "MARI",
+    "post_processing_for_all_stations": "False"
   },
-  "model_run_settings": {
+  "simulation_settings": {
     "QOI":"Q",
     "objective_function_qoi":"all",
     "mode":"continuous",
@@ -88,9 +89,11 @@
     "gradients_method":"Forward Difference"
   },
   "parameters_settings": {
-      "addSampledValue":"False",
+      "addSampledValue":"True",
+      "addAbsoluteValue":"False",
       "TGB_standard": 3085,
       "TGB":"None",
+      "parametersDistributed": "True",
       "roundParameters":"False",
       "roundDecimal": 2,
       "cut_limits":"False"

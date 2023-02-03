@@ -28,8 +28,9 @@
   "model_paths": {
     "hbv_model_path": "Hydro_Models/HBV-SASK-data"
   },
-  "model_run_settings": {
+  "simulation_settings": {
     "QOI":"Q",
+    "qoi_column":["Q_cms", "AET"],
     "objective_function_qoi":"all",
     "mode":"continuous",
     "interval": 24,
