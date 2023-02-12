@@ -32,6 +32,90 @@ def _plot_time_series(df, column_to_plot):
     fig.show()
 
 
+def _plot_output_data_and_precipitation(input_data_df, simulated_data_df=None, input_data_time_column=None,
+                                        simulated_time_column=None, measured_data_column="streamflow",
+                                        simulated_column="Q_cms", precipitation_columns="precipitation",
+                                        additional_columns=None, plot_measured_data=False):
+    if input_data_time_column is not None and input_data_time_column != "index" and input_data_time_column in input_data_df.columns:
+        input_data_df = input_data_df.set_index(input_data_time_column)
+
+    if simulated_time_column is None or not simulated_time_column in simulated_data_df.columns:
+        input_data_df = input_data_df.loc[simulated_data_df.index.min():simulated_data_df.index.max()]
+    else:
+        input_data_df = input_data_df.loc[
+                        simulated_data_df[simulated_time_column].min():simulated_data_df[simulated_time_column].max()]
+
+    N_max = input_data_df[precipitation_columns].max()
+    timesteps_min = input_data_df.index.min()
+    timesteps_max = input_data_df.index.max()
+
+    fig = go.Figure()
+
+    if plot_measured_data:
+        fig.add_trace(go.Scatter(x=input_data_df.index,
+                                 y=input_data_df[measured_data_column],
+                                 name=measured_data_column
+                                 ))
+
+    if simulated_data_df is not None:
+        if simulated_time_column is None or not simulated_time_column in simulated_data_df.columns:
+            fig.add_trace(go.Scatter(x=simulated_data_df.index,
+                                     y=simulated_data_df[simulated_column],
+                                     name=simulated_column
+                                     ))
+        else:
+            fig.add_trace(go.Scatter(x=simulated_data_df[simulated_time_column],
+                                     y=simulated_data_df[simulated_column],
+                                     name=simulated_column
+                                     ))
+
+    fig.add_trace(go.Scatter(x=input_data_df.index, y=input_data_df[precipitation_columns],
+                             text=input_data_df[precipitation_columns], name="Precipitation", yaxis="y2", ))
+
+    if input_data_time_column is not None and input_data_time_column != "index" and input_data_time_column in input_data_df.columns:
+        input_data_df.reset_index(inplace=True)
+        input_data_df.rename(columns={"index": input_data_time_column}, inplace=True)
+
+    # Update axes
+    fig.update_layout(
+        xaxis=dict(
+            autorange=True,
+            range=[timesteps_min, timesteps_max],
+            type="date"
+        ),
+        yaxis=dict(
+            side="left",
+            domain=[0, 0.7],
+            mirror=True,
+            tickfont={"color": "#d62728"},
+            tickmode="auto",
+            ticks="inside",
+            title="Q [cm/s]",
+            titlefont={"color": "#d62728"},
+        ),
+        yaxis2=dict(
+            anchor="x",
+            domain=[0.7, 1],
+            mirror=True,
+            range=[N_max, 0],
+            side="right",
+            tickfont={"color": '#1f77b4'},
+            nticks=3,
+            tickmode="auto",
+            ticks="inside",
+            titlefont={"color": '#1f77b4'},
+            title="N [mm/h]",
+            type="linear",
+        )
+    )
+    fig.update_layout(legend=dict(
+        yanchor="bottom",
+        y=0.01,
+        xanchor="right",
+        x=1.21
+    ))
+    return fig
+
 def _plot_streamflow_and_precipitation(input_data_df, simulated_data_df=None, input_data_time_column=None,
                                        simulated_time_column=None, observed_streamflow_column="streamflow",
                                        simulated_streamflow_column="Q_cms", precipitation_columns="precipitation",

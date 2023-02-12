@@ -3,13 +3,13 @@
     {
       "start_day": 1,
       "start_month": 10,
-      "start_year": 2003,
+      "start_year": 2002,
       "start_hour": 0,
       "start_minute": 0,
 
       "end_day": 30,
       "end_month": 9,
-      "end_year": 2007,
+      "end_year": 2006,
       "end_hour": 0,
       "end_minute": 0,
 
@@ -24,23 +24,23 @@
   "model_settings": {
     "basis": "Oldman_Basin",
     "plotting": "False",
-    "writing_results_to_a_file": "False"
+    "writing_results_to_a_file": "False",
   },
   "model_paths": {
     "hbv_model_path": "Hydro_Models/HBV-SASK-data"
   },
   "simulation_settings": {
     "QOI":"Q",
-    "qoi_column":["Q_cms", "AET"],
+    "qoi_column":"Q_cms",
+    "qoi_column_measured":"streamflow",
     "objective_function_qoi":"all",
     "mode":"continuous",
     "interval": 24,
     "min_periods": 6,
     "method": "avrg",
     "compute_gradients":"False",
-    "gradients_method":"Forward Difference"
-  },
-  "output_settings": {
+    "gradients_method":"Forward Difference",
+    "read_measured_data": "True",
     "calculate_GoF":"True",
     "objective_function":["MAE", "MSE", "RMSE", "NRMSE", "NSE", "LogNSE", "KGE"]
   },

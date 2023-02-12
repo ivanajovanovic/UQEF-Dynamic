@@ -15,7 +15,7 @@ from pandas.plotting import register_matplotlib_converters
 import pathlib
 import pickle
 from plotly.offline import iplot, plot
-import plotly.graph_objs as go
+import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import plotly.express as px
 import time
@@ -656,35 +656,39 @@ class HBVSASKStatistics(Statistics):
 
         starting_row = 1
         n_rows, starting_row, sobol_t_row, sobol_m_row = self._compute_number_of_rows_for_plotting(starting_row)
-        fig = make_subplots(rows=n_rows, cols=1, print_grid=True, shared_xaxes=False)
+        fig = make_subplots(rows=n_rows, cols=1,
+                            print_grid=True, shared_xaxes=False,
+                            vertical_spacing=0.1)
+        #row_heights
 
         if forcing and self.forcing_data_fetched:
+            # Precipitation
+            column_to_draw = kwargs.get('precipitation_df_column_to_draw', 'precipitation')
+            timestamp_column = kwargs.get('precipitation_df_timestamp_column', 'TimeStamp')
+            N_max = self.precipitation_temperature_df[column_to_draw].max()
+            if timestamp_column == "index":
+                fig.add_trace(go.Bar(x=self.precipitation_temperature_df.index,
+                                     y=self.precipitation_temperature_df[column_to_draw],
+                                     name="Precipitation", marker_color='magenta'),
+                              row=1, col=1)
+            else:
+                fig.add_trace(go.Bar(x=self.precipitation_temperature_df[timestamp_column],
+                                     y=self.precipitation_temperature_df[column_to_draw],
+                                     name="Precipitation", marker_color='magenta'),
+                              row=1, col=1)
+
             # Temperature
             column_to_draw = kwargs.get('temperature_df_column_to_draw', 'temperature')
             timestamp_column = kwargs.get('temperature_df_timestamp_column', 'TimeStamp')
             if timestamp_column == "index":
                 fig.add_trace(go.Scatter(x=self.precipitation_temperature_df.index,
                                          y=self.precipitation_temperature_df[column_to_draw],
-                                         name="Temperature", line_color='green'),
-                              row=1, col=1)
-            else:
-                fig.add_trace(go.Scatter(x=self.precipitation_temperature_df[timestamp_column],
-                                         y=self.precipitation_temperature_df[column_to_draw],
-                                         name="Temperature", line_color='green'),
-                              row=1, col=1)
-
-            # Precipitation
-            column_to_draw = kwargs.get('precipitation_df_column_to_draw', 'precipitation')
-            timestamp_column = kwargs.get('precipitation_df_timestamp_column', 'TimeStamp')
-            if timestamp_column == "index":
-                fig.add_trace(go.Scatter(x=self.precipitation_temperature_df.index,
-                                         y=self.precipitation_temperature_df[column_to_draw],
-                                         name="Precipitation", line_color='blue'),
+                                         name="Temperature", line_color='blue', mode = 'lines+markers'),
                               row=2, col=1)
             else:
                 fig.add_trace(go.Scatter(x=self.precipitation_temperature_df[timestamp_column],
                                          y=self.precipitation_temperature_df[column_to_draw],
-                                         name="Precipitation", line_color='blue'),
+                                         name="Temperature", line_color='blue', mode = 'lines+markers'),
                               row=2, col=1)
 
         if unalatered and self.unaltered_computed:
@@ -694,11 +698,11 @@ class HBVSASKStatistics(Statistics):
             # TODO change this logic
             if timestamp_column == "index":
                 fig.add_trace(go.Scatter(x=self.df_unaltered.index, y=self.df_unaltered[column_to_draw],
-                                         name="Q (unaltered simulation)", line_color='deepskyblue'),
+                                         name="Q (unaltered simulation)", line_color='deepskyblue', mode = 'lines'),
                               row=starting_row, col=1)
             else:
                 fig.add_trace(go.Scatter(x=self.df_unaltered[timestamp_column], y=self.df_unaltered[column_to_draw],
-                                         name="Q (unaltered simulation)", line_color='deepskyblue'),
+                                         name="Q (unaltered simulation)", line_color='deepskyblue', mode = 'lines'),
                               row=starting_row, col=1)
         if measured and self.groundTruth_computed:
             column_to_draw = self.qoi_column if self.qoi_column in self.df_measured.columns \
@@ -707,11 +711,11 @@ class HBVSASKStatistics(Statistics):
             # TODO change this logic
             if timestamp_column == "index":
                 fig.add_trace(go.Scatter(x=self.df_measured.index, y=self.df_measured[column_to_draw],
-                                         name="Q (measured)", line_color='red'),
+                                         name="Q (measured)", line_color='red', mode = 'lines'),
                               row=starting_row, col=1)
             else:
                 fig.add_trace(go.Scatter(x=self.df_measured[timestamp_column], y=self.df_measured[column_to_draw],
-                                         name="Q (measured)",line_color='red'),
+                                         name="Q (measured)",line_color='red', mode = 'lines'),
                               row=starting_row, col=1)
 
         fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.result_dict[key]["E"] for key in keyIter], name='E[QoI]',
@@ -733,27 +737,28 @@ class HBVSASKStatistics(Statistics):
                       row=starting_row, col=1)
 
         fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.result_dict[key]["StdDev"] for key in keyIter],
-                                 name='std. dev', line_color='darkviolet'),
+                                 name='std. dev', line_color='darkviolet', mode = 'lines'),
                       row=starting_row+1, col=1)
 
         if self._is_Sobol_m_computed:
             for i in range(len(self.labels)):
                 name = self.labels[i] + "_S_m"
                 fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.result_dict[key]["Sobol_m"][i] for key in keyIter],
-                                         name=name, legendgroup=self.labels[i], line_color=colors.COLORS[i]),
+                                         name=name, legendgroup=self.labels[i], line_color=colors.COLORS[i], mode = 'lines'),
                               row=sobol_m_row, col=1)
         if self._is_Sobol_t_computed:
             for i in range(len(self.labels)):
                 name = self.labels[i] + "_S_t"
                 fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.result_dict[key]["Sobol_t"][i] for key in keyIter],
-                                         name=name, legendgroup=self.labels[i], line_color=colors.COLORS[i]),
+                                         name=name, legendgroup=self.labels[i], line_color=colors.COLORS[i], mode = 'lines'),
                               row=sobol_t_row, col=1)
 
-        fig.update_traces(mode='lines')
+        # fig.update_traces(mode='lines')
         #fig.update_xaxes(title_text="Time")
         if forcing and self.forcing_data_fetched:
-            fig.update_yaxes(title_text="T [c]", side='right', showgrid=True, row=1, col=1)
-            fig.update_yaxes(title_text="N [mm/h]", side='right', showgrid=True, row=2, col=1)
+            fig.update_yaxes(title_text="N [mm/h]", side='left', showgrid=True, row=1, col=1)
+            fig.update_yaxes(autorange="reversed", row=1, col=1)
+            fig.update_yaxes(title_text="T [c]", side='left', showgrid=True, row=2, col=1)
         fig.update_yaxes(title_text=self.qoi_column, side='left', showgrid=True, row=starting_row, col=1)
         fig.update_yaxes(title_text="Std. Dev. [QoI]", side='left', showgrid=True, row=starting_row+1, col=1)
 
@@ -762,7 +767,9 @@ class HBVSASKStatistics(Statistics):
         if self._is_Sobol_t_computed:
             fig.update_yaxes(title_text="Sobol_t", side='left', showgrid=True, range=[0, 1], row=sobol_t_row, col=1)
 
-        fig.update_layout(height=600, width=1000, title_text=window_title)
+        fig.update_layout(width=1000)
+        fig.update_layout(title_text=window_title)
+        fig.update_layout(xaxis=dict(type="date"))
 
         print(f"[HVB STAT INFO] _plotStatisticsDict_plotly function is almost over, just to save the plot!")
 

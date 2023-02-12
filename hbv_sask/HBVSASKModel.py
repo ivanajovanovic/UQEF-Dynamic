@@ -39,12 +39,6 @@ class HBVSASKModel(object):
     # TODO Think of moving this _setup into the separate class, e.g., (Larsim)Configurations
     def _setup(self, **kwargs):
 
-        self.uq_method = kwargs.get('uq_method', None)
-        self.raise_exception_on_model_break = kwargs.get('raise_exception_on_model_break', False)
-        if self.uq_method is not None and self.uq_method == "sc":  # always break when running gPCE simulation
-            self.raise_exception_on_model_break = True
-        self.disable_statistics = kwargs.get('disable_statistics', False)
-
         if "run_full_timespan" in kwargs:
             self.run_full_timespan = kwargs['run_full_timespan']
         else:
@@ -84,27 +78,50 @@ class HBVSASKModel(object):
         self.long_term_precipitation_column_name = kwargs.get("long_term_precipitation_column_name", "monthly_average_PE")
         self.long_term_temperature_column_name = kwargs.get("long_term_temperature_column_name", "monthly_average_T")
 
+        if "model_output_qoi" in kwargs:
+            self.qoi_column = kwargs['qoi_column']
+        else:
+            self.qoi_column = self.configurationObject["simulation_settings"].get("qoi_column", "Q_cms")
+
+        if "read_measured_data" in kwargs:
+            self.read_measured_data = kwargs['read_measured_data']
+            self.qoi_column_measured = kwargs['qoi_column_measured']
+        else:
+            self.read_measured_data = strtobool(self.configurationObject["simulation_settings"].get("read_measured_data", False))
+            self.qoi_column_measured = self.configurationObject["simulation_settings"].get("qoi_column_measured", "streamflow")
+        self.read_measured_streamflow = self.read_measured_data
+
+        # these set of control variables are for UQEF & UQEFPP framework...
+        self.uq_method = kwargs.get('uq_method', None)
+        self.raise_exception_on_model_break = kwargs.get('raise_exception_on_model_break', False)
+        if self.uq_method is not None and self.uq_method == "sc":  # always break when running gPCE simulation
+            self.raise_exception_on_model_break = True
+        self.disable_statistics = kwargs.get('disable_statistics', False)
+
         try:
-            self.calculate_GoF = strtobool(self.configurationObject["output_settings"].get("calculate_GoF", True))
-            self.objective_function = self.configurationObject["output_settings"].get("objective_function", "all")
+            self.calculate_GoF = strtobool(self.configurationObject["simulation_settings"].get("calculate_GoF", False))
+            self.objective_function = self.configurationObject["simulation_settings"].get("objective_function", [])
+            if not self.read_measured_data:
+                self.calculate_GoF = False
         except KeyError:
             self.calculate_GoF = False
             self.objective_function = []
 
         self._timespan_setup(**kwargs)
-        self._input_data_setup(
-            time_column_name=self.time_column_name, streamflow_column_name=self.streamflow_column_name,
-            precipitation_column_name=self.precipitation_column_name, temperature_column_name=self.temperature_column_name,
-            long_term_precipitation_column_name=self.long_term_precipitation_column_name,
-            long_term_temperature_column_name=self.long_term_temperature_column_name
-
-        )
+        self._input_data_setup(time_column_name=self.time_column_name,
+                               precipitation_column_name=self.precipitation_column_name,
+                               temperature_column_name=self.temperature_column_name,
+                               long_term_precipitation_column_name=self.long_term_precipitation_column_name,
+                               long_term_temperature_column_name=self.long_term_temperature_column_name,
+                               read_measured_streamflow=self.read_measured_streamflow,
+                               streamflow_column_name=self.streamflow_column_name)
 
         if self.plotting:
-            self._plot_input_data(
-                time_column_name=self.time_column_name, streamflow_column_name=self.streamflow_column_name,
-                precipitation_column_name=self.precipitation_column_name, temperature_column_name=self.temperature_column_name
-            )
+            figure = self._plot_input_data(time_column_name=self.time_column_name,
+                                           precipitation_column_name=self.precipitation_column_name,
+                                           temperature_column_name=self.temperature_column_name,
+                                           read_measured_streamflow=self.read_measured_streamflow,
+                                           streamflow_column_name=self.streamflow_column_name)
 
     def _timespan_setup(self, **kwargs):
         if self.run_full_timespan:
@@ -115,13 +132,13 @@ class HBVSASKModel(object):
                     year=self.configurationObject["time_settings"]["start_year"],
                     month=self.configurationObject["time_settings"]["start_month"],
                     day=self.configurationObject["time_settings"]["start_day"],
-                    hour=self.configurationObject["time_settings"]["start_hour"]
+                    hour=self.configurationObject["time_settings"].get("start_hour", 0)
                 )
                 self.end_date = pd.Timestamp(
                     year=self.configurationObject["time_settings"]["end_year"],
                     month=self.configurationObject["time_settings"]["end_month"],
                     day=self.configurationObject["time_settings"]["end_day"],
-                    hour=self.configurationObject["time_settings"]["end_hour"]
+                    hour=self.configurationObject["time_settings"].get("end_hour", 0)
                 )
             except KeyError:
                 self.start_date, self.end_date = hbv._get_full_time_span(self.basis)
@@ -162,22 +179,28 @@ class HBVSASKModel(object):
         # print(len(self.simulation_range), (self.end_date - self.start_date_predictions).days)
         # assert len(self.time_series_data_df[self.start_date:self.end_date]) == len(self.full_data_range)
 
-    def _input_data_setup(self, time_column_name="TimeStamp", streamflow_column_name="streamflow",
-                          precipitation_column_name="precipitation", temperature_column_name="temperature",
+    def _input_data_setup(self, time_column_name="TimeStamp", precipitation_column_name="precipitation",
+                          temperature_column_name="temperature",
                           long_term_precipitation_column_name="monthly_average_PE",
-                          long_term_temperature_column_name="monthly_average_T"
-                          ):
+                          long_term_temperature_column_name="monthly_average_T", read_measured_streamflow=True,
+                          streamflow_column_name="streamflow"):
         # Reading the input data
-        self.streamflow_df = hbv.read_streamflow(
-            self.streamflow_inp, time_column_name=time_column_name, streamflow_column_name=streamflow_column_name
-        )
+
         self.precipitation_temperature_df = hbv.read_precipitation_temperature(
             self.precipitation_temperature_inp, time_column_name=time_column_name,
             precipitation_column_name=precipitation_column_name, temperature_column_name=temperature_column_name
         )
-        self.time_series_data_df = pd.merge(
-            self.streamflow_df, self.precipitation_temperature_df,  left_index=True, right_index=True
-        )
+
+        if read_measured_streamflow:
+            self.streamflow_df = hbv.read_streamflow(
+                self.streamflow_inp, time_column_name=time_column_name, streamflow_column_name=streamflow_column_name
+            )
+            self.time_series_data_df = pd.merge(
+                self.streamflow_df, self.precipitation_temperature_df,  left_index=True, right_index=True
+            )
+        else:
+            self.time_series_data_df = self.precipitation_temperature_df
+
         self.precipitation_temperature_monthly_df = hbv.read_long_term_data(
             self.monthly_data_inp, time_column_name=time_column_name,
             precipitation_column_name=long_term_precipitation_column_name,
@@ -201,12 +224,18 @@ class HBVSASKModel(object):
         #                                 'beta': 2.0, 'FRAC': 0.5, 'K1': 0.5, 'alpha': 2.0, 'K2': 0.025,
         #                                 'UBAS': 1, 'PM': 1}
 
-    def _plot_input_data(self, time_column_name="TimeStamp", streamflow_column_name="streamflow",
-                         precipitation_column_name="precipitation", temperature_column_name="temperature"):
+    def _plot_input_data(self, time_column_name="TimeStamp", precipitation_column_name="precipitation",
+                         temperature_column_name="temperature", read_measured_streamflow=True,
+                         streamflow_column_name="streamflow"):
         if self.time_series_data_df is None:
             return
 
-        fig = make_subplots(rows=3, cols=1)
+        if read_measured_streamflow:
+            n_rows = 3
+        else:
+            n_rows = 2
+        fig = make_subplots(rows=n_rows, cols=1)
+
         if time_column_name in self.time_series_data_df.columns:
             fig.add_trace(
                 go.Scatter(x=self.time_series_data_df[time_column_name], y=self.time_series_data_df[precipitation_column_name],
@@ -214,8 +243,9 @@ class HBVSASKModel(object):
             fig.add_trace(
                 go.Scatter(x=self.time_series_data_df[time_column_name], y=self.time_series_data_df[temperature_column_name],
                            name="T"), row=2, col=1)
-            fig.add_trace(
-                go.Scatter(x=self.time_series_data_df[time_column_name], y=self.time_series_data_df[streamflow_column_name], name="Q_cms"), row=3, col=1)
+            if read_measured_streamflow:
+                fig.add_trace(
+                    go.Scatter(x=self.time_series_data_df[time_column_name], y=self.time_series_data_df[streamflow_column_name], name="Q_cms"), row=3, col=1)
         else:
             fig.add_trace(
                 go.Scatter(x=self.time_series_data_df.index, y=self.time_series_data_df[precipitation_column_name],
@@ -223,11 +253,13 @@ class HBVSASKModel(object):
             fig.add_trace(
                 go.Scatter(x=self.time_series_data_df.index, y=self.time_series_data_df[temperature_column_name],
                            name="T"), row=2, col=1)
-            fig.add_trace(
-                go.Scatter(x=self.time_series_data_df.index, y=self.time_series_data_df[streamflow_column_name], name="Q_cms"), row=3, col=1)
+            if read_measured_streamflow:
+                fig.add_trace(
+                    go.Scatter(x=self.time_series_data_df.index, y=self.time_series_data_df[streamflow_column_name], name="Q_cms"), row=3, col=1)
 
         plot_filename = self.workingDir / f"forcing_data.html"
         plot(fig, filename=str(plot_filename), auto_open=False)
+        return fig
 
     def prepare(self, *args, **kwargs):
         pass
@@ -253,6 +285,8 @@ class HBVSASKModel(object):
         plotting = kwargs.get("plotting", self.plotting)
 
         merge_output_with_measured_data = kwargs.get("merge_output_with_measured_data", False)
+        if not self.read_measured_data:
+            merge_output_with_measured_data = False
         if self.calculate_GoF:
             merge_output_with_measured_data = True
 
@@ -324,10 +358,10 @@ class HBVSASKModel(object):
             flux_df.set_index(self.time_column_name, inplace=True)
             flux_df = flux_df.loc[self.simulation_range]  # flux_df[self.start_date_predictions:self.end_date]
 
-            # Append measured streamflow to flux_df, i.e., merge flux_df and self.time_series_data_df[self.streamflow_column_name]
+            # Append measured data to flux_df, i.e., merge flux_df and self.time_series_data_df[self.qoi_column_measured]
             if merge_output_with_measured_data:
                 flux_df = flux_df.merge(
-                    self.time_series_data_df[[self.streamflow_column_name, ]], left_index=True, right_index=True)
+                    self.time_series_data_df[[self.qoi_column_measured, ]], left_index=True, right_index=True)
 
             # Parse state_df between start_date_predictions, end_date + 1
             state_df.set_index(self.time_column_name, inplace=True)
@@ -378,16 +412,15 @@ class HBVSASKModel(object):
                     index_parameter_gof_DF.to_pickle(file_path, compression="gzip")
 
             if plotting:
-                fig = hbv._plot_streamflow_and_precipitation(
-                    input_data_df=self.time_series_data_df,
-                    simulated_data_df=flux_df,
-                    input_data_time_column=self.time_column_name,
-                    simulated_time_column=self.time_column_name,
-                    observed_streamflow_column=self.streamflow_column_name,
-                    simulated_streamflow_column="Q_cms",
-                    precipitation_columns=self.precipitation_column_name,
-                    additional_columns=None
-                )
+                fig = hbv._plot_output_data_and_precipitation(input_data_df=self.time_series_data_df,
+                                                              simulated_data_df=flux_df,
+                                                              input_data_time_column=self.time_column_name,
+                                                              simulated_time_column=self.time_column_name,
+                                                              measured_data_column=self.qoi_column_measured,
+                                                              simulated_column=self.qoi_column,
+                                                              precipitation_columns=self.precipitation_column_name,
+                                                              additional_columns=None,
+                                                              plot_measured_data=self.read_measured_data)
                 # fig.add_trace(go.Scatter(x=flux_df.index, y=flux_df["Q_cms"], name="Q_cms"))
                 plot_filename = curr_working_dir / f"hbv_sask_{self.basis}_{i}.html"
                 plot(fig, filename=str(plot_filename), auto_open=False)
@@ -404,9 +437,9 @@ class HBVSASKModel(object):
             predictedDF=predictedDF,
             gof_list=self.objective_function,
             measuredDF_time_column_name=self.time_column_name,
-            measuredDF_column_name=self.streamflow_column_name,
+            measuredDF_column_name=self.qoi_column_measured,
             simulatedDF_time_column_name=self.time_column_name,
-            simulatedDF_column_name='Q_cms',
+            simulatedDF_column_name=self.qoi_column,
             return_dict=True,
         )
         index_parameter_gof_dict = {**parameters_dict, **gof_dict}

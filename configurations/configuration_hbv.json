@@ -31,15 +31,15 @@
   "simulation_settings": {
     "QOI":"Q",
     "qoi_column":["Q_cms", "AET"],
+    "qoi_column_measured":"streamflow",
     "objective_function_qoi":"all",
     "mode":"continuous",
     "interval": 24,
     "min_periods": 6,
     "method": "avrg",
     "compute_gradients":"False",
-    "gradients_method":"Forward Difference"
-  },
-  "output_settings": {
+    "gradients_method":"Forward Difference",
+    "read_measured_data": "True",
     "calculate_GoF":"True",
     "objective_function":["MAE", "MSE", "RMSE", "NRMSE", "NSE", "LogNSE", "KGE"]
   },
