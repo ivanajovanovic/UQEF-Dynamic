@@ -106,7 +106,7 @@
       "lower": 0,
       "upper": 1,
       "lower_limit": 50,
-      "upper_limit": 5000,
+      "upper_limit": 4000,
       "depends_on":"EQI",
       "direction":"decreasing",
       "default": 450.0

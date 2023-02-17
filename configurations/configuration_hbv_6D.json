@@ -15,7 +15,7 @@
 
       "run_full_timespan":"False",
       "spin_up_length":1095,
-      "simulation_length": 365,
+      "simulation_length": 30,
       "resolution": "daily",
 
       "cut_runs": "False",
@@ -23,26 +23,28 @@
     },
   "model_settings": {
     "basis": "Oldman_Basin",
-    "plotting": "False",
-    "writing_results_to_a_file": "False",
+    "plotting": "True",
+    "writing_results_to_a_file": "True"
   },
   "model_paths": {
     "hbv_model_path": "Hydro_Models/HBV-SASK-data"
   },
   "simulation_settings": {
-    "QOI":"Q",
-    "qoi_column":"Q_cms",
-    "qoi_column_measured":"streamflow",
+    "qoi":["Q_cms", "AET"],
+    "qoi_column":["Q_cms", "AET"],
+    "read_measured_data": ["True", "False"],
+    "qoi_column_measured":["streamflow", "None"],
     "objective_function_qoi":"all",
+    "calculate_GoF":"True",
+    "objective_function":["MAE", "MSE", "RMSE", "NRMSE", "NSE", "LogNSE", "KGE"],
     "mode":"continuous",
     "interval": 24,
     "min_periods": 6,
     "method": "avrg",
-    "compute_gradients":"False",
+    "compute_gradients":"True",
     "gradients_method":"Forward Difference",
-    "read_measured_data": "True",
-    "calculate_GoF":"True",
-    "objective_function":["MAE", "MSE", "RMSE", "NRMSE", "NSE", "LogNSE", "KGE"]
+    "compute_active_subspaces": "True",
+    "save_gradient_related_runs": "True"
   },
   "parameters": [
     {

@@ -11,6 +11,9 @@ from plotly.subplots import make_subplots
 from plotly.offline import plot
 import numpy as np
 import time
+
+from common import utility
+
 #####################################
 
 DEFAULT_PAR_VALUES_DICT = {'TT': 0.0, 'C0': 5.0, 'ETF': 0.5, 'LP': 0.5, 'FC': 100,
@@ -563,7 +566,7 @@ def HBV_SASK(forcing, long_term, par_values_dict, initial_condition_df, printing
 
     return flux, state
 
-# TODO, add code for a gradient mode
+
 def parameters_configuration(parameters, configurationObject, take_direct_value=False):
     parameters_dict = defaultdict()  # copy.deepcopy(DEFAULT_PAR_VALUES_DICT)
 
@@ -571,15 +574,14 @@ def parameters_configuration(parameters, configurationObject, take_direct_value=
         return DEFAULT_PAR_VALUES_DICT
 
     if isinstance(parameters, dict) and take_direct_value:
-        if parameters is None:
-            return DEFAULT_PAR_VALUES_DICT
         parameters_dict = parameters
     else:
-        uncertaint_param_counter = 0
+        uncertain_param_counter = 0
+        configurationObject = utility._check_if_configurationObject_is_in_right_format(configurationObject)
         for single_param in configurationObject['parameters']:
             if single_param['distribution'] != "None":
-                parameters_dict[single_param['name']] = parameters[uncertaint_param_counter]
-                uncertaint_param_counter += 1
+                parameters_dict[single_param['name']] = parameters[uncertain_param_counter]
+                uncertain_param_counter += 1
             else:
                 if "value" in single_param:
                     parameters_dict[single_param['name']] = single_param["value"]
@@ -588,6 +590,89 @@ def parameters_configuration(parameters, configurationObject, take_direct_value=
                 else:
                     parameters_dict[single_param['name']] = DEFAULT_PAR_VALUES_DICT[single_param['name']]
     return parameters_dict
+
+
+# def parameters_configuration_for_gradient_approximation(
+#         parameters_dict, configurationObject, parameter_index_to_perturb, eps_val=1e-4, take_direct_value=False):
+#
+#     info_dict_on_perturbed_param = dict()
+#
+#     configurationObject = utility._check_if_configurationObject_is_in_right_format(configurationObject)
+#     uncertain_param_counter = 0
+#     for id, single_param in enumerate(configurationObject['parameters']):
+#         # TODO if uncertain_param_counter != parameter_index_to_perturb:
+#         if id != parameter_index_to_perturb:
+#             if single_param['distribution'] != "None" and parameters[uncertain_param_counter] is not None:
+#                 parameters_dict[single_param['name']] = parameters[uncertain_param_counter]
+#                 uncertain_param_counter += 1
+#             else:
+#                 if "value" in single_param:
+#                     parameters_dict[single_param['name']] = single_param["value"]
+#                 elif "default" in single_param:
+#                     parameters_dict[single_param['name']] = single_param["default"]
+#                 else:
+#                     parameters_dict[single_param['name']] = DEFAULT_PAR_VALUES_DICT[single_param['name']]
+#         else:
+#             if "lower_limit" in single_param:
+#                 parameter_lower_limit = single_param["lower_limit"]
+#             elif "lower" in single_param:
+#                 parameter_lower_limit = single_param["lower"]
+#             else:
+#                 parameter_lower_limit = None
+#
+#             if "upper_limit" in single_param:
+#                 parameter_upper_limit = single_param["upper_limit"]
+#             elif "upper" in single_param:
+#                 parameter_upper_limit = single_param["upper"]
+#             else:
+#                 parameter_upper_limit = None
+#
+#             if parameter_lower_limit is None or parameter_upper_limit is None:
+#                 raise Exception(
+#                     'ERROR in parameters_configuration: perturb_sinlge_param_around_nominal is set to True but '
+#                     'parameter_lower_limit or parameter_upper_limit are not specified!')
+#             else:
+#                 param_h = eps_val * (parameter_upper_limit - parameter_lower_limit)
+#                 parameter_lower_limit += param_h
+#                 parameter_upper_limit -= param_h
+#
+#             if single_param['distribution'] != "None" and parameters[uncertain_param_counter] is not None:
+#                 new_parameter_value = parameters[uncertain_param_counter] + param_h
+#                 parameters_dict[single_param['name']] = (new_parameter_value, param_h)
+#                 uncertain_param_counter += 1
+#             else:
+#                 if "value" in single_param:
+#                     parameters_dict[single_param['name']] = single_param["value"] + param_h
+#                 elif "default" in single_param:
+#                     parameters_dict[single_param['name']] = single_param["default"] + param_h
+#                 else:
+#                     parameters_dict[single_param['name']] = DEFAULT_PAR_VALUES_DICT[single_param['name']] + param_h
+#
+#             info_dict_on_perturbed_param = {
+#                 "uncertain_param_counter": uncertain_param_counter, "id": id,
+#                 "name": single_param['name'], "param_h": param_h}
+#
+#     return parameters_dict, info_dict_on_perturbed_param
+
+
+def update_parameter_dic_for_gradient(parameters, configurationObject, take_direct_value=False,
+                                      perturb_single_param_around_nominal=False,
+                                      parameter_index_to_perturb=0, eps_val=1e-4
+                                      ):
+    # TODO Rewrite bigger part of the function above
+    # iterate through all the parameters
+    list_of_parameters_from_json = configurationObject["parameters"]
+
+    for id, param_entry_dict in enumerate(list_of_parameters_from_json):
+        if perturb_single_param_around_nominal and id != parameter_index_to_perturb:
+            continue
+
+    parameter_lower_limit = param_entry_dict["lower_limit"] if "lower_limit" in param_entry_dict else None
+    parameter_upper_limit = param_entry_dict["upper_limit"] if "upper_limit" in param_entry_dict else None
+    param_h = eps_val * (parameter_upper_limit - parameter_lower_limit)
+    parameter_lower_limit += param_h
+    parameter_upper_limit -= param_h
+    raise NotImplementedError
 
 #####################################
 

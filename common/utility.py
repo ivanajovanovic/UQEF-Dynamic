@@ -6,12 +6,15 @@ Set of utility functions for preparing and/or postprocessing data for UQ runs of
 
 import chaospy as cp
 import datetime
+import dill
+import json
 import matplotlib.pyplot as plt
 import numpy as np
 import os
 import os.path as osp
 import pandas as pd
 import pathlib
+import pickle
 from plotly.subplots import make_subplots
 import plotly.express as px
 import plotly.graph_objects as go
@@ -169,6 +172,7 @@ def plot_2d_matrix_static(simulationNodes, nodes_or_paramters="nodes"):
 # Playing with transformations
 #####################################
 
+
 def transformation_of_parameters_var1(samples, distribution_r, distribution_q):
     """
     :param samples: array of samples from distribution_r
@@ -179,6 +183,7 @@ def transformation_of_parameters_var1(samples, distribution_r, distribution_q):
     # var 1
     return distribution_q.inv(distribution_r.fwd(samples))
 
+
 def transformation_of_parameters_var1_1(samples, distribution_q):
     """
     :param samples: array of samples from distribution_r - when distribution_r is U[0,1]
@@ -188,6 +193,7 @@ def transformation_of_parameters_var1_1(samples, distribution_q):
     """
     # var 1
     return distribution_q.inv(samples)
+
 
 def transformation_of_parameters_var2(samples, distribution_r, distribution_q):
     """
@@ -220,6 +226,7 @@ def transformation_of_parameters_var2(samples, distribution_r, distribution_q):
 #####################################
 # Utility for SG analysis
 #####################################
+
 
 def generate_table_single_rule_over_dim_and_orders_sparse_and_nonsparse(rule, dists, dim, q_orders, growth=None):
     num_nodes = np.zeros((len(dists), len(q_orders), 2), dtype=np.int32)
@@ -618,7 +625,7 @@ def parse_datetime_configuration(time_settings_config):
 
 
 ###################################################################################################################
-# Reading saved data
+# Reading saved data and configuration file/objects
 ###################################################################################################################
 
 
@@ -638,16 +645,37 @@ def return_configuration_object(configurationObject):
             "[Error] You have to specify the Configuration Object or provide the path to the .json file!\n")
 
 
+def _check_if_configurationObject_is_in_right_format(configurationObject):
+    if isinstance(configurationObject, dict) or isinstance(configurationObject, pd.DataFrame):
+        return configurationObject
+    elif isinstance(configurationObject, str) or isinstance(configurationObject, pathlib.PosixPath):
+        configurationObject = read_configuration_dict_from_json_file(configurationObject)
+        return configurationObject
+    else:
+        raise Exception("Error in configure_parameters_value function - configurationObject is not in the expected form!")
+
+
 def read_configuration_object_json(configurationObject, element=None):
     """
+    :param configurationObject: posixPath to the json file
     element can be, e.g., "Output", "parameters", "Timeframe", "parameters_settings"
     """
+    # with configurationObject.open(encoding="UTF-8") as source:
     with open(configurationObject) as f:
         configuration_object = json.load(f)
     if element is None:
         return configuration_object
     else:
         return configuration_object[element]
+
+
+def read_configuration_dict_from_json_file(configurationFile):
+    """
+
+    :param configurationFile: posixPath to the json file
+    :return:
+    """
+    return read_configuration_object_json(configurationObject=configurationFile)
 
 
 def read_configuration_object_dill(configurationObject, element=None):
@@ -660,6 +688,37 @@ def read_configuration_object_dill(configurationObject, element=None):
         return configuration_object
     else:
         return configuration_object[element]
+
+
+def get_param_info_dict_from_configurationObject(configurationObject):
+    configurationObject = _check_if_configurationObject_is_in_right_format(configurationObject)
+    result_dict = dict()
+    list_of_parameters_from_json = configurationObject["parameters"]
+    for _, param_entry_dict in enumerate(list_of_parameters_from_json):
+        param_name = param_entry_dict.get("name")
+        distribution = param_entry_dict.get("distribution", None)
+        if "lower_limit" in param_entry_dict:
+            lower_limit = param_entry_dict["lower_limit"]
+        elif "lower" in param_entry_dict:
+            lower_limit = param_entry_dict["lower"]
+        else:
+            lower_limit = None
+        if "upper_limit" in param_entry_dict:
+            upper_limit = param_entry_dict["upper_limit"]
+        elif "upper" in param_entry_dict:
+            upper_limit = param_entry_dict["upper"]
+        else:
+            upper_limit = None
+        # lower_limit = param_entry_dict.get("lower_limit", None)
+        # upper_limit = param_entry_dict.get("upper_limit", None)
+        default_value = param_entry_dict.get("default", None)
+        # parameter_value = param_entry_dict.get("value", None)
+
+        result_dict[param_name] = {
+            'distribution':distribution, 'default_value': default_value,
+            'lower_limit': lower_limit, 'upper_limit': upper_limit
+        }
+    return result_dict
 
 
 def read_and_print_uqsim_args_file(file):
@@ -799,6 +858,7 @@ def plot_scatter_matrix_params_vs_gof(df_index_parameter_gof, name_of_gof_column
 ###################################################################################################################
 # Plotting UQ & SA Output
 ###################################################################################################################
+
 
 def scatter_3d_params_vs_gof(df_index_parameter_gof, param1, param2, param3, name_of_gof_column="calculateNSE",
                              name_of_index_run_column="index_run"):
