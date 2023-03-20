@@ -733,7 +733,7 @@ def initiate_function_info(function_name):
                 a.append(single_param["lower"])
                 b.append(single_param["upper"])
         qoi = "GoF"  # "Q" "GoF"
-        gof = "calculateRMSE"  # "calculateRMSE" "calculateNSE"  "None"
+        gof = "RMSE"  # "RMSE" "NSE"  "None"
         operation = "UncertaintyQuantification"  # "Interpolation"
         problem_function = HBVSASKFunction(
             configurationObject=configuration_object,
@@ -776,7 +776,7 @@ def initiate_function_info(function_name):
                 a.append(single_param["lower"])
                 b.append(single_param["upper"])
         qoi = "Q"  # "Q" "GoF"
-        gof = "calculateRMSE"  # "calculateRMSE" "calculateNSE"  "None"
+        gof = "RMSE"  # "RMSE" "NSE"  "None"
         problem_function = HBVSASKFunction(
             configurationObject=configuration_object,
             inputModelDir=inputModelDir,

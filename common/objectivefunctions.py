@@ -109,7 +109,7 @@ def calculateBIAS(measuredDF, simulatedDF, measuredDF_column_name='Value', simul
     if measuredDF.size == simulatedDF.size:
         residual = np.subtract(measuredDF, simulatedDF)
         # return float(np.nansum(residual) / len(measuredDF))
-        return float(np.abs(np.nanmean(residual)))
+        return float(np.abs(np.nanmean(residual)))  # float(np.abs(residual.sum()/measuredDF.sum()))
     else:
         return np.nan
 
@@ -163,10 +163,10 @@ def calculateNSE(measuredDF, simulatedDF, measuredDF_column_name='Value', simula
     if measuredDF.size == simulatedDF.size:
         #numerator = np.square(np.subtract(measuredDF, simulatedDF))
         #denominator = np.square(np.subtract(measuredDF, np.mean(measuredDF)))
-        numerator = (measuredDF - simulatedDF)**2
-        denominator = (measuredDF - np.nanmean(measuredDF))**2
+        numerator = (measuredDF - simulatedDF)**2  # ((measuredDF - simulatedDF)**2).mean()
+        denominator = (measuredDF - np.nanmean(measuredDF))**2  # ((measuredDF - measuredDF.mean())**2).mean()
         try:
-            return float(1 - (np.nansum(numerator) / np.nansum(denominator)))
+            return float(1 - (np.nansum(numerator) / np.nansum(denominator)))  # float(1 - numerator / denominator)
         except ZeroDivisionError:
             return np.nan
     else:

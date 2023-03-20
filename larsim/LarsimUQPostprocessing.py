@@ -114,8 +114,8 @@ def _get_parameter_columns_df_index_parameter_gof(df_index_parameter_gof):
     def check_if_column_stores_parameter(x):
         if isinstance(x, tuple):
             x = x[0]
-        return not x.startswith("calculate") and not x.startswith("d_calculate") and \
-               x not in ["index_run", "station", "successful_run"]
+        return x not in list(larsimDataPostProcessing.mapping_gof_names_to_functions.keys()) and not x.startswith("d_") and \
+               x not in ["index_run", "station", "successful_run", "qoi"]
     return [x for x in df_index_parameter_gof.columns.tolist() if check_if_column_stores_parameter(x)]
 
 
@@ -123,15 +123,15 @@ def _get_gof_columns_df_index_parameter_gof(df_index_parameter_gof):
     def check_if_column_stores_gof(x):
         if isinstance(x, tuple):
             x = x[0]
-        return x.startswith("calculate") and x not in ["index_run", "station"]
+        return x in list(larsimDataPostProcessing.mapping_gof_names_to_functions.keys())
     return [x for x in df_index_parameter_gof.columns.tolist() if check_if_column_stores_gof(x)]
 
 
 def _get_grad_columns_df_index_parameter_gof(df_index_parameter_gof):
-    return [x for x in df_index_parameter_gof.columns.tolist() if x.startswith("d_calculate")]
+    return [x for x in df_index_parameter_gof.columns.tolist() if x.startswith("d_")]
 
 
-def plot_hist_of_gof_values_from_df(df_index_parameter_gof, name_of_gof_column="calculateNSE"):
+def plot_hist_of_gof_values_from_df(df_index_parameter_gof, name_of_gof_column="NSE"):
     return df_index_parameter_gof.hist(name_of_gof_column)
 
 
@@ -154,7 +154,7 @@ def plot_subplot_params_hist_from_df(df_index_parameter_gof):
     return fig
 
 
-def plot_subplot_params_hist_from_df_conditioned(df_index_parameter_gof, name_of_gof_column="calculateNSE",
+def plot_subplot_params_hist_from_df_conditioned(df_index_parameter_gof, name_of_gof_column="NSE",
                                                  threshold_gof_value=0, comparison="smaller"):
     """
     comparison should be: "smaller", "greater", "equal"
@@ -185,7 +185,7 @@ def plot_subplot_params_hist_from_df_conditioned(df_index_parameter_gof, name_of
     return fig
 
 
-def plot_scatter_matrix_params_vs_gof(df_index_parameter_gof, name_of_gof_column="calculateNSE",
+def plot_scatter_matrix_params_vs_gof(df_index_parameter_gof, name_of_gof_column="NSE",
                                       hover_name="index_run"):
     columns_with_parameters = _get_parameter_columns_df_index_parameter_gof(df_index_parameter_gof)
     fig = px.scatter_matrix(df_index_parameter_gof,
@@ -198,7 +198,7 @@ def plot_scatter_matrix_params_vs_gof(df_index_parameter_gof, name_of_gof_column
 
 # TODO  - This function does not work properly
 def plot_2d_contour_params_vs_gof(df_index_parameter_gof, param1, param2,
-                                  num_of_points_in_1d=8, name_of_gof_column="calculateNSE"):
+                                  num_of_points_in_1d=8, name_of_gof_column="NSE"):
     x = df_index_parameter_gof[param1].values
     y = df_index_parameter_gof[param2].values
     X = np.reshape(x, (-1, num_of_points_in_1d))
@@ -214,7 +214,7 @@ def plot_2d_contour_params_vs_gof(df_index_parameter_gof, param1, param2,
     return fig
 
 
-def scatter_3d_params_vs_gof(df_index_parameter_gof, param1, param2, param3, name_of_gof_column="calculateNSE",
+def scatter_3d_params_vs_gof(df_index_parameter_gof, param1, param2, param3, name_of_gof_column="NSE",
                              name_of_index_run_column="index_run"):
     fig = px.scatter_3d(
         df_index_parameter_gof, x=param1, y=param2, z=param3, color=name_of_gof_column, opacity=0.7,
@@ -224,7 +224,7 @@ def scatter_3d_params_vs_gof(df_index_parameter_gof, param1, param2, param3, nam
 
 
 def plot_surface_2d_params_vs_gof(df_index_parameter_gof, param1, param2, num_of_points_in_1d=8,
-                                  name_of_gof_column="calculateNSE"):
+                                  name_of_gof_column="NSE"):
     # from mpl_toolkits.mplot3d import Axes3D
     # from mpl_toolkits.mplot3d.art3d import Poly3DCollection, Line3DCollection
     # from matplotlib import cm
@@ -236,7 +236,7 @@ def plot_surface_2d_params_vs_gof(df_index_parameter_gof, param1, param2, num_of
 
     # x = samples_df_index_parameter_gof['A2'].to_numpy()
     # y = samples_df_index_parameter_gof['BSF'].to_numpy()
-    # z = samples_df_index_parameter_gof['calculateRMSE'].to_numpy()
+    # z = samples_df_index_parameter_gof['RMSE'].to_numpy()
 
     # X = np.reshape(x, (-1, 8))
     # Y = np.reshape(y, (-1, 8))
@@ -264,7 +264,7 @@ def plot_surface_2d_params_vs_gof(df_index_parameter_gof, param1, param2, num_of
     return fig
 
 
-def plot_parallel_params_vs_gof(df_index_parameter_gof, name_of_gof_column="calculateNSE", list_of_params=None):
+def plot_parallel_params_vs_gof(df_index_parameter_gof, name_of_gof_column="NSE", list_of_params=None):
     if list_of_params is None:
         list_of_params = _get_parameter_columns_df_index_parameter_gof(df_index_parameter_gof)
     dimensions = list_of_params + [name_of_gof_column, ]
@@ -272,7 +272,7 @@ def plot_parallel_params_vs_gof(df_index_parameter_gof, name_of_gof_column="calc
     return fig
 
 
-def plot_scatter_matrix_params_vs_gof_seaborn(df_index_parameter_gof, name_of_gof_column="calculateNSE"):
+def plot_scatter_matrix_params_vs_gof_seaborn(df_index_parameter_gof, name_of_gof_column="NSE"):
     columns_with_parameters = _get_parameter_columns_df_index_parameter_gof(df_index_parameter_gof)
     sns.set(style="ticks", color_codes=True)
     g = sns.pairplot(df_index_parameter_gof,

@@ -30,7 +30,7 @@ import uqef
 
 
 class LarsimFunction(Function):
-    def __init__(self, configurationObject, param_names=None, qoi="Q", gof="calculateNSE"):
+    def __init__(self, configurationObject, param_names=None, qoi="Q", gof="NSE"):
         super().__init__()
         self.larsimModelObject = larsimModel.LarsimModel(
             configurationObject=configurationObject,
@@ -81,7 +81,7 @@ class LarsimFunction(Function):
             # TODO take just last time-step
         elif self.qoi == "GoF":
             if self.gof in results_array[0][0]['gof_df'].columns:
-                if self.gof == "calculateRMSE":  # TODO change this - hard-coded for now...
+                if self.gof == "RMSE":  # TODO change this - hard-coded for now...
                     temp = results_array[0][0]['gof_df'][self.gof].values
                     temp = 1000 - temp
                     return np.array(temp)
@@ -153,7 +153,7 @@ if local_debugging:
 
     #####################################
     qoi = "GoF"  # "Q" "GoF"
-    gof = "calculateLogNSE"   # "calculateRMSE" "calculateNSE"  "None"
+    gof = "LogNSE"   # "RMSE" "NSE"  "None"
     operation = "UncertaintyQuantification"  # "Interpolation"
     problem_function = LarsimFunction(configurationObject=config_file, qoi=qoi, gof=gof)
 

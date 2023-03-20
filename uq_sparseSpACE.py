@@ -1220,7 +1220,7 @@ def main_routine(model, current_output_folder, **kwargs):
 
     if model == "larsim":
         qoi = "Q"  # "Q" "GoF"
-        gof = "calculateLogNSE"  # "calculateRMSE" "calculateNSE"  "None"
+        gof = "LogNSE"  # "RMSE" "NSE"  "None"
         problem_function = sparseSpACE_functions.LarsimFunction(
             configurationObject=configurationObject,
             inputModelDir=inputModelDir,
@@ -1235,7 +1235,7 @@ def main_routine(model, current_output_folder, **kwargs):
             compute_Sobol_t = True
     elif model == "hbvsask":
         qoi = "Q"  # "Q" "GoF"
-        gof = "calculateLogNSE"  # "calculateRMSE" "calculateNSE"  "None"
+        gof = "LogNSE"  # "RMSE" "NSE"  "None"
         problem_function = sparseSpACE_functions.HBVSASKFunction(
             configurationObject=configurationObject,
             inputModelDir=inputModelDir,
