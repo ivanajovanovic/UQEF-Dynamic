@@ -21,7 +21,7 @@ from hbv_sask import HBVSASKModel as hbvsaskmodel
 
 class HBVSASKFunction(Function):
     def __init__(self, configurationObject, inputModelDir, workingDir, dim=None,
-                 param_names=None, qoi="Q", gof="calculateNSE", **kwargs):
+                 param_names=None, qoi="Q", gof="NSE", **kwargs):
         super().__init__()
 
         self.dim = dim
@@ -108,7 +108,7 @@ if local_debugging:
 
     #####################################
     qoi = "Q"  # "Q" "GoF"
-    gof = "calculateRMSE"   # "calculateRMSE" "calculateNSE"  "None"
+    gof = "RMSE"   # "RMSE" "NSE"  "None"
     operation = "UncertaintyQuantification"  # "Interpolation"
     problem_function = HBVSASKFunction(
         configurationObject=configuration_object,

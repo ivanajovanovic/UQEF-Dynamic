@@ -4,7 +4,7 @@ import json
 import pathlib
 import pandas as pd
 import math
-import matplotlib.pyplot as plt
+import matplotlib.pyplot as pl
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -19,9 +19,26 @@ from common import utility
 DEFAULT_PAR_VALUES_DICT = {'TT': 0.0, 'C0': 5.0, 'ETF': 0.5, 'LP': 0.5, 'FC': 100,
                            'beta': 2.0, 'FRAC': 0.5, 'K1': 0.5, 'alpha': 2.0, 'K2': 0.025,
                            'UBAS': 1, 'PM': 1}
+
+DEFAULT_PAR_INFO_DICT = {
+    'TT': {"lower": -4.0, "upper": 4.0, "default": 0.0},
+    'C0': {"lower": 0.0, "upper": 10.0, "default": 5.0},
+    'ETF': {"lower": 0.0, "upper": 1.0, "default": 0.5},
+    'LP': {"lower": 0.0, "upper": 1.0, "default": 0.5},
+    'FC': {"lower": 50.0, "upper": 500.0, "default": 100.0},
+    'beta': {"lower": 1.0, "upper": 3.0, "default": 2.0},
+    'FRAC': {"lower": 0.1, "upper": 0.9, "default": 0.5},
+    'K1': {"lower": 0.05, "upper": 1.0, "default": 0.5},
+    'alpha': {"lower": 1.0, "upper": 3.0, "default": 2.0},
+    'K2': {"lower": 0.0, "upper": 0.05, "default": 0.025},
+    'UBAS': {"lower": 1.0, "upper": 3.0, "default": 1.0},
+    'PM':{"lower": 0.5, "upper": 2.0, "default": 1.0}
+}
+
 HBV_PARAMS_LIST = ['TT', 'C0', 'ETF', 'LP', 'FC',
                    'beta', 'FRAC', 'K1', 'alpha', 'K2',
                    'UBAS', 'PM']
+
 
 def _plot_time_series(df, column_to_plot):
     fig = go.Figure()
@@ -39,9 +56,12 @@ def _plot_output_data_and_precipitation(input_data_df, simulated_data_df=None, i
                                         simulated_time_column=None, measured_data_column="streamflow",
                                         simulated_column="Q_cms", precipitation_columns="precipitation",
                                         additional_columns=None, plot_measured_data=False):
+    reset_index_of_input_data_df = False
     if input_data_time_column is not None and input_data_time_column != "index" and input_data_time_column in input_data_df.columns:
+        reset_index_of_input_data_df = True
         input_data_df = input_data_df.set_index(input_data_time_column)
 
+    # filter input_data_df based on time steps which occure in simulated_data_df
     if simulated_time_column is None or not simulated_time_column in simulated_data_df.columns:
         input_data_df = input_data_df.loc[simulated_data_df.index.min():simulated_data_df.index.max()]
     else:
@@ -75,7 +95,7 @@ def _plot_output_data_and_precipitation(input_data_df, simulated_data_df=None, i
     fig.add_trace(go.Scatter(x=input_data_df.index, y=input_data_df[precipitation_columns],
                              text=input_data_df[precipitation_columns], name="Precipitation", yaxis="y2", ))
 
-    if input_data_time_column is not None and input_data_time_column != "index" and input_data_time_column in input_data_df.columns:
+    if reset_index_of_input_data_df:
         input_data_df.reset_index(inplace=True)
         input_data_df.rename(columns={"index": input_data_time_column}, inplace=True)
 
@@ -118,6 +138,7 @@ def _plot_output_data_and_precipitation(input_data_df, simulated_data_df=None, i
         x=1.21
     ))
     return fig
+
 
 def _plot_streamflow_and_precipitation(input_data_df, simulated_data_df=None, input_data_time_column=None,
                                        simulated_time_column=None, observed_streamflow_column="streamflow",
@@ -201,6 +222,244 @@ def _plot_streamflow_and_precipitation(input_data_df, simulated_data_df=None, in
         x=1.21
     ))
     return fig
+
+#####################################
+# Now comes the set of functiones copied from https://github.com/vars-tool/vars-tool/blob/master/tutorials/hbv.py
+# Original authors: Saman Razavi, Hoshin Gupta, Kasra Keshavarz, and Cordell Blanchard
+#####################################
+
+# Calculate Change in storage:
+def DeltaS(state, start, end):
+    S = np.zeros(len(state['SWE']))
+    for n in state: S = S + state[n]
+    S = S[start:end]
+    S = S - S[0]
+    return S
+
+
+def WaterBalancePlot(flux, state, forcing, start, end):
+    # Do a nice water balance plot
+    t = flux['PET'][start:end].index
+    S = DeltaS(state, start, end)
+    P = forcing['P'][start:end].cumsum()
+    AET = flux['AET'][start:end].cumsum()
+    Q = flux['Q_mm'][start:end].cumsum()
+
+    pl.figure(figsize=(10, 5))
+    pl.fill_between(t, Q + AET + S, 0., color='darkgreen', label='cumulative Q')
+    pl.fill_between(t, S + AET, 0., color='forestgreen', label='cumulative AET')
+    pl.fill_between(t, S, 0., color='lightgreen', label='$\Delta S$')
+    pl.plot(forcing['P'][start:end].cumsum(), label='cumulative P', color='b')
+    # pl.fill_between(flux['Q_mm'][start:end].cumsum()+flux['AET'][start:end].cumsum()+S,label='Streamflow',color='r')
+    # pl.plot(flux['AET'][start:end].cumsum(),label='AET',color='darkgreen')
+
+    pl.legend(fontsize=13)
+    pl.ylabel('Water balance (mm)', fontsize=13);
+    pl.grid()
+
+
+def PlotEverything(flux, state, forcing, start, end, freq):
+    # Do a nice plot of model outputs:
+    tS = state['SWE'].resample(freq).mean()[start:end].index
+    SWE = (state['SWE'].resample(freq).mean())[start:end]
+    SMS = (state['SMS'].resample(freq).mean())[start:end]
+    S1 = (state['S1'].resample(freq).mean())[start:end]
+    S2 = (state['S2'].resample(freq).mean())[start:end]
+
+    t = flux['PET'][start:end].resample(freq).sum().index
+    P = forcing['P'][start:end].resample(freq).sum()
+    AET = flux['AET'][start:end].resample(freq).sum()
+    PET = flux['PET'][start:end].resample(freq).sum()
+    Q = flux['Q_mm'][start:end].resample(freq).sum()
+
+    pl.figure(figsize=(10, 7))
+    pl.subplot(2, 1, 1)
+    pl.fill_between(t, PET, 0., color='lightgreen', label='PET', step='pre')
+    pl.step(t, P, label='P', color='b')
+    pl.step(t, Q, label='Q', color='m')
+    pl.step(t, AET, label='AET', color='g')
+    pl.legend(fontsize=13)
+    pl.ylabel('Fluxes (mm)', fontsize=13);
+    pl.grid()
+
+    pl.subplot(2, 1, 2)
+    pl.step(tS, SWE, label='SWE', color='tab:cyan')
+    pl.step(tS, SMS, label='SMS', color='tab:grey')
+    pl.step(tS, S1, label='S1', color='tab:olive')
+    pl.step(tS, S2, label='S2', color='tab:brown')
+    pl.legend(fontsize=13)
+    pl.ylabel('States (mm)', fontsize=13);
+    pl.grid()
+
+#####################################
+
+
+def get_param_info_dict(configurationObject=None):
+    configurationObject = utility._check_if_configurationObject_is_in_right_format(configurationObject, raise_error=False)
+    result_dict = defaultdict(dict)
+
+    # list_of_params_names_from_configurationObject = []
+    if configurationObject is not None:
+        for param_entry_dict in configurationObject["parameters"]:
+            param_name = param_entry_dict.get("name")
+            # list_of_params_names_from_configurationObject.append(param_name)
+            distribution = param_entry_dict.get("distribution", None)
+            if "lower_limit" in param_entry_dict:
+                lower_limit = param_entry_dict["lower_limit"]
+            elif "lower" in param_entry_dict:
+                lower_limit = param_entry_dict["lower"]
+            else:
+                lower_limit = None
+            if "upper_limit" in param_entry_dict:
+                upper_limit = param_entry_dict["upper_limit"]
+            elif "upper" in param_entry_dict:
+                upper_limit = param_entry_dict["upper"]
+            else:
+                upper_limit = None
+            # lower_limit = param_entry_dict.get("lower_limit", None)
+            # upper_limit = param_entry_dict.get("upper_limit", None)
+            default = param_entry_dict.get("default", None)
+            # parameter_value = param_entry_dict.get("value", None)
+            result_dict[param_name] = {
+                'distribution': distribution, 'default': default,
+                'lower_limit': lower_limit, 'upper_limit': upper_limit
+            }
+
+    for single_param_name in DEFAULT_PAR_INFO_DICT.keys():
+        if single_param_name in result_dict:
+            continue
+        else:
+            param_entry_dict = DEFAULT_PAR_INFO_DICT[single_param_name]
+            param_name = single_param_name
+            distribution = param_entry_dict.get("distribution", None)
+            default = param_entry_dict.get("default", None)
+            if "lower_limit" in param_entry_dict:
+                lower_limit = param_entry_dict["lower_limit"]
+            elif "lower" in param_entry_dict:
+                lower_limit = param_entry_dict["lower"]
+            else:
+                lower_limit = None
+            if "upper_limit" in param_entry_dict:
+                upper_limit = param_entry_dict["upper_limit"]
+            elif "upper" in param_entry_dict:
+                upper_limit = param_entry_dict["upper"]
+            else:
+                upper_limit = None
+            result_dict[param_name] = {
+                'distribution': distribution, 'default': default,
+                'lower_limit': lower_limit, 'upper_limit': upper_limit
+            }
+
+    return result_dict
+
+
+def parameters_configuration(parameters, configurationObject, take_direct_value=False):
+    parameters_dict = dict() #defaultdict()  # copy.deepcopy(DEFAULT_PAR_VALUES_DICT)
+
+    if parameters is None:
+        return DEFAULT_PAR_VALUES_DICT
+
+    if isinstance(parameters, dict) and take_direct_value:
+        parameters_dict = parameters
+    else:
+        uncertain_param_counter = 0
+        configurationObject = utility._check_if_configurationObject_is_in_right_format(configurationObject)
+        for single_param in configurationObject['parameters']:
+            if single_param['distribution'] != "None":
+                # TODO Does it make sense to round the value of parameters?
+                parameters_dict[single_param['name']] = parameters[uncertain_param_counter]
+                uncertain_param_counter += 1
+            else:
+                if "value" in single_param:
+                    parameters_dict[single_param['name']] = single_param["value"]
+                elif "default" in single_param:
+                    parameters_dict[single_param['name']] = single_param["default"]
+                else:
+                    parameters_dict[single_param['name']] = DEFAULT_PAR_VALUES_DICT[single_param['name']]
+    return parameters_dict
+
+
+# def parameters_configuration_for_gradient_approximation(
+#         parameters_dict, configurationObject, parameter_index_to_perturb, eps_val=1e-4, take_direct_value=False):
+#
+#     info_dict_on_perturbed_param = dict()
+#
+#     configurationObject = utility._check_if_configurationObject_is_in_right_format(configurationObject)
+#     uncertain_param_counter = 0
+#     for id, single_param in enumerate(configurationObject['parameters']):
+#         # TODO if uncertain_param_counter != parameter_index_to_perturb:
+#         if id != parameter_index_to_perturb:
+#             if single_param['distribution'] != "None" and parameters[uncertain_param_counter] is not None:
+#                 parameters_dict[single_param['name']] = parameters[uncertain_param_counter]
+#                 uncertain_param_counter += 1
+#             else:
+#                 if "value" in single_param:
+#                     parameters_dict[single_param['name']] = single_param["value"]
+#                 elif "default" in single_param:
+#                     parameters_dict[single_param['name']] = single_param["default"]
+#                 else:
+#                     parameters_dict[single_param['name']] = DEFAULT_PAR_VALUES_DICT[single_param['name']]
+#         else:
+#             if "lower_limit" in single_param:
+#                 parameter_lower_limit = single_param["lower_limit"]
+#             elif "lower" in single_param:
+#                 parameter_lower_limit = single_param["lower"]
+#             else:
+#                 parameter_lower_limit = None
+#
+#             if "upper_limit" in single_param:
+#                 parameter_upper_limit = single_param["upper_limit"]
+#             elif "upper" in single_param:
+#                 parameter_upper_limit = single_param["upper"]
+#             else:
+#                 parameter_upper_limit = None
+#
+#             if parameter_lower_limit is None or parameter_upper_limit is None:
+#                 raise Exception(
+#                     'ERROR in parameters_configuration: perturb_sinlge_param_around_nominal is set to True but '
+#                     'parameter_lower_limit or parameter_upper_limit are not specified!')
+#             else:
+#                 param_h = eps_val * (parameter_upper_limit - parameter_lower_limit)
+#                 parameter_lower_limit += param_h
+#                 parameter_upper_limit -= param_h
+#
+#             if single_param['distribution'] != "None" and parameters[uncertain_param_counter] is not None:
+#                 new_parameter_value = parameters[uncertain_param_counter] + param_h
+#                 parameters_dict[single_param['name']] = (new_parameter_value, param_h)
+#                 uncertain_param_counter += 1
+#             else:
+#                 if "value" in single_param:
+#                     parameters_dict[single_param['name']] = single_param["value"] + param_h
+#                 elif "default" in single_param:
+#                     parameters_dict[single_param['name']] = single_param["default"] + param_h
+#                 else:
+#                     parameters_dict[single_param['name']] = DEFAULT_PAR_VALUES_DICT[single_param['name']] + param_h
+#
+#             info_dict_on_perturbed_param = {
+#                 "uncertain_param_counter": uncertain_param_counter, "id": id,
+#                 "name": single_param['name'], "param_h": param_h}
+#
+#     return parameters_dict, info_dict_on_perturbed_param
+
+def update_parameter_dic_for_gradient(parameters, configurationObject, take_direct_value=False,
+                                      perturb_single_param_around_nominal=False,
+                                      parameter_index_to_perturb=0, eps_val=1e-4
+                                      ):
+    # TODO Rewrite bigger part of the function above
+    # iterate through all the parameters
+    list_of_parameters_from_json = configurationObject["parameters"]
+
+    for id, param_entry_dict in enumerate(list_of_parameters_from_json):
+        if perturb_single_param_around_nominal and id != parameter_index_to_perturb:
+            continue
+
+    parameter_lower_limit = param_entry_dict["lower_limit"] if "lower_limit" in param_entry_dict else None
+    parameter_upper_limit = param_entry_dict["upper_limit"] if "upper_limit" in param_entry_dict else None
+    param_h = eps_val * (parameter_upper_limit - parameter_lower_limit)
+    parameter_lower_limit += param_h
+    parameter_upper_limit -= param_h
+    raise NotImplementedError
+
 #####################################
 
 
@@ -304,6 +563,8 @@ def read_param_setup_dict(factorSpace_txt):
                 par_values_dict[elements_in_one_line[3]]["lower"] = elements_in_one_line[1]
                 par_values_dict[elements_in_one_line[3]]["upper"] = elements_in_one_line[2]
     return par_values_dict
+
+
 #####################################
 
 
@@ -341,15 +602,16 @@ def soil_storage_routing_module(ponding, SMS, S1, S2, AET, FC, beta, FRAC, K1, a
     soil_release_to_fast_reservoir = FRAC * soil_release
     soil_release_to_slow_reservoir = (1 - FRAC) * soil_release
 
-    Q1 = K1 * (S1 ** alpha)  # TODO make sure that it is not (K1 * S1) ** alpha np.pow(S1, alpha)
+    # Q1 = K1 * (S1 ** alpha)  # TODO make sure that it is not (K1 * S1) ** alpha np.pow(S1, alpha)
+    Q1 = K1 * S1 ** alpha
     if Q1 > S1:
         Q1 = S1
 
     S1_new = S1 + soil_release_to_fast_reservoir - Q1
 
-    Q2 = K2 * S2  # TODO
+    Q2 = K2 * S2
 
-    S2_new = S2 + soil_release_to_slow_reservoir - Q2  # TODO
+    S2_new = S2 + soil_release_to_slow_reservoir - Q2
 
     return SMS_new, S1_new, S2_new, Q1, Q2
 
@@ -367,7 +629,7 @@ def evapotranspiration_module(SMS, T, monthly_average_T, monthly_average_PE, ETF
     """
     # Potential Evapotranspiration
     PET = (1 + ETF * (T - monthly_average_T)) * monthly_average_PE
-    PET = max(PET, 0)
+    PET = max((PET, 0))
 
     if SMS > LP:
         AET = PET
@@ -375,7 +637,7 @@ def evapotranspiration_module(SMS, T, monthly_average_T, monthly_average_PE, ETF
         AET = PET * (SMS / LP)
 
     # to avoid evaporating more than water available
-    AET = min(AET, SMS)
+    AET = min((AET, SMS))
 
     return AET, PET
 
@@ -392,20 +654,16 @@ def precipitation_module(SWE, Precipitation, Temperature, TT, C0):
     if Temperature >= TT:
         rainfall = Precipitation
         potential_snow_melt = C0 * (Temperature - TT)
-        snow_melt = min(potential_snow_melt, SWE)
-        # Liquid Water on Surface
-        ponding = rainfall + snow_melt
-        # Soil Water Equivalent - Solid Water on Surface
-        SWE -= snow_melt
+        snow_melt = min((potential_snow_melt, SWE))
+        ponding = rainfall + snow_melt  # Liquid Water on Surface
+        SWE_new = SWE - snow_melt  # Soil Water Equivalent - Solid Water on Surface
     else:
         snowfall = Precipitation
         snow_melt = 0
-        # Liquid Water on Surface
-        ponding = 0
-        # Soil Water Equivalent - Solid Water on Surface
-        SWE += snowfall
+        ponding = 0  # Liquid Water on Surface
+        SWE_new = SWE + snowfall  # Soil Water Equivalent + Solid Water on Surface
 
-    return SWE, ponding
+    return SWE_new, ponding
 
 
 def triangle_routing(Q, UBAS):
@@ -414,39 +672,45 @@ def triangle_routing(Q, UBAS):
     *****  Q: list/1d-array *****
     *****  UBAS: Base of unit hydrograph for watershed routing in day; default is 1 for small watersheds *****
     """
-    UBAS = max(UBAS, 0.1)
-    length_triangle_base = math.ceil(UBAS)
+    UBAS = max((UBAS, 0.1))
+    length_triangle_base = int(math.ceil(UBAS))
 
     if UBAS == length_triangle_base:
-        x = [0, 0.5 * UBAS, length_triangle_base]
-        v = [0, 1, 0]
+        # x = [0, 0.5 * UBAS, length_triangle_base]
+        # v = [0, 1, 0]
+        x = np.array([0, 0.5 * UBAS, length_triangle_base])
+        v = np.array([0, 1, 0])
     else:
-        x = [0, 0.5 * UBAS, UBAS, length_triangle_base]
-        v = [0, 1, 0, 0]
+        # x = [0, 0.5 * UBAS, UBAS, length_triangle_base]
+        # v = [0, 1, 0, 0]
+        x = np.array([0, 0.5*UBAS, UBAS, length_triangle_base])
+        v = np.array([0, 1, 0, 0])
 
-    weight = np.empty(shape=(length_triangle_base + 1,), dtype=np.float64)
+    # weight = np.empty(shape=(length_triangle_base + 1,), dtype=np.float64)
+    weight=np.zeros(length_triangle_base)
     weight[0] = 0
 
     # np.interp(2.5, xp, fp) or f = scipy.interpolate.interp1d(x, y); f(xnew)
     for i in range(1, length_triangle_base + 1):
         if (i - 1) < (0.5 * UBAS) and i > (0.5 * UBAS):
-            weight[i] = 0.5 * (np.interp(i - 1, x, v) + np.interp(0.5 * UBAS, x, v)) * (0.5 * UBAS - i + 1) + \
+            weight[i-1] = 0.5 * (np.interp(i - 1, x, v) + np.interp(0.5 * UBAS, x, v)) * (0.5 * UBAS - i + 1) + \
                         0.5 * (np.interp(0.5 * UBAS, x, v) + np.interp(i, x, v)) * (i - 0.5 * UBAS)
         elif i > UBAS:
-            weight[i] = 0.5 * np.interp(i - 1, x, v) * (UBAS - i + 1)
+            weight[i-1] = 0.5 * np.interp(i - 1, x, v) * (UBAS - i + 1)
         else:
-            weight[i] = np.interp(i - 0.5, x, v)
+            weight[i-1] = np.interp(i - 0.5, x, v)
 
     weight = weight / np.sum(weight)
 
-    Q_routed = np.empty_like(Q)
-
-    for i in range(len(Q)):
+    # Q_routed = np.empty_like(Q)
+    Q_routed=np.zeros(len(Q))
+    for i in range(1, len(Q)+1):
         temp = 0
-        window_len = min(i, length_triangle_base)
-        for j in range(window_len):
-            temp += weight[j + 1] * Q[i - j - 1]  # TODO Q[i - j]
-        Q_routed[i] = temp
+        window_len = min((i, length_triangle_base))
+        for j in range(1, 1 + window_len):
+            # temp += weight[j + 1] * Q[i - j - 1]  # TODO Q[i - j]
+            temp += weight[j - 1] * Q[i - j]  # TODO Q[i - j]
+        Q_routed[i-1] = temp
 
     return Q_routed
 
@@ -507,6 +771,7 @@ def HBV_SASK(forcing, long_term, par_values_dict, initial_condition_df, printing
         time_series = forcing.index
     #     monthly_average_T = long_term["monthly_average_T"].to_numpy()
     #     monthly_average_PE = long_term["monthly_average_PE"].to_numpy()
+    # forcing['month_time_series']=forcing.index.month.values
 
     period_length = len(P)  # P.shape[0]
 
@@ -548,131 +813,28 @@ def HBV_SASK(forcing, long_term, par_values_dict, initial_condition_df, printing
 
     Q1_routed = triangle_routing(Q1, UBAS)
     Q = Q1_routed + Q2
-    Q_cms = (Q * watershed_area * 1000) / (24 * 3600)  # TODO
+    Q_cms = (Q * watershed_area * 1000) / (24 * 3600)
 
-    flux["Q_cms"] = Q_cms.conjugate()
-    flux["Q_mm"] = Q.conjugate()
-    flux["AET"] = AET.conjugate()
-    flux["PET"] = PET.conjugate()
-    flux["Q1"] = Q1.conjugate()
-    flux["Q1_routed"] = Q1_routed.conjugate()
-    flux["Q2"] = Q2.conjugate()
-    flux["ponding"] = ponding.conjugate()
+    flux["Q_cms"] = Q_cms#.conjugate()
+    # Make sure flows will never get negative values because of numerical errors
+    # flux["Q_cms"].loc[flux["Q_cms"] < 10 ** -5] = 10 ** -5
+    flux["Q_cms"][flux["Q_cms"] < 10 ** -5] = 10 ** -5
 
-    state["SWE"] = SWE.conjugate()
-    state["SMS"] = SMS.conjugate()
-    state["S1"] = S1.conjugate()
-    state["S2"] = S2.conjugate()
+    flux["Q_mm"] = Q#.conjugate()
+    flux["AET"] = AET#.conjugate()
+    flux["PET"] = PET#.conjugate()
+    flux["Q1"] = Q1#.conjugate()
+    flux["Q1_routed"] = Q1_routed#.conjugate()
+    flux["Q2"] = Q2#.conjugate()
+    flux["ponding"] = ponding#.conjugate()
+
+    state["SWE"] = SWE#.conjugate()
+    state["SMS"] = SMS#.conjugate()
+    state["S1"] = S1#.conjugate()
+    state["S2"] = S2#.conjugate()
 
     return flux, state
 
-
-def parameters_configuration(parameters, configurationObject, take_direct_value=False):
-    parameters_dict = defaultdict()  # copy.deepcopy(DEFAULT_PAR_VALUES_DICT)
-
-    if parameters is None:
-        return DEFAULT_PAR_VALUES_DICT
-
-    if isinstance(parameters, dict) and take_direct_value:
-        parameters_dict = parameters
-    else:
-        uncertain_param_counter = 0
-        configurationObject = utility._check_if_configurationObject_is_in_right_format(configurationObject)
-        for single_param in configurationObject['parameters']:
-            if single_param['distribution'] != "None":
-                parameters_dict[single_param['name']] = parameters[uncertain_param_counter]
-                uncertain_param_counter += 1
-            else:
-                if "value" in single_param:
-                    parameters_dict[single_param['name']] = single_param["value"]
-                elif "default" in single_param:
-                    parameters_dict[single_param['name']] = single_param["default"]
-                else:
-                    parameters_dict[single_param['name']] = DEFAULT_PAR_VALUES_DICT[single_param['name']]
-    return parameters_dict
-
-
-# def parameters_configuration_for_gradient_approximation(
-#         parameters_dict, configurationObject, parameter_index_to_perturb, eps_val=1e-4, take_direct_value=False):
-#
-#     info_dict_on_perturbed_param = dict()
-#
-#     configurationObject = utility._check_if_configurationObject_is_in_right_format(configurationObject)
-#     uncertain_param_counter = 0
-#     for id, single_param in enumerate(configurationObject['parameters']):
-#         # TODO if uncertain_param_counter != parameter_index_to_perturb:
-#         if id != parameter_index_to_perturb:
-#             if single_param['distribution'] != "None" and parameters[uncertain_param_counter] is not None:
-#                 parameters_dict[single_param['name']] = parameters[uncertain_param_counter]
-#                 uncertain_param_counter += 1
-#             else:
-#                 if "value" in single_param:
-#                     parameters_dict[single_param['name']] = single_param["value"]
-#                 elif "default" in single_param:
-#                     parameters_dict[single_param['name']] = single_param["default"]
-#                 else:
-#                     parameters_dict[single_param['name']] = DEFAULT_PAR_VALUES_DICT[single_param['name']]
-#         else:
-#             if "lower_limit" in single_param:
-#                 parameter_lower_limit = single_param["lower_limit"]
-#             elif "lower" in single_param:
-#                 parameter_lower_limit = single_param["lower"]
-#             else:
-#                 parameter_lower_limit = None
-#
-#             if "upper_limit" in single_param:
-#                 parameter_upper_limit = single_param["upper_limit"]
-#             elif "upper" in single_param:
-#                 parameter_upper_limit = single_param["upper"]
-#             else:
-#                 parameter_upper_limit = None
-#
-#             if parameter_lower_limit is None or parameter_upper_limit is None:
-#                 raise Exception(
-#                     'ERROR in parameters_configuration: perturb_sinlge_param_around_nominal is set to True but '
-#                     'parameter_lower_limit or parameter_upper_limit are not specified!')
-#             else:
-#                 param_h = eps_val * (parameter_upper_limit - parameter_lower_limit)
-#                 parameter_lower_limit += param_h
-#                 parameter_upper_limit -= param_h
-#
-#             if single_param['distribution'] != "None" and parameters[uncertain_param_counter] is not None:
-#                 new_parameter_value = parameters[uncertain_param_counter] + param_h
-#                 parameters_dict[single_param['name']] = (new_parameter_value, param_h)
-#                 uncertain_param_counter += 1
-#             else:
-#                 if "value" in single_param:
-#                     parameters_dict[single_param['name']] = single_param["value"] + param_h
-#                 elif "default" in single_param:
-#                     parameters_dict[single_param['name']] = single_param["default"] + param_h
-#                 else:
-#                     parameters_dict[single_param['name']] = DEFAULT_PAR_VALUES_DICT[single_param['name']] + param_h
-#
-#             info_dict_on_perturbed_param = {
-#                 "uncertain_param_counter": uncertain_param_counter, "id": id,
-#                 "name": single_param['name'], "param_h": param_h}
-#
-#     return parameters_dict, info_dict_on_perturbed_param
-
-
-def update_parameter_dic_for_gradient(parameters, configurationObject, take_direct_value=False,
-                                      perturb_single_param_around_nominal=False,
-                                      parameter_index_to_perturb=0, eps_val=1e-4
-                                      ):
-    # TODO Rewrite bigger part of the function above
-    # iterate through all the parameters
-    list_of_parameters_from_json = configurationObject["parameters"]
-
-    for id, param_entry_dict in enumerate(list_of_parameters_from_json):
-        if perturb_single_param_around_nominal and id != parameter_index_to_perturb:
-            continue
-
-    parameter_lower_limit = param_entry_dict["lower_limit"] if "lower_limit" in param_entry_dict else None
-    parameter_upper_limit = param_entry_dict["upper_limit"] if "upper_limit" in param_entry_dict else None
-    param_h = eps_val * (parameter_upper_limit - parameter_lower_limit)
-    parameter_lower_limit += param_h
-    parameter_upper_limit -= param_h
-    raise NotImplementedError
 
 #####################################
 
