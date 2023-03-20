@@ -6,6 +6,7 @@ Set of utility functions for preparing and/or postprocessing data for UQ runs of
 
 import chaospy as cp
 import datetime
+from distutils.util import strtobool
 import dill
 import json
 import matplotlib.pyplot as plt
@@ -22,6 +23,7 @@ import seaborn as sns
 from tabulate import tabulate
 
 
+# TODO Update this class with new changes
 class UQOutputPaths(object):
     def __init__(self, workingDir):
         self.workingDir = workingDir
@@ -328,41 +330,28 @@ def generate_table_over_rules_orders_for_single_dim(rules, dist, dim, q_orders, 
 #####################################
 from . import objectivefunctions
 
-_all_functions = [objectivefunctions.calculateMAE, objectivefunctions.calculateMSE,
-                  objectivefunctions.calculateRMSE, objectivefunctions.calculateNRMSE, objectivefunctions.calculateRSR,
-                  objectivefunctions.calculateBIAS, objectivefunctions.calculatePBIAS, objectivefunctions.calculateROCE,
-                  objectivefunctions.calculateNSE, objectivefunctions.calculateLogNSE,
-                  objectivefunctions.calculateLogGaussian, objectivefunctions.calculateCorrelationCoefficient,
-                  objectivefunctions.calculateKGE]
+_all_functions = [objectivefunctions.MAE, objectivefunctions.MSE,
+                  objectivefunctions.RMSE, objectivefunctions.NRMSE, objectivefunctions.RSR,
+                  objectivefunctions.BIAS, objectivefunctions.PBIAS, objectivefunctions.ROCE,
+                  objectivefunctions.NSE, objectivefunctions.LogNSE,
+                  objectivefunctions.LogGaussian, objectivefunctions.CorrelationCoefficient,
+                  objectivefunctions.KGE]
 
 
 mapping_gof_names_to_functions = {
-    "MAE": objectivefunctions.calculateMAE,
-    "calculateMAE": objectivefunctions.calculateMAE,
-    "MSE": objectivefunctions.calculateMSE,
-    "calculateMSE": objectivefunctions.calculateMSE,
-    "RMSE": objectivefunctions.calculateRMSE,
-    "calculateRMSE": objectivefunctions.calculateRMSE,
-    "NRMSE": objectivefunctions.calculateNRMSE,
-    "calculateNRMSE": objectivefunctions.calculateNRMSE,
-    "RSR": objectivefunctions.calculateRSR,
-    "calculateRSR": objectivefunctions.calculateRSR,
-    "BIAS": objectivefunctions.calculateBIAS,
-    "calculateBIAS": objectivefunctions.calculateBIAS,
-    "PBIAS": objectivefunctions.calculatePBIAS,
-    "calculatePBIAS": objectivefunctions.calculatePBIAS,
-    "ROCE": objectivefunctions.calculateROCE,
-    "calculateROCE": objectivefunctions.calculateROCE,
-    "NSE": objectivefunctions.calculateNSE,
-    "calculateNSE": objectivefunctions.calculateNSE,
-    "LogNSE": objectivefunctions.calculateLogNSE,
-    "calculateLogNSE": objectivefunctions.calculateLogNSE,
-    "LogGaussian": objectivefunctions.calculateLogGaussian,
-    "calculateLogGaussian": objectivefunctions.calculateLogGaussian,
-    "CorrelationCoefficient": objectivefunctions.calculateCorrelationCoefficient,
-    "calculateCorrelationCoefficient": objectivefunctions.calculateCorrelationCoefficient,
-    "KGE": objectivefunctions.calculateKGE,
-    "calculateKGE": objectivefunctions.calculateKGE
+    "MAE": objectivefunctions.MAE,
+    "MSE": objectivefunctions.MSE,
+    "RMSE": objectivefunctions.RMSE,
+    "NRMSE": objectivefunctions.NRMSE,
+    "RSR": objectivefunctions.RSR,
+    "BIAS": objectivefunctions.BIAS,
+    "PBIAS": objectivefunctions.PBIAS,
+    "ROCE": objectivefunctions.ROCE,
+    "NSE": objectivefunctions.NSE,
+    "LogNSE": objectivefunctions.LogNSE,
+    "LogGaussian": objectivefunctions.LogGaussian,
+    "CorrelationCoefficient": objectivefunctions.CorrelationCoefficient,
+    "KGE": objectivefunctions.KGE
 }
 
 
@@ -406,24 +395,27 @@ def dataframe_difference(df1, df2, which=None):
     return diff_df
 
 
-def filter_two_DF_on_common_timesteps(DF1, DF2, saveToFile=None, column_name="TimeStamp"):
+def filter_two_DF_on_common_timesteps(DF1, DF2, saveToFile=None, column_name_df1="TimeStamp", column_name_df2=None):
     # really important to check if there are any missing time steps compared to measured array
     # in other words measured and observed values have to be of the same length
     # TODO Should we make a copy of DF1 and DF1 or change the origins?
+    # TODO Maybe there is more elegant way to 
+    if column_name_df2 is None:
+        column_name_df2 = column_name_df1
     df1_column_is_index_column = False
     df2_column_is_index_column = False
-    if DF1.index.name == column_name:
+    if DF1.index.name == column_name_df1:
         df1_column_is_index_column = True
         DF1 = DF1.reset_index()
-        DF1.rename(columns={DF1.index.name: column_name}, inplace=True)
-    if DF2.index.name == column_name:
+        DF1.rename(columns={DF1.index.name: column_name_df1}, inplace=True)
+    if DF2.index.name == column_name_df2:
         df2_column_is_index_column = True
         DF2 = DF2.reset_index()
-        DF2.rename(columns={DF2.index.name: column_name}, inplace=True)
+        DF2.rename(columns={DF2.index.name: column_name_df2}, inplace=True)
 
-    list_of_columns_to_drop = [x for x in list(DF1.columns) if x != column_name]
+    list_of_columns_to_drop = [x for x in list(DF1.columns) if x != column_name_df1]
     DF1_timeSteps = DF1.drop(list_of_columns_to_drop, axis=1, errors='ignore')
-    list_of_columns_to_drop = [x for x in list(DF2.columns) if x != column_name]
+    list_of_columns_to_drop = [x for x in list(DF2.columns) if x != column_name_df2]
     DF2_timeSteps = DF2.drop(list_of_columns_to_drop, axis=1, errors='ignore')
 
     diff_df = dataframe_difference(DF1_timeSteps, DF2_timeSteps, which=None)
@@ -433,13 +425,13 @@ def filter_two_DF_on_common_timesteps(DF1, DF2, saveToFile=None, column_name="Ti
     left_only = diff_df[diff_df['_merge'] == 'left_only']
     right_only = diff_df[diff_df['_merge'] == 'right_only']
 
-    DF1 = DF1[~DF1[column_name].isin(left_only[column_name].values)]
-    DF2 = DF2[~DF2[column_name].isin(right_only[column_name].values)]
+    DF1 = DF1[~DF1[column_name_df1].isin(left_only[column_name_df1].values)]
+    DF2 = DF2[~DF2[column_name_df2].isin(right_only[column_name_df2].values)]
 
     if df1_column_is_index_column:
-        DF1.set_index(column_name, inplace=True)
+        DF1.set_index(column_name_df1, inplace=True)
     if df2_column_is_index_column:
-        DF2.set_index(column_name, inplace=True)
+        DF2.set_index(column_name_df2, inplace=True)
 
     return DF1, DF2
 
@@ -474,8 +466,10 @@ def calculateGoodnessofFit_simple(measuredDF, predictedDF, gof_list,
     # DataFrames containing measurements might be longer than the one containing model predictions - alignment is needed
     # It might be as well that one of DataFrames does not contain all the timesteps the other one does
     # therefore, apply one of these two filtering functions
-    assert measuredDF_time_column_name == simulatedDF_time_column_name, "Assertion failed in utility.calculateGoodnessofFit_simple"
-    predictedDF, measuredDF = filter_two_DF_on_common_timesteps(predictedDF, measuredDF, column_name=measuredDF_time_column_name)
+    # assert measuredDF_time_column_name == simulatedDF_time_column_name, "Assertion failed in utility.calculateGoodnessofFit_simple"
+    predictedDF, measuredDF = filter_two_DF_on_common_timesteps(predictedDF, measuredDF,
+                                                                column_name_df1=measuredDF_time_column_name,
+                                                                column_name_df2=simulatedDF_time_column_name)
     #predictedDF, measuredDF = align_dataFrames_timewise_2(predictedDF, measuredDF)
 
     if return_dict:
@@ -645,14 +639,17 @@ def return_configuration_object(configurationObject):
             "[Error] You have to specify the Configuration Object or provide the path to the .json file!\n")
 
 
-def _check_if_configurationObject_is_in_right_format(configurationObject):
+def _check_if_configurationObject_is_in_right_format(configurationObject, raise_error=True):
     if isinstance(configurationObject, dict) or isinstance(configurationObject, pd.DataFrame):
         return configurationObject
     elif isinstance(configurationObject, str) or isinstance(configurationObject, pathlib.PosixPath):
         configurationObject = read_configuration_dict_from_json_file(configurationObject)
         return configurationObject
     else:
-        raise Exception("Error in configure_parameters_value function - configurationObject is not in the expected form!")
+        if raise_error:
+            raise Exception("Error in configure_parameters_value function - configurationObject is not in the expected form!")
+        else:
+            return None
 
 
 def read_configuration_object_json(configurationObject, element=None):
@@ -690,9 +687,219 @@ def read_configuration_object_dill(configurationObject, element=None):
         return configuration_object[element]
 
 
-def get_param_info_dict_from_configurationObject(configurationObject):
-    configurationObject = _check_if_configurationObject_is_in_right_format(configurationObject)
+def read_simulation_settings_from_configuration_object(configurationObject, **kwargs):
+    configurationObject = _check_if_configurationObject_is_in_right_format(configurationObject, raise_error=False)
+
     result_dict = dict()
+
+    if configurationObject is None:
+        return result_dict
+
+    # dict_config_simulation_settings = configurationObject["simulation_settings"]
+    dict_config_simulation_settings = configurationObject.get("simulation_settings", dict())
+
+    if "qoi" in kwargs:
+        qoi = kwargs['qoi']
+    else:
+        qoi = dict_config_simulation_settings.get("qoi", "Q_cms")
+    result_dict["qoi"] = qoi
+
+    if "qoi_column" in kwargs:
+        qoi_column = kwargs['qoi_column']
+    else:
+        qoi_column = dict_config_simulation_settings.get("qoi_column", "Q_cms")
+    result_dict["qoi_column"] = qoi_column
+
+    multiple_qoi = False
+    number_of_qois = 1
+    if isinstance(qoi, list) or (qoi == "GoF" and isinstance(qoi_column, list)):
+        multiple_qoi = True
+        number_of_qois = len(qoi_column)
+    result_dict["multiple_qoi"] = multiple_qoi
+    result_dict["number_of_qois"] = number_of_qois
+
+    if "read_measured_data" in kwargs:
+        read_measured_data = kwargs['read_measured_data']
+    else:
+        if multiple_qoi:
+            read_measured_data = []
+            try:
+                temp = dict_config_simulation_settings["read_measured_data"]
+            except KeyError:
+                temp = ["False"] * number_of_qois
+            for i in range(number_of_qois):
+                read_measured_data.append(strtobool(temp[i]))
+        else:
+            read_measured_data = strtobool(dict_config_simulation_settings.get("read_measured_data", "False"))
+
+    if "qoi_column_measured" in kwargs:
+        qoi_column_measured = kwargs['qoi_column_measured']
+    else:
+        if multiple_qoi:
+            try:
+                qoi_column_measured = dict_config_simulation_settings["qoi_column_measured"]
+                for idx, single_qoi_column_measured in enumerate(qoi_column_measured):
+                    if single_qoi_column_measured == "None":
+                        qoi_column_measured[idx] = None
+            except KeyError:
+                qoi_column_measured = [None] * number_of_qois
+        else:
+            qoi_column_measured = dict_config_simulation_settings.get("qoi_column_measured", "streamflow")
+            if qoi_column_measured == "None":
+                qoi_column_measured = None
+    result_dict["qoi_column_measured"] = qoi_column_measured
+
+    if multiple_qoi:
+        for idx, single_read_measured_data in enumerate(read_measured_data):
+            if single_read_measured_data and qoi_column_measured[idx] is None:
+                # raise ValueError
+                read_measured_data[idx] = False
+    else:
+        if read_measured_data and qoi_column_measured is None:
+            # raise ValueError
+            read_measured_data = False
+    result_dict["read_measured_data"] = read_measured_data
+
+    if multiple_qoi:
+        assert len(read_measured_data) == len(qoi_column)
+        assert len(read_measured_data) == len(qoi_column_measured)
+
+    calculate_GoF = strtobool(dict_config_simulation_settings.get("calculate_GoF", "False"))
+    # self.calculate_GoF has to follow the self.read_measured_data which tells if ground truth data for that qoi is available
+    list_calculate_GoF = [False, ]
+    if calculate_GoF:
+        if multiple_qoi:
+            list_calculate_GoF = [False] * len(read_measured_data)
+            for idx, single_read_measured_data in enumerate(read_measured_data):
+                list_calculate_GoF[idx] = single_read_measured_data
+        else:
+            list_calculate_GoF = read_measured_data
+    result_dict["calculate_GoF"] = calculate_GoF
+    result_dict["list_calculate_GoF"] = list_calculate_GoF
+
+    objective_function = dict_config_simulation_settings.get("objective_function", [])
+    result_dict["objective_function"] = objective_function
+
+    objective_function_qoi = None
+    objective_function_names_qoi = None
+    list_objective_function_qoi = None
+    list_objective_function_names_qoi = None
+    if qoi == "GoF":
+        # take only those Outputs of Interest that have measured data
+        if multiple_qoi:
+            updated_qoi_column = []
+            updated_qoi_column_measured = []
+            updated_read_measured_data = []
+            for idx, single_qoi_column in enumerate(qoi_column):
+                if read_measured_data[idx]:
+                    updated_qoi_column.append(single_qoi_column)
+                    updated_qoi_column_measured.append(qoi_column_measured[idx])
+                    updated_read_measured_data.append(True)
+            qoi_column = updated_qoi_column
+            qoi_column_measured = updated_qoi_column_measured
+            read_measured_data = updated_read_measured_data
+            result_dict["qoi_column"] = qoi_column
+            result_dict["qoi_column_measured"] = qoi_column_measured
+        else:
+            if not read_measured_data:
+                raise ValueError
+        objective_function_qoi = dict_config_simulation_settings.get("objective_function_qoi", "all")
+        objective_function_qoi = gof_list_to_function_names(objective_function_qoi)
+        if isinstance(objective_function_qoi, list):
+            objective_function_names_qoi = [
+                single_gof.__name__ if callable(single_gof) else single_gof \
+                for single_gof in objective_function_qoi]
+            list_objective_function_qoi = objective_function_qoi
+            list_objective_function_names_qoi = objective_function_names_qoi
+        else:
+            list_objective_function_qoi = [objective_function_qoi, ]
+            if callable(objective_function_qoi):
+                objective_function_names_qoi = objective_function_qoi.__name__
+            else:
+                objective_function_names_qoi = objective_function_qoi
+            list_objective_function_names_qoi = [objective_function_names_qoi,]
+    result_dict["objective_function_qoi"] = objective_function_qoi
+    result_dict["objective_function_names_qoi"] = objective_function_names_qoi
+    result_dict["list_objective_function_qoi"] = list_objective_function_qoi
+    result_dict["list_objective_function_names_qoi"] = list_objective_function_names_qoi
+
+    # Create a list version of some configuration parameters which might be needed when computing GoF
+    # if self.qoi.lower() == "gof" or self.calculate_GoF:
+    if not isinstance(qoi_column, list):
+        list_qoi_column = [qoi_column, ]
+    else:
+        list_qoi_column = qoi_column
+    if not isinstance(qoi_column_measured, list):
+        list_qoi_column_measured = [qoi_column_measured, ]
+    else:
+        list_qoi_column_measured = qoi_column_measured
+    if not isinstance(read_measured_data, list):
+        list_read_measured_data = [read_measured_data, ]
+    else:
+        list_read_measured_data = read_measured_data
+    result_dict["list_qoi_column"] = list_qoi_column
+    result_dict["list_qoi_column_measured"] = list_qoi_column_measured
+    result_dict["list_read_measured_data"] = list_read_measured_data
+
+    assert len(list_qoi_column) == len(list_qoi_column_measured)
+    assert len(list_qoi_column_measured) == len(list_read_measured_data)
+
+    mode = dict_config_simulation_settings.get("mode", "continuous")
+    if mode != "continuous" and mode != "sliding_window" and mode != "resampling":
+        raise Exception(f"[ERROR] mode should have one of the following values:"
+                        f" \"continuous\" or \"sliding_window\" or \"resampling\"")
+    interval = dict_config_simulation_settings.get("interval", 24)
+    min_periods = dict_config_simulation_settings.get("min_periods", 1)
+    method = dict_config_simulation_settings.get("method", "avrg")
+    center = dict_config_simulation_settings.get("center", "center")
+    if center != "center" and center != "left" and center != "right":
+        raise Exception(f"[ERROR:] center should be either \"center\" or \"left\" or \"right\"")
+    if method != "avrg" and method != "max" and method != "min":
+        raise Exception(f"[ERROR:] method should be either \"avrg\" or \"max\" or \"min\"")
+    result_dict["mode"] = mode
+    result_dict["method"] = method
+    result_dict["interval"] = interval
+    result_dict["min_periods"] = min_periods
+    result_dict["center"] = center
+
+    compute_gradients = strtobool(dict_config_simulation_settings.get("compute_gradients", "False"))
+    result_dict["compute_gradients"] = compute_gradients
+
+    CD = None
+    eps_val_global = None
+    compute_active_subspaces = False
+    save_gradient_related_runs = False
+    if compute_gradients:
+        gradient_method = dict_config_simulation_settings.get("gradient_method", "Forward Difference")
+        if gradient_method == "Central Difference":
+            CD = 1  # flag for using Central Differences (with 2 * num_evaluations)
+        elif gradient_method == "Forward Difference":
+            CD = 0  # flag for using Forward Differences (with num_evaluations)
+        else:
+            raise Exception(f"NUMERICAL GRADIENT EVALUATION ERROR: "
+                            f"Only \"Central Difference\" and \"Forward Difference\" supported")
+        eps_val_global = dict_config_simulation_settings.get("eps_gradients", 1e-4)
+
+        compute_active_subspaces = strtobool(
+            dict_config_simulation_settings.get("compute_active_subspaces", "False"))
+        save_gradient_related_runs = strtobool(
+            dict_config_simulation_settings.get("save_gradient_related_runs", "False"))
+        # It makes sense to compute gradients only if once of the following flags are set to True
+        if not save_gradient_related_runs and not compute_active_subspaces:
+            compute_gradients = False
+    result_dict["CD"] = CD
+    result_dict["eps_val_global"] = eps_val_global
+    result_dict["compute_active_subspaces"] = compute_active_subspaces
+    result_dict["save_gradient_related_runs"] = save_gradient_related_runs
+
+    return result_dict
+
+
+def get_param_info_dict_from_configurationObject(configurationObject):
+    configurationObject = _check_if_configurationObject_is_in_right_format(configurationObject, raise_error=False)
+    result_dict = dict()
+    if configurationObject is None:
+        return result_dict
     list_of_parameters_from_json = configurationObject["parameters"]
     for _, param_entry_dict in enumerate(list_of_parameters_from_json):
         param_name = param_entry_dict.get("name")
@@ -715,7 +922,7 @@ def get_param_info_dict_from_configurationObject(configurationObject):
         # parameter_value = param_entry_dict.get("value", None)
 
         result_dict[param_name] = {
-            'distribution':distribution, 'default_value': default_value,
+            'distribution': distribution, 'default_value': default_value,
             'lower_limit': lower_limit, 'upper_limit': upper_limit
         }
     return result_dict
@@ -774,8 +981,8 @@ def _get_parameter_columns_df_index_parameter_gof(df_index_parameter_gof):
     def check_if_column_stores_parameter(x):
         if isinstance(x, tuple):
             x = x[0]
-        return not x.startswith("calculate") and not x.startswith("d_calculate") and \
-               x not in ["index_run", "station", "successful_run"]
+        return x not in list(mapping_gof_names_to_functions.keys()) and not x.startswith("d_") and \
+               x not in ["index_run", "station", "successful_run", "qoi"]
     return [x for x in df_index_parameter_gof.columns.tolist() if check_if_column_stores_parameter(x)]
 
 
@@ -783,15 +990,15 @@ def _get_gof_columns_df_index_parameter_gof(df_index_parameter_gof):
     def check_if_column_stores_gof(x):
         if isinstance(x, tuple):
             x = x[0]
-        return x.startswith("calculate") and x not in ["index_run", "station"]
+        return x in list(mapping_gof_names_to_functions.keys()) and x not in ["index_run", "station", "successful_run", "qoi"]
     return [x for x in df_index_parameter_gof.columns.tolist() if check_if_column_stores_gof(x)]
 
 
 def _get_grad_columns_df_index_parameter_gof(df_index_parameter_gof):
-    return [x for x in df_index_parameter_gof.columns.tolist() if x.startswith("d_calculate")]
+    return [x for x in df_index_parameter_gof.columns.tolist() if x.startswith("d_")]
 
 
-def plot_hist_of_gof_values_from_df(df_index_parameter_gof, name_of_gof_column="calculateNSE"):
+def plot_hist_of_gof_values_from_df(df_index_parameter_gof, name_of_gof_column="NSE"):
     return df_index_parameter_gof.hist(name_of_gof_column)
 
 
@@ -814,7 +1021,7 @@ def plot_subplot_params_hist_from_df(df_index_parameter_gof):
     return fig
 
 
-def plot_subplot_params_hist_from_df_conditioned(df_index_parameter_gof, name_of_gof_column="calculateNSE",
+def plot_subplot_params_hist_from_df_conditioned(df_index_parameter_gof, name_of_gof_column="NSE",
                                                  threshold_gof_value=0, comparison="smaller"):
     """
     comparison should be: "smaller", "greater", "equal"
@@ -845,7 +1052,7 @@ def plot_subplot_params_hist_from_df_conditioned(df_index_parameter_gof, name_of
     return fig
 
 
-def plot_scatter_matrix_params_vs_gof(df_index_parameter_gof, name_of_gof_column="calculateNSE",
+def plot_scatter_matrix_params_vs_gof(df_index_parameter_gof, name_of_gof_column="NSE",
                                       hover_name="index_run"):
     columns_with_parameters = _get_parameter_columns_df_index_parameter_gof(df_index_parameter_gof)
     fig = px.scatter_matrix(df_index_parameter_gof,
@@ -860,7 +1067,7 @@ def plot_scatter_matrix_params_vs_gof(df_index_parameter_gof, name_of_gof_column
 ###################################################################################################################
 
 
-def scatter_3d_params_vs_gof(df_index_parameter_gof, param1, param2, param3, name_of_gof_column="calculateNSE",
+def scatter_3d_params_vs_gof(df_index_parameter_gof, param1, param2, param3, name_of_gof_column="NSE",
                              name_of_index_run_column="index_run"):
     fig = px.scatter_3d(
         df_index_parameter_gof, x=param1, y=param2, z=param3, color=name_of_gof_column, opacity=0.7,
@@ -870,7 +1077,7 @@ def scatter_3d_params_vs_gof(df_index_parameter_gof, param1, param2, param3, nam
 
 
 def plot_surface_2d_params_vs_gof(df_index_parameter_gof, param1, param2, num_of_points_in_1d=8,
-                                  name_of_gof_column="calculateNSE"):
+                                  name_of_gof_column="NSE"):
     # from mpl_toolkits.mplot3d import Axes3D
     # from mpl_toolkits.mplot3d.art3d import Poly3DCollection, Line3DCollection
     # from matplotlib import cm
@@ -882,7 +1089,7 @@ def plot_surface_2d_params_vs_gof(df_index_parameter_gof, param1, param2, num_of
 
     # x = samples_df_index_parameter_gof['A2'].to_numpy()
     # y = samples_df_index_parameter_gof['BSF'].to_numpy()
-    # z = samples_df_index_parameter_gof['calculateRMSE'].to_numpy()
+    # z = samples_df_index_parameter_gof['RMSE'].to_numpy()
 
     # X = np.reshape(x, (-1, 8))
     # Y = np.reshape(y, (-1, 8))
@@ -910,7 +1117,7 @@ def plot_surface_2d_params_vs_gof(df_index_parameter_gof, param1, param2, num_of
     return fig
 
 
-def plot_parallel_params_vs_gof(df_index_parameter_gof, name_of_gof_column="calculateNSE", list_of_params=None):
+def plot_parallel_params_vs_gof(df_index_parameter_gof, name_of_gof_column="NSE", list_of_params=None):
     if list_of_params is None:
         list_of_params = _get_parameter_columns_df_index_parameter_gof(df_index_parameter_gof)
     dimensions = list_of_params + [name_of_gof_column, ]
@@ -918,7 +1125,7 @@ def plot_parallel_params_vs_gof(df_index_parameter_gof, name_of_gof_column="calc
     return fig
 
 
-def plot_scatter_matrix_params_vs_gof_seaborn(df_index_parameter_gof, name_of_gof_column="calculateNSE"):
+def plot_scatter_matrix_params_vs_gof_seaborn(df_index_parameter_gof, name_of_gof_column="NSE"):
     columns_with_parameters = _get_parameter_columns_df_index_parameter_gof(df_index_parameter_gof)
     sns.set(style="ticks", color_codes=True)
     g = sns.pairplot(df_index_parameter_gof,
