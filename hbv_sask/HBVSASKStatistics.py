@@ -27,20 +27,23 @@ from common import saltelliSobolIndicesHelpingFunctions
 from common import parallelStatistics
 from common import colors
 
-# import hbvsask_utility as hbv
+from common import utility
 from hbv_sask import hbvsask_utility as hbv
 
 
+# TODO - changed logic, update, TimeStamp is an index column of raw model runs returned by simulations
 class HBVSASKSamples(object):
-    def __init__(self, rawSamples, configurationObject, qoi_column="Value", **kwargs):
+    def __init__(self, rawSamples, configurationObject, qoi_column="Value", time_column_name="TimeStamp", **kwargs):
         if isinstance(configurationObject, dict):
             self.configurationObject = configurationObject
         else:
             with open(configurationObject) as f:
                 self.configurationObject = json.load(f)
 
+        self.time_column_name = time_column_name
+
         qoi_columns = [qoi_column, ]  # ["Q_cms", ]
-        qoi_columns = qoi_columns + ["TimeStamp", "Index_run"]  # "streamflow"
+        qoi_columns = qoi_columns + [self.time_column_name, "Index_run"]  # "streamflow"
         self.extract_only_qoi_columns = kwargs.get('extract_only_qoi_columns', False)
 
         try:
@@ -77,6 +80,14 @@ class HBVSASKSamples(object):
                         list_of_gradient_matrix_dict.append(gradient_matrix_dict)
             else:
                 df_result = value
+
+            if isinstance(df_result, pd.DataFrame) and df_result.index.name==self.time_column_name:
+                df_result = df_result.reset_index()
+                df_result.rename(columns={df_result.index.name: self.time_column_name}, inplace=True)
+
+            if self.time_column_name not in list(df_result):
+                raise Exception(f"Error in Samples class - {self.time_column_name} is not in the "
+                                f"columns of the result DataFrame")
 
             if df_result is not None:
                 if self.extract_only_qoi_columns:
@@ -184,13 +195,27 @@ class HBVSASKStatistics(Statistics):
             with open(configurationObject) as f:
                 self.configurationObject = json.load(f)
 
+        # in the statistics class specification of the workingDir is necessary
         self.workingDir = pathlib.Path(workingDir)
 
+        if "basis" in kwargs:
+            self.basis = kwargs['basis']
+        else:
+            self.basis = self.configurationObject["model_settings"].get("basis", 'Oldman_Basin')
+
+        inputModelDir = kwargs.get('inputModelDir', self.workingDir)
+        self.inputModelDir = pathlib.Path(inputModelDir)
+        self.inputModelDir_basis = self.inputModelDir / self.basis
+
         #####################################
-        # Set of configuration variables propagated via UQsim.args and **kwargs
+        # Set of configuration variables propagated via UQsim.args and/or **kwargs
+        # These are mainly UQ simulation - related configurations
         #####################################
+        self.uq_method = kwargs.get('uq_method', None)
+
         self.sampleFromStandardDist = kwargs.get('sampleFromStandardDist', False)
 
+        # wheather to store all original model outputs in the stat dict; note - this might take a lot of space
         self.store_qoi_data_in_stat_dict = kwargs.get('store_qoi_data_in_stat_dict', False)
 
         # TODO: eventually make a non-MPI version
@@ -203,8 +228,6 @@ class HBVSASKStatistics(Statistics):
             self.mpi_chunksize = kwargs.get('mpi_chunksize', 1)
             self.unordered = kwargs.get('unordered', False)
 
-        self.uq_method = kwargs.get('uq_method', None)
-
         self.save_samples = kwargs.get('save_samples', True)
 
         self._compute_Sobol_t = kwargs.get('compute_Sobol_t', True)
@@ -212,29 +235,64 @@ class HBVSASKStatistics(Statistics):
         self._compute_Sobol_m2 = kwargs.get('compute_Sobol_m2', False)
 
         #####################################
-        # self.qoi_column = kwargs.get('qoi_column', "Value")
-        if "qoi_column" in kwargs:
-            self.qoi_column = kwargs['qoi_column']
-        else:
-            self.qoi_column = self.configurationObject["model_settings"].get("qoi_column", 'Value')
+        # Set of configuration variables propagated via **kwargs or read from configurationObject
+        # These are mainly model related configurations
+        #####################################
+        # This is actually index name in the propageted results DataFrame
+        self.time_column_name = kwargs.get("time_column_name", "TimeStamp")
 
         if "run_full_timespan" in kwargs:
             self.run_full_timespan = kwargs['run_full_timespan']
         else:
-            self.run_full_timespan = strtobool(self.configurationObject["time_settings"].get("run_full_timespan", 'False'))
+            self.run_full_timespan = strtobool(
+                self.configurationObject["time_settings"].get("run_full_timespan", 'False'))
 
-        if "basis" in kwargs:
-            self.basis = kwargs['basis']
+        dict_processed_config_simulation_settings = utility.read_simulation_settings_from_configuration_object(
+            self.configurationObject, **kwargs)
+
+        self.qoi = dict_processed_config_simulation_settings["qoi"]
+        self.qoi_column = dict_processed_config_simulation_settings["qoi_column"]
+        self.multiple_qoi = dict_processed_config_simulation_settings["multiple_qoi"]
+        self.number_of_qois = dict_processed_config_simulation_settings["number_of_qois"]
+        self.qoi_column_measured = dict_processed_config_simulation_settings["qoi_column_measured"]
+        self.read_measured_data = dict_processed_config_simulation_settings["read_measured_data"]
+
+        # streamflow is of special importance here, since we have saved/measured/ground truth that for it and it is inside input data
+        self.read_measured_streamflow = False
+        if self.multiple_qoi:
+            for idx, single_qoi_column in enumerate(self.qoi_column):
+                if single_qoi_column == "Q_cms" or single_qoi_column == "Q" or single_qoi_column == "streamflow":
+                    self.read_measured_streamflow = self.read_measured_data[idx]
+                    self.streamflow_column_name = self.qoi_column_measured[idx]
         else:
-            self.basis = self.configurationObject["model_settings"].get("basis", 'Oldman_Basin')
+            if self.qoi_column == "Q_cms" or self.qoi_column == "Q" or self.qoi_column == "streamflow":
+                self.read_measured_streamflow = self.read_measured_data
+                self.streamflow_column_name = self.qoi_column_measured
 
-        inputModelDir = kwargs.get('inputModelDir', self.workingDir)
-        self.inputModelDir = pathlib.Path(inputModelDir)
-        self.inputModelDir_basis = self.inputModelDir / self.basis
+        self.objective_function_qoi = dict_processed_config_simulation_settings["objective_function_qoi"]
+        self.objective_function_names_qoi = dict_processed_config_simulation_settings["objective_function_names_qoi"]
+
+        # list versions of above variables
+        self.list_qoi_column = dict_processed_config_simulation_settings["list_qoi_column"]
+        self.list_qoi_column_measured = dict_processed_config_simulation_settings["list_qoi_column_measured"]
+        self.list_read_measured_data = dict_processed_config_simulation_settings["list_read_measured_data"]
+        self.list_objective_function_qoi = dict_processed_config_simulation_settings["list_objective_function_qoi"]
+        self.list_objective_function_names_qoi = dict_processed_config_simulation_settings[
+            "list_objective_function_names_qoi"]
+
+        self.mode = dict_processed_config_simulation_settings["mode"]
+        self.method = dict_processed_config_simulation_settings["method"]
+
+        self.compute_gradients = dict_processed_config_simulation_settings["compute_gradients"]
+        self.compute_active_subspaces = dict_processed_config_simulation_settings["compute_active_subspaces"]
+        self.save_gradient_related_runs = dict_processed_config_simulation_settings["save_gradient_related_runs"]
+
+        #####################################
+        # Parameters related set-up part
         #####################################
         self.nodeNames = []
         try:
-            list_of_parameters = configurationObject["parameters"]
+            list_of_parameters = self.configurationObject["parameters"]
         except KeyError as e:
             print(f"HBVSASK Statistics: parameters key does "
                   f"not exists in the configurationObject{e}")
@@ -245,10 +303,13 @@ class HBVSASKStatistics(Statistics):
         self.dim = len(self.nodeNames)
         self.labels = [nodeName.strip() for nodeName in self.nodeNames]
 
+        #####################################
+        # Initialize different variables of the Statisitc class
+        #####################################
         self.df_unaltered = None
         self.df_measured = None
         self.unaltered_computed = False
-        self.groundTruth_computed = False
+        self.mesaured_fetched = False
         self.forcing_data_fetched = False
 
         self._is_Sobol_t_computed = False
@@ -314,12 +375,14 @@ class HBVSASKStatistics(Statistics):
             rawSamples,
             configurationObject=self.configurationObject,
             qoi_column=self.qoi_column,
+            time_column_name=self.time_column_name,
             extract_only_qoi_columns=True
         )
 
         if self.samples.df_simulation_result is not None:
             self.samples.df_simulation_result.sort_values(
-                by=["Index_run", "TimeStamp"], axis=0, ascending=True, inplace=True, kind='quicksort', na_position='last'
+                by=["Index_run", self.time_column_name], ascending=[True, True], inplace=True, kind='quicksort',
+                na_position='last'
             )
 
         if self.save_samples:
@@ -331,6 +394,7 @@ class HBVSASKStatistics(Statistics):
                 self.samples.save_dict_of_approx_matrix_c(self.workingDir)
                 self.samples.save_dict_of_matrix_c_eigen_decomposition(self.workingDir)
 
+        # Tead info about the time from propagated model runs, i.e., samples
         self.timesteps = self.samples.get_simulation_timesteps()
         self.timesteps_min = self.samples.get_timesteps_min()
         self.timesteps_max = self.samples.get_timesteps_max()
@@ -370,7 +434,7 @@ class HBVSASKStatistics(Statistics):
 
     def calcStatisticsForMcParallel(self, chunksize=1, regression=False, *args, **kwargs):
         if self.rank == 0:
-            grouped = self.samples.df_simulation_result.groupby(['TimeStamp',])
+            grouped = self.samples.df_simulation_result.groupby([self.time_column_name,])
             groups = grouped.groups
 
             keyIter = list(groups.keys())
@@ -398,6 +462,7 @@ class HBVSASKStatistics(Statistics):
 
         with futures.MPICommExecutor(MPI.COMM_WORLD, root=0) as executor:
             if executor is not None:  # master process
+                print(f"{self.rank}: computation of statistics started...")
                 solver_time_start = time.time()
                 if regression:
                     chunk_results_it = executor.map(parallelStatistics._my_parallel_calc_stats_for_gPCE,
@@ -442,7 +507,7 @@ class HBVSASKStatistics(Statistics):
 
     def calcStatisticsForScParallel(self, chunksize=1, regression=False, *args, **kwargs):
         if self.rank == 0:
-            grouped = self.samples.df_simulation_result.groupby(['TimeStamp', ])
+            grouped = self.samples.df_simulation_result.groupby([self.time_column_name, ])
             groups = grouped.groups
 
             keyIter = list(groups.keys())
@@ -466,6 +531,7 @@ class HBVSASKStatistics(Statistics):
 
         with futures.MPICommExecutor(MPI.COMM_WORLD, root=0) as executor:
             if executor is not None:  # master process
+                print(f"{self.rank}: computation of statistics started...")
                 solver_time_start = time.time()
                 chunk_results_it = executor.map(parallelStatistics._my_parallel_calc_stats_for_gPCE,
                                                 keyIter_chunk,
@@ -498,7 +564,7 @@ class HBVSASKStatistics(Statistics):
 
     def calcStatisticsForSaltelliParallel(self, chunksize=1, regression=False, *args, **kwargs):
         if self.rank == 0:
-            grouped = self.samples.df_simulation_result.groupby(['TimeStamp', ])
+            grouped = self.samples.df_simulation_result.groupby([self.time_column_name, ])
             groups = grouped.groups
 
             keyIter = list(groups.keys())
@@ -519,6 +585,7 @@ class HBVSASKStatistics(Statistics):
 
         with futures.MPICommExecutor(MPI.COMM_WORLD, root=0) as executor:
             if executor is not None:  # master process
+                print(f"{self.rank}: computation of statistics started...")
                 solver_time_start = time.time()
                 chunk_results_it = executor.map(parallelStatistics._my_parallel_calc_stats_for_mc_saltelli,
                                                 keyIter_chunk,
@@ -587,7 +654,7 @@ class HBVSASKStatistics(Statistics):
                 (self.df_measured[time_column_name] >= self.timesteps_min) & (self.df_measured[time_column_name] <= self.timesteps_max)]
         else:
             self.df_measured = self.df_measured[self.timesteps_min:self.timesteps_max]
-        self.groundTruth_computed = True
+        self.mesaured_fetched = True
 
     def get_unaltered_run_data(self):
         self.df_unaltered = None
@@ -639,7 +706,7 @@ class HBVSASKStatistics(Statistics):
 
         single_fileName = self.generateFileName(fileName=fileName, fileNameIdent=".html",
                                                 directory=directory, fileNameIdentIsFullName=fileNameIdentIsFullName)
-        fig = self._plotStatisticsDict_plotly(unalatered=self.unaltered_computed, measured=self.groundTruth_computed,
+        fig = self._plotStatisticsDict_plotly(unalatered=self.unaltered_computed, measured=self.mesaured_fetched,
                                               forcing=self.forcing_data_fetched,
                                               recalculateTimesteps=False, filename=single_fileName, display=display, **kwargs)
         if display:
@@ -704,7 +771,7 @@ class HBVSASKStatistics(Statistics):
                 fig.add_trace(go.Scatter(x=self.df_unaltered[timestamp_column], y=self.df_unaltered[column_to_draw],
                                          name="Q (unaltered simulation)", line_color='deepskyblue', mode = 'lines'),
                               row=starting_row, col=1)
-        if measured and self.groundTruth_computed:
+        if measured and self.mesaured_fetched:
             column_to_draw = self.qoi_column if self.qoi_column in self.df_measured.columns \
                 else kwargs.get('measured_df_column_to_draw', 'Value')
             timestamp_column = kwargs.get('measured_df_timestamp_column', 'TimeStamp')
@@ -833,7 +900,7 @@ class HBVSASKStatistics(Statistics):
 
         df_statistics_station = pd.DataFrame(list(zip(*list_of_columns)), columns=list_of_columns_names)
 
-        if self.groundTruth_computed:
+        if self.mesaured_fetched:
             pass  # TODO
 
         if self.unaltered_computed:
