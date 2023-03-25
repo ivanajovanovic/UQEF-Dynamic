@@ -44,7 +44,8 @@ class HBVSASKModel(object):
         if "run_full_timespan" in kwargs:
             self.run_full_timespan = kwargs['run_full_timespan']
         else:
-            self.run_full_timespan = strtobool(self.configurationObject["time_settings"].get("run_full_timespan", 'False'))
+            self.run_full_timespan = strtobool(self.configurationObject["time_settings"].get(
+                "run_full_timespan", 'False'))
 
         if "writing_results_to_a_file" in kwargs:
             self.writing_results_to_a_file = kwargs['writing_results_to_a_file']
@@ -57,6 +58,21 @@ class HBVSASKModel(object):
         else:
             self.plotting = strtobool(self.configurationObject["model_settings"].get("plotting", True))
 
+        if "corrupt_forcing_data" in kwargs:
+            self.corrupt_forcing_data = kwargs['corrupt_forcing_data']
+        else:
+            self.corrupt_forcing_data = strtobool(self.configurationObject["model_settings"].get(
+                "corrupt_forcing_data", False))
+        ######################################################################################################
+
+        # these set of control variables are for UQEF & UQEFPP framework...
+        self.uq_method = kwargs.get('uq_method', None)
+        self.raise_exception_on_model_break = kwargs.get('raise_exception_on_model_break', False)
+        if self.uq_method is not None and self.uq_method == "sc":  # always break when running gPCE simulation
+            self.raise_exception_on_model_break = True
+        self.disable_statistics = kwargs.get('disable_statistics', False)
+        # if not self.disable_statistics:
+        #     self.writing_results_to_a_file = False
         ######################################################################################################
 
         # self.initial_condition_file = self.inputModelDir_basis / "initial_condition.inp"
@@ -81,15 +97,6 @@ class HBVSASKModel(object):
         self.temperature_column_name = kwargs.get("temperature_column_name", "temperature")
         self.long_term_precipitation_column_name = kwargs.get("long_term_precipitation_column_name", "monthly_average_PE")
         self.long_term_temperature_column_name = kwargs.get("long_term_temperature_column_name", "monthly_average_T")
-
-        ######################################################################################################
-
-        # these set of control variables are for UQEF & UQEFPP framework...
-        self.uq_method = kwargs.get('uq_method', None)
-        self.raise_exception_on_model_break = kwargs.get('raise_exception_on_model_break', False)
-        if self.uq_method is not None and self.uq_method == "sc":  # always break when running gPCE simulation
-            self.raise_exception_on_model_break = True
-        self.disable_statistics = kwargs.get('disable_statistics', False)
 
         ######################################################################################################
         dict_processed_config_simulation_settings = utility.read_simulation_settings_from_configuration_object(
@@ -329,6 +336,7 @@ class HBVSASKModel(object):
         deleteFolderAfterwards = kwargs.get("deleteFolderAfterwards", True)
         writing_results_to_a_file = kwargs.get("writing_results_to_a_file", self.writing_results_to_a_file)
         plotting = kwargs.get("plotting", self.plotting)
+        corrupt_forcing_data = kwargs.get("corrupt_forcing_data", self.corrupt_forcing_data)
 
         merge_output_with_measured_data = kwargs.get("merge_output_with_measured_data", False)
         if any(self.list_calculate_GoF):
@@ -347,6 +355,15 @@ class HBVSASKModel(object):
 
             id_dict = {"index_run": i}
 
+            # this indeed represents the number of parameters considered to be uncertain, later on parameters_dict might
+            # be extanded with fixed parameters that occure in configurationObject
+            if parameter is None:
+                number_of_uncertain_params = 0
+            elif isinstance(parameter, dict):
+                number_of_uncertain_params = len(list(parameter.keys()))
+            else:
+                number_of_uncertain_params = len(parameter)
+
             parameters_dict = hbv.parameters_configuration(
                 parameters=parameter,
                 configurationObject=self.configurationObject,
@@ -364,18 +381,15 @@ class HBVSASKModel(object):
                 curr_working_dir = self.workingDir
 
             # Running the model
-            flux, state = hbv.HBV_SASK(
-                forcing=self.time_series_measured_data_df,
-                long_term=self.precipitation_temperature_monthly_df,
-                par_values_dict=parameters_dict,
-                initial_condition_df=self.initial_condition_df,
-                printing=False,
-                time_column_name=self.time_column_name,
-                precipitation_column_name=self.precipitation_column_name,
-                temperature_column_name=self.temperature_column_name,
-                long_term_precipitation_column_name=self.long_term_precipitation_column_name,
-                long_term_temperature_column_name=self.long_term_temperature_column_name
-            )
+            flux, state = hbv.HBV_SASK(forcing=self.time_series_measured_data_df,
+                                       long_term=self.precipitation_temperature_monthly_df,
+                                       par_values_dict=parameters_dict, initial_condition_df=self.initial_condition_df,
+                                       printing=False, time_column_name=self.time_column_name,
+                                       precipitation_column_name=self.precipitation_column_name,
+                                       temperature_column_name=self.temperature_column_name,
+                                       long_term_precipitation_column_name=self.long_term_precipitation_column_name,
+                                       long_term_temperature_column_name=self.long_term_temperature_column_name,
+                                       corrupt_forcing_data=corrupt_forcing_data)
 
             ######################################################################################################
             # Processing model output
@@ -387,6 +401,8 @@ class HBVSASKModel(object):
 
             # Create a final df - flux
             flux_df = self._create_flux_df(flux, time_series_list)
+            if corrupt_forcing_data and "precipitation" in flux:
+                flux_df['precipitation'] = flux["precipitation"]
             flux_df['Index_run'] = i
             # Parse flux_df between start_date_predictions, end_date
             flux_df.set_index(self.time_column_name, inplace=True)
@@ -547,18 +563,15 @@ class HBVSASKModel(object):
                     updated_parameter_dict[single_param_name] = single_param_value + param_h
 
                     # 2.2 Run the model; forward run always; backward run only when CD=1 & 2.3. Do some postprocessing
-                    flux_plus_h, _ = hbv.HBV_SASK(
-                        forcing=self.time_series_measured_data_df,
-                        long_term=self.precipitation_temperature_monthly_df,
-                        par_values_dict=updated_parameter_dict,
-                        initial_condition_df=self.initial_condition_df,
-                        printing=False,
-                        time_column_name=self.time_column_name,
-                        precipitation_column_name=self.precipitation_column_name,
-                        temperature_column_name=self.temperature_column_name,
-                        long_term_precipitation_column_name=self.long_term_precipitation_column_name,
-                        long_term_temperature_column_name=self.long_term_temperature_column_name
-                    )
+                    flux_plus_h, _ = hbv.HBV_SASK(forcing=self.time_series_measured_data_df,
+                                                  long_term=self.precipitation_temperature_monthly_df,
+                                                  par_values_dict=updated_parameter_dict,
+                                                  initial_condition_df=self.initial_condition_df, printing=False,
+                                                  time_column_name=self.time_column_name,
+                                                  precipitation_column_name=self.precipitation_column_name,
+                                                  temperature_column_name=self.temperature_column_name,
+                                                  long_term_precipitation_column_name=self.long_term_precipitation_column_name,
+                                                  long_term_temperature_column_name=self.long_term_temperature_column_name)
                     h = param_h
 
                     # Create a final df - flux with +dh parameter value
@@ -585,18 +598,15 @@ class HBVSASKModel(object):
                         updated_parameter_dict[single_param_name] = single_param_value - param_h
 
                         # Run the model for -dh
-                        flux_minus_h, _ = hbv.HBV_SASK(
-                            forcing=self.time_series_measured_data_df,
-                            long_term=self.precipitation_temperature_monthly_df,
-                            par_values_dict=updated_parameter_dict,
-                            initial_condition_df=self.initial_condition_df,
-                            printing=False,
-                            time_column_name=self.time_column_name,
-                            precipitation_column_name=self.precipitation_column_name,
-                            temperature_column_name=self.temperature_column_name,
-                            long_term_precipitation_column_name=self.long_term_precipitation_column_name,
-                            long_term_temperature_column_name=self.long_term_temperature_column_name
-                        )
+                        flux_minus_h, _ = hbv.HBV_SASK(forcing=self.time_series_measured_data_df,
+                                                       long_term=self.precipitation_temperature_monthly_df,
+                                                       par_values_dict=updated_parameter_dict,
+                                                       initial_condition_df=self.initial_condition_df, printing=False,
+                                                       time_column_name=self.time_column_name,
+                                                       precipitation_column_name=self.precipitation_column_name,
+                                                       temperature_column_name=self.temperature_column_name,
+                                                       long_term_precipitation_column_name=self.long_term_precipitation_column_name,
+                                                       long_term_temperature_column_name=self.long_term_temperature_column_name)
                         h = 2*param_h
 
                         # Create a final df - flux with -dh parameter value
@@ -729,8 +739,6 @@ class HBVSASKModel(object):
                                         dict_of_grad_estimation_vector[
                                             (single_qoi_column, single_objective_function_name_qoi)].append(
                                             grad.values.tolist())
-                                        print(
-                                            f"DEBUGGING -  when adding {new_column_name} - the size of the grad was {len(grad.values.tolist())}\n\n")
 
                                 elif self.mode == "resampling":
                                     raise NotImplementedError
@@ -753,7 +761,6 @@ class HBVSASKModel(object):
 
                                 grad = grad.dropna()
                                 dict_of_grad_estimation_vector[single_qoi_column].append(grad.values.tolist())
-                                print(f"DEBUGGING -  when adding {new_column_name} - the size of the grad was {len(grad.values.tolist())}\n\n")
 
                             elif self.mode == "sliding_window":
                                 if self.CD:
@@ -780,7 +787,6 @@ class HBVSASKModel(object):
 
                                 grad = grad.dropna()
                                 dict_of_grad_estimation_vector[single_qoi_column].append(grad.values.tolist())
-                                print(f"DEBUGGING -  when adding {new_column_name} - the size of the grad was {len(grad.values.tolist())}\n\n")
 
                             elif self.mode == "resampling":
                                 raise NotImplementedError()
@@ -855,7 +861,6 @@ class HBVSASKModel(object):
                 result_dict["grad_matrix"] = gradient_matrix_dict
 
             results_array.append((result_dict, runtime))
-            print(f"[HVBSASK INFO] Process {i} returned / appended it's results")
 
             if writing_results_to_a_file and curr_working_dir is not None:
                 file_path = curr_working_dir / f"flux_df_{i}.pkl"

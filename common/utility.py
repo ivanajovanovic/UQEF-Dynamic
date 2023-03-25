@@ -701,13 +701,13 @@ def read_simulation_settings_from_configuration_object(configurationObject, **kw
     if "qoi" in kwargs:
         qoi = kwargs['qoi']
     else:
-        qoi = dict_config_simulation_settings.get("qoi", "Q_cms")
+        qoi = dict_config_simulation_settings.get("qoi", "Q")
     result_dict["qoi"] = qoi
 
     if "qoi_column" in kwargs:
         qoi_column = kwargs['qoi_column']
     else:
-        qoi_column = dict_config_simulation_settings.get("qoi_column", "Q_cms")
+        qoi_column = dict_config_simulation_settings.get("qoi_column", "Value")
     result_dict["qoi_column"] = qoi_column
 
     multiple_qoi = False
@@ -773,7 +773,7 @@ def read_simulation_settings_from_configuration_object(configurationObject, **kw
             for idx, single_read_measured_data in enumerate(read_measured_data):
                 list_calculate_GoF[idx] = single_read_measured_data
         else:
-            list_calculate_GoF = read_measured_data
+            list_calculate_GoF = [read_measured_data, ]
     result_dict["calculate_GoF"] = calculate_GoF
     result_dict["list_calculate_GoF"] = list_calculate_GoF
 

@@ -10,15 +10,21 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from plotly.offline import plot
 import numpy as np
+import sys
 import time
 
 from common import utility
 
 #####################################
 
+epsilon = sys.float_info.epsilon
 DEFAULT_PAR_VALUES_DICT = {'TT': 0.0, 'C0': 5.0, 'ETF': 0.5, 'LP': 0.5, 'FC': 100,
                            'beta': 2.0, 'FRAC': 0.5, 'K1': 0.5, 'alpha': 2.0, 'K2': 0.025,
-                           'UBAS': 1, 'PM': 1}
+                           'UBAS': 1, 'PM': 1, "M": 1.0, "VAR_M": 1e-4}
+
+DEFAULT_PAR_VALUES_DICT_EXTEND = {'TT': 0.0, 'C0': 5.0, 'ETF': 0.5, 'LP': 0.5, 'FC': 100,
+                           'beta': 2.0, 'FRAC': 0.5, 'K1': 0.5, 'alpha': 2.0, 'K2': 0.025,
+                           'UBAS': 1, 'PM': 1, "M": 1.0, "VAR_M": 1e-4}
 
 DEFAULT_PAR_INFO_DICT = {
     'TT': {"lower": -4.0, "upper": 4.0, "default": 0.0},
@@ -32,7 +38,9 @@ DEFAULT_PAR_INFO_DICT = {
     'alpha': {"lower": 1.0, "upper": 3.0, "default": 2.0},
     'K2': {"lower": 0.0, "upper": 0.05, "default": 0.025},
     'UBAS': {"lower": 1.0, "upper": 3.0, "default": 1.0},
-    'PM':{"lower": 0.5, "upper": 2.0, "default": 1.0}
+    'PM':{"lower": 0.5, "upper": 2.0, "default": 1.0},
+    'M':{"lower": 0.9, "upper": 1.0, "default": 1.0},
+    'VAR_M':{"lower": 1e-5, "upper": 1e-3, "default": 1e-4}
 }
 
 HBV_PARAMS_LIST = ['TT', 'C0', 'ETF', 'LP', 'FC',
@@ -354,6 +362,17 @@ def get_param_info_dict(configurationObject=None):
 
 
 def parameters_configuration(parameters, configurationObject, take_direct_value=False):
+    """
+    Note: If not take_direct_value and parameters!= None, parameters_dict will contain
+    some value for every single parameter in configurationObject (e.g., it might at the end have more entries that the
+    input parameters variable)
+    :param parameters:
+    :type parameters: dictionary or array storing all uncertain parameters
+       in the same order as parameters are listed in configurationObject
+    :param configurationObject:
+    :param take_direct_value:
+    :return:
+    """
     parameters_dict = dict() #defaultdict()  # copy.deepcopy(DEFAULT_PAR_VALUES_DICT)
 
     if parameters is None:
@@ -634,7 +653,12 @@ def evapotranspiration_module(SMS, T, monthly_average_T, monthly_average_PE, ETF
     if SMS > LP:
         AET = PET
     else:
-        AET = PET * (SMS / LP)
+        # if np.absolute(LP) < epsilon:
+        # if math.isclose(LP, 0):
+        if abs(LP) < 1e-9: # in this case both SMS and LP are close to zero lim(x/x) x->0 is 1
+            AET = PET
+        else:
+            AET = PET * (SMS / LP)
 
     # to avoid evaporating more than water available
     AET = min((AET, SMS))
@@ -716,17 +740,15 @@ def triangle_routing(Q, UBAS):
 
 
 #####################################
-def HBV_SASK(forcing, long_term, par_values_dict, initial_condition_df, printing=False,
-             time_column_name="TimeStamp",
-             precipitation_column_name="precipitation",
-             temperature_column_name="temperature",
+def HBV_SASK(forcing, long_term, par_values_dict, initial_condition_df, printing=False, time_column_name="TimeStamp",
+             precipitation_column_name="precipitation", temperature_column_name="temperature",
              long_term_precipitation_column_name="monthly_average_PE",
-             long_term_temperature_column_name="monthly_average_T"
-             ):
+             long_term_temperature_column_name="monthly_average_T", corrupt_forcing_data=False):
     """
     HBV-SASK has 12 parameters: The first 10 ones are necessary
     to run the model, and parameters 11 and 12, if not given,
     will be set at their default values.
+    :param corrupt_forcing_data:
     """
     if par_values_dict is None:
         par_values_dict = {
@@ -762,7 +784,16 @@ def HBV_SASK(forcing, long_term, par_values_dict, initial_condition_df, printing
     flux = defaultdict(dict)
     state = defaultdict(dict)
 
-    P = PM * forcing[precipitation_column_name].to_numpy()
+    precipitation_array = forcing[precipitation_column_name].to_numpy()
+    if corrupt_forcing_data:
+        M = float(par_values_dict.get("M", DEFAULT_PAR_VALUES_DICT["M"]))
+        VAR_M = float(par_values_dict.get("VAR_M", DEFAULT_PAR_VALUES_DICT["VAR_M"]))
+        period_length = len(precipitation_array)
+        r = np.random.normal(loc=M, scale=np.sqrt(VAR_M), size=period_length)
+        precipitation_array = np.multiply(r, precipitation_array)
+
+    # TODO - Think avout adding option for corrupting the precipitation, e.g., Ajami et. al. 2007
+    P = PM * precipitation_array
     T = forcing[temperature_column_name].to_numpy()
 
     if time_column_name in forcing.columns:
@@ -781,15 +812,15 @@ def HBV_SASK(forcing, long_term, par_values_dict, initial_condition_df, printing
               f"\n initial_S1={initial_S1} \n initial_S2={initial_S2} \n")
         print(f"period_length={period_length}")
 
-    SWE = np.empty(shape=(period_length + 1,), dtype=np.float64)
-    SMS = np.empty(shape=(period_length + 1,), dtype=np.float64)
-    S1 = np.empty(shape=(period_length + 1,), dtype=np.float64)
-    S2 = np.empty(shape=(period_length + 1,), dtype=np.float64)  # np.empty_like(P)
-    Q1 = np.empty_like(P, dtype=np.float64)
-    Q2 = np.empty_like(P, dtype=np.float64)
-    AET = np.empty_like(P, dtype=np.float64)
-    PET = np.empty_like(P, dtype=np.float64)
-    ponding = np.empty_like(P, dtype=np.float64)  # np.empty(shape=(period_length,), dtype=np.float32)
+    SWE = np.zeros(shape=(period_length + 1,), dtype=np.float64)
+    SMS = np.zeros(shape=(period_length + 1,), dtype=np.float64)
+    S1 = np.zeros(shape=(period_length + 1,), dtype=np.float64)
+    S2 = np.zeros(shape=(period_length + 1,), dtype=np.float64)
+    Q1 = np.zeros(shape=period_length, dtype=np.float64)
+    Q2 = np.zeros(shape=period_length, dtype=np.float64)
+    AET = np.zeros(shape=period_length, dtype=np.float64)
+    PET = np.zeros(shape=period_length, dtype=np.float64)
+    ponding = np.zeros(shape=period_length, dtype=np.float64)
 
     SWE[0] = initial_SWE
     SMS[0] = initial_SMS
@@ -817,7 +848,6 @@ def HBV_SASK(forcing, long_term, par_values_dict, initial_condition_df, printing
 
     flux["Q_cms"] = Q_cms#.conjugate()
     # Make sure flows will never get negative values because of numerical errors
-    # flux["Q_cms"].loc[flux["Q_cms"] < 10 ** -5] = 10 ** -5
     flux["Q_cms"][flux["Q_cms"] < 10 ** -5] = 10 ** -5
 
     flux["Q_mm"] = Q#.conjugate()
@@ -827,6 +857,8 @@ def HBV_SASK(forcing, long_term, par_values_dict, initial_condition_df, printing
     flux["Q1_routed"] = Q1_routed#.conjugate()
     flux["Q2"] = Q2#.conjugate()
     flux["ponding"] = ponding#.conjugate()
+    if corrupt_forcing_data:
+        flux["precipitation"] = precipitation_array
 
     state["SWE"] = SWE#.conjugate()
     state["SMS"] = SMS#.conjugate()
@@ -966,18 +998,12 @@ def run_the_model(hbv_model_path, config_file, par_values_dict, run_full_timespa
     #############################
 
     # Running the model
-    flux, state = HBV_SASK(
-        forcing=time_series_data_df,
-        long_term=precipitation_temperature_monthly_df,
-        par_values_dict=par_values_dict,
-        initial_condition_df=initial_condition_df,
-        printing=True,
-        time_column_name=time_column_name,
-        precipitation_column_name=precipitation_column_name,
-        temperature_column_name=temperature_column_name,
-        long_term_precipitation_column_name=long_term_precipitation_column_name,
-        long_term_temperature_column_name=long_term_temperature_column_name
-    )
+    flux, state = HBV_SASK(forcing=time_series_data_df, long_term=precipitation_temperature_monthly_df,
+                           par_values_dict=par_values_dict, initial_condition_df=initial_condition_df, printing=True,
+                           time_column_name=time_column_name, precipitation_column_name=precipitation_column_name,
+                           temperature_column_name=temperature_column_name,
+                           long_term_precipitation_column_name=long_term_precipitation_column_name,
+                           long_term_temperature_column_name=long_term_temperature_column_name)
 
     # Create a final df - flux
     time_series_list = list(full_data_range)  # list(simulation_range)
