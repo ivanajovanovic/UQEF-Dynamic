@@ -23,7 +23,7 @@ def _prepare_data_to_calculate_likelihood(DF, column_name='Value') -> np.ndarray
         Accepted are: pandas.DataFrame, pandas.Series and numpy.ndarray()'.format(type(DF)))
 
 
-def calculateMAE(measuredDF, simulatedDF, measuredDF_column_name='Value', simulatedDF_column_name='Value', **kwargs):
+def MAE(measuredDF, simulatedDF, measuredDF_column_name='Value', simulatedDF_column_name='Value', **kwargs):
     measuredDF = _prepare_data_to_calculate_likelihood(DF=measuredDF, column_name=measuredDF_column_name)
     simulatedDF = _prepare_data_to_calculate_likelihood(DF=simulatedDF, column_name=simulatedDF_column_name)
 
@@ -33,7 +33,7 @@ def calculateMAE(measuredDF, simulatedDF, measuredDF_column_name='Value', simula
         return np.nan
 
 
-def calculateMSE(measuredDF, simulatedDF, measuredDF_column_name='Value', simulatedDF_column_name='Value', **kwargs):
+def MSE(measuredDF, simulatedDF, measuredDF_column_name='Value', simulatedDF_column_name='Value', **kwargs):
     measuredDF = _prepare_data_to_calculate_likelihood(DF=measuredDF, column_name=measuredDF_column_name)
     simulatedDF = _prepare_data_to_calculate_likelihood(DF=simulatedDF, column_name=simulatedDF_column_name)
 
@@ -45,7 +45,7 @@ def calculateMSE(measuredDF, simulatedDF, measuredDF_column_name='Value', simula
         return np.nan
 
 
-def calculateRMSE(measuredDF, simulatedDF, measuredDF_column_name='Value', simulatedDF_column_name='Value', **kwargs):
+def RMSE(measuredDF, simulatedDF, measuredDF_column_name='Value', simulatedDF_column_name='Value', **kwargs):
     measuredDF = _prepare_data_to_calculate_likelihood(DF=measuredDF, column_name=measuredDF_column_name)
     simulatedDF = _prepare_data_to_calculate_likelihood(DF=simulatedDF, column_name=simulatedDF_column_name)
 
@@ -56,13 +56,13 @@ def calculateRMSE(measuredDF, simulatedDF, measuredDF_column_name='Value', simul
         return np.nan
 
 
-def calculateNRMSE(measuredDF, simulatedDF, measuredDF_column_name='Value', simulatedDF_column_name='Value', **kwargs):
+def NRMSE(measuredDF, simulatedDF, measuredDF_column_name='Value', simulatedDF_column_name='Value', **kwargs):
     measuredDF = _prepare_data_to_calculate_likelihood(DF=measuredDF, column_name=measuredDF_column_name)
     simulatedDF = _prepare_data_to_calculate_likelihood(DF=simulatedDF, column_name=simulatedDF_column_name)
 
     if measuredDF.size == simulatedDF.size:
         try:
-            return calculateRMSE(measuredDF, simulatedDF, measuredDF_column_name, simulatedDF_column_name) \
+            return RMSE(measuredDF, simulatedDF, measuredDF_column_name, simulatedDF_column_name) \
                    / (np.max(measuredDF) - np.min(measuredDF))
         except ZeroDivisionError:
             return np.nan
@@ -70,7 +70,7 @@ def calculateNRMSE(measuredDF, simulatedDF, measuredDF_column_name='Value', simu
         return np.nan
 
 
-def calculateRSR(measuredDF, simulatedDF, measuredDF_column_name='Value', simulatedDF_column_name='Value', **kwargs):
+def RSR(measuredDF, simulatedDF, measuredDF_column_name='Value', simulatedDF_column_name='Value', **kwargs):
     """
     RMSE-observations standard deviation ratio
     Corresponding paper:
@@ -83,7 +83,7 @@ def calculateRSR(measuredDF, simulatedDF, measuredDF_column_name='Value', simula
 
     if measuredDF.size == simulatedDF.size:
         try:
-            return calculateRMSE(measuredDF, simulatedDF, measuredDF_column_name, simulatedDF_column_name) / np.std(
+            return RMSE(measuredDF, simulatedDF, measuredDF_column_name, simulatedDF_column_name) / np.std(
                 measuredDF)
         except ZeroDivisionError:
             return np.nan
@@ -91,7 +91,7 @@ def calculateRSR(measuredDF, simulatedDF, measuredDF_column_name='Value', simula
         return np.nan
 
 
-def calculateBIAS(measuredDF, simulatedDF, measuredDF_column_name='Value', simulatedDF_column_name='Value', **kwargs):
+def BIAS(measuredDF, simulatedDF, measuredDF_column_name='Value', simulatedDF_column_name='Value', **kwargs):
     """
     Bias
         .. math::
@@ -114,7 +114,7 @@ def calculateBIAS(measuredDF, simulatedDF, measuredDF_column_name='Value', simul
         return np.nan
 
 
-def calculatePBIAS(measuredDF, simulatedDF, measuredDF_column_name='Value', simulatedDF_column_name='Value', **kwargs):
+def PBIAS(measuredDF, simulatedDF, measuredDF_column_name='Value', simulatedDF_column_name='Value', **kwargs):
     """
     Bias
         .. math::
@@ -133,7 +133,7 @@ def calculatePBIAS(measuredDF, simulatedDF, measuredDF_column_name='Value', simu
         return np.nan
 
 
-def calculateROCE(measuredDF, simulatedDF, measuredDF_column_name='Value', simulatedDF_column_name='Value', **kwargs):
+def ROCE(measuredDF, simulatedDF, measuredDF_column_name='Value', simulatedDF_column_name='Value', **kwargs):
     measuredDF = _prepare_data_to_calculate_likelihood(DF=measuredDF, column_name=measuredDF_column_name)
     simulatedDF = _prepare_data_to_calculate_likelihood(DF=simulatedDF, column_name=simulatedDF_column_name)
     if measuredDF.size == simulatedDF.size:
@@ -145,7 +145,7 @@ def calculateROCE(measuredDF, simulatedDF, measuredDF_column_name='Value', simul
         return np.nan
 
 
-def calculateNSE(measuredDF, simulatedDF, measuredDF_column_name='Value', simulatedDF_column_name='Value', **kwargs):
+def NSE(measuredDF, simulatedDF, measuredDF_column_name='Value', simulatedDF_column_name='Value', **kwargs):
     """
     Nash-Sutcliffe model efficinecy
         .. math::
@@ -173,7 +173,7 @@ def calculateNSE(measuredDF, simulatedDF, measuredDF_column_name='Value', simula
         return np.nan
 
 
-def calculateLogNSE(measuredDF, simulatedDF, measuredDF_column_name='Value', simulatedDF_column_name='Value', **kwargs):
+def LogNSE(measuredDF, simulatedDF, measuredDF_column_name='Value', simulatedDF_column_name='Value', **kwargs):
     """
     log Nash-Sutcliffe model efficiency
         .. math::
@@ -210,8 +210,8 @@ def calculateLogNSE(measuredDF, simulatedDF, measuredDF_column_name='Value', sim
         return np.nan
 
 
-def calculateLogGaussian(measuredDF, simulatedDF, measuredDF_column_name='Value', simulatedDF_column_name='Value',
-                         **kwargs):
+def LogGaussian(measuredDF, simulatedDF, measuredDF_column_name='Value', simulatedDF_column_name='Value',
+                **kwargs):
     """
     Logarithmic Gaussian probability distribution of the error/residual signal
     :measuredDF: Observed data to compared with simulation data.
@@ -235,8 +235,8 @@ def calculateLogGaussian(measuredDF, simulatedDF, measuredDF_column_name='Value'
         return np.nan
 
 
-def calculateCorrelationCoefficient(measuredDF, simulatedDF, measuredDF_column_name='Value',
-                                    simulatedDF_column_name='Value', **kwargs):
+def CorrelationCoefficient(measuredDF, simulatedDF, measuredDF_column_name='Value',
+                           simulatedDF_column_name='Value', **kwargs):
     """
     Correlation Coefficient
         .. math::
@@ -258,7 +258,7 @@ def calculateCorrelationCoefficient(measuredDF, simulatedDF, measuredDF_column_n
         return np.nan
 
 
-def calculateKGE(measuredDF, simulatedDF, measuredDF_column_name='Value', simulatedDF_column_name='Value', **kwargs):
+def KGE(measuredDF, simulatedDF, measuredDF_column_name='Value', simulatedDF_column_name='Value', **kwargs):
     """
     code from - https://github.com/thouska/spotpy/tree/master/spotpy
     Kling-Gupta Efficiency
@@ -292,8 +292,8 @@ def calculateKGE(measuredDF, simulatedDF, measuredDF_column_name='Value', simula
 #####################################################
 
 
-def calculateKGE_non_parametric(measuredDF, simulatedDF, measuredDF_column_name='Value',
-                                simulatedDF_column_name='Value', **kwargs):
+def KGE_non_parametric(measuredDF, simulatedDF, measuredDF_column_name='Value',
+                       simulatedDF_column_name='Value', **kwargs):
     """
     code from - https://github.com/thouska/spotpy/tree/master/spotpy
     Non parametric Kling-Gupta Efficiency
@@ -330,8 +330,8 @@ def calculateKGE_non_parametric(measuredDF, simulatedDF, measuredDF_column_name=
         return np.nan
 
 
-def calculateCovariance(measuredDF, simulatedDF, measuredDF_column_name='Value', simulatedDF_column_name='Value',
-                        **kwargs):
+def Covariance(measuredDF, simulatedDF, measuredDF_column_name='Value', simulatedDF_column_name='Value',
+               **kwargs):
     """
     Covariance
         .. math::
@@ -353,8 +353,8 @@ def calculateCovariance(measuredDF, simulatedDF, measuredDF_column_name='Value',
         return np.nan
 
 
-def calculateBraviasPearson(measuredDF, simulatedDF, measuredDF_column_name='Value', simulatedDF_column_name='Value',
-                            **kwargs):
+def BraviasPearson(measuredDF, simulatedDF, measuredDF_column_name='Value', simulatedDF_column_name='Value',
+                   **kwargs):
     measuredDF = _prepare_data_to_calculate_likelihood(DF=measuredDF, column_name=measuredDF_column_name)
     simulatedDF = _prepare_data_to_calculate_likelihood(DF=simulatedDF, column_name=simulatedDF_column_name)
 
@@ -372,12 +372,12 @@ def calculateBraviasPearson(measuredDF, simulatedDF, measuredDF_column_name='Val
 #####################################################
 
 
-_all_functions = [calculateMAE, calculateMSE,
-                  calculateRMSE, calculateNRMSE, calculateRSR,
-                  calculateBIAS, calculatePBIAS, calculateROCE,
-                  calculateNSE, calculateLogNSE,
-                  calculateLogGaussian, calculateCorrelationCoefficient,
-                  calculateKGE]
+_all_functions = [MAE, MSE,
+                  RMSE, NRMSE, RSR,
+                  BIAS, PBIAS, ROCE,
+                  NSE, LogNSE,
+                  LogGaussian, CorrelationCoefficient,
+                  KGE]
 
 
 def calculate_all_functions(measuredDF, simulatedDF, measuredDF_column_name='Value', simulatedDF_column_name='Value',
