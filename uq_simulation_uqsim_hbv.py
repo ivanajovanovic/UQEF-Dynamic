@@ -34,7 +34,7 @@ from productFunction import ProductFunctionModel
 from productFunction import ProductFunctionStatistics
 
 from hbv_sask import HBVSASKModelUQ
-from hbv_sask import HBVSASKStatistics_II as HBVSASKStatistics
+from hbv_sask import HBVSASKStatisticsMultipleQoI as HBVSASKStatistics
 
 # instantiate UQsim
 uqsim = uqef.UQsim()

@@ -334,11 +334,11 @@ def transform_column_in_df(df, transformation_function_str, column_name, new_col
     if new_column_name is None:
         new_column_name = column_name
     if transformation_function_str == "log":
-        df[new_column_name] = np.log(df[column_name])
+        df[new_column_name] = np.log(df[column_name], out=np.zeros_like(df[column_name].values), where=(df[column_name].values!=0))
     elif transformation_function_str == "log2":
-        df[new_column_name] = np.log2(df[column_name])
+        df[new_column_name] = np.log2(df[column_name], out=np.zeros_like(df[column_name].values), where=(df[column_name].values!=0))
     elif transformation_function_str == "log10":
-        df[new_column_name] = np.log10(df[column_name])
+        df[new_column_name] = np.log10(df[column_name], out=np.zeros_like(df[column_name].values), where=(df[column_name].values!=0))
     elif transformation_function_str == "exp":
         df[new_column_name] = np.exp(df[column_name])
     else:
@@ -708,6 +708,7 @@ def read_configuration_object_dill(configurationObject, element=None):
 
 
 def read_simulation_settings_from_configuration_object(configurationObject, **kwargs):
+    # TODO Delete unnecessary copy() below...
     configurationObject = check_if_configurationObject_is_in_right_format_and_return(configurationObject,
                                                                                      raise_error=False)
 

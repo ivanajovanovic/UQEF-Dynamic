@@ -33,7 +33,7 @@
   "simulation_settings": {
     "qoi":["Q_cms","AET"],
     "qoi_column":["Q_cms","AET"],
-    "transform_model_output":["None", "None"],
+    "transform_model_output":["log", "log"],
     "read_measured_data": ["True","False"],
     "qoi_column_measured":["streamflow","None"],
     "objective_function_qoi":["RMSE", "LogNSE"],

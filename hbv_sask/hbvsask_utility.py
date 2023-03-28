@@ -656,7 +656,7 @@ def evapotranspiration_module(SMS, T, monthly_average_T, monthly_average_PE, ETF
     else:
         # if np.absolute(LP) < epsilon:
         # if math.isclose(LP, 0):
-        if abs(LP) < 1e-9: # in this case both SMS and LP are close to zero lim(x/x) x->0 is 1
+        if abs(LP) < 1e-9:  # in this case both SMS and LP are close to zero lim(x/x) x->0 is 1
             AET = PET
         else:
             AET = PET * (SMS / LP)
@@ -757,16 +757,16 @@ def HBV_SASK(forcing, long_term, par_values_dict, initial_condition_df, printing
             'K1': 0.5, 'alpha': 2.0, 'K2': 0.025, 'UBAS': 1, 'PM': 1
         }
     try:
-        TT = float(par_values_dict.get("TT", DEFAULT_PAR_VALUES_DICT["TT"]))  # float(par_values_dict["TT"])
-        C0 = float(par_values_dict.get("C0", DEFAULT_PAR_VALUES_DICT["C0"]))  # float(par_values_dict["C0"])
-        ETF = float(par_values_dict.get("ETF", DEFAULT_PAR_VALUES_DICT["ETF"]))  # float(par_values_dict["ETF"])
-        LP = float(par_values_dict.get("LP", DEFAULT_PAR_VALUES_DICT["LP"]))  # float(par_values_dict["LP"])
-        FC = float(par_values_dict.get("FC", DEFAULT_PAR_VALUES_DICT["FC"]))  # float(par_values_dict["FC"])
-        beta = float(par_values_dict.get("beta", DEFAULT_PAR_VALUES_DICT["beta"]))  # float(par_values_dict["beta"])
-        FRAC = float(par_values_dict.get("FRAC", DEFAULT_PAR_VALUES_DICT["FRAC"]))  # float(par_values_dict["FRAC"])
-        K1 = float(par_values_dict.get("K1", DEFAULT_PAR_VALUES_DICT["K1"]))  # float(par_values_dict["K1"])
-        alpha = float(par_values_dict.get("alpha", DEFAULT_PAR_VALUES_DICT["alpha"]))  # float(par_values_dict["alpha"])
-        K2 = float(par_values_dict.get("K2", DEFAULT_PAR_VALUES_DICT["K2"]))  # float(par_values_dict["K2"])
+        TT = par_values_dict.get("TT", DEFAULT_PAR_VALUES_DICT["TT"])  # float(par_values_dict["TT"])
+        C0 = par_values_dict.get("C0", DEFAULT_PAR_VALUES_DICT["C0"])  # float(par_values_dict["C0"])
+        ETF = par_values_dict.get("ETF", DEFAULT_PAR_VALUES_DICT["ETF"])  # float(par_values_dict["ETF"])
+        LP = par_values_dict.get("LP", DEFAULT_PAR_VALUES_DICT["LP"])  # float(par_values_dict["LP"])
+        FC = par_values_dict.get("FC", DEFAULT_PAR_VALUES_DICT["FC"])  # float(par_values_dict["FC"])
+        beta = par_values_dict.get("beta", DEFAULT_PAR_VALUES_DICT["beta"])  # float(par_values_dict["beta"])
+        FRAC = par_values_dict.get("FRAC", DEFAULT_PAR_VALUES_DICT["FRAC"])  # float(par_values_dict["FRAC"])
+        K1 = par_values_dict.get("K1", DEFAULT_PAR_VALUES_DICT["K1"])  # float(par_values_dict["K1"])
+        alpha = par_values_dict.get("alpha", DEFAULT_PAR_VALUES_DICT["alpha"])  # float(par_values_dict["alpha"])
+        K2 = par_values_dict.get("K2", DEFAULT_PAR_VALUES_DICT["K2"])  # float(par_values_dict["K2"])
     except KeyError:
         print(f"Error while reading parameter values from param dictionary!")
         raise

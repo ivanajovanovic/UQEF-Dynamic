@@ -306,48 +306,8 @@ class HBVSASKStatistics(Statistics):
 
         self.solverTimes = None
         self.work_package_indexes = None
+
         ##################################
-        self.qoi = None
-        self.qoi_column = None
-        self.transform_model_output = None
-        self.multiple_qoi = False
-        self.number_of_qois = 1
-        self.qoi_column_measured = None
-        self.read_measured_data = False
-
-        self.objective_function_qoi = None
-        self.objective_function_names_qoi = None
-
-        # list versions of the above variables
-        self.list_qoi_column = []
-        self.list_qoi_column_measured = []
-        self.list_read_measured_data = []
-        self.list_transform_model_output = []
-        self.list_objective_function_qoi = []
-        self.list_objective_function_names_qoi = []
-
-        self.mode = None
-        self.method = None
-
-        self.compute_gradients = False
-        self.compute_active_subspaces =  False
-        self.save_gradient_related_runs = False
-        self.gradient_analysis = False
-
-        self.read_measured_streamflow = False
-        self.streamflow_column_name = None
-        ##################################
-        # self.list_qoi_column = []
-        self.list_original_model_output_columns = []
-        self.list_qoi_column_processed = []
-        self.list_grad_columns = []
-        self.additional_qoi_columns_besides_original_model_output = False
-        self.qoi_is_a_single_number = False
-        # self._infer_qoi_column_names(**kwargs)
-        #####################################
-        # Set of configuration variables propagated via **kwargs or read from configurationObject
-        # These are mainly model related configurations
-        #####################################
         dict_processed_config_simulation_settings = utility.read_simulation_settings_from_configuration_object(
             self.configurationObject, **kwargs)
 
@@ -523,56 +483,6 @@ class HBVSASKStatistics(Statistics):
 
     ###################################################################################################################
     def prepare(self, rawSamples, **kwargs):
-        #####################################
-        # Set of configuration variables propagated via **kwargs or read from configurationObject
-        # These are mainly model related configurations
-        #####################################
-        # dict_processed_config_simulation_settings = utility.read_simulation_settings_from_configuration_object(
-        #     self.configurationObject, **kwargs)
-        #
-        # self.qoi = dict_processed_config_simulation_settings["qoi"]
-        # self.qoi_column = dict_processed_config_simulation_settings["qoi_column"]
-        # self.transform_model_output = dict_processed_config_simulation_settings["transform_model_output"]
-        # self.multiple_qoi = dict_processed_config_simulation_settings["multiple_qoi"]
-        # self.number_of_qois = dict_processed_config_simulation_settings["number_of_qois"]
-        # self.qoi_column_measured = dict_processed_config_simulation_settings["qoi_column_measured"]
-        # self.read_measured_data = dict_processed_config_simulation_settings["read_measured_data"]
-        #
-        # self.objective_function_qoi = dict_processed_config_simulation_settings["objective_function_qoi"]
-        # self.objective_function_names_qoi = dict_processed_config_simulation_settings["objective_function_names_qoi"]
-        #
-        # # list versions of the above variables
-        # self.list_qoi_column = dict_processed_config_simulation_settings["list_qoi_column"]
-        # self.list_qoi_column_measured = dict_processed_config_simulation_settings["list_qoi_column_measured"]
-        # self.list_read_measured_data = dict_processed_config_simulation_settings["list_read_measured_data"]
-        # self.list_transform_model_output = dict_processed_config_simulation_settings["list_transform_model_output"]
-        # self.list_objective_function_qoi = dict_processed_config_simulation_settings["list_objective_function_qoi"]
-        # self.list_objective_function_names_qoi = dict_processed_config_simulation_settings[
-        #     "list_objective_function_names_qoi"]
-        #
-        # self.mode = dict_processed_config_simulation_settings["mode"]
-        # self.method = dict_processed_config_simulation_settings["method"]
-        #
-        # self.compute_gradients = dict_processed_config_simulation_settings["compute_gradients"]
-        # self.compute_active_subspaces = dict_processed_config_simulation_settings["compute_active_subspaces"]
-        # self.save_gradient_related_runs = dict_processed_config_simulation_settings["save_gradient_related_runs"]
-        # self.gradient_analysis = dict_processed_config_simulation_settings["gradient_analysis"]
-        #
-        # # streamflow is of special importance here, since we have saved/measured/ground truth that for it and it is inside input data
-        # # self.streamflow_column_name = kwargs.get("streamflow_column_name", "streamflow")
-        # self.read_measured_streamflow = False
-        # if self.multiple_qoi:
-        #     for idx, single_qoi_column in enumerate(self.qoi_column):
-        #         if single_qoi_column == "Q_cms" or single_qoi_column == "Q" or single_qoi_column == "streamflow":
-        #             self.read_measured_streamflow = self.read_measured_data[idx]
-        #             self.streamflow_column_name = self.qoi_column_measured[idx]
-        # else:
-        #     if self.qoi_column == "Q_cms" or self.qoi_column == "Q" or self.qoi_column == "streamflow":
-        #         self.read_measured_streamflow = self.read_measured_data
-        #         self.streamflow_column_name = self.qoi_column_measured
-        #
-        # self._infer_qoi_column_names(**kwargs)
-
         self.timesteps = kwargs.get('timesteps', None)
         self.solverTimes = kwargs.get('solverTimes', None)
         self.work_package_indexes = kwargs.get('work_package_indexes', None)

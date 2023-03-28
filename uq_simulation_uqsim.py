@@ -34,7 +34,8 @@ from productFunction import ProductFunctionModel
 from productFunction import ProductFunctionStatistics
 
 from hbv_sask import HBVSASKModelUQ
-from hbv_sask import HBVSASKStatistics
+# from hbv_sask import HBVSASKStatistics
+from hbv_sask import HBVSASKStatisticsMultipleQoI as HBVSASKStatistics
 
 # instantiate UQsim
 uqsim = uqef.UQsim()
@@ -178,7 +179,7 @@ uqsim.statistics.update({"ishigami"       : (lambda: IshigamiStatistics.Ishigami
 ))})
 uqsim.statistics.update({"productFunction": (lambda: ProductFunctionStatistics.ProductFunctionStatistics(uqsim.configuration_object))})
 uqsim.statistics.update({"hbvsask"         : (lambda: HBVSASKStatistics.HBVSASKStatistics(
-    configurationObject=uqsim.configuration_object,
+    configurationObject=uqsim.configuration_object,  # uqsim.args.config_file,
     workingDir=uqsim.args.outputResultDir,  # .args.workingDir,
     sampleFromStandardDist=uqsim.args.sampleFromStandardDist,
     store_qoi_data_in_stat_dict=False,
@@ -189,7 +190,6 @@ uqsim.statistics.update({"hbvsask"         : (lambda: HBVSASKStatistics.HBVSASKS
     compute_Sobol_t=uqsim.args.compute_Sobol_t,
     compute_Sobol_m=uqsim.args.compute_Sobol_m,
     save_samples=True,
-    qoi_column="Q_cms",
     inputModelDir=uqsim.args.inputModelDir
 ))})
 
