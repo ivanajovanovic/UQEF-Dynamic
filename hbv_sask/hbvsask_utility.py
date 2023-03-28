@@ -303,7 +303,8 @@ def PlotEverything(flux, state, forcing, start, end, freq):
 
 
 def get_param_info_dict(configurationObject=None):
-    configurationObject = utility._check_if_configurationObject_is_in_right_format(configurationObject, raise_error=False)
+    configurationObject = utility.check_if_configurationObject_is_in_right_format_and_return(configurationObject,
+                                                                                             raise_error=False)
     result_dict = defaultdict(dict)
 
     # list_of_params_names_from_configurationObject = []
@@ -382,7 +383,7 @@ def parameters_configuration(parameters, configurationObject, take_direct_value=
         parameters_dict = parameters
     else:
         uncertain_param_counter = 0
-        configurationObject = utility._check_if_configurationObject_is_in_right_format(configurationObject)
+        configurationObject = utility.check_if_configurationObject_is_in_right_format_and_return(configurationObject)
         for single_param in configurationObject['parameters']:
             if single_param['distribution'] != "None":
                 # TODO Does it make sense to round the value of parameters?
@@ -403,7 +404,7 @@ def parameters_configuration(parameters, configurationObject, take_direct_value=
 #
 #     info_dict_on_perturbed_param = dict()
 #
-#     configurationObject = utility._check_if_configurationObject_is_in_right_format(configurationObject)
+#     configurationObject = utility._check_if_configurationObject_is_in_right_format_and_return(configurationObject)
 #     uncertain_param_counter = 0
 #     for id, single_param in enumerate(configurationObject['parameters']):
 #         # TODO if uncertain_param_counter != parameter_index_to_perturb:

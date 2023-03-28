@@ -23,23 +23,23 @@
     },
   "model_settings": {
     "basis": "Oldman_Basin",
-    "plotting": "True",
-    "writing_results_to_a_file": "True",
+    "plotting": "False",
+    "writing_results_to_a_file": "False",
     "corrupt_forcing_data": "False"
   },
   "model_paths": {
     "hbv_model_path": "Hydro_Models/HBV-SASK-data"
   },
   "simulation_settings": {
-    "qoi":["Q_cms", "AET"],
-    "qoi_column":["Q_cms", "AET"],
+    "qoi":["Q_cms","AET"],
+    "qoi_column":["Q_cms","AET"],
     "transform_model_output":["None", "None"],
-    "read_measured_data": ["True", "False"],
-    "qoi_column_measured":["streamflow", "None"],
+    "read_measured_data": ["True","False"],
+    "qoi_column_measured":["streamflow","None"],
     "objective_function_qoi":["RMSE", "LogNSE"],
     "calculate_GoF":"True",
     "objective_function":["MAE", "MSE", "RMSE", "NRMSE", "NSE", "LogNSE", "KGE"],
-    "mode":"sliding_window",
+    "mode":"continuous",
     "interval": 10,
     "min_periods": 5,
     "method": "avrg",
@@ -47,8 +47,9 @@
     "compute_gradients":"True",
     "eps_gradients": 0.01,
     "gradient_method":"Forward Difference",
+    "gradient_analysis": "True",
     "compute_active_subspaces": "False",
-    "save_gradient_related_runs": "True"
+    "save_gradient_related_runs": "False"
   },
   "parameters": [
     {
@@ -78,23 +79,51 @@
       "lower": 50.0,
       "upper": 500.0,
       "default": 100
-    },
-    {
-      "name": "FRAC",
-      "distribution": "Uniform",
-      "lower": 0.1,
-      "upper": 0.9,
-      "default": 0.5
-    },
-    {
-      "name": "K2",
-      "distribution": "Uniform",
-      "lower": 0.0,
-      "upper": 0.05,
-      "default": 0.025
     }
   ],
   "unused_parameters": [
+    {
+      "name": "ETF",
+      "distribution": "Uniform",
+      "lower": 0.0,
+      "upper": 1.0,
+      "default": 0.5
+    },
+    {
+      "name": "FC",
+      "distribution": "Uniform",
+      "lower": 50.0,
+      "upper": 500.0,
+      "default": 100
+    },
+    {
+      "name": "ETF",
+      "distribution": "Uniform",
+      "lower": 0.0,
+      "upper": 1.0,
+      "default": 0.5
+    },
+    {
+      "name": "FC",
+      "distribution": "Uniform",
+      "lower": 50.0,
+      "upper": 500.0,
+      "default": 100
+    },
+    {
+      "name": "M",
+      "distribution": "Uniform",
+      "lower": 0.9,
+      "upper": 1.0,
+      "default": 1.0
+    },
+        {
+      "name": "VAR_M",
+      "distribution": "Uniform",
+      "lower": 1e-5,
+      "upper": 1e-3,
+      "default": 1.0
+    },
     {
       "name": "beta",
       "distribution": "Uniform",
@@ -144,7 +173,7 @@
       "upper": 1.0,
       "default": 1.0
     },
-    {
+        {
       "name": "VAR_M",
       "distribution": "Uniform",
       "lower": 1e-5,

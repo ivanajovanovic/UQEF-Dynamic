@@ -63,9 +63,11 @@ class HBVSASKModel(object):
         else:
             self.corrupt_forcing_data = strtobool(self.configurationObject["model_settings"].get(
                 "corrupt_forcing_data", False))
-        ######################################################################################################
 
+        #####################################
         # these set of control variables are for UQEF & UQEFPP framework...
+        #####################################
+
         self.uq_method = kwargs.get('uq_method', None)
         self.raise_exception_on_model_break = kwargs.get('raise_exception_on_model_break', False)
         if self.uq_method is not None and self.uq_method == "sc":  # always break when running gPCE simulation
@@ -73,8 +75,7 @@ class HBVSASKModel(object):
         self.disable_statistics = kwargs.get('disable_statistics', False)
         # if not self.disable_statistics:
         #     self.writing_results_to_a_file = False
-        ######################################################################################################
-
+        #####################################
         # self.initial_condition_file = self.inputModelDir_basis / "initial_condition.inp"
         # initial_condition_file = kwargs.get("initial_condition_file", "state_df.pkl")
         initial_condition_file = kwargs.get("initial_condition_file", "state_const_df.pkl")
@@ -98,27 +99,29 @@ class HBVSASKModel(object):
         self.long_term_precipitation_column_name = kwargs.get("long_term_precipitation_column_name", "monthly_average_PE")
         self.long_term_temperature_column_name = kwargs.get("long_term_temperature_column_name", "monthly_average_T")
 
-        ######################################################################################################
+        #####################################
         dict_processed_config_simulation_settings = utility.read_simulation_settings_from_configuration_object(
             self.configurationObject, **kwargs)
 
         self.qoi = dict_processed_config_simulation_settings["qoi"]
         self.qoi_column = dict_processed_config_simulation_settings["qoi_column"]
+        self.transform_model_output = dict_processed_config_simulation_settings["transform_model_output"]
         self.multiple_qoi = dict_processed_config_simulation_settings["multiple_qoi"]
         self.number_of_qois = dict_processed_config_simulation_settings["number_of_qois"]
         self.qoi_column_measured = dict_processed_config_simulation_settings["qoi_column_measured"]
         self.read_measured_data = dict_processed_config_simulation_settings["read_measured_data"]
 
-        self.list_qoi_column = dict_processed_config_simulation_settings["list_qoi_column"]
-        self.list_qoi_column_measured = dict_processed_config_simulation_settings["list_qoi_column_measured"]
-        self.list_read_measured_data = dict_processed_config_simulation_settings["list_read_measured_data"]
-
         self.calculate_GoF = dict_processed_config_simulation_settings["calculate_GoF"]
-        self.list_calculate_GoF = dict_processed_config_simulation_settings["list_calculate_GoF"]
         self.objective_function = dict_processed_config_simulation_settings["objective_function"]
         self.objective_function_qoi = dict_processed_config_simulation_settings["objective_function_qoi"]
         self.objective_function_names_qoi = dict_processed_config_simulation_settings["objective_function_names_qoi"]
 
+        # list versions of the above variables
+        self.list_qoi_column = dict_processed_config_simulation_settings["list_qoi_column"]
+        self.list_qoi_column_measured = dict_processed_config_simulation_settings["list_qoi_column_measured"]
+        self.list_read_measured_data = dict_processed_config_simulation_settings["list_read_measured_data"]
+        self.list_transform_model_output = dict_processed_config_simulation_settings["list_transform_model_output"]
+        self.list_calculate_GoF = dict_processed_config_simulation_settings["list_calculate_GoF"]
         self.list_objective_function_qoi = dict_processed_config_simulation_settings["list_objective_function_qoi"]
         self.list_objective_function_names_qoi = dict_processed_config_simulation_settings[
             "list_objective_function_names_qoi"]
@@ -147,16 +150,16 @@ class HBVSASKModel(object):
                 self.read_measured_streamflow = self.read_measured_data
                 self.streamflow_column_name = self.qoi_column_measured
 
-        ######################################################################################################
+        #####################################
 
         self._timespan_setup(**kwargs)
-        self._input_data_setup(time_column_name=self.time_column_name,
-                               precipitation_column_name=self.precipitation_column_name,
-                               temperature_column_name=self.temperature_column_name,
-                               long_term_precipitation_column_name=self.long_term_precipitation_column_name,
-                               long_term_temperature_column_name=self.long_term_temperature_column_name,
-                               read_measured_streamflow=self.read_measured_streamflow,
-                               streamflow_column_name=self.streamflow_column_name)
+        self._input_and_measured_data_setup(time_column_name=self.time_column_name,
+                                            precipitation_column_name=self.precipitation_column_name,
+                                            temperature_column_name=self.temperature_column_name,
+                                            long_term_precipitation_column_name=self.long_term_precipitation_column_name,
+                                            long_term_temperature_column_name=self.long_term_temperature_column_name,
+                                            read_measured_streamflow=self.read_measured_streamflow,
+                                            streamflow_column_name=self.streamflow_column_name)
 
         if self.plotting:
             figure = self._plot_input_data(time_column_name=self.time_column_name,
@@ -221,14 +224,14 @@ class HBVSASKModel(object):
         # print(len(self.simulation_range), (self.end_date - self.start_date_predictions).days)
         # assert len(self.time_series_measured_data_df[self.start_date:self.end_date]) == len(self.full_data_range)
 
-    def _input_data_setup(self, time_column_name="TimeStamp", precipitation_column_name="precipitation",
-                          temperature_column_name="temperature",
-                          long_term_precipitation_column_name="monthly_average_PE",
-                          long_term_temperature_column_name="monthly_average_T", read_measured_streamflow=None,
-                          streamflow_column_name="streamflow"):
+    def _input_and_measured_data_setup(self, time_column_name="TimeStamp", precipitation_column_name="precipitation",
+                                       temperature_column_name="temperature",
+                                       long_term_precipitation_column_name="monthly_average_PE",
+                                       long_term_temperature_column_name="monthly_average_T", read_measured_streamflow=None,
+                                       streamflow_column_name="streamflow"):
         # Reading the input data
 
-        # % ********  Forecing (Precipitation and Temperature)  *********
+        # % ********  Forcing (Precipitation and Temperature)  *********
         self.precipitation_temperature_df = hbv.read_precipitation_temperature(
             self.precipitation_temperature_inp, time_column_name=time_column_name,
             precipitation_column_name=precipitation_column_name, temperature_column_name=temperature_column_name
@@ -395,7 +398,7 @@ class HBVSASKModel(object):
             # Processing model output
             ######################################################################################################
 
-            # these will be the dates contined in the output of the model
+            # these will be the dates contained in the output of the model
             time_series_list = list(self.full_data_range)  # list(self.simulation_range)
             assert len(list(self.full_data_range)) == len(flux["Q_cms"])
 
@@ -428,6 +431,39 @@ class HBVSASKModel(object):
                     single_qoi_column_measured for single_qoi_column_measured in self.list_qoi_column_measured if single_qoi_column_measured is not None]
                 flux_df = flux_df.merge(
                     self.time_series_measured_data_df[list_qoi_column_measured_to_filter], left_index=True, right_index=True)
+
+            ######################################################################################################
+            # Some basic transformation of model output
+            ######################################################################################################
+            # TODO - think about this, extend this, maybe perform transformation to ground truth column as well,
+            #  and rewrite the content of self.list_qoi_column
+            for idx, single_qoi_column in enumerate(self.list_qoi_column):
+                single_transformation = self.list_transform_model_output[idx]
+                if single_transformation is not None and single_transformation!="None":
+                    # new_column_name = single_transformation + "_" + single_qoi_column
+                    new_column_name = single_qoi_column
+                    utility.transform_column_in_df(flux_df, transformation_function_str=single_transformation,
+                                                   column_name=single_qoi_column, new_column_name=new_column_name)
+                    # flux_df.drop(labels=single_qoi_column, inplace=False)
+                    # flux_df.rename(columns={new_column_name: single_qoi_column}, inplace=False)
+                    if self.list_read_measured_data[idx]:
+                        # new_column_name = single_transformation + "_" + self.list_qoi_column_measured[idx]
+                        new_column_name = self.list_qoi_column_measured[idx]
+                        utility.transform_column_in_df(
+                            self.time_series_measured_data_df, transformation_function_str=single_transformation,
+                            column_name=self.list_qoi_column_measured[idx], new_column_name=new_column_name)
+                        # self.time_series_measured_data_df.drop(labels=self.list_qoi_column_measured[idx], inplace=False)
+                        # self.time_series_measured_data_df.rename(columns={
+                        #     new_column_name: self.list_qoi_column_measured[idx]}, inplace=False)
+                        if merge_output_with_measured_data:
+                            # new_column_name = single_transformation + "_" + self.list_qoi_column_measured[idx]
+                            new_column_name = self.list_qoi_column_measured[idx]
+                            utility.transform_column_in_df(flux_df, transformation_function_str=single_transformation,
+                                                           column_name=self.list_qoi_column_measured[idx], new_column_name=new_column_name)
+                            # flux_df.drop(labels=self.list_qoi_column_measured[idx], inplace=False)
+                            # flux_df.rename(columns={new_column_name: self.list_qoi_column_measured[idx]},
+                            #                inplace=False)
+
 
             ######################################################################################################
             # Compute GoFs for the whole time-span in certain set-ups
@@ -483,10 +519,10 @@ class HBVSASKModel(object):
                                 return_dict=True
                             )
                             index_parameter_gof_list_of_dicts.append(index_parameter_gof_dict_single_qoi)
-                        for single_objective_function_name_qoi in self.list_objective_function_names_qoi:
-                            new_column_name = single_qoi_column + "_" + single_objective_function_name_qoi
-                            flux_df[new_column_name] = index_parameter_gof_dict_single_qoi[
-                                single_objective_function_name_qoi]
+                            for single_objective_function_name_qoi in self.list_objective_function_names_qoi:
+                                new_column_name = single_objective_function_name_qoi + "_" + single_qoi_column
+                                flux_df[new_column_name] = index_parameter_gof_dict_single_qoi[
+                                    single_objective_function_name_qoi]
                     index_parameter_gof_DF = pd.DataFrame(index_parameter_gof_list_of_dicts)
 
             elif self.mode == "sliding_window":
@@ -498,7 +534,7 @@ class HBVSASKModel(object):
                     for idx, single_qoi_column in enumerate(self.list_qoi_column):
                         if self.list_read_measured_data[idx]:
                             for single_objective_function_name_qoi in self.list_objective_function_names_qoi:
-                                new_column_name = single_qoi_column + "_" + single_objective_function_name_qoi + \
+                                new_column_name = single_objective_function_name_qoi + "_" + single_qoi_column + \
                                                   "_" + self.method + "_sliding_window"
                                 rol = flux_df[single_qoi_column].rolling(
                                     window=self.interval, min_periods=self.min_periods,
@@ -594,6 +630,15 @@ class HBVSASKModel(object):
                         flux_plus_h_df[self.time_column_name].isin(self.simulation_range)]
                     flux_plus_h_df.set_index(self.time_column_name, inplace=True)
 
+                    for idx, single_qoi_column in enumerate(self.list_qoi_column):
+                        single_transformation = self.list_transform_model_output[idx]
+                        if single_transformation is not None:
+                            # new_column_name = single_transformation + "_" + single_qoi_column
+                            new_column_name = single_qoi_column
+                            utility.transform_column_in_df(
+                                flux_plus_h_df, transformation_function_str=single_transformation,
+                                column_name=single_qoi_column, new_column_name=new_column_name)
+
                     if self.CD:
                         updated_parameter_dict[single_param_name] = single_param_value - param_h
 
@@ -628,6 +673,16 @@ class HBVSASKModel(object):
                         flux_minus_h_df = flux_minus_h_df[
                             flux_minus_h_df[self.time_column_name].isin(self.simulation_range)]
                         flux_minus_h_df.set_index(self.time_column_name, inplace=True)
+
+                        for idx, single_qoi_column in enumerate(self.list_qoi_column):
+                            single_transformation = self.list_transform_model_output[idx]
+                            if single_transformation is not None:
+                                # new_column_name = single_transformation + "_" + single_qoi_column
+                                new_column_name = single_qoi_column
+                                utility.transform_column_in_df(flux_minus_h_df,
+                                                             transformation_function_str=single_transformation,
+                                                             column_name=single_qoi_column,
+                                                             new_column_name=new_column_name)
 
                     h_vector.append(h)
 
@@ -698,7 +753,7 @@ class HBVSASKModel(object):
                                         #     )
                                         #     return gof_dict[single_objective_function_name_qoi]
 
-                                        new_column_name = single_qoi_column + "_" + single_objective_function_name_qoi + \
+                                        new_column_name = single_objective_function_name_qoi + "_" + single_qoi_column + \
                                                   "_" + self.method + "_sliding_window"
 
                                         if self.CD:

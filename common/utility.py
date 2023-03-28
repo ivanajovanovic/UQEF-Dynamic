@@ -326,6 +326,26 @@ def generate_table_over_rules_orders_for_single_dim(rules, dist, dim, q_orders, 
                    numalign="right"))
 
 #####################################
+# Utility functions for processing/manipulating pandas.DataFrame (i.e., main data structure)
+#####################################
+
+
+def transform_column_in_df(df, transformation_function_str, column_name, new_column_name=None):
+    if new_column_name is None:
+        new_column_name = column_name
+    if transformation_function_str == "log":
+        df[new_column_name] = np.log(df[column_name])
+    elif transformation_function_str == "log2":
+        df[new_column_name] = np.log2(df[column_name])
+    elif transformation_function_str == "log10":
+        df[new_column_name] = np.log10(df[column_name])
+    elif transformation_function_str == "exp":
+        df[new_column_name] = np.exp(df[column_name])
+    else:
+        # flux_df[new_column_name] = flux_df[single_qoi_column].apply(single_transformation)
+        raise NotImplementedError("For know only log transformation is supported")
+
+#####################################
 # Utility for calculating different GoF/Objective/Likelihood funtions/metrices
 #####################################
 from . import objectivefunctions
@@ -619,7 +639,7 @@ def parse_datetime_configuration(time_settings_config):
 
 
 ###################################################################################################################
-# Reading saved data and configuration file/objects
+# Reading, extract data and manipulate configuration file/object
 ###################################################################################################################
 
 
@@ -639,7 +659,7 @@ def return_configuration_object(configurationObject):
             "[Error] You have to specify the Configuration Object or provide the path to the .json file!\n")
 
 
-def _check_if_configurationObject_is_in_right_format(configurationObject, raise_error=True):
+def check_if_configurationObject_is_in_right_format_and_return(configurationObject, raise_error=True):
     if isinstance(configurationObject, dict) or isinstance(configurationObject, pd.DataFrame):
         return configurationObject
     elif isinstance(configurationObject, str) or isinstance(configurationObject, pathlib.PosixPath):
@@ -688,7 +708,8 @@ def read_configuration_object_dill(configurationObject, element=None):
 
 
 def read_simulation_settings_from_configuration_object(configurationObject, **kwargs):
-    configurationObject = _check_if_configurationObject_is_in_right_format(configurationObject, raise_error=False)
+    configurationObject = check_if_configurationObject_is_in_right_format_and_return(configurationObject,
+                                                                                     raise_error=False)
 
     result_dict = dict()
 
@@ -710,13 +731,32 @@ def read_simulation_settings_from_configuration_object(configurationObject, **kw
         qoi_column = dict_config_simulation_settings.get("qoi_column", "Value")
     result_dict["qoi_column"] = qoi_column
 
+    temp = result_dict["qoi_column"]
+
     multiple_qoi = False
     number_of_qois = 1
-    if isinstance(qoi, list) or (qoi == "GoF" and isinstance(qoi_column, list)):
+    if (isinstance(qoi, list) and isinstance(qoi_column, list)) or (qoi == "GoF" and isinstance(qoi_column, list)):
         multiple_qoi = True
         number_of_qois = len(qoi_column)
     result_dict["multiple_qoi"] = multiple_qoi
     result_dict["number_of_qois"] = number_of_qois
+
+    if "transform_model_output" in kwargs:
+        transform_model_output = kwargs['transform_model_output']
+    else:
+        if multiple_qoi:
+            try:
+                transform_model_output = dict_config_simulation_settings["transform_model_output"]
+                for idx, single_transform_model_output in enumerate(transform_model_output):
+                    if single_transform_model_output == "None":
+                        transform_model_output[idx] = None
+            except KeyError:
+                transform_model_output = [None] * number_of_qois
+        else:
+            transform_model_output = dict_config_simulation_settings.get("transform_model_output", "None")
+            if transform_model_output == "None":
+                transform_model_output = None
+    result_dict["transform_model_output"] = transform_model_output
 
     if "read_measured_data" in kwargs:
         read_measured_data = kwargs['read_measured_data']
@@ -728,9 +768,14 @@ def read_simulation_settings_from_configuration_object(configurationObject, **kw
             except KeyError:
                 temp = ["False"] * number_of_qois
             for i in range(number_of_qois):
-                read_measured_data.append(strtobool(temp[i]))
+                if isinstance(temp[i], str):
+                    read_measured_data.append(strtobool(temp[i]))
+                else:
+                    read_measured_data.append(temp[i])
         else:
-            read_measured_data = strtobool(dict_config_simulation_settings.get("read_measured_data", "False"))
+            read_measured_data = dict_config_simulation_settings.get("read_measured_data", "False")
+            if isinstance(read_measured_data, str):
+                read_measured_data = strtobool(read_measured_data)
 
     if "qoi_column_measured" in kwargs:
         qoi_column_measured = kwargs['qoi_column_measured']
@@ -809,8 +854,8 @@ def read_simulation_settings_from_configuration_object(configurationObject, **kw
             objective_function_names_qoi = [
                 single_gof.__name__ if callable(single_gof) else single_gof \
                 for single_gof in objective_function_qoi]
-            list_objective_function_qoi = objective_function_qoi
-            list_objective_function_names_qoi = objective_function_names_qoi
+            list_objective_function_qoi = objective_function_qoi.copy()
+            list_objective_function_names_qoi = objective_function_names_qoi.copy()
         else:
             list_objective_function_qoi = [objective_function_qoi, ]
             if callable(objective_function_qoi):
@@ -828,18 +873,23 @@ def read_simulation_settings_from_configuration_object(configurationObject, **kw
     if not isinstance(qoi_column, list):
         list_qoi_column = [qoi_column, ]
     else:
-        list_qoi_column = qoi_column
+        list_qoi_column = qoi_column.copy()
     if not isinstance(qoi_column_measured, list):
         list_qoi_column_measured = [qoi_column_measured, ]
     else:
-        list_qoi_column_measured = qoi_column_measured
+        list_qoi_column_measured = qoi_column_measured.copy()
     if not isinstance(read_measured_data, list):
         list_read_measured_data = [read_measured_data, ]
     else:
-        list_read_measured_data = read_measured_data
+        list_read_measured_data = read_measured_data.copy()
+    if not isinstance(transform_model_output, list):
+        list_transform_model_output = [transform_model_output,]
+    else:
+        list_transform_model_output = transform_model_output.copy()
     result_dict["list_qoi_column"] = list_qoi_column
     result_dict["list_qoi_column_measured"] = list_qoi_column_measured
     result_dict["list_read_measured_data"] = list_read_measured_data
+    result_dict["list_transform_model_output"] = list_transform_model_output
 
     assert len(list_qoi_column) == len(list_qoi_column_measured)
     assert len(list_qoi_column_measured) == len(list_read_measured_data)
@@ -869,6 +919,7 @@ def read_simulation_settings_from_configuration_object(configurationObject, **kw
     eps_val_global = None
     compute_active_subspaces = False
     save_gradient_related_runs = False
+    gradient_analysis = False
     if compute_gradients:
         gradient_method = dict_config_simulation_settings.get("gradient_method", "Forward Difference")
         if gradient_method == "Central Difference":
@@ -884,19 +935,21 @@ def read_simulation_settings_from_configuration_object(configurationObject, **kw
             dict_config_simulation_settings.get("compute_active_subspaces", "False"))
         save_gradient_related_runs = strtobool(
             dict_config_simulation_settings.get("save_gradient_related_runs", "False"))
-        # It makes sense to compute gradients only if once of the following flags are set to True
-        if not save_gradient_related_runs and not compute_active_subspaces:
-            compute_gradients = False
+        gradient_analysis = strtobool(
+            dict_config_simulation_settings.get("gradient_analysis", "False"))
+
     result_dict["CD"] = CD
     result_dict["eps_val_global"] = eps_val_global
     result_dict["compute_active_subspaces"] = compute_active_subspaces
     result_dict["save_gradient_related_runs"] = save_gradient_related_runs
+    result_dict["gradient_analysis"] = gradient_analysis
 
     return result_dict
 
 
 def get_param_info_dict_from_configurationObject(configurationObject):
-    configurationObject = _check_if_configurationObject_is_in_right_format(configurationObject, raise_error=False)
+    configurationObject = check_if_configurationObject_is_in_right_format_and_return(configurationObject,
+                                                                                     raise_error=False)
     result_dict = dict()
     if configurationObject is None:
         return result_dict
@@ -926,6 +979,10 @@ def get_param_info_dict_from_configurationObject(configurationObject):
             'lower_limit': lower_limit, 'upper_limit': upper_limit
         }
     return result_dict
+
+###################################################################################################################
+# Reading saved data
+###################################################################################################################
 
 
 def read_and_print_uqsim_args_file(file):
