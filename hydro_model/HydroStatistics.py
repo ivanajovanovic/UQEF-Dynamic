@@ -191,7 +191,7 @@ class Samples(object):
             return None
 
 
-class Hydrotatistics(Statistics):
+class HydroStatistics(Statistics):
     def __init__(self, configurationObject, workingDir=None, *args, **kwargs):
         Statistics.__init__(self)
 
@@ -235,7 +235,13 @@ class Hydrotatistics(Statistics):
         # These are mainly model related configurations
         #####################################
         self.time_column_name = kwargs.get("time_column_name", "TimeStamp")
+        self.forcing_data_column_names = kwargs.get("forcing_data_column_names", "precipitation")
 
+        if "corrupt_forcing_data" in kwargs:
+            self.corrupt_forcing_data = kwargs['corrupt_forcing_data']
+        else:
+            self.corrupt_forcing_data = strtobool(self.configurationObject["model_settings"].get(
+                "corrupt_forcing_data", False))
         #####################################
         # Parameters related set-up part
         #####################################
@@ -467,7 +473,7 @@ class Hydrotatistics(Statistics):
 
         list_of_columns_to_filter_from_results = self.list_qoi_column.copy()
         if self.corrupt_forcing_data:
-            list_of_columns_to_filter_from_results = self.list_qoi_column + [self.precipitation_column_name]
+            list_of_columns_to_filter_from_results = self.list_qoi_column + [self.forcing_data_column_names]
 
         self.samples = Samples(rawSamples, qoi_column=list_of_columns_to_filter_from_results,
                                time_column_name=self.time_column_name,
@@ -801,6 +807,11 @@ class Hydrotatistics(Statistics):
                     fileNameIdentIsFullName=False, safe=True, **kwargs):
         raise NotImplementedError
 
+    def _plotStatisticsDict_plotly(self, unalatered=False, measured=False, forcing=False, recalculateTimesteps=False,
+                                   window_title='Forward UQ & SA', filename="sim-plotly.html",
+                                   display=False, **kwargs):
+        raise NotImplementedError
+
     def _compute_number_of_rows_for_plotting(self, starting_row=1):
         sobol_t_row = sobol_m_row = None
         if self.forcing_data_fetched:
@@ -822,6 +833,7 @@ class Hydrotatistics(Statistics):
         return n_rows, starting_row, sobol_t_row, sobol_m_row
 
     ###################################################################################################################
+
     @staticmethod
     def _single_qoi_single_param_grad_analysis(df, qoi_column, time_column_name="TimeStamp"):
 
