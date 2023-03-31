@@ -47,6 +47,7 @@
     "compute_gradients":"True",
     "eps_gradients": 0.01,
     "gradient_method":"Forward Difference",
+    "gradient_analysis": "True",
     "compute_active_subspaces": "False",
     "save_gradient_related_runs": "True"
   },

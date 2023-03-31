@@ -19,25 +19,25 @@
       "upper": 1.0
     },
     {
-      "name": "LP",
-      "distribution": "Uniform",
-      "lower": 0.0,
-      "upper": 1.0
-    },
-    {
       "name": "FC",
       "distribution": "Uniform",
       "lower": 0.0,
       "upper": 1.0
     },
     {
-      "name": "beta",
+      "name": "FRAC",
       "distribution": "Uniform",
       "lower": 0.0,
       "upper": 1.0
     },
     {
-      "name": "FRAC",
+      "name": "K2",
+      "distribution": "Uniform",
+      "lower": 0.0,
+      "upper": 1.0
+    },
+    {
+      "name": "beta",
       "distribution": "Uniform",
       "lower": 0.0,
       "upper": 1.0
@@ -55,7 +55,7 @@
       "upper": 1.0
     },
     {
-      "name": "K2",
+      "name": "LP",
       "distribution": "Uniform",
       "lower": 0.0,
       "upper": 1.0
