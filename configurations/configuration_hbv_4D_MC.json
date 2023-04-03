@@ -65,7 +65,9 @@
       "lower": 0.0,
       "upper": 10.0,
       "default": 5.0
-    },
+    }
+  ],
+  "unused_parameters": [
     {
       "name": "ETF",
       "distribution": "Uniform",
@@ -79,9 +81,7 @@
       "lower": 50.0,
       "upper": 500.0,
       "default": 100
-    }
-  ],
-  "unused_parameters": [
+    },
     {
       "name": "ETF",
       "distribution": "Uniform",

@@ -24,7 +24,8 @@
   "model_settings": {
     "basis": "Oldman_Basin",
     "plotting": "True",
-    "writing_results_to_a_file": "True"
+    "writing_results_to_a_file": "True",
+    "corrupt_forcing_data": "False"
   },
   "model_paths": {
     "hbv_model_path": "Hydro_Models/HBV-SASK-data"
@@ -41,12 +42,13 @@
     "interval": 10,
     "min_periods": 5,
     "method": "avrg",
-    "center": "left",
-    "compute_gradients":"True",
+    "center": "center",
+    "compute_gradients":"False",
     "eps_gradients": 0.01,
     "gradient_method":"Forward Difference",
+    "gradient_analysis": "True",
     "compute_active_subspaces": "False",
-    "save_gradient_related_runs": "True"
+    "save_gradient_related_runs": "False"
   },
   "parameters": [
     {
@@ -62,7 +64,10 @@
       "lower": 0.0,
       "upper": 10.0,
       "default": 5.0
-    },
+    }
+
+  ],
+  "unused_parameters": [
     {
       "name": "ETF",
       "distribution": "Uniform",
@@ -90,9 +95,7 @@
       "lower": 0.0,
       "upper": 0.05,
       "default": 0.025
-    }
-  ],
-  "unused_parameters": [
+    },
     {
       "name": "beta",
       "distribution": "Uniform",

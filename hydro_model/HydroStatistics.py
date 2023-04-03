@@ -263,6 +263,7 @@ class HydroStatistics(Statistics):
         #####################################
         self.df_unaltered = None
         self.df_measured = None
+        self.forcing_df = None
         self.unaltered_computed = False
         self.measured_fetched = False
         self.forcing_data_fetched = False
@@ -290,7 +291,8 @@ class HydroStatistics(Statistics):
         self.gof_mean_measured = None
 
         self.active_scores_dict = None
-
+        self.df_time_varying_grad_analysis = None
+        self.df_time_aggregated_grad_analysis = None
         self.solverTimes = None
         self.work_package_indexes = None
 
@@ -330,7 +332,6 @@ class HydroStatistics(Statistics):
         self.additional_qoi_columns_besides_original_model_output = False
         self.qoi_is_a_single_number = False
         self.list_grad_columns = []
-        self.df_grad_analysis = None
 
         self._infer_qoi_column_names(**kwargs)
 
@@ -490,7 +491,10 @@ class HydroStatistics(Statistics):
             )
 
         if self.compute_gradients and self.compute_active_subspaces:
-            self.active_scores_dict = self._compute_active_score(self.samples.dict_of_matrix_c_eigen_decomposition)
+            self.active_scores_dict = HydroStatistics._compute_active_score(self.samples.dict_of_matrix_c_eigen_decomposition)
+
+        if self.compute_gradients and self.gradient_analysis:
+            self.param_grad_analysis()
 
         if self.save_samples:
             self.samples.save_samples_to_file(self.workingDir)
@@ -522,18 +526,31 @@ class HydroStatistics(Statistics):
         # In case compute_gradients mode was turned on and gradient_analysis set to True
         if self.samples.df_simulation_result is not None and self.compute_gradients \
                 and self.gradient_analysis and self.list_grad_columns:
-            list_of_single_df_grad_analysis = []
+            list_of_single_dict_grad_analysis_time_aggregated = []
+            list_of_single_df_grad_analysis_over_time = []
             if not isinstance(self.list_grad_columns, list):
                 self.list_grad_columns = [self.list_grad_columns, ]
             for single_grad_columns in self.list_grad_columns:
-                df_single_grad_analysis = Hydrotatistics._single_qoi_single_param_grad_analysis(
+                result_dict_time_aggregated, result_df_over_time = \
+                    HydroStatistics._single_qoi_single_param_grad_analysis(
                     self.samples.df_simulation_result, single_grad_columns, self.time_column_name)
-                list_of_single_df_grad_analysis.append(df_single_grad_analysis)
-            self.df_grad_analysis = pd.concat(list_of_single_df_grad_analysis, ignore_index=True, sort=False, axis=0)
+                list_of_single_dict_grad_analysis_time_aggregated.append(result_dict_time_aggregated)
+                list_of_single_df_grad_analysis_over_time.append(result_df_over_time)
+            self.df_time_aggregated_grad_analysis = pd.DataFrame.from_dict(list_of_single_dict_grad_analysis_time_aggregated)
+            self.df_time_varying_grad_analysis = pd.concat(list_of_single_df_grad_analysis_over_time,
+                                                           ignore_index=False, axis=1)
         else:
             raise Exception("[STAT ERROR] - Calling method param_grad_analysis "
                             "when not all the requirements for the analysis are meet")
 
+    def save_param_grad_analysis(self, file_path='./'):
+        file_path = str(file_path)
+        if self.df_time_varying_grad_analysis is not None:
+            self.df_time_varying_grad_analysis.to_pickle(
+                os.path.abspath(os.path.join(file_path, "df_time_varying_grad_analysis.pkl")), compression="gzip")
+        if self.df_time_aggregated_grad_analysis is not None:
+            self.df_time_aggregated_grad_analysis.to_pickle(
+                os.path.abspath(os.path.join(file_path, "df_time_aggregated_grad_analysis.pkl")), compression="gzip")
     ###################################################################################################################
 
     def preparePolyExpanForMc(self, simulationNodes, numEvaluations, regression=None, order=None,
@@ -783,15 +800,26 @@ class HydroStatistics(Statistics):
 
         for single_qoi_column in self.list_qoi_column:
             fileName = "statistics_dictionary_qoi_" + single_qoi_column + ".pkl"
-            statFileName = os.path.abspath(os.path.join(str(self.workingDir), fileName))
-            with open(statFileName, 'wb') as handle:
+            fullFileName = os.path.abspath(os.path.join(str(self.workingDir), fileName))
+            with open(fullFileName, 'wb') as handle:
                 pickle.dump(self.result_dict[single_qoi_column], handle, protocol=pickle.HIGHEST_PROTOCOL)
 
         if self.active_scores_dict is not None:
             fileName = "active_scores_dict.pkl"
-            statFileName = os.path.abspath(os.path.join(str(self.workingDir), fileName))
-            with open(statFileName, 'wb') as handle:
+            fullFileName = os.path.abspath(os.path.join(str(self.workingDir), fileName))
+            with open(fullFileName, 'wb') as handle:
                 pickle.dump(self.active_scores_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+        # self.save_param_grad_analysis(self.workingDir)
+        if self.df_time_varying_grad_analysis is not None:
+            fileName = "df_time_varying_grad_analysis.pkl"
+            fullFileName = os.path.abspath(os.path.join(str(self.workingDir), fileName))
+            self.df_time_varying_grad_analysis.to_pickle(fullFileName, compression="gzip")
+
+        if self.df_time_aggregated_grad_analysis is not None:
+            fileName = "df_time_aggregated_grad_analysis.pkl"
+            fullFileName = os.path.abspath(os.path.join(str(self.workingDir), fileName))
+            self.df_time_aggregated_grad_analysis.to_pickle(fullFileName, compression="gzip")
 
     ###################################################################################################################
 
@@ -843,8 +871,8 @@ class HydroStatistics(Statistics):
         grouped = df.groupby([time_column_name, ])
         groups = grouped.groups
         keyIter = list(groups.keys())
-        result_dict = dict()
-        result_dict["qoi_column"] = qoi_column
+        result_dict_time_aggregated = dict()
+        result_dict_time_aggregated["qoi_column"] = qoi_column
 
         # all_list_of_values = [
         #             df.loc[groups[key].values][qoi_column].values
@@ -854,37 +882,44 @@ class HydroStatistics(Statistics):
         all_list_of_values_abs = np.abs(df[qoi_column].values)
         # Calculate relative frequencies
 
+
         count, bins_count = np.histogram(all_list_of_values_abs, bins=len(all_list_of_values_abs))
         # finding the PDF of the histogram using count values
         pdf = count / sum(count)
         # using numpy np.cumsum to calculate the CDF
         cdf = np.cumsum(pdf)
         mean_cdf = np.mean(cdf)
-        result_dict["total_time_relative_frequency_np"] = pdf
-        result_dict["total_time_cumulative_sum_np"] = cdf
-        result_dict["total_time_mean_cumulative_sum_np"] = mean_cdf
+
+        # x, counts = np.unique(all_list_of_values_abs, return_counts=True)
+        # cusum = np.cumsum(counts) # cusum / cusum[-1]
+
+        result_dict_time_aggregated["total_time_relative_frequency_np"] = pdf
+        result_dict_time_aggregated["total_time_cumulative_sum_np"] = cdf
+        result_dict_time_aggregated["total_time_mean_cumulative_sum_np"] = mean_cdf
 
         pdf = stats.relfreq(all_list_of_values_abs, numbins=len(all_list_of_values_abs))
         cdf = stats.cumfreq(all_list_of_values_abs, numbins=len(all_list_of_values_abs))
         mean_cdf = np.mean(cdf)
-        result_dict["total_time_relative_frequency"] = pdf
-        result_dict["total_time_cumulative_sum"] = cdf
-        result_dict["total_time_mean_cumulative_sum"] = mean_cdf
+        result_dict_time_aggregated["total_time_relative_frequency"] = pdf
+        result_dict_time_aggregated["total_time_cumulative_sum"] = cdf
+        result_dict_time_aggregated["total_time_mean_cumulative_sum"] = mean_cdf
 
         # result_dict_over_time = defaultdict(list)
-        result_dict["TimeStamp"] = []
-        result_dict["mean_cumulative_sum"] = []
+
+        result_dict_over_time = defaultdict(list)
         for key in keyIter:
             # single_timestep_grad_values = df.loc[groups[key].values][qoi_column].values
             single_timestep_abs_grad_values = np.abs(
                 df.loc[groups[key].values][qoi_column].values)
             mean_cdf = np.mean(
                 stats.cumfreq(single_timestep_abs_grad_values, numbins=len(single_timestep_abs_grad_values)))
-            result_dict["TimeStamp"].append(key)
-            result_dict["mean_cumulative_sum"].append(mean_cdf)
+            result_dict_over_time[time_column_name].append(key)
+            result_dict_over_time[qoi_column].append(mean_cdf)
 
-        result_df = pd.DataFrame.from_dict(result_dict)
-        return result_df
+        result_df_over_time = pd.DataFrame.from_dict(result_dict_over_time)
+        result_df_over_time.set_index(time_column_name, inplace=True)
+
+        return result_dict_time_aggregated, result_df_over_time
 
     @staticmethod
     def _compute_active_score(dict_of_matrix_c_eigen_decomposition):
