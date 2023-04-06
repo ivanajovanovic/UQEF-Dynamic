@@ -88,7 +88,7 @@ class HBVSASKStatistics(HydroStatistics.HydroStatistics):
     ###################################################################################################################
 
     def prepare(self, rawSamples, **kwargs):
-        super(HBVSASKStatistics, self).prepare(rawSamples, **kwargs)
+        super(HBVSASKStatistics, self).prepare(rawSamples=rawSamples, **kwargs)
 
     ###################################################################################################################
 
@@ -127,14 +127,14 @@ class HBVSASKStatistics(HydroStatistics.HydroStatistics):
 
     ###################################################################################################################
 
-    def _check_if_Sobol_t_computed(self, keyIter, qoi_column=None):
-        super(HBVSASKStatistics, self)._check_if_Sobol_t_computed(keyIter, qoi_column)
+    def _check_if_Sobol_t_computed(self, timestamp=None, qoi_column=None):
+        super(HBVSASKStatistics, self)._check_if_Sobol_t_computed(timestamp, qoi_column)
 
-    def _check_if_Sobol_m_computed(self, keyIter, qoi_column=None):
-        super(HBVSASKStatistics, self)._check_if_Sobol_m_computed(keyIter, qoi_column)
+    def _check_if_Sobol_m_computed(self, timestamp=None, qoi_column=None):
+        super(HBVSASKStatistics, self)._check_if_Sobol_m_computed(timestamp, qoi_column)
 
-    def _check_if_Sobol_m2_computed(self, keyIter, qoi_column=None):
-        super(HBVSASKStatistics, self)._check_if_Sobol_m2_computed(keyIter, qoi_column)
+    def _check_if_Sobol_m2_computed(self, timestamp=None, qoi_column=None):
+        super(HBVSASKStatistics, self)._check_if_Sobol_m2_computed(timestamp, qoi_column)
 
     ###################################################################################################################
 
@@ -147,43 +147,105 @@ class HBVSASKStatistics(HydroStatistics.HydroStatistics):
     # TODO What about AET or other QoI/Model output, make this more general
     # TODO Make below functions more general
 
-    def get_measured_data(self, timestepRange=None, time_column_name="TimeStamp", qoi_column_name="streamflow",
-                          **kwargs):
+    def get_measured_data(self, timestepRange=None, time_column_name="TimeStamp",
+                          qoi_column_name="streamflow", **kwargs):
+        """
+
+        :param timestepRange:
+        :param time_column_name:
+        :param qoi_column_name:
+        :param kwargs:
+        :return: set self.df_measured to be a pd.DataFrame with three columns "TimeStamp", "qoi", "measured"
+        """
         # In this particular set-up, we only have access to the measured streamflow
-        self.df_measured = self._get_measured_streamflow(time_column_name=time_column_name,
-                                                         streamflow_column_name=qoi_column_name, **kwargs)
 
-        transforme_mesured_data_as_original_model = kwargs.get(
-            "transforme_mesured_data_as_original_model", True)
+        if not isinstance(qoi_column_name, list):
+            qoi_column_name = [qoi_column_name, ]
 
-        # This data will be used for plotting or comparing with approximated data
-        # Perform the same transformation as on original model output
-        if transforme_mesured_data_as_original_model:
-            for idx, single_qoi_column in enumerate(self.list_original_model_output_columns):
-                single_transformation = self.list_transform_model_output[idx]
-                if single_transformation is not None and single_transformation != "None":
-                    if self.list_read_measured_data[idx]:
-                        utility.transform_column_in_df(
-                            self.df_measured,
-                            transformation_function_str=single_transformation,
-                            column_name=self.list_qoi_column_measured[idx],
-                            new_column_name=self.list_qoi_column_measured[idx])
-        self.measured_fetched = True
+        transform_measured_data_as_original_model = kwargs.get(
+            "transform_measured_data_as_original_model", True)
 
-    def get_unaltered_run_data(self):
+        list_df_measured_single_qoi = []
+        for single_qoi_column in qoi_column_name:
+
+            if single_qoi_column not in self.list_original_model_output_columns:
+                is_single_qoi_column_in_measured_column_names = False
+                for temp in self.list_original_model_output_columns:
+                    if single_qoi_column == self.dict_qoi_column_and_measured_info[temp][1]:
+                        is_single_qoi_column_in_measured_column_names = True
+                        single_qoi_column = temp
+                        break
+                if not is_single_qoi_column_in_measured_column_names:
+                    continue
+
+            single_qoi_column_info = self.dict_qoi_column_and_measured_info[single_qoi_column]
+
+            single_qoi_read_measured_data = single_qoi_column_info[0]
+            single_qoi_column_measured = single_qoi_column_info[1]
+            single_qoi_transform_model_output = single_qoi_column_info[2]
+
+            if not single_qoi_read_measured_data:
+                continue
+
+            # hard-coded for HBV
+            if single_qoi_column == "Q_cms":
+                df_measured_single_qoi = self._get_measured_streamflow(
+                    timestepRange=timestepRange, time_column_name=time_column_name,
+                    streamflow_column_name=single_qoi_column_measured, **kwargs)
+            else:
+                df_measured_single_qoi = self._get_measured_single_qoi(
+                    timestepRange=timestepRange, time_column_name=time_column_name,
+                    qoi_column_measured=single_qoi_column_measured, **kwargs)
+
+            # This data will be used for plotting or comparing with approximated data
+            # Perform the same transformation as on original model output
+            if transform_measured_data_as_original_model:
+                if single_qoi_transform_model_output is not None and single_qoi_transform_model_output != "None":
+                    utility.transform_column_in_df(
+                        df_measured_single_qoi,
+                        transformation_function_str=single_qoi_transform_model_output,
+                        column_name=single_qoi_column_measured,
+                        new_column_name=single_qoi_column_measured)
+
+            if df_measured_single_qoi.index.name == time_column_name:
+                df_measured_single_qoi.reset_index(inplace=True)
+                df_measured_single_qoi.rename(columns={df_measured_single_qoi.index.name: time_column_name},
+                                              inplace=True)
+
+            df_measured_single_qoi.rename(columns={single_qoi_column_measured: "measured"},
+                                          inplace=True)
+
+            df_measured_single_qoi["qoi"] = single_qoi_column
+            df_measured_single_qoi = df_measured_single_qoi[[time_column_name, "measured", "qoi"]]
+            list_df_measured_single_qoi.append(df_measured_single_qoi)
+
+        if list_df_measured_single_qoi:
+            self.df_measured = pd.concat(list_df_measured_single_qoi, ignore_index=True, sort=False, axis=0)
+            self.measured_fetched = True
+        else:
+            self.df_measured = None
+            self.measured_fetched = False
+
+    def get_unaltered_run_data(self, timestepRange=None, time_column_name="TimeStamp", qoi_column_name="streamflow",
+                              **kwargs):
         self.df_unaltered = None
         self.unaltered_computed = False
 
     def get_forcing_data(self, timestepRange=None, time_column_name="TimeStamp", forcing_column_names="precipitation",
                           **kwargs):
-        self.forcing_df = self._get_precipitation_temperature_input_data(time_column_name=time_column_name, **kwargs)
+        self.forcing_df = self._get_precipitation_temperature_input_data(
+            timestepRange=timestepRange, time_column_name=time_column_name, **kwargs)
         self.forcing_data_fetched = True
 
     ##########################
     # HBV Specific functions for fetching saved data
     ##########################
+    def _get_measured_single_qoi(self, timestepRange=None, time_column_name="TimeStamp",
+        qoi_column_measured="measured", **kwargs):
+        raise NotImplementedError
 
-    def _get_measured_streamflow(self, time_column_name="TimeStamp", streamflow_column_name="streamflow", **kwargs):
+    def _get_measured_streamflow(self, timestepRange=None, time_column_name="TimeStamp",
+                                 streamflow_column_name="streamflow", **kwargs):
         streamflow_inp = kwargs.get("streamflow_inp", "streamflow.inp")
         streamflow_inp = self.inputModelDir_basis / streamflow_inp
 
@@ -192,16 +254,19 @@ class HBVSASKStatistics(HydroStatistics.HydroStatistics):
         streamflow_df = hbv.read_streamflow(streamflow_inp,
                                             time_column_name=time_column_name,
                                             streamflow_column_name=streamflow_column_name)
+        if timestepRange is None:
+            timestepRange = (self.timesteps_min, self.timesteps_max)
+
         # Parse input based on some timeframe
         if time_column_name in streamflow_df.columns:
             streamflow_df = streamflow_df.loc[
-                (streamflow_df[time_column_name] >= self.timesteps_min) & (
-                        streamflow_df[time_column_name] <= self.timesteps_max)]
+                (streamflow_df[time_column_name] >= timestepRange[0]) & (
+                        streamflow_df[time_column_name] <= timestepRange[1])]
         else:
-            streamflow_df = streamflow_df[self.timesteps_min:self.timesteps_max]
+            streamflow_df = streamflow_df[timestepRange[0]:timestepRange[1]]
         return streamflow_df
 
-    def _get_precipitation_temperature_input_data(self, time_column_name="TimeStamp", **kwargs):
+    def _get_precipitation_temperature_input_data(self, timestepRange=None, time_column_name="TimeStamp", **kwargs):
         precipitation_temperature_inp = kwargs.get("precipitation_temperature_inp", "Precipitation_Temperature.inp")
         precipitation_column_name = kwargs.get("precipitation_column_name", "precipitation")
         temperature_column_name = kwargs.get("temperature_column_name", "temperature")
@@ -212,32 +277,36 @@ class HBVSASKStatistics(HydroStatistics.HydroStatistics):
             precipitation_column_name=precipitation_column_name, temperature_column_name=temperature_column_name
         )
 
+        if timestepRange is None:
+            timestepRange = (self.timesteps_min, self.timesteps_max)
+
         # Parse input based on some timeframe
         if time_column_name in precipitation_temperature_df.columns:
             precipitation_temperature_df = precipitation_temperature_df.loc[
-                (precipitation_temperature_df[time_column_name] >= self.timesteps_min) \
-                & (precipitation_temperature_df[time_column_name] <= self.timesteps_max)]
+                (precipitation_temperature_df[time_column_name] >= timestepRange[0]) \
+                & (precipitation_temperature_df[time_column_name] <= timestepRange[1])]
         else:
-            precipitation_temperature_df = precipitation_temperature_df[self.timesteps_min:self.timesteps_max]
+            precipitation_temperature_df = precipitation_temperature_df[timestepRange[0]:timestepRange[1]]
         return precipitation_temperature_df
 
-    def input_and_measured_data_setup(self, time_column_name="TimeStamp", precipitation_column_name="precipitation",
-                                       temperature_column_name="temperature",
-                                       read_measured_streamflow=None, streamflow_column_name="streamflow",
-                                       **kwargs):
+    def input_and_measured_data_setup(self, timestepRange=None, time_column_name="TimeStamp",
+                                      precipitation_column_name="precipitation", temperature_column_name="temperature",
+                                      read_measured_streamflow=None, streamflow_column_name="streamflow", **kwargs):
         # % ********  Forcing (Precipitation and Temperature)  *********
         precipitation_temperature_df = self._get_precipitation_temperature_input_data(
-            time_column_name=time_column_name,
+            timestepRange=timestepRange, time_column_name=time_column_name,
             precipitation_column_name=precipitation_column_name,
-            temperature_column_name=temperature_column_name, **kwargs)
+            temperature_column_name=temperature_column_name,
+            **kwargs)
 
         # % ********  Observed Streamflow  *********
         # if read_measured_streamflow is None:
         #     read_measured_streamflow = self.read_measured_streamflow
 
         if read_measured_streamflow:
-            streamflow_df = self._get_measured_streamflow(time_column_name=time_column_name,
-                                                          streamflow_column_name=streamflow_column_name, **kwargs)
+            streamflow_df = self._get_measured_streamflow(
+                timestepRange=timestepRange, time_column_name=time_column_name,
+                streamflow_column_name=streamflow_column_name, **kwargs)
 
             time_series_measured_data_df = pd.merge(
                 streamflow_df, precipitation_temperature_df,  left_index=True, right_index=True
@@ -260,7 +329,7 @@ class HBVSASKStatistics(HydroStatistics.HydroStatistics):
 
         if plot_measured_timeseries:
             self.get_measured_data(time_column_name=time_column_name,
-                                   qoi_column_name=kwargs.get('measured_df_column_to_draw', "streamflow"))
+                                   qoi_column_name=self.list_original_model_output_columns)
 
         if plot_unaltered_timeseries:
             self.get_unaltered_run_data()
@@ -288,8 +357,8 @@ class HBVSASKStatistics(HydroStatistics.HydroStatistics):
                                    display=False, **kwargs):
         pdTimesteps = self.pdTimesteps
         keyIter = list(pdTimesteps)
-        self._check_if_Sobol_t_computed(keyIter)
-        self._check_if_Sobol_m_computed(keyIter)
+        self._check_if_Sobol_t_computed(keyIter[0])
+        self._check_if_Sobol_m_computed(keyIter[0])
 
         n_rows = 0
         starting_row = 1
@@ -306,6 +375,7 @@ class HBVSASKStatistics(HydroStatistics.HydroStatistics):
                             print_grid=True, shared_xaxes=False,
                             vertical_spacing=0.1)
 
+        # HBV - Specific plotting of observed data, i.e., forcing data and measured streamflow
         if forcing and self.forcing_data_fetched:
             # Precipitation
             column_to_draw = kwargs.get('precipitation_df_column_to_draw', 'precipitation')
@@ -337,19 +407,19 @@ class HBVSASKStatistics(HydroStatistics.HydroStatistics):
                               row=2, col=1)
 
             # Streamflow - hard-coded for HBV
-            column_to_draw = kwargs.get('streamflow_df_column_to_draw', 'temperature')
+            streamflow_df = self._get_measured_streamflow(time_column_name="TimeStamp",
+                                                          streamflow_column_name="streamflow")
+            column_to_draw = kwargs.get('streamflow_df_column_to_draw', 'streamflow')
             timestamp_column = kwargs.get('streamflow_df_timestamp_column', 'TimeStamp')
-            streamflow_df = self._get_measured_streamflow(
-                time_column_name="TimeStamp", streamflow_column_name=column_to_draw)
             if timestamp_column == "index":
                 fig.add_trace(go.Scatter(x=streamflow_df.index,
                                          y=streamflow_df[column_to_draw],
-                                         name="Obs Streamflow", line_color='blue', mode='lines'),
+                                         name="Obs Streamflow", line_color='red', mode='lines'),
                               row=3, col=1)
             else:
                 fig.add_trace(go.Scatter(x=streamflow_df[timestamp_column],
                                          y=streamflow_df[column_to_draw],
-                                         name="Obs Streamflow", line_color='blue', mode='lines'),
+                                         name="Obs Streamflow", line_color='red', mode='lines'),
                               row=3, col=1)
 
         dict_qoi_vs_plot_rows = defaultdict(dict, {single_qoi_column: {} for single_qoi_column in self.list_qoi_column})
@@ -357,16 +427,15 @@ class HBVSASKStatistics(HydroStatistics.HydroStatistics):
         for idx, single_qoi_column in enumerate(self.list_qoi_column):
             if single_qoi_column in self.list_original_model_output_columns:
                 if measured and self.measured_fetched and self.list_read_measured_data[idx]:
-                    column_to_draw = self.list_qoi_column_measured[idx]
-                    timestamp_column = kwargs.get('measured_df_timestamp_column', 'TimeStamp')
-                    if timestamp_column == "index":
-                        fig.add_trace(go.Scatter(x=self.df_measured.index, y=self.df_measured[column_to_draw],
-                                                 name=f"{single_qoi_column} (measured)", line_color='red', mode='lines'),
-                                      row=starting_row, col=1)
-                    else:
-                        fig.add_trace(go.Scatter(x=self.df_measured[timestamp_column], y=self.df_measured[column_to_draw],
-                                                 name=f"{single_qoi_column} (measured)", line_color='red', mode='lines'),
-                                      row=starting_row, col=1)
+                    # column_to_draw = self.list_qoi_column_measured[idx]
+                    # timestamp_column = kwargs.get('measured_df_timestamp_column', 'TimeStamp')
+                    df_measured_subset = self.df_measured.loc[self.df_measured["qoi"] == single_qoi_column]
+                    column_to_draw = "measured"
+                    timestamp_column = self.time_column_name
+                    fig.add_trace(
+                        go.Scatter(x=df_measured_subset[timestamp_column], y=df_measured_subset[column_to_draw],
+                                   name=f"{single_qoi_column} (measured)", line_color='red', mode='lines'),
+                        row=starting_row, col=1)
 
             fig.add_trace(go.Scatter(x=pdTimesteps,
                                      y=[self.result_dict[single_qoi_column][key]["E"] for key in keyIter],
@@ -456,53 +525,12 @@ class HBVSASKStatistics(HydroStatistics.HydroStatistics):
     ###################################################################################################################
 
     def extract_mean_time_series(self):
-        if self.result_dict is None:
-            raise Exception('[STAT INFO] extract_mean_time_series - self.result_dict is None. '
-                            'Calculate the statistics first!')
-        list_of_single_qoi_mean_df = []
-        for single_qoi_column in self.list_qoi_column:
-            keyIter = list(self.pdTimesteps)
-            mean_time_series = [self.result_dict[single_qoi_column][key]["E"] for key in keyIter]
-            qoi_column = [single_qoi_column] * len(keyIter)
-            mean_df_single_qoi = pd.DataFrame(list(zip(qoi_column, mean_time_series, self.pdTimesteps)),
-                                              columns=['QoI', 'Mean_QoI', 'TimeStamp'])
-            list_of_single_qoi_mean_df.append(mean_df_single_qoi)
-        self.qoi_mean_df = pd.concat(list_of_single_qoi_mean_df, ignore_index=True, sort=False, axis=0)
+        super(HBVSASKStatistics, self).extract_mean_time_series()
+
+    def create_df_from_statistics_data(self, uq_method="sc"):
+        super(HBVSASKStatistics, self).create_df_from_statistics_data(uq_method=uq_method)
 
     def create_df_from_statistics_data_single_qoi(self, qoi_column, uq_method="sc"):
-        keyIter = list(self.pdTimesteps)
-        mean_time_series = [self.result_dict[qoi_column][key]["E"] for key in keyIter]
-        std_time_series = [self.result_dict[qoi_column][key]["StdDev"] for key in keyIter]
-        p10_time_series = [self.result_dict[qoi_column][key]["P10"] for key in keyIter]
-        p90_time_series = [self.result_dict[qoi_column][key]["P90"] for key in keyIter]
-        list_of_columns = [self.pdTimesteps, mean_time_series, std_time_series,
-                           p10_time_series, p90_time_series]
-        list_of_columns_names = ['TimeStamp', "E", "Std", "P10", "P90"]
-
-        self._check_if_Sobol_t_computed(keyIter, qoi_column=qoi_column)
-        self._check_if_Sobol_m_computed(keyIter, qoi_column=qoi_column)
-        if self._is_Sobol_m_computed:
-            for i in range(len(self.labels)):
-                sobol_m_time_series = [self.result_dict[qoi_column][key]["Sobol_m"][i] for key in keyIter]
-                list_of_columns.append(sobol_m_time_series)
-                temp = "sobol_m_" + self.labels[i]
-                list_of_columns_names.append(temp)
-        if self._is_Sobol_t_computed:
-            for i in range(len(self.labels)):
-                sobol_t_time_series = [self.result_dict[qoi_column][key]["Sobol_t"][i] for key in keyIter]
-                list_of_columns.append(sobol_t_time_series)
-                temp = "sobol_t_" + self.labels[i]
-                list_of_columns_names.append(temp)
-
-        df_statistics = pd.DataFrame(list(zip(*list_of_columns)), columns=list_of_columns_names)
-
-        if self.measured_fetched:
-            pass  # TODO
-
-        if self.unaltered_computed:
-            pass  # TODO
-
-        df_statistics["E_minus_std"] = df_statistics['E'] - df_statistics['Std']
-        df_statistics["E_plus_std"] = df_statistics['E'] + df_statistics['Std']
-        return df_statistics
+        super(HBVSASKStatistics, self).create_df_from_statistics_data_single_qoi(
+            qoi_column=qoi_column, uq_method=uq_method)
 

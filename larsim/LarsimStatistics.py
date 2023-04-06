@@ -1513,6 +1513,7 @@ class LarsimStatistics(Statistics):
         std_observed = df_statistics_station[observed_column].std(ddof=1)
         return mean_uncertainty_band, std_uncertainty_band, mean_observed, std_observed
 
+    # TODO calculate_gof_over_leap_time (!?)
     def calculate_gof_over_lead_time(self):
         pass
 
