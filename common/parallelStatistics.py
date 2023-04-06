@@ -1,6 +1,7 @@
 import chaospy as cp
 import numpy as np
 import pandas as pd
+import scipy
 
 # from saltelliSobolIndicesHelpingFunctions import *
 from . import saltelliSobolIndicesHelpingFunctions
@@ -22,6 +23,8 @@ def _my_parallel_calc_stats_for_MC(keyIter_chunk, qoi_values_chunk, numEvaluatio
                                           dtype=np.float64) / (numEvaluations - 1)
         # local_result_dict["StdDev"] = np.sqrt(local_result_dict["Var"], dtype=np.float64)
         local_result_dict["StdDev"] = np.std(qoi_values, 0, ddof=1)
+        local_result_dict["Skew"] = scipy.stats.skew(qoi_values, axis=0, bias=True)
+        local_result_dict["Kurt"] = scipy.stats.kurtosis(qoi_values, axis=0, bias=True)
 
         local_result_dict["P10"] = np.percentile(qoi_values, 10, axis=0)
         local_result_dict["P90"] = np.percentile(qoi_values, 90, axis=0)
@@ -58,7 +61,10 @@ def _my_parallel_calc_stats_for_gPCE(keyIter_chunk, qoi_values_chunk, dist, poly
         local_result_dict["E"] = float(cp.E(qoi_gPCE, dist))
         local_result_dict["Var"] = float(cp.Var(qoi_gPCE, dist))
         local_result_dict["StdDev"] = float(cp.Std(qoi_gPCE, dist))
-        #local_result_dict["qoi_dist"] = cp.QoI_Dist(qoi_gPCE, dist)
+
+        local_result_dict["Skew"] = cp.Skew(qoi_gPCE, dist).round(4)
+        local_result_dict["Kurt"] = cp.Kurt(qoi_gPCE, dist)
+        local_result_dict["qoi_dist"] = cp.QoI_Dist(qoi_gPCE, dist)
 
         local_result_dict["P10"] = float(cp.Perc(qoi_gPCE, 10, dist, numPercSamples))
         local_result_dict["P90"] = float(cp.Perc(qoi_gPCE, 90, dist, numPercSamples))
@@ -96,6 +102,8 @@ def _my_parallel_calc_stats_for_mc_saltelli(keyIter_chunk, qoi_values_chunk, num
                                           axis=0, dtype=np.float64) / (2 * numEvaluations - 1)
         # local_result_dict["Var"] = np.sum((qoi_values[:(2 * numEvaluations)] - local_result_dict["E"]) ** 2,
         #                                    axis=0, dtype=np.float64)/(2 * numEvaluations - 1)
+        local_result_dict["Skew"] = scipy.stats.skew(qoi_values[:(2 * numEvaluations)], axis=0, bias=True)
+        local_result_dict["Kurt"] = scipy.stats.kurtosis(qoi_values[:(2 * numEvaluations)], axis=0, bias=True)
 
         local_result_dict["StdDev"] = np.std(qoi_values[:(2 * numEvaluations)], 0, ddof=1)
 
