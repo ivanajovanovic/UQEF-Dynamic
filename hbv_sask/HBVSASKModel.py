@@ -121,7 +121,12 @@ class HBVSASKModel(object):
         self.list_qoi_column_measured = dict_processed_config_simulation_settings["list_qoi_column_measured"]
         self.list_read_measured_data = dict_processed_config_simulation_settings["list_read_measured_data"]
         self.list_transform_model_output = dict_processed_config_simulation_settings["list_transform_model_output"]
+
+        self.dict_qoi_column_and_measured_info = dict_processed_config_simulation_settings[
+            "dict_qoi_column_and_measured_info"]
+
         self.list_calculate_GoF = dict_processed_config_simulation_settings["list_calculate_GoF"]
+
         self.list_objective_function_qoi = dict_processed_config_simulation_settings["list_objective_function_qoi"]
         self.list_objective_function_names_qoi = dict_processed_config_simulation_settings[
             "list_objective_function_names_qoi"]

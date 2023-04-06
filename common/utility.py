@@ -5,6 +5,7 @@ Set of utility functions for preparing and/or postprocessing data for UQ runs of
 """
 
 import chaospy as cp
+from collections import defaultdict
 import datetime
 from distutils.util import strtobool
 import dill
@@ -85,7 +86,7 @@ class UQOutputPaths(object):
 
 def get_df_from_simulationNodes(simulationNodes, nodes_or_paramters="nodes", params_list=None):
     numDim = simulationNodes.nodes.shape[0]
-    numSamples = simulationNodes.nodes.shape[0]
+    numSamples = simulationNodes.nodes.shape[1]
     if nodes_or_paramters == "nodes":
         if params_list is None:
             my_ditc = {f"x{i}": simulationNodes.nodes[i, :] for i in range(numDim)}
@@ -894,6 +895,12 @@ def read_simulation_settings_from_configuration_object(configurationObject, **kw
 
     assert len(list_qoi_column) == len(list_qoi_column_measured)
     assert len(list_qoi_column_measured) == len(list_read_measured_data)
+
+    dict_qoi_column_and_measured_info = defaultdict(tuple)
+    for idx, single_qoi_column in enumerate(list_qoi_column):
+        dict_qoi_column_and_measured_info[single_qoi_column] = \
+            (list_read_measured_data[idx], list_qoi_column_measured[idx], list_transform_model_output[idx])
+    result_dict["dict_qoi_column_and_measured_info"] = dict_qoi_column_and_measured_info
 
     mode = dict_config_simulation_settings.get("mode", "continuous")
     if mode != "continuous" and mode != "sliding_window" and mode != "resampling":
