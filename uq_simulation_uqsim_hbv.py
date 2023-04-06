@@ -52,18 +52,18 @@ if local_debugging:
     uqsim.args.uncertain = "all"
     uqsim.args.chunksize = 1
 
-    uqsim.args.uq_method = "saltelli"  # "sc" | "saltelli" | "mc" | "ensemble"
+    uqsim.args.uq_method = "sc"  # "sc" | "saltelli" | "mc" | "ensemble"
     uqsim.args.mc_numevaluations = 100
     uqsim.args.sampling_rule = "latin_hypercube"  # "random" | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
     uqsim.args.sc_q_order = 6  # 7 #10 3
     uqsim.args.sc_p_order = 3  # 4, 5, 6, 8
     uqsim.args.sc_quadrature_rule = "clenshaw_curtis"  # "p" "genz_keister_24" "leja"
 
-    uqsim.args.read_nodes_from_file = False
+    uqsim.args.read_nodes_from_file = True
     l = 6  # 10
     path_to_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/sparse_grid_nodes_weights")
-    uqsim.args.parameters_file = path_to_file / f"KPU_d6_l{l}.asc" # f"KPU_d3_l{l}.asc"
-    uqsim.args.parameters_setup_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEFPP/configurations/KPU_HBV_d6.json")
+    uqsim.args.parameters_file = path_to_file / f"KPU_d4_l{l}.asc" # f"KPU_d3_l{l}.asc"
+    uqsim.args.parameters_setup_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEFPP/configurations/KPU_HBV_d4.json")
 
     uqsim.args.sc_poly_rule = "three_terms_recurrence"  # "gram_schmidt" | "three_terms_recurrence" | "cholesky"
     uqsim.args.sc_poly_normed = False  # True
@@ -73,9 +73,9 @@ if local_debugging:
     uqsim.args.inputModelDir = pathlib.Path("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/HBV-SASK-data")
     uqsim.args.sourceDir = pathlib.Path("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/HBV-SASK-data")
     uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs",
-                                                              'gof_sliding_window_2d')) #sliding_window or continuous
+                                                              'gpce_d4_l6_p3_II')) #sliding_window or continuous
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
-    uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEFPP/configurations/configuration_hbv_6D_GoF.json'
+    uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEFPP/configurations/configuration_hbv_4D.json'
 
     uqsim.args.sampleFromStandardDist = True  # False
 
@@ -256,8 +256,11 @@ elif uqsim.args.model == "hbvsask":
     uqsim.plot_statistics(display=False,
                           plot_measured_timeseries=True,
                           plot_forcing_timeseries=True,
+                          time_column_name = "TimeStamp",
                           measured_df_column_to_draw="streamflow",
                           measured_df_timestamp_column="index",
+                          streamflow_df_column_to_draw="streamflow",
+                          streamflow_df_timestamp_column="index",
                           precipitation_df_column_to_draw="precipitation",
                           precipitation_df_timestamp_column="index",
                           temperature_df_column_to_draw="temperature",

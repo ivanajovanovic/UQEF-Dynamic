@@ -269,6 +269,8 @@ elif uqsim.args.model == "hbvsask":
                           time_column_name="TimeStamp",
                           measured_df_column_to_draw="streamflow",
                           measured_df_timestamp_column="index",
+                          streamflow_df_column_to_draw="streamflow",
+                          streamflow_df_timestamp_column="index",
                           precipitation_df_column_to_draw="precipitation",
                           precipitation_df_timestamp_column="index",
                           temperature_df_column_to_draw="temperature",

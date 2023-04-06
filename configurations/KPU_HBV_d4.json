@@ -1,0 +1,28 @@
+{
+  "parameters": [
+    {
+      "name": "TT",
+      "distribution": "Uniform",
+      "lower": 0.0,
+      "upper": 1.0
+    },
+    {
+      "name": "C0",
+      "distribution": "Uniform",
+      "lower": 0.0,
+      "upper": 1.0
+    },
+    {
+      "name": "M",
+      "distribution": "Uniform",
+      "lower": 0.0,
+      "upper": 1.0
+    },
+    {
+      "name": "VAR_M",
+      "distribution": "Uniform",
+      "lower": 0.0,
+      "upper": 1.0
+    }
+  ]
+}
