@@ -279,7 +279,8 @@ def KGE(measuredDF, simulatedDF, measuredDF_column_name='Value', simulatedDF_col
     if measuredDF.size == simulatedDF.size:
         cc = np.corrcoef(measuredDF, simulatedDF)[0, 1]
         alpha = np.std(simulatedDF) / np.std(measuredDF)
-        beta = np.sum(simulatedDF) / np.sum(measuredDF)
+        # beta = np.sum(simulatedDF) / np.sum(measuredDF)
+        beta = np.mean(simulatedDF) / np.mean(measuredDF)
         kge = 1 - np.sqrt((cc - 1) ** 2 + (alpha - 1) ** 2 + (beta - 1) ** 2)
         if return_all:
             return kge, cc, alpha, beta
