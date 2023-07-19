@@ -55,7 +55,7 @@ if local_debugging:
 
     uqsim.args.uq_method = "saltelli"  # "sc" | "saltelli" | "mc" | "ensemble"
     uqsim.args.mc_numevaluations = 1000
-    uqsim.args.sampling_rule = "latin_hypercube"  # "random" | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
+    uqsim.args.sampling_rule = "halton"  # "random" | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
     uqsim.args.sc_q_order = 6  # 7 #10 3
     uqsim.args.sc_p_order = 3  # 4, 5, 6, 8
     uqsim.args.sc_quadrature_rule = "clenshaw_curtis"  # "p" "genz_keister_24" "leja"
@@ -161,6 +161,8 @@ uqsim.statistics.update({"larsim"         : (lambda: LarsimStatistics.LarsimStat
     workingDir=uqsim.args.workingDir,
     sampleFromStandardDist=uqsim.args.sampleFromStandardDist,
     store_qoi_data_in_stat_dict=False,
+    store_gpce_surrogate=True,
+    save_gpce_surrogate=False,
     parallel_statistics=uqsim.args.parallel_statistics,
     mpi_chunksize=uqsim.args.mpi_chunksize,
     unordered=False,
@@ -183,6 +185,8 @@ uqsim.statistics.update({"hbvsask"         : (lambda: HBVSASKStatistics.HBVSASKS
     workingDir=uqsim.args.outputResultDir,  # .args.workingDir,
     sampleFromStandardDist=uqsim.args.sampleFromStandardDist,
     store_qoi_data_in_stat_dict=False,
+    store_gpce_surrogate=True,
+    save_gpce_surrogate=False,
     parallel_statistics=uqsim.args.parallel_statistics,
     mpi_chunksize=uqsim.args.mpi_chunksize,
     unordered=False,
@@ -254,30 +258,30 @@ if uqsim.is_master():
 uqsim.calc_statistics()
 uqsim.save_statistics()
 
-if uqsim.args.model == "larsim":
-    uqsim.plot_statistics(
-        display=False,
-        plot_measured_timeseries=strtobool(uqsim.configuration_object["model_settings"]["get_measured_discharge"]),
-        plot_unaltered_timeseries=strtobool(uqsim.configuration_object["model_settings"]["run_unaltered_sim"])
-    )
-elif uqsim.args.model == "hbvsask":
-    # TODO This only for now - change the logic
-    uqsim.plot_statistics(display=False,
-                          plot_measured_timeseries=True,
-                          plot_unaltered_timeseries=False,
-                          plot_forcing_timeseries=True,
-                          time_column_name="TimeStamp",
-                          measured_df_column_to_draw="streamflow",
-                          measured_df_timestamp_column="index",
-                          streamflow_df_column_to_draw="streamflow",
-                          streamflow_df_timestamp_column="index",
-                          precipitation_df_column_to_draw="precipitation",
-                          precipitation_df_timestamp_column="index",
-                          temperature_df_column_to_draw="temperature",
-                          temperature_df_timestamp_column="index",
-                          )
-else:
-    uqsim.plot_statistics(display=False)
+# if uqsim.args.model == "larsim":
+#     uqsim.plot_statistics(
+#         display=False,
+#         plot_measured_timeseries=strtobool(uqsim.configuration_object["model_settings"]["get_measured_discharge"]),
+#         plot_unaltered_timeseries=strtobool(uqsim.configuration_object["model_settings"]["run_unaltered_sim"])
+#     )
+# elif uqsim.args.model == "hbvsask":
+#     # TODO This only for now - change the logic
+#     uqsim.plot_statistics(display=False,
+#                           plot_measured_timeseries=True,
+#                           plot_unaltered_timeseries=False,
+#                           plot_forcing_timeseries=True,
+#                           time_column_name="TimeStamp",
+#                           measured_df_column_to_draw="streamflow",
+#                           measured_df_timestamp_column="index",
+#                           streamflow_df_column_to_draw="streamflow",
+#                           streamflow_df_timestamp_column="index",
+#                           precipitation_df_column_to_draw="precipitation",
+#                           precipitation_df_timestamp_column="index",
+#                           temperature_df_column_to_draw="temperature",
+#                           temperature_df_timestamp_column="index",
+#                           )
+# else:
+#     uqsim.plot_statistics(display=False)
 
 # uqsim.args.uqsim_file = os.path.abspath(os.path.join(uqsim.args.outputResultDir, "uqsim.saved"))
 # #uqsim.store_to_file()
