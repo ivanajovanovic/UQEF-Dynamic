@@ -230,118 +230,6 @@ class LarsimSamples(object):
 ########################################################################################################################
 
 
-def _my_parallel_calc_stats_for_MC(keyIter_chunk, qoi_values_chunk, numEvaluations, store_qoi_data_in_stat_dict=False):
-    results = []
-    for ip in range(0, len(keyIter_chunk)):  # for each peace of work
-        key = keyIter_chunk[ip]
-        qoi_values = qoi_values_chunk[ip]
-        local_result_dict = dict()
-        if store_qoi_data_in_stat_dict:
-            local_result_dict["QoI"] = qoi_values
-
-        numEvaluations = len(qoi_values)
-
-        # local_result_dict["E"] = np.sum(qoi_values, axis=0, dtype=np.float64) / numEvaluations
-        local_result_dict["E"] = np.mean(qoi_values, 0)
-        local_result_dict["Var"] = np.sum((qoi_values - local_result_dict["E"]) ** 2, axis=0,
-                                          dtype=np.float64) / (numEvaluations - 1)
-        # local_result_dict["StdDev"] = np.sqrt(local_result_dict["Var"], dtype=np.float64)
-        local_result_dict["StdDev"] = np.std(qoi_values, 0, ddof=1)
-
-        local_result_dict["P10"] = np.percentile(qoi_values, 10, axis=0)
-        local_result_dict["P90"] = np.percentile(qoi_values, 90, axis=0)
-        if isinstance(local_result_dict["P10"], list) and len(local_result_dict["P10"]) == 1:
-            local_result_dict["P10"] = local_result_dict["P10"][0]
-            local_result_dict["P90"] = local_result_dict["P90"][0]
-
-        results.append((key, local_result_dict))
-    return results
-
-
-def _my_parallel_calc_stats_for_SC(keyIter_chunk, qoi_values_chunk, dist, polynomial_expansion, nodes,
-                                   compute_Sobol_t=False, compute_Sobol_m=False, store_qoi_data_in_stat_dict=False):
-    pass
-
-
-def _my_parallel_calc_stats_for_gPCE(keyIter_chunk, qoi_values_chunk, dist, polynomial_expansion, nodes, weights=None,
-                                     regression=False, compute_Sobol_t=False, compute_Sobol_m=False,
-                                     store_qoi_data_in_stat_dict=False):
-    results = []
-    for ip in range(0, len(keyIter_chunk)):  # for each peace of work
-        key = keyIter_chunk[ip]
-        qoi_values = qoi_values_chunk[ip]
-        local_result_dict = dict()
-        if store_qoi_data_in_stat_dict:
-            local_result_dict["QoI"] = qoi_values
-        if regression:
-            qoi_gPCE = cp.fit_regression(polynomial_expansion, nodes, qoi_values)
-        else:
-            qoi_gPCE = cp.fit_quadrature(polynomial_expansion, nodes, weights, qoi_values)
-
-        numPercSamples = 10 ** 5
-        local_result_dict["gPCE"] = qoi_gPCE
-        local_result_dict["E"] = float(cp.E(qoi_gPCE, dist))
-        local_result_dict["Var"] = float(cp.Var(qoi_gPCE, dist))
-        local_result_dict["StdDev"] = float(cp.Std(qoi_gPCE, dist))
-        #local_result_dict["qoi_dist"] = cp.QoI_Dist(qoi_gPCE, dist)
-
-        local_result_dict["P10"] = float(cp.Perc(qoi_gPCE, 10, dist, numPercSamples))
-        local_result_dict["P90"] = float(cp.Perc(qoi_gPCE, 90, dist, numPercSamples))
-        if isinstance(local_result_dict["P10"], list) and len(local_result_dict["P10"]) == 1:
-            local_result_dict["P10"] = local_result_dict["P10"][0]
-            local_result_dict["P90"] = local_result_dict["P90"][0]
-
-        if compute_Sobol_t:
-            local_result_dict["Sobol_t"] = cp.Sens_t(qoi_gPCE, dist)
-        if compute_Sobol_m:
-            local_result_dict["Sobol_m"] = cp.Sens_m(qoi_gPCE, dist)
-            #local_result_dict["Sobol_m2"] = cp.Sens_m2(qoi_gPCE, dist) # second order sensitivity indices
-
-        results.append((key, local_result_dict))
-    return results
-
-
-def _my_parallel_calc_stats_for_mc_saltelli(keyIter_chunk, qoi_values_chunk, numEvaluations, dim, compute_Sobol_t=False,
-                                            compute_Sobol_m=False, store_qoi_data_in_stat_dict=False):
-    results = []
-    for ip in range(0, len(keyIter_chunk)):  # for each peace of work
-        key = keyIter_chunk[ip]
-        qoi_values = qoi_values_chunk[ip]
-        local_result_dict = dict()
-
-        qoi_values_saltelli = qoi_values[:, np.newaxis]
-        standard_qoi_values = qoi_values_saltelli[:numEvaluations, :]
-        extended_standard_qoi_values = qoi_values_saltelli[:(2 * numEvaluations), :]
-
-        if store_qoi_data_in_stat_dict:
-            local_result_dict["QoI"] = standard_qoi_values
-
-        local_result_dict["E"] = np.mean(qoi_values[:(2 * numEvaluations)], 0)
-        local_result_dict["Var"] = np.sum((extended_standard_qoi_values - local_result_dict["E"]) ** 2,
-                                          axis=0, dtype=np.float64) / (2 * numEvaluations - 1)
-        # local_result_dict["Var"] = np.sum((qoi_values[:(2 * numEvaluations)] - local_result_dict["E"]) ** 2,
-        #                                    axis=0, dtype=np.float64)/(2 * numEvaluations - 1)
-
-        local_result_dict["StdDev"] = np.std(qoi_values[:(2 * numEvaluations)], 0, ddof=1)
-
-        local_result_dict["P10"] = np.percentile(qoi_values[:(2 * numEvaluations)], 10, axis=0)
-        local_result_dict["P90"] = np.percentile(qoi_values[:(2 * numEvaluations)], 90, axis=0)
-        if isinstance(local_result_dict["P10"], list) and len(local_result_dict["P10"]) == 1:
-            local_result_dict["P10"] = local_result_dict["P10"][0]
-            local_result_dict["P90"] = local_result_dict["P90"][0]
-
-        if compute_Sobol_t:
-            local_result_dict["Sobol_t"] = saltelliSobolIndicesHelpingFunctions._Sens_t_sample(
-                qoi_values_saltelli, dim, numEvaluations, code=4)
-        if compute_Sobol_m:
-            local_result_dict["Sobol_m"] = saltelliSobolIndicesHelpingFunctions._Sens_m_sample(
-                qoi_values_saltelli, dim, numEvaluations, code=4)
-
-        results.append((key, local_result_dict))
-    return results
-########################################################################################################################
-
-
 class LarsimStatistics(Statistics):
     """
        LarsimStatistics calculates the statistics for the LarsimModel
@@ -368,6 +256,8 @@ class LarsimStatistics(Statistics):
         self.sampleFromStandardDist = kwargs.get('sampleFromStandardDist', False)
 
         self.store_qoi_data_in_stat_dict = kwargs.get('store_qoi_data_in_stat_dict', False)
+        self.store_gpce_surrogate = kwargs.get('store_gpce_surrogate', False)
+        self.save_gpce_surrogate = kwargs.get('save_gpce_surrogate', False)
 
         # TODO: eventually make a non-MPI version
         self.parallel_statistics = kwargs.get('parallel_statistics', False)
@@ -638,6 +528,8 @@ class LarsimStatistics(Statistics):
             compute_Sobol_t_Chunks = [self._compute_Sobol_t] * len(keyIter_chunk)
             compute_Sobol_m_Chunks = [self._compute_Sobol_m] * len(keyIter_chunk)
             store_qoi_data_in_stat_dict_Chunks = [self.store_qoi_data_in_stat_dict] * len(keyIter_chunk)
+            store_gpce_surrogate_Chunks = [self.store_gpce_surrogate] * len(keyIter_chunk)
+            save_gpce_surrogate_Chunks = [self.save_gpce_surrogate] * len(keyIter_chunk)
 
         with futures.MPICommExecutor(MPI.COMM_WORLD, root=0) as executor:
             if executor is not None:  # master process
@@ -653,6 +545,8 @@ class LarsimStatistics(Statistics):
                                                 compute_Sobol_t_Chunks,
                                                 compute_Sobol_m_Chunks,
                                                 store_qoi_data_in_stat_dict_Chunks,
+                                                store_gpce_surrogate_Chunks,
+                                                save_gpce_surrogate_Chunks,
                                                 chunksize=self.mpi_chunksize,
                                                 unordered=self.unordered)
                 print(f"{self.rank}: waits for shutdown...")
@@ -772,7 +666,7 @@ class LarsimStatistics(Statistics):
             #qoi_values = self.samples.df_simulation_result.Value.loc[val_indices].values
             self.result_dict[key] = dict()
             if self.store_qoi_data_in_stat_dict:
-                self.result_dict[key]["QoI"] = qoi_values
+                self.result_dict[key]["qoi_values"] = qoi_values
             if regression:
                 qoi_gPCE = cp.fit_regression(polynomial_expansion, nodes, qoi_values)
                 self._calc_stats_for_gPCE(dist, key, qoi_gPCE)
@@ -848,7 +742,7 @@ class LarsimStatistics(Statistics):
             qoi_values = self.samples.df_simulation_result.loc[val_indices.values][self.qoi_column].values
             self.result_dict[key] = dict()
             if self.store_qoi_data_in_stat_dict:
-                self.result_dict[key]["QoI"] = qoi_values
+                self.result_dict[key]["qoi_values"] = qoi_values
             if regression:
                 qoi_gPCE = cp.fit_regression(polynomial_expansion, nodes, qoi_values)
             else:
@@ -939,7 +833,7 @@ class LarsimStatistics(Statistics):
             standard_qoi_values = qoi_values_saltelli[:numEvaluations, :]
             extended_standard_qoi_values = qoi_values_saltelli[:(2*numEvaluations), :]
             if self.store_qoi_data_in_stat_dict:
-                self.result_dict[key]["QoI"] = standard_qoi_values
+                self.result_dict[key]["qoi_values"] = standard_qoi_values
 
             #self.result_dict[key]["min_q"] = np.amin(qoi_values) #standard_qoi_values.min()
             #self.result_dict[key]["max_q"] = np.amax(qoi_values) #standard_qoi_values.max()
