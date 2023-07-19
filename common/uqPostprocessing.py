@@ -24,11 +24,14 @@ import seaborn as sns
 from tabulate import tabulate
 
 # sys.path.insert(0, os.getcwd())
+import sys
 sys.path.insert(0, '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEFPP')
 
 from common import colors
 #
 from common import utility
+from collections import defaultdict
+
 from hydro_model import HydroStatistics
 
 from larsim import LarsimStatistics
@@ -105,7 +108,8 @@ def extend_statistics_object(statisticsObject, statistics_dictionary, df_simulat
     statisticsObject.set_numbTimesteps(len(statisticsObject.timesteps))
 
     # TODO Update statisticsObject.list_qoi_column based on columns inside df_simulation_result?
-    assert set(statisticsObject.list_qoi_column) == set(df_simulation_result["qoi"].unique())
+    # assert set(statisticsObject.list_qoi_column) == ...
+    # assert set(statisticsObject.list_qoi_column) == ...
 
     statisticsObject._check_if_Sobol_t_computed()
     statisticsObject._check_if_Sobol_m_computed()
@@ -124,6 +128,17 @@ def get_number_of_unique_runs(df, index_run_column_name="Index_run"):
 
 def extracting_statistics_df_for_single_qoi(statisticsObject, qoi="Q_cms"):
     pass
+
+
+def read_all_save_statistics_dict(workingDir, list_qoi_column):
+    statistics_dictionary = defaultdict(dict)
+    for single_qoi in list_qoi_column:
+        statistics_dictionary_file_temp = workingDir / f"statistics_dictionary_qoi_{single_qoi}.pkl"
+        assert statistics_dictionary_file_temp.is_file()
+        with open(statistics_dictionary_file_temp, 'rb') as f:
+            statistics_dictionary_temp = pickle.load(f)
+        statistics_dictionary[single_qoi] = statistics_dictionary_temp
+    return statistics_dictionary
 
 
 def compute_gof_over_different_time_series(df_statistics,
@@ -151,11 +166,11 @@ def compute_gof_over_different_time_series(df_statistics,
             continue
 
         for single_objective_function in objective_function:
-            if not callable(objective_function) and objective_function in utility.mapping_gof_names_to_functions:
-                objective_function = utility.mapping_gof_names_to_functions[objective_function]
+            if not callable(single_objective_function) and single_objective_function in utility.mapping_gof_names_to_functions:
+                single_objective_function = utility.mapping_gof_names_to_functions[single_objective_function]
             elif not callable(
-                    objective_function) and objective_function not in utility.mapping_gof_names_to_functions \
-                    or callable(objective_function) and objective_function not in utility._all_functions:
+                    single_objective_function) and single_objective_function not in utility.mapping_gof_names_to_functions \
+                    or callable(single_objective_function) and single_objective_function not in utility._all_functions:
                 raise ValueError("Not proper specification of Goodness of Fit function name")
 
             if 'unaltered' in df_statistics_single_qoi.columns:
