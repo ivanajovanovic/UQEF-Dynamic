@@ -444,7 +444,7 @@ class HBVSASKModel(object):
             #  and rewrite the content of self.list_qoi_column
             for idx, single_qoi_column in enumerate(self.list_qoi_column):
                 single_transformation = self.list_transform_model_output[idx]
-                if single_transformation is not None and single_transformation!="None":
+                if single_transformation is not None and single_transformation != "None":
                     # new_column_name = single_transformation + "_" + single_qoi_column
                     new_column_name = single_qoi_column
                     utility.transform_column_in_df(flux_df, transformation_function_str=single_transformation,
@@ -464,7 +464,8 @@ class HBVSASKModel(object):
                             # new_column_name = single_transformation + "_" + self.list_qoi_column_measured[idx]
                             new_column_name = self.list_qoi_column_measured[idx]
                             utility.transform_column_in_df(flux_df, transformation_function_str=single_transformation,
-                                                           column_name=self.list_qoi_column_measured[idx], new_column_name=new_column_name)
+                                                           column_name=self.list_qoi_column_measured[idx],
+                                                           new_column_name=new_column_name)
                             # flux_df.drop(labels=self.list_qoi_column_measured[idx], inplace=False)
                             # flux_df.rename(columns={new_column_name: self.list_qoi_column_measured[idx]},
                             #                inplace=False)
@@ -540,7 +541,7 @@ class HBVSASKModel(object):
                         if self.list_read_measured_data[idx]:
                             for single_objective_function_name_qoi in self.list_objective_function_names_qoi:
                                 new_column_name = single_objective_function_name_qoi + "_" + single_qoi_column + \
-                                                  "_" + self.method + "_sliding_window"
+                                                  "_sliding_window"
                                 rol = flux_df[single_qoi_column].rolling(
                                     window=self.interval, min_periods=self.min_periods,
                                     center=center, win_type=None
@@ -734,7 +735,7 @@ class HBVSASKModel(object):
                                             grad = (f_x_ij_p_h - f_x_ij) / h
 
                                         new_column_name = "d_" + single_objective_function_name_qoi + "_" + \
-                                                          single_qoi_column + "_" + "_d_" + single_param_name
+                                                          single_qoi_column + "_d_" + single_param_name
                                         flux_df[new_column_name] = grad
 
                                         # in this case grad should be a single float number
@@ -759,7 +760,7 @@ class HBVSASKModel(object):
                                         #     return gof_dict[single_objective_function_name_qoi]
 
                                         new_column_name = single_objective_function_name_qoi + "_" + single_qoi_column + \
-                                                  "_" + self.method + "_sliding_window"
+                                                          "_sliding_window"
 
                                         if self.CD:
                                             rol = flux_minus_h_df[single_qoi_column].rolling(
@@ -791,7 +792,7 @@ class HBVSASKModel(object):
                                             grad = (flux_plus_h_df[new_column_name] - flux_df[new_column_name]) / h
 
                                         new_column_name = "d_" + single_objective_function_name_qoi + "_" + \
-                                                          single_qoi_column + "_" + self.method + "_sliding_window" \
+                                                          single_qoi_column + "_sliding_window" \
                                                           + "_d_" + single_param_name
                                         flux_df[new_column_name] = grad
 
