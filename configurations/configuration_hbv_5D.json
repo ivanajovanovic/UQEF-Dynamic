@@ -2,20 +2,20 @@
     "time_settings":
     {
       "start_day": 1,
-      "start_month": 5,
+      "start_month": 10,
       "start_year": 2002,
       "start_hour": 0,
       "start_minute": 0,
 
-      "end_day": 30,
-      "end_month": 5,
-      "end_year": 2006,
+      "end_day": 10,
+      "end_month": 10,
+      "end_year": 2007,
       "end_hour": 0,
       "end_minute": 0,
 
       "run_full_timespan":"False",
-      "spin_up_length":1095,
-      "simulation_length": 30,
+      "spin_up_length":1460,
+      "simulation_length": 365,
       "resolution": "daily",
 
       "cut_runs": "False",
@@ -31,11 +31,11 @@
     "hbv_model_path": "Hydro_Models/HBV-SASK-data"
   },
   "simulation_settings": {
-    "qoi":"Q_cms",
-    "qoi_column":"Q_cms",
-    "transform_model_output":"None",
-    "read_measured_data": "True",
-    "qoi_column_measured":"streamflow",
+    "qoi":["Q_cms", "AET"],
+    "qoi_column":["Q_cms", "AET"],
+    "transform_model_output":["log", "None"],
+    "read_measured_data": ["True", "False"],
+    "qoi_column_measured":["streamflow", "None"],
     "objective_function_qoi":["RMSE", "LogNSE"],
     "calculate_GoF":"True",
     "objective_function":["MAE", "MSE", "RMSE", "NRMSE", "NSE", "LogNSE", "KGE"],
@@ -145,7 +145,7 @@
       "upper": 1.0,
       "default": 1.0
     },
-        {
+    {
       "name": "VAR_M",
       "distribution": "Uniform",
       "lower": 1e-5,

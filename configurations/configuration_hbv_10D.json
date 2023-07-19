@@ -7,15 +7,15 @@
       "start_hour": 0,
       "start_minute": 0,
 
-      "end_day": 30,
-      "end_month": 9,
+      "end_day": 1,
+      "end_month": 11,
       "end_year": 2006,
       "end_hour": 0,
       "end_minute": 0,
 
       "run_full_timespan":"False",
       "spin_up_length":1095,
-      "simulation_length": 365,
+      "simulation_length": 395,
       "resolution": "daily",
 
       "cut_runs": "False",
@@ -31,17 +31,17 @@
     "hbv_model_path": "Hydro_Models/HBV-SASK-data"
   },
   "simulation_settings": {
-    "qoi":"Q_cms",
+    "qoi":"GoF",
     "qoi_column":"Q_cms",
     "transform_model_output":"None",
     "read_measured_data": "True",
     "qoi_column_measured":"streamflow",
-    "objective_function_qoi":["RMSE", "LogNSE"],
+    "objective_function_qoi":["RMSE", "LogNSE", "KGE"],
     "calculate_GoF":"True",
     "objective_function":["MAE", "MSE", "RMSE", "NRMSE", "NSE", "LogNSE", "KGE"],
-    "mode":"continuous",
-    "interval": 10,
-    "min_periods": 5,
+    "mode":"sliding_window",
+    "interval": 31,
+    "min_periods": 31,
     "method": "avrg",
     "center": "center",
     "compute_gradients":"False",
@@ -63,7 +63,7 @@
       "name": "C0",
       "distribution": "Uniform",
       "lower": 0.0,
-      "upper": 10.0,
+      "upper": 20.0,
       "default": 5.0
     },
     {
@@ -84,7 +84,7 @@
       "name": "K2",
       "distribution": "Uniform",
       "lower": 0.0,
-      "upper": 0.05,
+      "upper": 0.1,
       "default": 0.025
     },
     {
@@ -98,14 +98,14 @@
       "name": "FC",
       "distribution": "Uniform",
       "lower": 50.0,
-      "upper": 500.0,
+      "upper": 1000.0,
       "default": 100
     },
     {
       "name": "beta",
       "distribution": "Uniform",
-      "lower": 1.0,
-      "upper": 3.0,
+      "lower": 0.4,
+      "upper": 7.0,
       "default": 2.0
     },
     {
