@@ -623,7 +623,7 @@ def soil_storage_routing_module(ponding, SMS, S1, S2, AET, FC, beta, FRAC, K1, a
     soil_release_to_slow_reservoir = (1 - FRAC) * soil_release
 
     # Q1 = K1 * (S1 ** alpha)  # TODO make sure that it is not (K1 * S1) ** alpha np.pow(S1, alpha)
-    Q1 = K1 * S1 ** alpha
+    Q1 = K1 * (S1 ** alpha)
     if Q1 > S1:
         Q1 = S1
 
@@ -846,25 +846,26 @@ def HBV_SASK(forcing, long_term, par_values_dict, initial_condition_df, printing
     Q1_routed = triangle_routing(Q1, UBAS)
     Q = Q1_routed + Q2
     Q_cms = (Q * watershed_area * 1000) / (24 * 3600)
-
-    flux["Q_cms"] = Q_cms#.conjugate()
+    Q_cms[Q_cms < 1e-4] = 1e-4
+    flux["Q_cms"] = Q_cms #.conjugate()
     # Make sure flows will never get negative values because of numerical errors
-    flux["Q_cms"][flux["Q_cms"] < 10 ** -5] = 10 ** -5
+    # flux["Q_cms"][flux["Q_cms"] < 10 ** -5] = 10 ** -5
+    # flux["Q_cms"] = flux["Q_cms"].apply(lambda x: 1e-4 if x < 1e-4 else x)
 
-    flux["Q_mm"] = Q#.conjugate()
-    flux["AET"] = AET#.conjugate()
-    flux["PET"] = PET#.conjugate()
-    flux["Q1"] = Q1#.conjugate()
-    flux["Q1_routed"] = Q1_routed#.conjugate()
-    flux["Q2"] = Q2#.conjugate()
-    flux["ponding"] = ponding#.conjugate()
+    flux["Q_mm"] = Q #.conjugate()
+    flux["AET"] = AET #.conjugate()
+    flux["PET"] = PET #.conjugate()
+    flux["Q1"] = Q1 #.conjugate()
+    flux["Q1_routed"] = Q1_routed #.conjugate()
+    flux["Q2"] = Q2 #.conjugate()
+    flux["ponding"] = ponding #.conjugate()
     if corrupt_forcing_data:
         flux["precipitation"] = precipitation_array
 
-    state["SWE"] = SWE#.conjugate()
-    state["SMS"] = SMS#.conjugate()
-    state["S1"] = S1#.conjugate()
-    state["S2"] = S2#.conjugate()
+    state["SWE"] = SWE #.conjugate()
+    state["SMS"] = SMS #.conjugate()
+    state["S1"] = S1 #.conjugate()
+    state["S2"] = S2 #.conjugate()
 
     return flux, state
 
