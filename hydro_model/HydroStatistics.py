@@ -99,6 +99,7 @@ class Samples(object):
                 else:
                     list_of_single_df.append(df_result)
 
+        # TODO Add 'qoi' column
         if list_of_single_df:
             self.df_simulation_result = pd.concat(list_of_single_df, ignore_index=True, sort=False, axis=0)
         else:
@@ -213,6 +214,8 @@ class HydroStatistics(Statistics):
 
         # whether to store all original model outputs in the stat dict; note - this might take a lot of space
         self.store_qoi_data_in_stat_dict = kwargs.get('store_qoi_data_in_stat_dict', False)
+        self.store_gpce_surrogate = kwargs.get('store_gpce_surrogate', False)
+        self.save_gpce_surrogate = kwargs.get('save_gpce_surrogate', False)
 
         # TODO: eventually make a non-MPI version
         self.parallel_statistics = kwargs.get('parallel_statistics', False)
@@ -298,40 +301,40 @@ class HydroStatistics(Statistics):
         self.work_package_indexes = None
 
         ##################################
-        self.dict_processed_config_simulation_settings = utility.read_simulation_settings_from_configuration_object(
-            self.configurationObject, **kwargs)
+        self.dict_processed_simulation_settings_from_config_file = \
+            utility.read_simulation_settings_from_configuration_object(self.configurationObject, **kwargs)
 
-        self.qoi = self.dict_processed_config_simulation_settings["qoi"]
-        self.qoi_column = self.dict_processed_config_simulation_settings["qoi_column"]
-        self.transform_model_output = self.dict_processed_config_simulation_settings["transform_model_output"]
-        self.multiple_qoi = self.dict_processed_config_simulation_settings["multiple_qoi"]
-        self.number_of_qois = self.dict_processed_config_simulation_settings["number_of_qois"]
-        self.qoi_column_measured = self.dict_processed_config_simulation_settings["qoi_column_measured"]
-        self.read_measured_data = self.dict_processed_config_simulation_settings["read_measured_data"]
+        self.qoi = self.dict_processed_simulation_settings_from_config_file["qoi"]
+        self.qoi_column = self.dict_processed_simulation_settings_from_config_file["qoi_column"]
+        self.transform_model_output = self.dict_processed_simulation_settings_from_config_file["transform_model_output"]
+        self.multiple_qoi = self.dict_processed_simulation_settings_from_config_file["multiple_qoi"]
+        self.number_of_qois = self.dict_processed_simulation_settings_from_config_file["number_of_qois"]
+        self.qoi_column_measured = self.dict_processed_simulation_settings_from_config_file["qoi_column_measured"]
+        self.read_measured_data = self.dict_processed_simulation_settings_from_config_file["read_measured_data"]
 
-        # self.objective_function_qoi = self.dict_processed_config_simulation_settings["objective_function_qoi"]
-        # self.objective_function_names_qoi = self.dict_processed_config_simulation_settings["objective_function_names_qoi"]
+        # self.objective_function_qoi = self.dict_processed_simulation_settings_from_config_file["objective_function_qoi"]
+        # self.objective_function_names_qoi = self.dict_processed_simulation_settings_from_config_file["objective_function_names_qoi"]
 
         # list versions of the above variables
-        self.list_qoi_column = self.dict_processed_config_simulation_settings["list_qoi_column"]
-        self.list_qoi_column_measured = self.dict_processed_config_simulation_settings["list_qoi_column_measured"]
-        self.list_read_measured_data = self.dict_processed_config_simulation_settings["list_read_measured_data"]
-        self.list_transform_model_output = self.dict_processed_config_simulation_settings["list_transform_model_output"]
+        self.list_qoi_column = self.dict_processed_simulation_settings_from_config_file["list_qoi_column"]
+        self.list_qoi_column_measured = self.dict_processed_simulation_settings_from_config_file["list_qoi_column_measured"]
+        self.list_read_measured_data = self.dict_processed_simulation_settings_from_config_file["list_read_measured_data"]
+        self.list_transform_model_output = self.dict_processed_simulation_settings_from_config_file["list_transform_model_output"]
 
-        self.dict_qoi_column_and_measured_info = self.dict_processed_config_simulation_settings[
+        self.dict_qoi_column_and_measured_info = self.dict_processed_simulation_settings_from_config_file[
             "dict_qoi_column_and_measured_info"]
 
-        self.list_objective_function_qoi = self.dict_processed_config_simulation_settings["list_objective_function_qoi"]
-        self.list_objective_function_names_qoi = self.dict_processed_config_simulation_settings[
+        self.list_objective_function_qoi = self.dict_processed_simulation_settings_from_config_file["list_objective_function_qoi"]
+        self.list_objective_function_names_qoi = self.dict_processed_simulation_settings_from_config_file[
             "list_objective_function_names_qoi"]
 
-        self.mode = self.dict_processed_config_simulation_settings["mode"]
-        self.method = self.dict_processed_config_simulation_settings["method"]
+        self.mode = self.dict_processed_simulation_settings_from_config_file["mode"]
+        self.method = self.dict_processed_simulation_settings_from_config_file["method"]
 
-        self.compute_gradients = self.dict_processed_config_simulation_settings["compute_gradients"]
-        self.compute_active_subspaces = self.dict_processed_config_simulation_settings["compute_active_subspaces"]
-        self.save_gradient_related_runs = self.dict_processed_config_simulation_settings["save_gradient_related_runs"]
-        self.gradient_analysis = self.dict_processed_config_simulation_settings["gradient_analysis"]
+        self.compute_gradients = self.dict_processed_simulation_settings_from_config_file["compute_gradients"]
+        self.compute_active_subspaces = self.dict_processed_simulation_settings_from_config_file["compute_active_subspaces"]
+        self.save_gradient_related_runs = self.dict_processed_simulation_settings_from_config_file["save_gradient_related_runs"]
+        self.gradient_analysis = self.dict_processed_simulation_settings_from_config_file["gradient_analysis"]
 
         self.list_original_model_output_columns = self.list_qoi_column.copy()
         self.additional_qoi_columns_besides_original_model_output = False
@@ -340,43 +343,43 @@ class HydroStatistics(Statistics):
 
         self._infer_qoi_column_names(**kwargs)
 
-    def _set_dict_processed_config_simulation_settings(self, dict_processed_config_simulation_settings=None, **kwargs):
-        if dict_processed_config_simulation_settings is None:
-            self.dict_processed_config_simulation_settings = utility.read_simulation_settings_from_configuration_object(
+    def _set_dict_processed_simulation_settings_from_config_file(self, dict_processed_simulation_settings_from_config_file=None, **kwargs):
+        if dict_processed_simulation_settings_from_config_file is None:
+            self.dict_processed_simulation_settings_from_config_file = utility.read_simulation_settings_from_configuration_object(
             self.configurationObject, **kwargs)
 
-    def _set_attributes_based_on_dict_processed_config_simulation_settings(self, **kwargs):
-        self.qoi = self.dict_processed_config_simulation_settings["qoi"]
-        self.qoi_column = self.dict_processed_config_simulation_settings["qoi_column"]
-        self.transform_model_output = self.dict_processed_config_simulation_settings["transform_model_output"]
-        self.multiple_qoi = self.dict_processed_config_simulation_settings["multiple_qoi"]
-        self.number_of_qois = self.dict_processed_config_simulation_settings["number_of_qois"]
-        self.qoi_column_measured = self.dict_processed_config_simulation_settings["qoi_column_measured"]
-        self.read_measured_data = self.dict_processed_config_simulation_settings["read_measured_data"]
+    def _set_attributes_based_on_dict_processed_simulation_settings_from_config_file(self, **kwargs):
+        self.qoi = self.dict_processed_simulation_settings_from_config_file["qoi"]
+        self.qoi_column = self.dict_processed_simulation_settings_from_config_file["qoi_column"]
+        self.transform_model_output = self.dict_processed_simulation_settings_from_config_file["transform_model_output"]
+        self.multiple_qoi = self.dict_processed_simulation_settings_from_config_file["multiple_qoi"]
+        self.number_of_qois = self.dict_processed_simulation_settings_from_config_file["number_of_qois"]
+        self.qoi_column_measured = self.dict_processed_simulation_settings_from_config_file["qoi_column_measured"]
+        self.read_measured_data = self.dict_processed_simulation_settings_from_config_file["read_measured_data"]
 
-        # self.objective_function_qoi = self.dict_processed_config_simulation_settings["objective_function_qoi"]
-        # self.objective_function_names_qoi = self.dict_processed_config_simulation_settings["objective_function_names_qoi"]
+        # self.objective_function_qoi = self.dict_processed_simulation_settings_from_config_file["objective_function_qoi"]
+        # self.objective_function_names_qoi = self.dict_processed_simulation_settings_from_config_file["objective_function_names_qoi"]
 
         # list versions of the above variables
-        self.list_qoi_column = self.dict_processed_config_simulation_settings["list_qoi_column"]
-        self.list_qoi_column_measured = self.dict_processed_config_simulation_settings["list_qoi_column_measured"]
-        self.list_read_measured_data = self.dict_processed_config_simulation_settings["list_read_measured_data"]
-        self.list_transform_model_output = self.dict_processed_config_simulation_settings["list_transform_model_output"]
+        self.list_qoi_column = self.dict_processed_simulation_settings_from_config_file["list_qoi_column"]
+        self.list_qoi_column_measured = self.dict_processed_simulation_settings_from_config_file["list_qoi_column_measured"]
+        self.list_read_measured_data = self.dict_processed_simulation_settings_from_config_file["list_read_measured_data"]
+        self.list_transform_model_output = self.dict_processed_simulation_settings_from_config_file["list_transform_model_output"]
 
-        self.dict_qoi_column_and_measured_info = self.dict_processed_config_simulation_settings[
+        self.dict_qoi_column_and_measured_info = self.dict_processed_simulation_settings_from_config_file[
             "dict_qoi_column_and_measured_info"]
 
-        self.list_objective_function_qoi = self.dict_processed_config_simulation_settings["list_objective_function_qoi"]
-        self.list_objective_function_names_qoi = self.dict_processed_config_simulation_settings[
+        self.list_objective_function_qoi = self.dict_processed_simulation_settings_from_config_file["list_objective_function_qoi"]
+        self.list_objective_function_names_qoi = self.dict_processed_simulation_settings_from_config_file[
             "list_objective_function_names_qoi"]
 
-        self.mode = self.dict_processed_config_simulation_settings["mode"]
-        self.method = self.dict_processed_config_simulation_settings["method"]
+        self.mode = self.dict_processed_simulation_settings_from_config_file["mode"]
+        self.method = self.dict_processed_simulation_settings_from_config_file["method"]
 
-        self.compute_gradients = self.dict_processed_config_simulation_settings["compute_gradients"]
-        self.compute_active_subspaces = self.dict_processed_config_simulation_settings["compute_active_subspaces"]
-        self.save_gradient_related_runs = self.dict_processed_config_simulation_settings["save_gradient_related_runs"]
-        self.gradient_analysis = self.dict_processed_config_simulation_settings["gradient_analysis"]
+        self.compute_gradients = self.dict_processed_simulation_settings_from_config_file["compute_gradients"]
+        self.compute_active_subspaces = self.dict_processed_simulation_settings_from_config_file["compute_active_subspaces"]
+        self.save_gradient_related_runs = self.dict_processed_simulation_settings_from_config_file["save_gradient_related_runs"]
+        self.gradient_analysis = self.dict_processed_simulation_settings_from_config_file["gradient_analysis"]
 
         self.list_original_model_output_columns = self.list_qoi_column.copy()
         self.additional_qoi_columns_besides_original_model_output = False
@@ -410,7 +413,7 @@ class HydroStatistics(Statistics):
                     if self.list_read_measured_data[idx]:
                         for single_objective_function_name_qoi in self.list_objective_function_names_qoi:
                             new_column_name = single_objective_function_name_qoi + "_" + single_qoi_column + \
-                                              "_" + self.method + "_sliding_window"
+                                              "_sliding_window"
                             list_qoi_column_processed.append(new_column_name)
                             self.additional_qoi_columns_besides_original_model_output = True
             else:
@@ -447,7 +450,7 @@ class HydroStatistics(Statistics):
                                 if self.list_read_measured_data[idx]:
                                     for single_objective_function_name_qoi in self.list_objective_function_names_qoi:
                                         new_column_name = "d_" + single_objective_function_name_qoi + "_" + \
-                                                          single_qoi_column + "_" + self.method + "_sliding_window" \
+                                                          single_qoi_column + "_sliding_window" \
                                                           + "_d_" + single_param_name
                                         # list_qoi_column_processed.append(new_column_name)
                                         self.list_grad_columns.append(new_column_name)
@@ -701,7 +704,7 @@ class HydroStatistics(Statistics):
                     print(f"{self.rank}: computation for qoi {single_qoi_column} - waits for shutdown...")
                     sys.stdout.flush()
                     executor.shutdown(wait=True)
-                    print(f"{self.rank}: computation for qoi {single_qoi_column} - shutted down...")
+                    print(f"{self.rank}: computation for qoi {single_qoi_column} - shut down...")
                     sys.stdout.flush()
 
                     solver_time_end = time.time()
@@ -714,10 +717,15 @@ class HydroStatistics(Statistics):
                             self.result_dict[single_qoi_column][result[0]] = result[1]
 
                     # Saving Stat Dict as soon as it is computed
+                    # TODO - current problem of saving at this stage -
+                    #  single_qoi_column info is missed once saved dict is read
                     fileName = "statistics_dictionary_qoi_" + single_qoi_column + ".pkl"
                     fullFileName = os.path.abspath(os.path.join(str(self.workingDir), fileName))
                     with open(fullFileName, 'wb') as handle:
                         pickle.dump(self.result_dict[single_qoi_column], handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+                    # TODO Plotting Stat Dict as soon as it is computed
+
 
     def calcStatisticsForEnsembleParallel(self, chunksize=1, regression=False, *args, **kwargs):
         self.calcStatisticsForMcParallel(chunksize=chunksize, regression=False, *args, **kwargs)
@@ -765,7 +773,7 @@ class HydroStatistics(Statistics):
                     print(f"{self.rank}: computation for qoi {single_qoi_column} - waits for shutdown...")
                     sys.stdout.flush()
                     executor.shutdown(wait=True)
-                    print(f"{self.rank}: computation for qoi {single_qoi_column} - shutted down...")
+                    print(f"{self.rank}: computation for qoi {single_qoi_column} - shut down...")
                     sys.stdout.flush()
 
                     solver_time_end = time.time()
@@ -778,10 +786,13 @@ class HydroStatistics(Statistics):
                             self.result_dict[single_qoi_column][result[0]] = result[1]
 
                     # Saving Stat Dict as soon as it is computed
+                    # TODO - current problem, single_qoi_column info is missed once saved dict is read
                     fileName = "statistics_dictionary_qoi_" + single_qoi_column + ".pkl"
                     fullFileName = os.path.abspath(os.path.join(str(self.workingDir), fileName))
                     with open(fullFileName, 'wb') as handle:
                         pickle.dump(self.result_dict[single_qoi_column], handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+                    # TODO Plotting Stat Dict as soon as it is computed
 
     def calcStatisticsForScParallel(self, chunksize=1, regression=False, *args, **kwargs):
         self.result_dict = defaultdict(dict)
@@ -794,12 +805,14 @@ class HydroStatistics(Statistics):
 
         for single_qoi_column in self.list_qoi_column:
             if self.rank == 0:
+                # TODO Potential Memory Problem
                 list_of_simulations_df = [
                     self.samples.df_simulation_result.loc[groups[key].values][single_qoi_column].values
                     for key in keyIter
                 ]
 
                 keyIter_chunk = list(more_itertools.chunked(keyIter, chunksize))
+                # TODO Potential Memory Problem
                 list_of_simulations_df_chunk = list(more_itertools.chunked(list_of_simulations_df, chunksize))
 
                 nodesChunks = [self.nodes] * len(keyIter_chunk)
@@ -811,11 +824,14 @@ class HydroStatistics(Statistics):
                 compute_Sobol_t_Chunks = [self._compute_Sobol_t] * len(keyIter_chunk)
                 compute_Sobol_m_Chunks = [self._compute_Sobol_m] * len(keyIter_chunk)
                 store_qoi_data_in_stat_dict_Chunks = [self.store_qoi_data_in_stat_dict] * len(keyIter_chunk)
+                store_gpce_surrogate_Chunks = [self.store_gpce_surrogate] * len(keyIter_chunk)
+                save_gpce_surrogate_Chunks = [self.save_gpce_surrogate] * len(keyIter_chunk)
 
             with futures.MPICommExecutor(MPI.COMM_WORLD, root=0) as executor:
                 if executor is not None:  # master process
                     print(f"{self.rank}: computation of statistics for qoi {single_qoi_column} started...")
                     solver_time_start = time.time()
+                    # TODO Potential Memory Problem
                     chunk_results_it = executor.map(parallelStatistics._my_parallel_calc_stats_for_gPCE,
                                                     keyIter_chunk,
                                                     list_of_simulations_df_chunk,
@@ -827,12 +843,14 @@ class HydroStatistics(Statistics):
                                                     compute_Sobol_t_Chunks,
                                                     compute_Sobol_m_Chunks,
                                                     store_qoi_data_in_stat_dict_Chunks,
+                                                    store_gpce_surrogate_Chunks,
+                                                    save_gpce_surrogate_Chunks,
                                                     chunksize=self.mpi_chunksize,
                                                     unordered=self.unordered)
                     print(f"{self.rank}: computation for qoi {single_qoi_column} - waits for shutdown...")
                     sys.stdout.flush()
                     executor.shutdown(wait=True)
-                    print(f"{self.rank}: computation for qoi {single_qoi_column} - shutted down...")
+                    print(f"{self.rank}: computation for qoi {single_qoi_column} - shut down...")
                     sys.stdout.flush()
 
                     solver_time_end = time.time()
@@ -842,13 +860,25 @@ class HydroStatistics(Statistics):
                     chunk_results = list(chunk_results_it)
                     for chunk_result in chunk_results:
                         for result in chunk_result:
+                            # TODO - extend result[1] with {"qoi":single_qoi_column}
+                            result[1].update({'qoi': single_qoi_column})
                             self.result_dict[single_qoi_column][result[0]] = result[1]
+                            # final_result_dict = {'qoi': single_qoi_column, **result[1]}
+                            # self.result_dict[single_qoi_column][result[0]] = final_result_dict
+                            # TODO should I doo result[1].clean(); would that delete the entries in self.result_dict?
 
                     # Saving Stat Dict as soon as it is computed
+                    # TODO - current problem, single_qoi_column info is missed once saved dict is read
                     fileName = "statistics_dictionary_qoi_" + single_qoi_column + ".pkl"
                     fullFileName = os.path.abspath(os.path.join(str(self.workingDir), fileName))
                     with open(fullFileName, 'wb') as handle:
                         pickle.dump(self.result_dict[single_qoi_column], handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+                    # TODO Plotting Stat Dict as soon as it is computed
+
+                    # TODO - maybe freeing up the memory - self.result_dict[single_qoi_column].clean(),
+                    #  it will letter be used only in saveToFile(), _plotStatisticsDict_plotly()
+                    #  and functions which do postprocessing
 
     ###################################################################################################################
 
@@ -1019,6 +1049,24 @@ class HydroStatistics(Statistics):
         return n_rows, starting_row, sobol_t_row, sobol_m_row
 
     ###################################################################################################################
+    def prepare_for_plotting(self, timestep=-1, display=False,
+                    fileName="", fileNameIdent="", directory="./",
+                    fileNameIdentIsFullName=False, safe=True, **kwargs):
+        raise NotImplementedError
+
+    def plotResults_single_qoi(self, single_qoi_column, dict_time_vs_qoi_stat, timestep=-1, display=False,
+                    fileName="", fileNameIdent="", directory="./",
+                    fileNameIdentIsFullName=False, safe=True, **kwargs):
+        raise NotImplementedError
+
+    def _plotStatisticsDict_plotly_single_qoi(
+            self, single_qoi_column, dict_time_vs_qoi_stat=None,
+            unalatered=False, measured=False, forcing=False,
+            recalculateTimesteps=False,
+            window_title='Forward UQ & SA', filename="sim-plotly.html", display=False, **kwargs):
+        raise NotImplementedError
+
+    ###################################################################################################################
 
     def extract_mean_time_series(self):
         if self.result_dict is None:
@@ -1030,19 +1078,39 @@ class HydroStatistics(Statistics):
             mean_time_series = [self.result_dict[single_qoi_column][key]["E"] for key in keyIter]
             qoi_column = [single_qoi_column] * len(keyIter)
             mean_df_single_qoi = pd.DataFrame(list(zip(qoi_column, mean_time_series, self.pdTimesteps)),
-                                              columns=['QoI', 'Mean_QoI', self.time_column_name])
+                                              columns=['qoi', 'mean_qoi', self.time_column_name])
             list_of_single_qoi_mean_df.append(mean_df_single_qoi)
         self.qoi_mean_df = pd.concat(list_of_single_qoi_mean_df, ignore_index=True, sort=False, axis=0)
 
     def create_df_from_statistics_data(self, uq_method="sc"):
         list_of_single_qoi_dfs = []
         for single_qoi_column in self.list_qoi_column:
-            df_statistics = self.create_df_from_statistics_data_single_qoi(
+            df_statistics_single_qoi = self.create_df_from_statistics_data_single_qoi(
                 qoi_column=single_qoi_column, uq_method=uq_method)
-            df_statistics["qoi"] = single_qoi_column
-            list_of_single_qoi_dfs.append(df_statistics)
+            df_statistics_single_qoi["qoi"] = single_qoi_column
+            list_of_single_qoi_dfs.append(df_statistics_single_qoi)
         if list_of_single_qoi_dfs:
             self.df_statistics = pd.concat(list_of_single_qoi_dfs, axis=0)
+
+    def create_df_from_sensitivity_indices(self, si_type="Sobol_t", uq_method="sc"):
+        """
+        Creates one big Padans.DataFrame for all QoIs
+        :param si_type:
+        :param uq_method:
+        :return:
+        """
+        si_df = None
+        list_of_single_qoi_dfs = []
+        for single_qoi_column in self.list_qoi_column:
+            single_si_df = self.create_df_from_sensitivity_indices_single_qoi(
+                qoi_column=single_qoi_column, si_type=si_type, uq_method=uq_method)
+            single_si_df["qoi"] = single_qoi_column
+            single_si_df.reset_index(inplace=True)
+            single_si_df.rename(columns={single_si_df.index.name: self.time_column_name}, inplace=True)
+            list_of_single_qoi_dfs.append(single_si_df)
+        if list_of_single_qoi_dfs:
+            si_df = pd.concat(list_of_single_qoi_dfs, axis=0)
+        return si_df
 
     def create_df_from_statistics_data_single_qoi(self, qoi_column, uq_method="sc"):
         keyIter = list(self.pdTimesteps)
@@ -1065,66 +1133,189 @@ class HydroStatistics(Statistics):
             list_of_columns.append([self.result_dict[qoi_column][key]["qoi_dist"] for key in keyIter])
             list_of_columns_names.append("qoi_dist")
 
-        self._check_if_Sobol_t_computed(keyIter[0], qoi_column=qoi_column)
-        self._check_if_Sobol_m_computed(keyIter[0], qoi_column=qoi_column)
-        if self._is_Sobol_m_computed:
+        # self._check_if_Sobol_t_computed(keyIter[0], qoi_column=qoi_column)
+        # self._check_if_Sobol_m_computed(keyIter[0], qoi_column=qoi_column)
+        is_Sobol_t_computed = "Sobol_t" in self.result_dict[qoi_column][keyIter[0]]
+        is_Sobol_m_computed = "Sobol_m" in self.result_dict[qoi_column][keyIter[0]]
+        # is_Sobol_m2_computed = "Sobol_m2" in self.result_dict[qoi_column][keyIter[0]]
+
+        if is_Sobol_m_computed:
             for i in range(len(self.labels)):
                 sobol_m_time_series = [self.result_dict[qoi_column][key]["Sobol_m"][i] for key in keyIter]
                 list_of_columns.append(sobol_m_time_series)
                 temp = "sobol_m_" + self.labels[i]
                 list_of_columns_names.append(temp)
-        if self._is_Sobol_t_computed:
+        if is_Sobol_t_computed:
             for i in range(len(self.labels)):
                 sobol_t_time_series = [self.result_dict[qoi_column][key]["Sobol_t"][i] for key in keyIter]
                 list_of_columns.append(sobol_t_time_series)
                 temp = "sobol_t_" + self.labels[i]
                 list_of_columns_names.append(temp)
 
-        df_statistics = pd.DataFrame(list(zip(*list_of_columns)), columns=list_of_columns_names)
+        df_statistics_single_qoi = pd.DataFrame(list(zip(*list_of_columns)), columns=list_of_columns_names)
 
-        if self.measured_fetched:
-            pass  # TODO
+        df_statistics_single_qoi["E_minus_std"] = df_statistics_single_qoi['E'] - df_statistics_single_qoi['Std']
+        df_statistics_single_qoi["E_plus_std"] = df_statistics_single_qoi['E'] + df_statistics_single_qoi['Std']
+
+        if self.measured_fetched and self.df_measured is not None:
+            if qoi_column in list(self.df_measured["qoi"].unique()):
+                # print(f"{qoi_column}")
+                df_measured_subset = self.df_measured.loc[self.df_measured["qoi"] == qoi_column][[
+                    self.time_column_name, "measured"]]
+                # df_measured_subset.drop("qoi", inplace=True)
+                df_statistics_single_qoi = pd.merge(df_statistics_single_qoi, df_measured_subset, on=[self.time_column_name, ], how='left')
+            else:
+                df_statistics_single_qoi["measured"] = np.nan
+        else:
+            df_statistics_single_qoi["measured"] = np.nan
 
         if self.unaltered_computed:
             pass  # TODO
 
-        df_statistics["E_minus_std"] = df_statistics['E'] - df_statistics['Std']
-        df_statistics["E_plus_std"] = df_statistics['E'] + df_statistics['Std']
-        return df_statistics
+        return df_statistics_single_qoi
 
     def create_df_from_sensitivity_indices_single_qoi(self, qoi_column, si_type="Sobol_t", uq_method="sc"):
-        raise NotImplementedError
+        """
+        si_type should be: Sobol_t, Sobol_m or Sobol_m2
+        """
+        keyIter = list(self.pdTimesteps)
+        is_Sobol_t_computed = "Sobol_t" in self.result_dict[qoi_column][keyIter[0]]
+        is_Sobol_m_computed = "Sobol_m" in self.result_dict[qoi_column][keyIter[0]]
+        is_Sobol_m2_computed = "Sobol_m2" in self.result_dict[qoi_column][keyIter[0]]
 
-    def plot_heatmap_si_for_single_station(self, qoi_column, si_df=None, si_type="Sobol_t", uq_method="sc"):
-        raise NotImplementedError
+        if si_type == "Sobol_t" and not is_Sobol_t_computed:
+            raise Exception("Sobol Total Order Indices are not computed")
+        elif si_type == "Sobol_m" and not is_Sobol_m_computed:
+            raise Exception("Sobol Main Order Indices are not computed")
+        elif si_type == "Sobol_m2" and not is_Sobol_m2_computed:
+            raise Exception("Sobol Second Order Indices are not computed")
 
-    def plot_si_indices_over_time(self, qoi_column, si_type="Sobol_t", uq_method="sc"):
-        raise NotImplementedError
+        list_of_df_over_parameters = []
+        for i in range(len(self.labels)):
+            # if uq_method == "saltelli":
+            #     si_single_param = [self.result_dict[key][si_type][i][0] for key in keyIter]
+            # else:
+            si_single_param = [self.result_dict[qoi_column][key][si_type][i] for key in keyIter]
+            df_temp = pd.DataFrame(list(zip(si_single_param, self.pdTimesteps)),
+                                   columns=[si_type + "_" + self.labels[i], self.time_column_name])
+            list_of_df_over_parameters.append(df_temp)
+        si_df = reduce(lambda left, right: pd.merge(left, right, on=self.time_column_name, how='outer'),
+                       list_of_df_over_parameters)
 
+        if self.measured_fetched and self.df_measured is not None:
+            if qoi_column in list(self.df_measured["qoi"].unique()):
+                df_measured_subset = self.df_measured.loc[self.df_measured["qoi"] == qoi_column][[
+                    self.time_column_name, "measured"]]
+                si_df = pd.merge(si_df, df_measured_subset, on=[self.time_column_name,], how='left')
+                # TODO Add normalized measured for plotting later on "measured_norm"
+            else:
+                si_df["measured"] = np.nan
+        else:
+            si_df["measured"] = np.nan
+
+        si_df.set_index(self.time_column_name, inplace=True)
+        return si_df
+
+    def plot_heatmap_si_single_qoi(self, qoi_column, si_df=None, si_type="Sobol_t", uq_method="sc"):
+        if si_df is None:
+            si_df = self.create_df_from_sensitivity_indices_single_qoi(qoi_column, si_type, uq_method)
+        si_columns = [x for x in si_df.columns.tolist() if x != 'measured']
+        fig = px.imshow(si_df[si_columns].T, labels=dict(y='Parameter'))
+        return fig
+
+    def plot_si_indices_over_time_single_qoi(self, qoi_column, si_type="Sobol_t", uq_method="sc"):
+        fig = go.Figure()
+        keyIter = list(self.pdTimesteps)
+        for i in range(len(self.labels)):
+            # if uq_method == "saltelli":
+            #     fig.add_trace(
+            #         go.Scatter(x=self.pdTimesteps, y=[self.result_dict[key][si_type][i][0] for key in keyIter],
+            #                    name=self.labels[i], legendgroup=self.labels[i], line_color=colors.COLORS[i]))
+            # else:
+            fig.add_trace(
+                go.Scatter(x=self.pdTimesteps, y=[self.result_dict[qoi_column][key][si_type][i] for key in keyIter],
+                           name=self.labels[i], legendgroup=self.labels[i], line_color=colors.COLORS[i]))
+
+        return fig
     ###################################################################################################################
     # Set of functions which require some measured/observed data
     ###################################################################################################################
+
     def compare_mean_time_series_and_measured(self):
+        # TODO Finish this
         raise NotImplementedError
 
-    def compute_gof_over_different_time_series(self, df_statistics,
+    def compute_gof_over_different_time_series_single_qoi(self, df_statistics,
                                                objective_function="MAE", qoi="Q", measuredDF_column_names=["measured"]):
+        # TODO Finish this
         raise NotImplementedError
 
-    def calculate_p_factor(self, df_statistics=None, qoi_column=None,
+    def calculate_p_factor_single_qoi(self, qoi_column, df_statistics=None,
                            column_lower_uncertainty_bound="P10", column_upper_uncertainty_bound="P90",
                            observed_column="measured"):
-        raise NotImplementedError
 
-    def compute_stat_of_uncertainty_band(self, df_statistics=None, qoi_column=None,
+        if df_statistics is None:
+            df_statistics = self.create_df_from_statistics_data_single_qoi(qoi_column)
+
+        if observed_column not in df_statistics.columns or df_statistics[observed_column].isnull().all():
+            raise Exception(f"{observed_column} is missing from df_statistics!")
+
+        df_statistics_subset = df_statistics.loc[df_statistics["qoi"] == qoi_column]
+
+        condition = df_statistics_subset[
+            (df_statistics_subset[observed_column] >= df_statistics_subset[column_lower_uncertainty_bound]) & (
+                    df_statistics_subset[observed_column] <= df_statistics_subset[column_upper_uncertainty_bound])]
+
+        p = len(condition.index) / len(df_statistics_subset.index)
+        print(f"P factor for QoI-{qoi_column} is: {p * 100}%")
+        return p
+
+    def compute_stat_of_uncertainty_band(self, qoi_column, df_statistics=None,
                                          column_lower_uncertainty_bound="P10", column_upper_uncertainty_bound="P90",
                                          observed_column="measured"):
-        raise NotImplementedError
+        if df_statistics is None:
+            df_statistics = self.create_df_from_statistics_data_single_qoi(qoi_column)
 
-    def plot_si_and_normalized_measured_time_signal(
-            self, si_df=None, df_statistics=None, qoi_column=None, si_type="Sobol_t",
-            measured_norm_columns_name="measured_norm", uq_method="sc",):
-        raise NotImplementedError
+        df_statistics_subset = df_statistics.loc[df_statistics["qoi"] == qoi_column]
+
+        mean_uncertainty_band = np.mean(
+            df_statistics_subset[column_upper_uncertainty_bound] - df_statistics_subset[
+                column_lower_uncertainty_bound])
+        std_uncertainty_band = np.std(
+            df_statistics_subset[column_upper_uncertainty_bound] - df_statistics_subset[
+                column_lower_uncertainty_bound])
+        print(f"mean_uncertainty_band for QoI-{qoi_column} is: {mean_uncertainty_band} \n")
+        print(f"std_uncertainty_band for QoI-{qoi_column} is: {std_uncertainty_band} \n")
+
+        mean_observed = None
+        std_observed = None
+
+        if observed_column in df_statistics_subset.columns and not df_statistics_subset[observed_column].isnull().all():
+            mean_observed = df_statistics_subset[observed_column].mean()
+            std_observed = df_statistics_subset[observed_column].std(ddof=1)
+            print(f"mean_observed for QoI-{qoi_column} is: {mean_observed} \n")
+            print(f"std_observed for QoI-{qoi_column} is: {std_observed} \n")
+
+        return mean_uncertainty_band, std_uncertainty_band, mean_observed, std_observed
+
+    def plot_si_and_normalized_measured_time_signal_single_qoi(
+            self, qoi_column, si_df=None, si_type="Sobol_t",
+            observed_column="measured_norm", uq_method="sc", plot_precipitation=False):
+
+        if si_df is None:
+            si_df = self.create_df_from_sensitivity_indices_single_qoi(qoi_column, si_type, uq_method)
+
+        si_columns = [x for x in si_df.columns.tolist() if x != 'measured']
+
+        fig = px.line(si_df, x=si_df.index, y=si_columns)
+
+        if observed_column in si_df.columns and not si_df[observed_column].isnull().all():
+            fig.add_trace(go.Scatter(x=si_df.index,
+                                     y=si_df[observed_column],
+                                     fill='tozeroy', name=f"Normalized {qoi_column}"))
+        # if plot_precipitation:
+        #     self._add_precipitation_to_graph(fig)
+        return fig
 
     ###################################################################################################################
     @staticmethod

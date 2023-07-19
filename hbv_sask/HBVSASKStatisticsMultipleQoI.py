@@ -32,6 +32,7 @@ from common import utility
 from hydro_model import HydroStatistics
 from hbv_sask import hbvsask_utility as hbv
 
+
 class HBVSASKStatistics(HydroStatistics.HydroStatistics):
 
     def __init__(self, configurationObject, workingDir=None, *args, **kwargs):
@@ -510,7 +511,8 @@ class HBVSASKStatistics(HydroStatistics.HydroStatistics):
                 fig.update_yaxes(title_text=f"{single_qoi_column}_t", showgrid=True, range=[0, 1],
                                  row=dict_qoi_vs_plot_rows[single_qoi_column]["sobol_t"], col=1)
 
-        fig.update_layout(width=1000)
+        width = len(self.list_qoi_column) * 1000
+        fig.update_layout(width=width)
         fig.update_layout(title_text=window_title)
         fig.update_layout(xaxis=dict(type="date"))
 
@@ -531,6 +533,231 @@ class HBVSASKStatistics(HydroStatistics.HydroStatistics):
         super(HBVSASKStatistics, self).create_df_from_statistics_data(uq_method=uq_method)
 
     def create_df_from_statistics_data_single_qoi(self, qoi_column, uq_method="sc"):
-        super(HBVSASKStatistics, self).create_df_from_statistics_data_single_qoi(
+        return super(HBVSASKStatistics, self).create_df_from_statistics_data_single_qoi(
             qoi_column=qoi_column, uq_method=uq_method)
+
+    ###################################################################################################################
+    # TODO Make sure that this function is finished, and add to the base class
+    def prepare_for_plotting(self, timestep=-1, display=False,
+                    fileName="", fileNameIdent="", directory="./",
+                    fileNameIdentIsFullName=False, safe=True, **kwargs):
+        plot_measured_timeseries = kwargs.get('plot_measured_timeseries', False)
+        plot_unaltered_timeseries = kwargs.get('plot_unaltered_timeseries', False)
+        plot_forcing_timeseries = kwargs.get('plot_forcing_timeseries', False)
+        time_column_name = kwargs.get('time_column_name', self.time_column_name)
+
+        if plot_measured_timeseries:
+            self.get_measured_data(time_column_name=time_column_name,
+                                   qoi_column_name=self.list_original_model_output_columns)
+
+        if plot_unaltered_timeseries:
+            self.get_unaltered_run_data()
+
+        if plot_forcing_timeseries:
+            precipitation_column_name = kwargs.get('precipitation_df_column_to_draw', "precipitation")
+            temperature_column_name = kwargs.get('temperature_df_column_to_draw', "temperature")
+            self.get_forcing_data(time_column_name=time_column_name,
+                                  precipitation_column_name=precipitation_column_name,
+                                  temperature_column_name=temperature_column_name)
+
+    # TODO Make sure that this function is finished, and add to the base class
+    def plotResults_single_qoi(self, single_qoi_column, dict_time_vs_qoi_stat, timestep=-1, display=False,
+                    fileName="", fileNameIdent="", directory="./",
+                    fileNameIdentIsFullName=False, safe=True, **kwargs):
+
+        single_fileName = self.generateFileName(fileName=fileName, fileNameIdent=".html",
+                                                directory=directory, fileNameIdentIsFullName=fileNameIdentIsFullName)
+
+        # TODO - This might be a memory problem!
+        if dict_time_vs_qoi_stat is None:
+            dict_time_vs_qoi_stat = self.result_dict[single_qoi_column]
+
+        if fileName == "":
+            fileName = single_qoi_column
+
+        fig = self._plotStatisticsDict_plotly_single_qoi(
+            single_qoi_column=single_qoi_column,
+            dict_time_vs_qoi_stat=dict_time_vs_qoi_stat,
+            unalatered=self.unaltered_computed,
+            measured=self.measured_fetched,
+            forcing=self.forcing_data_fetched,
+            recalculateTimesteps=False,
+            filename=single_fileName,
+            display=display,
+            **kwargs
+        )
+        if display:
+            fig.show()
+        print(f"[STAT INFO] plotResults for QoI-{single_qoi_column} function is done!")
+
+    def _plotStatisticsDict_plotly_single_qoi(
+            self, single_qoi_column, dict_time_vs_qoi_stat=None,
+            unalatered=False, measured=False, forcing=False,
+            recalculateTimesteps=False,
+            window_title='Forward UQ & SA', filename="sim-plotly.html", display=False, **kwargs):
+
+        pdTimesteps = self.pdTimesteps
+        keyIter = list(pdTimesteps)
+        self._check_if_Sobol_t_computed(keyIter[0], qoi_column=single_qoi_column)
+        self._check_if_Sobol_m_computed(keyIter[0], qoi_column=single_qoi_column)
+
+        n_rows = 0
+        starting_row = 1
+        if forcing and self.forcing_data_fetched:
+            n_rows += 3
+            starting_row = 4
+        n_rows += 1
+        if self._is_Sobol_m_computed:
+            n_rows += 1
+        if self._is_Sobol_t_computed:
+            n_rows += 1
+
+        fig = make_subplots(rows=n_rows, cols=1,
+                            print_grid=True, shared_xaxes=False,
+                            vertical_spacing=0.1)
+
+        # TODO - This might be a memory problem!
+        if dict_time_vs_qoi_stat is None:
+            dict_time_vs_qoi_stat = self.result_dict[single_qoi_column]
+
+        # HBV - Specific plotting of observed data, i.e., forcing data and measured streamflow
+        if forcing and self.forcing_data_fetched:
+            # Precipitation
+            column_to_draw = kwargs.get('precipitation_df_column_to_draw', 'precipitation')
+            timestamp_column = kwargs.get('precipitation_df_timestamp_column', 'TimeStamp')
+            N_max = self.forcing_df[column_to_draw].max()
+            if timestamp_column == "index":
+                fig.add_trace(go.Bar(x=self.forcing_df.index,
+                                     y=self.forcing_df[column_to_draw],
+                                     name="Precipitation", marker_color='magenta'),
+                              row=1, col=1)
+            else:
+                fig.add_trace(go.Bar(x=self.forcing_df[timestamp_column],
+                                     y=self.forcing_df[column_to_draw],
+                                     name="Precipitation", marker_color='magenta'),
+                              row=1, col=1)
+
+            # Temperature
+            column_to_draw = kwargs.get('temperature_df_column_to_draw', 'temperature')
+            timestamp_column = kwargs.get('temperature_df_timestamp_column', 'TimeStamp')
+            if timestamp_column == "index":
+                fig.add_trace(go.Scatter(x=self.forcing_df.index,
+                                         y=self.forcing_df[column_to_draw],
+                                         name="Temperature", line_color='blue', mode='lines+markers'),
+                              row=2, col=1)
+            else:
+                fig.add_trace(go.Scatter(x=self.forcing_df[timestamp_column],
+                                         y=self.forcing_df[column_to_draw],
+                                         name="Temperature", line_color='blue', mode='lines+markers'),
+                              row=2, col=1)
+
+            # Streamflow - hard-coded for HBV
+            streamflow_df = self._get_measured_streamflow(time_column_name="TimeStamp",
+                                                          streamflow_column_name="streamflow")
+            column_to_draw = kwargs.get('streamflow_df_column_to_draw', 'streamflow')
+            timestamp_column = kwargs.get('streamflow_df_timestamp_column', 'TimeStamp')
+            if timestamp_column == "index":
+                fig.add_trace(go.Scatter(x=streamflow_df.index,
+                                         y=streamflow_df[column_to_draw],
+                                         name="Obs Streamflow", line_color='red', mode='lines'),
+                              row=3, col=1)
+            else:
+                fig.add_trace(go.Scatter(x=streamflow_df[timestamp_column],
+                                         y=streamflow_df[column_to_draw],
+                                         name="Obs Streamflow", line_color='red', mode='lines'),
+                              row=3, col=1)
+
+        dict_plot_rows = dict()
+
+        if single_qoi_column in self.list_original_model_output_columns:
+            if measured and self.measured_fetched:
+                # column_to_draw = self.list_qoi_column_measured[idx]
+                # timestamp_column = kwargs.get('measured_df_timestamp_column', 'TimeStamp')
+                df_measured_subset = self.df_measured.loc[self.df_measured["qoi"] == single_qoi_column]
+                column_to_draw = "measured"
+                timestamp_column = self.time_column_name
+                fig.add_trace(
+                    go.Scatter(x=df_measured_subset[timestamp_column], y=df_measured_subset[column_to_draw],
+                               name=f"{single_qoi_column} (measured)", line_color='red', mode='lines'),
+                    row=starting_row, col=1)
+
+        fig.add_trace(go.Scatter(x=pdTimesteps,
+                                 y=[dict_time_vs_qoi_stat[key]["E"] for key in keyIter],
+                                 name=f'E[{single_qoi_column}]',
+                                 line_color='green', mode='lines'),
+                      row=starting_row, col=1)
+        fig.add_trace(go.Scatter(x=pdTimesteps,
+                                 y=[(dict_time_vs_qoi_stat[key]["E"] \
+                                     - dict_time_vs_qoi_stat[key]["StdDev"]) for key in keyIter],
+                                 name='mean - std. dev', line_color='darkviolet', mode='lines'),
+                      row=starting_row, col=1)
+        fig.add_trace(go.Scatter(x=pdTimesteps,
+                                 y=[(dict_time_vs_qoi_stat[key]["E"] + \
+                                     dict_time_vs_qoi_stat[key]["StdDev"]) for key in keyIter],
+                                 name='mean + std. dev', line_color='darkviolet', mode='lines', fill='tonexty'),
+                      row=starting_row, col=1)
+        fig.add_trace(go.Scatter(x=pdTimesteps,
+                                 y=[dict_time_vs_qoi_stat[key]["P10"] for key in keyIter],
+                                 name='10th percentile', line_color='yellow', mode='lines'),
+                      row=starting_row, col=1)
+        fig.add_trace(go.Scatter(x=pdTimesteps,
+                                 y=[dict_time_vs_qoi_stat[key]["P90"] for key in keyIter],
+                                 name='90th percentile', line_color='yellow', mode='lines', fill='tonexty'),
+                      row=starting_row, col=1)
+        dict_plot_rows["qoi"] = starting_row
+        starting_row += 1
+
+        # fig.add_trace(go.Scatter(x=pdTimesteps,
+        #                          y=[dict_time_vs_qoi_stat[key]["StdDev"] for key in keyIter],
+        #                          name='std. dev', line_color='darkviolet', mode='lines'),
+        #               row=starting_row+1, col=1)
+
+        if self._is_Sobol_m_computed:
+            for i in range(len(self.labels)):
+                name = self.labels[i] + "_" + single_qoi_column + "_S_m"
+                fig.add_trace(go.Scatter(
+                    x=pdTimesteps,
+                    y=[dict_time_vs_qoi_stat[key]["Sobol_m"][i] for key in keyIter],
+                    name=name, legendgroup=self.labels[i], line_color=colors.COLORS[i], mode='lines'),
+                    row=starting_row, col=1)
+            dict_plot_rows["sobol_m"] = starting_row
+            starting_row += 1
+
+        if self._is_Sobol_t_computed:
+            for i in range(len(self.labels)):
+                name = self.labels[i] + "_" + single_qoi_column + "_S_t"
+                fig.add_trace(go.Scatter(
+                    x=pdTimesteps,
+                    y=[dict_time_vs_qoi_stat[key]["Sobol_t"][i] for key in keyIter],
+                    name=name, legendgroup=self.labels[i], line_color=colors.COLORS[i], mode='lines'),
+                    row=starting_row, col=1)
+            dict_plot_rows["sobol_t"] = starting_row
+            starting_row += 1
+
+        # fig.update_traces(mode='lines')
+        if forcing and self.forcing_data_fetched:
+            fig.update_yaxes(title_text="N [mm/h]", showgrid=True, row=1, col=1)
+            fig.update_yaxes(autorange="reversed", row=1, col=1)
+            fig.update_yaxes(title_text="T [c]", showgrid=True, row=2, col=1)
+
+        fig.update_yaxes(title_text=single_qoi_column, showgrid=True,
+                         row=dict_plot_rows["qoi"], col=1)
+        # fig.update_yaxes(title_text=f"Std. Dev. [{single_qoi_column}]", side='left', showgrid=True,
+        #                  row=starting_row+1, col=1)
+        if self._is_Sobol_m_computed:
+            fig.update_yaxes(title_text=f"{single_qoi_column}_m", showgrid=True, range=[0, 1],
+                             row=dict_plot_rows["sobol_m"], col=1)
+        if self._is_Sobol_t_computed:
+            fig.update_yaxes(title_text=f"{single_qoi_column}_t", showgrid=True, range=[0, 1],
+                             row=dict_plot_rows["sobol_t"], col=1)
+
+        fig.update_layout(width=1000)
+        fig.update_layout(title_text=window_title)
+        fig.update_layout(xaxis=dict(type="date"))
+
+        print(f"[HVB STAT INFO] _plotStatisticsDict_plotly function is almost over, just to save the plot!")
+
+        # filename = pathlib.Path(filename)
+        plot(fig, filename=filename, auto_open=display)
+        return fig
 
