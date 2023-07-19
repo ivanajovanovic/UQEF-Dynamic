@@ -335,12 +335,16 @@ def transform_column_in_df(df, transformation_function_str, column_name, new_col
     if new_column_name is None:
         new_column_name = column_name
     if transformation_function_str == "log":
+        df[column_name] = df[column_name].apply(lambda x: x if x > 1e-4 else 1e-4)
         df[new_column_name] = np.log(df[column_name], out=np.zeros_like(df[column_name].values), where=(df[column_name].values!=0))
     elif transformation_function_str == "log2":
+        df[column_name] = df[column_name].apply(lambda x: x if x > 1e-4 else 1e-4)
         df[new_column_name] = np.log2(df[column_name], out=np.zeros_like(df[column_name].values), where=(df[column_name].values!=0))
     elif transformation_function_str == "log10":
+        df[column_name] = df[column_name].apply(lambda x: x if x > 1e-4 else 1e-4)
         df[new_column_name] = np.log10(df[column_name], out=np.zeros_like(df[column_name].values), where=(df[column_name].values!=0))
     elif transformation_function_str == "exp":
+        # df[column_name] = df[column_name].apply(lambda x: x if x > 1e-4 else 1e-4)
         df[new_column_name] = np.exp(df[column_name])
     else:
         # flux_df[new_column_name] = flux_df[single_qoi_column].apply(single_transformation)
@@ -842,6 +846,7 @@ def read_simulation_settings_from_configuration_object(configurationObject, **kw
                     updated_qoi_column.append(single_qoi_column)
                     updated_qoi_column_measured.append(qoi_column_measured[idx])
                     updated_read_measured_data.append(True)
+            # here, we overwrite qoi_column such that it only contains columns which do have a corresponding measured data
             qoi_column = updated_qoi_column
             qoi_column_measured = updated_qoi_column_measured
             read_measured_data = updated_read_measured_data
@@ -1037,6 +1042,16 @@ def _get_statistics_dict(working_folder, statistics_dictionary_file_name="statis
             statistics_dictionary = pickle.load(f)
     return statistics_dictionary
 
+
+def create_statistics_dictionary_from_saved_single_qoi_statistics_dictionary(workingDir, list_qoi_column):
+    statistics_dictionary = defaultdict(dict)
+    for single_qoi in list_qoi_column:
+        statistics_dictionary_file_temp = workingDir / f"statistics_dictionary_qoi_{single_qoi}.pkl"
+        assert statistics_dictionary_file_temp.is_file()
+        with open(statistics_dictionary_file_temp, 'rb') as f:
+            statistics_dictionary_temp = pickle.load(f)
+        statistics_dictionary[single_qoi] = statistics_dictionary_temp
+    return statistics_dictionary
 ###################################################################################################################
 # Plotting params and GoF values - mostly from df_index_parameter_gof filtered for a single station
 ###################################################################################################################
