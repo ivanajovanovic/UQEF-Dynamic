@@ -337,7 +337,7 @@ def extend_larsimStatistics_object(larsimStatisticsObject, statistics_dictionary
         df_simulation_result, index_run_column_name="Index_run")
     larsimStatisticsObject.numEvaluations = larsimStatisticsObject.number_of_unique_index_runs
 
-    larsimStatisticsObject.numbTimesteps = len(larsimStatisticsObject.timesteps)
+    larsimStatisticsObject.numTimesteps = len(larsimStatisticsObject.timesteps)
 
     larsimStatisticsObject.samples_station_names = list(df_simulation_result["Stationskennung"].unique())
     larsimStatisticsObject.station_of_Interest = list(set(larsimStatisticsObject.samples_station_names).intersection(
@@ -464,11 +464,11 @@ def redo_all_statistics(
         )
 
         if plotting:
-            larsimStatisticsObject._plotStatisticsDict_plotly(
-                unalatered=get_unaltered_data, measured=get_measured_data, station=station,
-                recalculateTimesteps=True, window_title='Larsim Forward UQ & SA',
-                filename=uq_output_paths_obj.output_stat_graph_filename, display=True
-            )
+            larsimStatisticsObject._plotStatisticsDict_plotly(unalatered=get_unaltered_data, measured=get_measured_data,
+                                                              recalculateTimesteps=True,
+                                                              window_title='Larsim Forward UQ & SA',
+                                                              filename=uq_output_paths_obj.output_stat_graph_filename,
+                                                              display=True, station=station)
         # TODO Add only time series model output plotting
 
         df_statistics_station = larsimStatisticsObject.create_df_from_statistics_data_single_station(

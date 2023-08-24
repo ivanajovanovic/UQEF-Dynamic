@@ -120,7 +120,7 @@ class IshigamiStatistics(Statistics):
         self.numbTimesteps = len(self.timesteps)
         print("STATISTICS INFO: timesteps Info")
         print(type(self.timesteps))
-        print("numbTimesteps is: {}".format(self.numbTimesteps))
+        print("numTimesteps is: {}".format(self.numbTimesteps))
 
         if regression:
             self.qoi_gPCE = cp.fit_regression(polynomial_expansion, nodes, self.qoi)
@@ -157,7 +157,7 @@ class IshigamiStatistics(Statistics):
         self.numbTimesteps = len(self.timesteps)
         print("STATISTICS INFO: timesteps Info")
         print(type(self.timesteps))
-        print("numbTimesteps is: {}".format(self.numbTimesteps))
+        print("numTimesteps is: {}".format(self.numbTimesteps))
 
         qoi_values_saltelli = self.qoi[:, np.newaxis]
         print(f"qoi_values_saltelli.shape = {qoi_values_saltelli.shape}")
@@ -215,7 +215,7 @@ class IshigamiStatistics(Statistics):
         self.numbTimesteps = len(self.timesteps)
         print("STATISTICS INFO: timesteps Info")
         print(type(self.timesteps))
-        print("numbTimesteps is: {}".format(self.numbTimesteps))
+        print("numTimesteps is: {}".format(self.numbTimesteps))
 
         nodes = simulationNodes.distNodes
         weights = simulationNodes.weights

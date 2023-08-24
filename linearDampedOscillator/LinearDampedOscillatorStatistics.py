@@ -67,7 +67,7 @@ class LinearDampedOscillatorStatistics(Statistics):
 
         print("timesteps Info")
         print(type(self.timesteps))
-        print("numbTimesteps is: {}".format(self.numbTimesteps))
+        print("numTimesteps is: {}".format(self.numbTimesteps))
 
 
         # percentiles
@@ -161,7 +161,7 @@ class LinearDampedOscillatorStatistics(Statistics):
         assert self.numbTimesteps == (self.qoi).shape[1]
         print("timesteps Info")
         print(type(self.timesteps))
-        print("numbTimesteps is: {}".format(self.numbTimesteps))
+        print("numTimesteps is: {}".format(self.numbTimesteps))
 
         P = cp.orth_ttr(order, dist)
 
