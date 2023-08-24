@@ -959,6 +959,100 @@ def read_simulation_settings_from_configuration_object(configurationObject, **kw
 
     return result_dict
 
+# def infer_qoi_column_names(dict_processed_simulation_settings_from_config_file, **kwargs):
+#     always_process_original_model_output = kwargs.get("always_process_original_model_output", False)
+#     list_qoi_column_processed = []
+#
+#     if dict_processed_simulation_settings_from_config_file["mode"] == "continuous":
+#         if dict_processed_simulation_settings_from_config_file["qoi"] == "GoF":
+#             for idx, single_qoi_column in enumerate(
+#                     dict_processed_simulation_settings_from_config_file["list_qoi_column"]):
+#                 if dict_processed_simulation_settings_from_config_file["list_read_measured_data"][idx]:
+#                     for single_objective_function_name_qoi in \
+#                             dict_processed_simulation_settings_from_config_file["list_objective_function_names_qoi"]:
+#                         new_column_name = single_objective_function_name_qoi + "_" + single_qoi_column
+#                         list_qoi_column_processed.append(new_column_name)
+#                         # self.additional_qoi_columns_besides_original_model_output = True
+#                         # self.qoi_is_a_single_number = True
+#                         # TODO in this case QoI is a single number, not a time-series!!!
+#         else:
+#             # here, model output itself is regarded as a QoI
+#             pass
+#             # list_qoi_column_processed.append(self.list_qoi_column)
+#     elif self.mode == "sliding_window":
+#         if self.qoi == "GoF":
+#             for idx, single_qoi_column in enumerate(self.list_qoi_column):
+#                 if self.list_read_measured_data[idx]:
+#                     for single_objective_function_name_qoi in self.list_objective_function_names_qoi:
+#                         new_column_name = single_objective_function_name_qoi + "_" + single_qoi_column + \
+#                                           "_sliding_window"
+#                         list_qoi_column_processed.append(new_column_name)
+#                         # self.additional_qoi_columns_besides_original_model_output = True
+#         else:
+#             for idx, single_qoi_column in enumerate(self.list_qoi_column):
+#                 new_column_name = single_qoi_column + "_" + self.method + "_sliding_window"
+#                 list_qoi_column_processed.append(new_column_name)
+#                 # self.additional_qoi_columns_besides_original_model_output = True
+#
+#     if self.compute_gradients:
+#         if self.gradient_analysis:
+#             always_process_original_model_output = True
+#             for single_param_name in self.nodeNames:
+#                 if self.mode == "continuous":
+#                     if self.qoi == "GoF":
+#                         for idx, single_qoi_column in enumerate(self.list_qoi_column):
+#                             if self.list_read_measured_data[idx]:
+#                                 for single_objective_function_name_qoi in self.list_objective_function_names_qoi:
+#                                     new_column_name = "d_" + single_objective_function_name_qoi + "_" + \
+#                                                       single_qoi_column + "_" + "_d_" + single_param_name
+#                                     # list_qoi_column_processed.append(new_column_name)
+#                                     self.list_grad_columns.append(new_column_name)
+#                                     # self.additional_qoi_columns_besides_original_model_output = True
+#                                     # self.qoi_is_a_single_number = True
+#                                     # TODO in this case QoI is a single number, not a time-series!!!
+#                     else:
+#                         for idx, single_qoi_column in enumerate(self.list_qoi_column):
+#                             new_column_name = "d_" + single_qoi_column + "_d_" + single_param_name
+#                             # list_qoi_column_processed.append(new_column_name)
+#                             self.list_grad_columns.append(new_column_name)
+#                             # self.additional_qoi_columns_besides_original_model_output = True
+#                 elif self.mode == "sliding_window":
+#                     if self.qoi == "GoF":
+#                         for idx, single_qoi_column in enumerate(self.list_qoi_column):
+#                             if self.list_read_measured_data[idx]:
+#                                 for single_objective_function_name_qoi in self.list_objective_function_names_qoi:
+#                                     new_column_name = "d_" + single_objective_function_name_qoi + "_" + \
+#                                                       single_qoi_column + "_sliding_window" \
+#                                                       + "_d_" + single_param_name
+#                                     # list_qoi_column_processed.append(new_column_name)
+#                                     self.list_grad_columns.append(new_column_name)
+#                                     # self.additional_qoi_columns_besides_original_model_output = True
+#                     else:
+#                         for idx, single_qoi_column in enumerate(self.list_qoi_column):
+#                             new_column_name = "d_" + single_qoi_column + "_" + self.method + "_sliding_window" + \
+#                                               "_d_" + single_param_name
+#                             # list_qoi_column_processed.append(new_column_name)
+#                             self.list_grad_columns.append(new_column_name)
+#                             # self.additional_qoi_columns_besides_original_model_output = True
+#
+#         elif self.compute_active_subspaces:
+#             always_process_original_model_output = True
+#             pass
+#
+#     if self.corrupt_forcing_data:
+#         always_process_original_model_output = True
+#         pass  # 'precipitation' column is in the results df
+#
+#     wrong_computation_of_new_qoi_columns = self.additional_qoi_columns_besides_original_model_output and \
+#                           len(list_qoi_column_processed) == 0
+#     assert not wrong_computation_of_new_qoi_columns
+#
+#     if self.additional_qoi_columns_besides_original_model_output and len(list_qoi_column_processed) != 0:
+#         if always_process_original_model_output:
+#             self.list_qoi_column = self.list_original_model_output_columns + list_qoi_column_processed
+#         else:
+#             self.list_qoi_column = list_qoi_column_processed
+
 
 def get_param_info_dict_from_configurationObject(configurationObject):
     configurationObject = check_if_configurationObject_is_in_right_format_and_return(configurationObject,
