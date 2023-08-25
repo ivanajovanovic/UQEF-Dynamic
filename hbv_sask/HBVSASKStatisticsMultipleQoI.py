@@ -582,7 +582,6 @@ class HBVSASKStatistics(HydroStatistics.HydroStatistics):
             qoi_column=qoi_column, uq_method=uq_method, compute_measured_normalized_data=compute_measured_normalized_data)
 
     ###################################################################################################################
-    # TODO Make sure that this function is finished, and add to the base class
     def prepare_for_plotting(self, timestep=-1, display=False,
                     fileName="", fileNameIdent="", directory="./",
                     fileNameIdentIsFullName=False, safe=True, **kwargs):
@@ -605,7 +604,6 @@ class HBVSASKStatistics(HydroStatistics.HydroStatistics):
                                   precipitation_column_name=precipitation_column_name,
                                   temperature_column_name=temperature_column_name)
 
-    # TODO Make sure that this function is finished, and add to the base class
     def plotResults_single_qoi(self, single_qoi_column, dict_time_vs_qoi_stat, timestep=-1, display=False, fileName="",
                                fileNameIdent="", directory="./", fileNameIdentIsFullName=False, safe=True,
                                dict_what_to_plot=None, **kwargs):
@@ -638,6 +636,8 @@ class HBVSASKStatistics(HydroStatistics.HydroStatistics):
 
         pdTimesteps = self.pdTimesteps
         keyIter = list(pdTimesteps)
+
+        window_title = window_title + f": QoI - {single_qoi_column}"
 
         if dict_time_vs_qoi_stat is None:
             dict_time_vs_qoi_stat = self.result_dict[single_qoi_column]
@@ -820,28 +820,29 @@ class HBVSASKStatistics(HydroStatistics.HydroStatistics):
             fig.update_yaxes(title_text="N [mm/h]", showgrid=True, row=1, col=1)
             fig.update_yaxes(autorange="reversed", row=1, col=1)
             fig.update_yaxes(title_text="T [c]", showgrid=True, row=2, col=1)
+            fig.update_yaxes(title_text="Q [cms]", showgrid=True, row=3, col=1)
 
-        fig.update_yaxes(title_text=single_qoi_column, showgrid=True,
+        fig.update_yaxes(title_text=single_qoi_column, showgrid=True, side='right',
                          row=dict_plot_rows["qoi"], col=1)
         # fig.update_yaxes(title_text=f"Std. Dev. [{single_qoi_column}]", side='left', showgrid=True,
         #                  row=starting_row+1, col=1)
         if "StdDev" in dict_time_vs_qoi_stat[keyIter[0]] and dict_what_to_plot.get("StdDev", False):
-            fig.update_yaxes(title_text=f"StdDev {single_qoi_column}", showgrid=True,
+            fig.update_yaxes(title_text=f"StdDev", showgrid=True,
                              row=dict_plot_rows["StdDev"], col=1)
         if "Skew" in dict_time_vs_qoi_stat[keyIter[0]] and dict_what_to_plot.get("Skew", False):
-            fig.update_yaxes(title_text=f"{single_qoi_column}_m", showgrid=True,
+            fig.update_yaxes(title_text=f"Skew", showgrid=True,
                              row=dict_plot_rows["Skew"], col=1)
         if "Kurt" in dict_time_vs_qoi_stat[keyIter[0]] and dict_what_to_plot.get("Kurt", False):
-            fig.update_yaxes(title_text=f"{single_qoi_column}_m", showgrid=True,
+            fig.update_yaxes(title_text=f"Kurt", showgrid=True,
                              row=dict_plot_rows["Kurt"], col=1)
         if "Sobol_m" in dict_time_vs_qoi_stat[keyIter[0]] and dict_what_to_plot.get("Sobol_m", False):
-            fig.update_yaxes(title_text=f"{single_qoi_column}_m", showgrid=True, range=[0, 1],
+            fig.update_yaxes(title_text=f"F. SI", showgrid=True, range=[0, 1],
                              row=dict_plot_rows["Sobol_m"], col=1)
         if "Sobol_m2" in dict_time_vs_qoi_stat[keyIter[0]] and dict_what_to_plot.get("Sobol_m2", False):
-            fig.update_yaxes(title_text=f"{single_qoi_column}_m2", showgrid=True, range=[0, 1],
+            fig.update_yaxes(title_text=f"S. SI", showgrid=True, range=[0, 1],
                              row=dict_plot_rows["Sobol_m2"], col=1)
         if "Sobol_t" in dict_time_vs_qoi_stat[keyIter[0]] and dict_what_to_plot.get("Sobol_m", False):
-            fig.update_yaxes(title_text=f"{single_qoi_column}_t", showgrid=True, range=[0, 1],
+            fig.update_yaxes(title_text=f"T. SI", showgrid=True, range=[0, 1],
                              row=dict_plot_rows["Sobol_t"], col=1)
 
         fig.update_layout(width=1000)
@@ -852,5 +853,76 @@ class HBVSASKStatistics(HydroStatistics.HydroStatistics):
 
         # filename = pathlib.Path(filename)
         plot(fig, filename=filename, auto_open=display)
+        return fig
+
+    def plot_forcing_mean_predicted_and_observed_all_qoi(self, directory="./", fileName="simulation_big_plot.html"):
+        measured_columns_names_set = set()
+        for single_qoi in self.list_qoi_column:
+            measured_columns_names_set.add(self.dict_corresponding_original_qoi_column[single_qoi])
+
+        total_number_of_rows = 2 + len(self.list_qoi_column) + len(measured_columns_names_set)
+        fig = make_subplots(
+            rows=total_number_of_rows, cols=1,
+            #     subplot_titles=tuple(self.list_qoi_column)
+        )
+        n_row = 3
+
+        fig.add_trace(
+            go.Bar(
+                x=self.forcing_df.index, y=self.forcing_df['precipitation'],
+                text=self.forcing_df['precipitation'],
+                name="Precipitation"
+            ),
+            row=1, col=1
+        )
+
+        fig.add_trace(
+            go.Scatter(
+                x=self.forcing_df.index, y=self.forcing_df['temperature'],
+                text=self.forcing_df['temperature'],
+                name="Temperature", mode='lines+markers'
+            ),
+            row=2, col=1
+        )
+
+        if self.df_statistics is None or self.df_statistics.empty:
+            raise Exception(f"You are trying to call a plotting utiltiy function whereas "
+                            f"self.df_statistics object is still not computed - make sure to first call"
+                            f"self.create_df_from_statistics_data")
+
+        measured_columns_names_set = set()
+        for single_qoi in self.list_qoi_column:
+            df_statistics_single_qoi = self.df_statistics.loc[
+                self.df_statistics['qoi'] == single_qoi]
+            corresponding_measured_column = self.dict_corresponding_original_qoi_column[single_qoi]
+            if corresponding_measured_column not in measured_columns_names_set:
+                measured_columns_names_set.add(corresponding_measured_column)
+                fig.add_trace(
+                    go.Scatter(
+                        x=df_statistics_single_qoi['TimeStamp'],
+                        y=df_statistics_single_qoi['measured'],
+                        name=f"Observed {corresponding_measured_column}", mode='lines'
+                    ),
+                    row=n_row, col=1
+                )
+                n_row += 1
+
+            fig.add_trace(
+                go.Scatter(
+                    x=df_statistics_single_qoi['TimeStamp'],
+                    y=df_statistics_single_qoi['E'],
+                    text=df_statistics_single_qoi['E'],
+                    name=f"Mean predicted {single_qoi}", mode='lines'),
+                row=n_row, col=1
+            )
+            n_row += 1
+
+        fig.update_yaxes(autorange="reversed", row=1, col=1)
+        fig.update_layout(height=600, width=800, title_text="Detailed plot of most important time-series")
+        fig.update_layout(xaxis=dict(type="date"))
+        if not str(directory).endswith("/"):
+            directory = str(directory) + "/"
+        fileName = directory + fileName
+        plot(fig, filename=fileName)
         return fig
 

@@ -1358,9 +1358,17 @@ class HydroStatistics(Statistics):
             si_df.set_index(self.time_column_name, inplace=True)
             reset_index_at_the_end = True
 
-        si_columns = [x for x in si_df.columns.tolist() if x != 'measured' and x != 'measured_norm' and x != 'qoi']
+        # si_df_temp = si_df.loc[si_df['qoi'] == qoi_column]
 
-        fig = px.imshow(si_df[si_columns].T, labels=dict(y='Parameters', x='Dates'))
+        si_columns_to_plot = [x for x in si_df.columns.tolist() if x != 'measured' \
+                              and x != 'measured_norm' and x != 'qoi']
+
+        if 'qoi' in si_df.columns.tolist():
+            fig = px.imshow(si_df.loc[si_df['qoi'] == qoi_column][si_columns_to_plot].T,
+                            labels=dict(y='Parameters', x='Dates'))
+        else:
+            fig = px.imshow(si_df[si_columns_to_plot].T,
+                            labels=dict(y='Parameters', x='Dates'))
 
         if reset_index_at_the_end:
             si_df.reset_index(inplace=True)
@@ -1453,14 +1461,18 @@ class HydroStatistics(Statistics):
                 qoi_column, si_type, uq_method, compute_measured_normalized_data=True
             )
 
+        if 'qoi' in si_df.columns.tolist():
+            si_df = si_df.loc[si_df['qoi'] == qoi_column]
+
         reset_index_at_the_end = False
         if si_df.index.name != self.time_column_name:
             si_df.set_index(self.time_column_name, inplace=True)
             reset_index_at_the_end = True
 
-        si_columns = [x for x in si_df.columns.tolist() if x != 'measured' and x != 'measured_norm' and x != 'qoi']
+        si_columns_to_plot = [x for x in si_df.columns.tolist() if x != 'measured' \
+                              and x != 'measured_norm' and x != 'qoi']
 
-        fig = px.line(si_df, x=si_df.index, y=si_columns)
+        fig = px.line(si_df, x=si_df.index, y=si_columns_to_plot)
 
         if observed_column_normalized in si_df.columns.tolist() and not si_df[observed_column_normalized].isnull().all():
             fig.add_trace(go.Scatter(

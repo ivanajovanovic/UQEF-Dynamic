@@ -251,6 +251,78 @@ def plot_si_and_normalized_measured_time_signal_single_qoi(
     return fig
 
 
+def plot_forcing_mean_predicted_and_observed_all_qoi(statisticsObject, directory="./", fileName="simulation_big_plot.html"):
+    measured_columns_names_set = set()
+    for single_qoi in statisticsObject.list_qoi_column:
+        measured_columns_names_set.add(statisticsObject.dict_corresponding_original_qoi_column[single_qoi])
+
+    total_number_of_rows = 2 + len(statisticsObject.list_qoi_column) + len(measured_columns_names_set)
+    fig = make_subplots(
+        rows=total_number_of_rows, cols=1,
+        #     subplot_titles=tuple(statisticsObject.list_qoi_column)
+    )
+    n_row = 3
+
+    fig.add_trace(
+        go.Bar(
+            x=statisticsObject.forcing_df.index, y=statisticsObject.forcing_df['precipitation'],
+            text=statisticsObject.forcing_df['precipitation'],
+            name="Precipitation"
+        ),
+        row=1, col=1
+    )
+
+    fig.add_trace(
+        go.Scatter(
+            x=statisticsObject.forcing_df.index, y=statisticsObject.forcing_df['temperature'],
+            text=statisticsObject.forcing_df['temperature'],
+            name="Temperature", mode='lines+markers'
+        ),
+        row=2, col=1
+    )
+
+    if statisticsObject.df_statistics is None or statisticsObject.df_statistics.empty:
+        raise Exception(f"You are trying to call a plotting utiltiy function whereas "
+                        f"statisticsObject.df_statistics object is still not computed - make sure to first call"
+                        f"statisticsObject.create_df_from_statistics_data")
+
+    measured_columns_names_set = set()
+    for single_qoi in statisticsObject.list_qoi_column:
+        df_statistics_single_qoi = statisticsObject.df_statistics.loc[
+            statisticsObject.df_statistics['qoi'] == single_qoi]
+        corresponding_measured_column = statisticsObject.dict_corresponding_original_qoi_column[single_qoi]
+        if corresponding_measured_column not in measured_columns_names_set:
+            measured_columns_names_set.add(corresponding_measured_column)
+            fig.add_trace(
+                go.Scatter(
+                    x=df_statistics_single_qoi['TimeStamp'],
+                    y=df_statistics_single_qoi['measured'],
+                    name=f"Observed {corresponding_measured_column}", mode='lines'
+                ),
+                row=n_row, col=1
+            )
+            n_row += 1
+
+        fig.add_trace(
+            go.Scatter(
+                x=df_statistics_single_qoi['TimeStamp'],
+                y=df_statistics_single_qoi['E'],
+                text=df_statistics_single_qoi['E'],
+                name=f"Mean predicted {single_qoi}", mode='lines'),
+            row=n_row, col=1
+        )
+        n_row += 1
+
+    fig.update_yaxes(autorange="reversed", row=1, col=1)
+    fig.update_layout(height=600, width=800, title_text="Detailed plot of most important time-series")
+    fig.update_layout(xaxis=dict(type="date"))
+    if not str(directory).endswith("/"):
+        directory = str(directory) + "/"
+    fileName = directory + fileName
+    pyo.plot(fig, filename=fileName)
+    return fig
+
+
 def plotting_function_single_qoi(
         df, single_qoi, qoi="Q", subplot_titles=None, dict_what_to_plot=None, directory="./", fileName="simulation_big_plot.html"
 ):
@@ -307,6 +379,7 @@ def plotting_function_single_qoi(
         ),
         row=1, col=1
     )
+    fig.update_yaxes(autorange="reversed", row=1, col=1)
 
     fig.add_trace(
         go.Scatter(

@@ -266,6 +266,7 @@ uqsim.save_statistics()
 #     )
 # elif uqsim.args.model == "hbvsask":
 #     # TODO This only for now - change the logic
+#     # TODO Add dict_what_to_plot
 #     uqsim.plot_statistics(display=False,
 #                           plot_measured_timeseries=True,
 #                           plot_unaltered_timeseries=False,
