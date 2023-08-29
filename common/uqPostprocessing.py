@@ -1,8 +1,11 @@
 """
-Set of utility functions for postprocessing data for UQ runs of different models
+Set of utility functions for postprocessing data for UQ runs of different models.
+Many of these functions exist as well as part of HydroStatistics methods
 
 @author: Ivana Jovanovic Buha
 """
+import chaospy as cp
+import numpy as np
 import pandas as pd
 import pickle
 
@@ -222,6 +225,201 @@ def compute_gof_over_different_time_series(df_statistics,
 def redo_all_statistics(
         workingDir, get_measured_data=False, get_unaltered_data=False, station="MARI", uq_method="sc", plotting=False):
     raise NotImplementedError
+
+###################################################################################################################
+# Set of different functions for analyzinf df_statistics DataFrame
+    # produced as part of UQ simulation - these function may go to utility as well?
+###################################################################################################################
+
+
+def describe_df_statistics(single_qoi, df_statistics_and_measured):
+    df_statistics_and_measured_single_qoi_subset = df_statistics_and_measured.loc[
+        df_statistics_and_measured['qoi'] == single_qoi]
+    result = df_statistics_and_measured_single_qoi_subset.describe(include=np.number)
+    print(f"{single_qoi}\n\n")
+    print(result)
+
+
+def _get_sensitivity_indices_subset_of_big_df_statistics(df_statistics, single_qoi, param_names,
+        si_type="Sobol_t"):
+    df_statistics_and_measured_single_qoi = df_statistics.loc[df_statistics['qoi'] == single_qoi]
+    # TODO allow user to specify which column names
+    list_of_columns_to_keep = ["measured", "precipitation", "temperature"]
+    if not isinstance(param_names, list):
+        param_names = [param_names,]
+    for param_name in param_names:
+        if si_type == "Sobol_t":
+            list_of_columns_to_keep.append(f"Sobol_t_{param_name}")
+        elif si_type == "Sobol_m":
+            list_of_columns_to_keep.append(f"Sobol_m_{param_name}")
+        elif si_type == "Sobol_m2":
+            list_of_columns_to_keep.append(f"Sobol_m2_{param_name}")
+    df_statistics_and_measured_single_qoi_subset = df_statistics_and_measured_single_qoi[list_of_columns_to_keep]
+    return df_statistics_and_measured_single_qoi_subset
+
+
+def describe_sensitivity_indices_single_qoi_under_some_condition(
+        df_statistics, single_qoi, param_names,
+        si_type="Sobol_t", condition_columns=None,condition_value=None, condition_sign="equal"):
+    df_statistics_and_measured_single_qoi_subset = _get_sensitivity_indices_subset_of_big_df_statistics(
+        df_statistics, single_qoi, param_names, si_type)
+    if condition_columns is None or condition_value is None:
+        result_describe = df_statistics_and_measured_single_qoi_subset.describe(include=np.number)
+        print(f"{result_describe}")
+    else:
+        if condition_sign=="equal":
+            df_subset = df_statistics_and_measured_single_qoi_subset[
+                df_statistics_and_measured_single_qoi_subset[condition_columns] == condition_value].copy()
+            result_describe = df_subset.describe(include=np.number)
+            print(f"{result_describe}")
+        elif condition_sign=="greater than":
+            df_subset = df_statistics_and_measured_single_qoi_subset[
+                df_statistics_and_measured_single_qoi_subset[condition_columns] > condition_value].copy()
+            result_describe = df_subset.describe(include=np.number)
+            print(f"{result_describe}")
+        elif condition_sign=="greater than or equal":
+            df_subset = df_statistics_and_measured_single_qoi_subset[
+                df_statistics_and_measured_single_qoi_subset[condition_columns] >= condition_value].copy()
+            result_describe = df_subset.describe(include=np.number)
+            print(f"{result_describe}")
+        elif condition_sign=="less than":
+            df_subset = df_statistics_and_measured_single_qoi_subset[
+                df_statistics_and_measured_single_qoi_subset[condition_columns] < condition_value].copy()
+            result_describe = df_subset.describe(include=np.number)
+            print(f"{result_describe}")
+        elif condition_sign=="less than or equal":
+            df_subset = df_statistics_and_measured_single_qoi_subset[
+                df_statistics_and_measured_single_qoi_subset[condition_columns] <= condition_value].copy()
+            result_describe = df_subset.describe(include=np.number)
+            print(f"{result_describe}")
+        else:
+            raise Exception(f"Error in HydroStatistics.describe_sensitivity_indices_single_qoi_under_some_condition "
+                            f"method - condition_sign should be one of the following strings: equal"
+                            f"/greater than/greater than or equal/less than/less than or equal")
+
+
+def compute_df_statistics_columns_correlation(
+        df_statistics, single_qoi, param_names,
+        only_sensitivity_indices_columns=True, si_type="Sobol_t", plot=True):
+    if only_sensitivity_indices_columns:
+        df_statistics_and_measured_single_qoi_subset = _get_sensitivity_indices_subset_of_big_df_statistics(
+            df_statistics, single_qoi, param_names, si_type)
+    else:
+        df_statistics_and_measured_single_qoi = df_statistics.loc[df_statistics['qoi'] == single_qoi]
+        df_statistics_and_measured_single_qoi_subset = df_statistics_and_measured_single_qoi
+
+    corr_df_statistics_and_measured_single_qoi_subset = df_statistics_and_measured_single_qoi_subset.corr()
+    print(f"Correlation matrix: {corr_df_statistics_and_measured_single_qoi_subset} \n")
+    if plot:
+        import seaborn as sns
+        sns.set(style="darkgrid")
+        mask = np.triu(np.ones_like(corr_df_statistics_and_measured_single_qoi_subset, dtype=np.bool))
+        fig, axs = plt.subplots(figsize=(11, 9))
+        sns.heatmap(corr_df_statistics_and_measured_single_qoi_subset, mask=mask, square=True, annot=True,
+                    linewidths=.5)
+        plt.show()
+
+
+def plot_parameters_sensitivity_indices_vs_temp_prec_measured(
+        df_statistics, single_qoi, param_names, si_type="Sobol_t"):
+    df_statistics_and_measured_single_qoi_subset = _get_sensitivity_indices_subset_of_big_df_statistics(
+        df_statistics, single_qoi, param_names, si_type)
+    num_param = len(param_names)
+    fig, axs = plt.subplots(3, num_param, figsize=(15, 8))
+    # param = configurationObject["parameters"][0]["name"]
+    # param_num = 0
+    param_counter = 0
+    for i, ax in enumerate(axs.flat):
+        param_num = param_counter % num_param
+        param = param_names[param_num]
+        if i % 3 == 0:
+            if si_type == "Sobol_t":
+                ax.scatter(*df_statistics_and_measured_single_qoi_subset[[f"Sobol_t_{param}", "measured"]].values.T)
+            elif si_type == "Sobol_m":
+                ax.scatter(*df_statistics_and_measured_single_qoi_subset[[f"Sobol_m_{param}", "measured"]].values.T)
+            elif si_type == "Sobol_m2":
+                ax.scatter(*df_statistics_and_measured_single_qoi_subset[[f"Sobol_m2_{param}", "measured"]].values.T)
+        elif i % 3 == 1:
+            if si_type == "Sobol_t":
+                ax.scatter(
+                    *df_statistics_and_measured_single_qoi_subset[[f"Sobol_t_{param}", "precipitation"]].values.T)
+            elif si_type == "Sobol_m":
+                ax.scatter(
+                    *df_statistics_and_measured_single_qoi_subset[[f"Sobol_m_{param}", "precipitation"]].values.T)
+            elif si_type == "Sobol_m2":
+                ax.scatter(
+                    *df_statistics_and_measured_single_qoi_subset[[f"Sobol_m2_{param}", "precipitation"]].values.T)
+        elif i % 3 == 2:
+            if si_type == "Sobol_t":
+                ax.scatter(*df_statistics_and_measured_single_qoi_subset[[f"Sobol_t_{param}", "temperature"]].values.T)
+            elif si_type == "Sobol_m":
+                ax.scatter(*df_statistics_and_measured_single_qoi_subset[[f"Sobol_m_{param}", "temperature"]].values.T)
+            elif si_type == "Sobol_m2":
+                ax.scatter(*df_statistics_and_measured_single_qoi_subset[[f"Sobol_m2_{param}", "temperature"]].values.T)
+        param_counter += 1
+    #     ax.set_title(f'{param}')
+    # set labels
+    for i in range(num_param):
+        param = param_names[i]
+        plt.setp(axs[-1, i], xlabel=f'{param}')
+    plt.setp(axs[0, 0], ylabel='measured')
+    plt.setp(axs[1, 0], ylabel='precipitation')
+    plt.setp(axs[2, 0], ylabel='temperature')
+
+
+def plot_cdfs_of_parameters_sensitivity_indices(df_statistics, single_qoi, param_names, si_type="Sobol_t"):
+    df_statistics_and_measured_single_qoi_subset = _get_sensitivity_indices_subset_of_big_df_statistics(
+        df_statistics, single_qoi, param_names, si_type)
+    num_param = len(param_names)
+
+    t = np.linspace(0, 1.0, 1000)
+    fig, axs = plt.subplots(1, num_param, figsize=(20, 10))
+    for i in range(num_param):
+        param_name = param_names[i]
+        if si_type == "Sobol_t":
+            param_eval = df_statistics_and_measured_single_qoi_subset[f"Sobol_t_{param_name}"].values
+        elif si_type == "Sobol_m":
+            param_eval = df_statistics_and_measured_single_qoi_subset[f"Sobol_m_{param_name}"].values
+        elif si_type == "Sobol_m2":
+            param_eval = df_statistics_and_measured_single_qoi_subset[f"Sobol_m2_{param_name}"].values
+        distribution = cp.GaussianKDE(param_eval, h_mat=0.005 ** 2)
+        axs[i,].plot(t, distribution.cdf(t), label=f"KDE m {param_name}")
+        plt.setp(axs[i,], xlabel=f'{param_name}')
+        axs[i,].grid()
+    # plt.legend()
+    plt.setp(axs[0], ylabel='CDF')
+    plt.show()
+
+
+def single_param_single_qoi_sensitivity_indices_GaussianKDE(
+        df_statistics, single_qoi, param_name, si_type="Sobol_t", plot=True, plot_pdf_or_cdf="pdf"):
+    df_statistics_and_measured_single_qoi_subset = _get_sensitivity_indices_subset_of_big_df_statistics(
+        df_statistics, single_qoi, param_name, si_type)
+    column_to_keep = None
+    if si_type == "Sobol_t":
+        column_to_keep = f"Sobol_t_{param_name}"
+    elif si_type == "Sobol_m":
+        column_to_keep = f"Sobol_m_{param_name}"
+    elif si_type == "Sobol_m2":
+        column_to_keep = f"Sobol_m2_{param_name}"
+    samples = df_statistics_and_measured_single_qoi_subset[column_to_keep].values
+
+    t = np.linspace(0, 1.0, 1000)
+    distribution = cp.GaussianKDE(samples, h_mat=0.02 ** 2)
+
+    if plot:
+        if plot_pdf_or_cdf=="pdf":
+            plt.hist(samples, bins=100, density=True, alpha=0.5)
+            plt.plot(t, distribution.pdf(t), label="0.05")
+        elif plot_pdf_or_cdf=="cdf":
+            plt.plot(t, distribution.cdf(t), label="0.05")
+        else:
+            raise Exception()
+        plt.legend()
+        plt.show()
+
+    return distribution
+
 
 ###################################################################################################################
 # Set of functions for plotting - these function may go to utility as well?

@@ -1088,7 +1088,7 @@ def get_param_info_dict_from_configurationObject(configurationObject):
     return result_dict
 
 ###################################################################################################################
-# Reading saved data
+# Reading saved data - produced by UQEF related run/simulation
 ###################################################################################################################
 
 
@@ -1146,6 +1146,7 @@ def create_statistics_dictionary_from_saved_single_qoi_statistics_dictionary(wor
             statistics_dictionary_temp = pickle.load(f)
         statistics_dictionary[single_qoi] = statistics_dictionary_temp
     return statistics_dictionary
+
 ###################################################################################################################
 # Plotting params and GoF values - mostly from df_index_parameter_gof filtered for a single station
 ###################################################################################################################
