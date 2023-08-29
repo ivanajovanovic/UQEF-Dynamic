@@ -393,7 +393,7 @@ class HydroStatistics(Statistics):
         self._infer_qoi_column_names(**kwargs)
 
     def _infer_qoi_column_names(self, **kwargs):
-        # TODO Make one genral function from this one in uqPostprocessing or utlities...
+        # TODO Make one general function from this one in uqPostprocessing or utilities...
         # TODO Is this redundant with self.store_qoi_data_in_stat_dict
         always_process_original_model_output = kwargs.get("always_process_original_model_output", False)
         list_qoi_column_processed = []
@@ -1172,6 +1172,17 @@ class HydroStatistics(Statistics):
         if list_of_single_qoi_dfs:
             self.df_statistics = pd.concat(list_of_single_qoi_dfs, axis=0)
 
+    def _check_if_df_statistics_is_computed(self, recompute_if_not=False):
+        if self.df_statistics is None or self.df_statistics.empty:
+            if recompute_if_not:
+                self.create_df_from_statistics_data()
+            else:
+                raise Exception(f"You are trying to call a plotting utiltiy function whereas "
+                                f"self.df_statistics object is still not computed - make sure to first call"
+                                f"self.create_df_from_statistics_data")
+        else:
+            return
+
     def merge_df_statistics_data_with_forcing_data(self, **kwargs):
         if not self.forcing_data_fetched or self.forcing_df is None or self.forcing_df.empty:
             self.get_forcing_data(time_column_name=self.time_column_name, **kwargs)
@@ -1183,11 +1194,12 @@ class HydroStatistics(Statistics):
         return df_statistics_and_measured
 
     def describe_df_statistics(self):
+        self._check_if_df_statistics_is_computed(recompute_if_not=True)
         for single_qoi in self.list_qoi_column:
-            df_statistics_and_measured_single_qoi_subset = self.df_statistics.loc[
+            df_statistics_single_qoi_subset = self.df_statistics.loc[
                 self.df_statistics['qoi'] == single_qoi]
             print(f"{single_qoi}\n\n")
-            print(df_statistics_and_measured_single_qoi_subset.describe(include=np.number))
+            print(df_statistics_single_qoi_subset.describe(include=np.number))
 
     def create_df_from_sensitivity_indices(self, si_type="Sobol_t", uq_method="sc",
                                            compute_measured_normalized_data=False):
@@ -1245,19 +1257,19 @@ class HydroStatistics(Statistics):
             for i in range(len(self.labels)):
                 sobol_m_time_series = [self.result_dict[qoi_column][key]["Sobol_m"][i] for key in keyIter]
                 list_of_columns.append(sobol_m_time_series)
-                temp = "sobol_m_" + self.labels[i]
+                temp = "Sobol_m_" + self.labels[i]
                 list_of_columns_names.append(temp)
         if is_Sobol_m2_computed:
             for i in range(len(self.labels)):
                 sobol_m2_time_series = [self.result_dict[qoi_column][key]["Sobol_m2"][i] for key in keyIter]
                 list_of_columns.append(sobol_m2_time_series)
-                temp = "sobol_m2_" + self.labels[i]
+                temp = "Sobol_m2_" + self.labels[i]
                 list_of_columns_names.append(temp)
         if is_Sobol_t_computed:
             for i in range(len(self.labels)):
                 sobol_t_time_series = [self.result_dict[qoi_column][key]["Sobol_t"][i] for key in keyIter]
                 list_of_columns.append(sobol_t_time_series)
-                temp = "sobol_t_" + self.labels[i]
+                temp = "Sobol_t_" + self.labels[i]
                 list_of_columns_names.append(temp)
 
         df_statistics_single_qoi = pd.DataFrame(list(zip(*list_of_columns)), columns=list_of_columns_names)

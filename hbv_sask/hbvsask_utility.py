@@ -718,23 +718,29 @@ def triangle_routing(Q, UBAS):
     # np.interp(2.5, xp, fp) or f = scipy.interpolate.interp1d(x, y); f(xnew)
     for i in range(1, length_triangle_base + 1):
         if (i - 1) < (0.5 * UBAS) and i > (0.5 * UBAS):
+            # weight[i] = 0.5 * (np.interp(i - 1, x, v) + np.interp(0.5 * UBAS, x, v)) * (0.5 * UBAS - i + 1) + \
+            #             0.5 * (np.interp(0.5 * UBAS, x, v) + np.interp(i, x, v)) * (i - 0.5 * UBAS)
             weight[i-1] = 0.5 * (np.interp(i - 1, x, v) + np.interp(0.5 * UBAS, x, v)) * (0.5 * UBAS - i + 1) + \
                         0.5 * (np.interp(0.5 * UBAS, x, v) + np.interp(i, x, v)) * (i - 0.5 * UBAS)
         elif i > UBAS:
+            # weight[i] = 0.5 * np.interp(i - 1, x, v) * (UBAS - i + 1)
             weight[i-1] = 0.5 * np.interp(i - 1, x, v) * (UBAS - i + 1)
         else:
+            # weight[i] = np.interp(i - 0.5, x, v)
             weight[i-1] = np.interp(i - 0.5, x, v)
 
     weight = weight / np.sum(weight)
 
     # Q_routed = np.empty_like(Q)
     Q_routed=np.zeros(len(Q))
+    # for i in range(len(Q)):
     for i in range(1, len(Q)+1):
         temp = 0
         window_len = min((i, length_triangle_base))
         for j in range(1, 1 + window_len):
             # temp += weight[j + 1] * Q[i - j - 1]  # TODO Q[i - j]
             temp += weight[j - 1] * Q[i - j]  # TODO Q[i - j]
+        # Q_routed[i] = temp
         Q_routed[i-1] = temp
 
     return Q_routed
