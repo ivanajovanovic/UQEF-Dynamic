@@ -538,7 +538,7 @@ def plotting_function_single_qoi(
             "StdDev": False, "Skew": False, "Kurt": False
         }
 
-    if qoi.lower() == "gof":
+    if not isinstance(qoi, list) and qoi.lower() == "gof":
         n_rows += 1
         starting_row_for_predicted_data = 4
         # subplot_titles = ("Precipitation", "Temperature", "Measured Streamflow", "Mean", "Skew", "Kurt")
@@ -552,7 +552,7 @@ def plotting_function_single_qoi(
 
     if subplot_titles is None:
         subplot_titles = ("Precipitation", "Temperature")
-        if qoi.lower() == "gof":
+        if not isinstance(qoi, list) and qoi.lower() == "gof":
             subplot_titles = subplot_titles + ("Measured Streamflow",)
             subplot_titles = subplot_titles + ("Predicted",)
         else:

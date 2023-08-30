@@ -577,6 +577,7 @@ class HydroStatistics(Statistics):
 
     def set_result_dict(self, result_dict):
         self.result_dict = result_dict
+        # TODO Should I update self.timesteps self.pdTimesteps self.numTimesteps based on self.result_dict??/
 
     def set_timesteps(self, timesteps=None):
         if timesteps is not None:

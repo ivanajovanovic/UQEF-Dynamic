@@ -340,6 +340,8 @@ class HBVSASKModel(object):
         if raise_exception_on_model_break is None:
             raise_exception_on_model_break = self.raise_exception_on_model_break
         take_direct_value = kwargs.get("take_direct_value", False)
+        if self.uq_method == "ensemble":
+            take_direct_value = True
         createNewFolder = kwargs.get("createNewFolder", False)
         deleteFolderAfterwards = kwargs.get("deleteFolderAfterwards", True)
         writing_results_to_a_file = kwargs.get("writing_results_to_a_file", self.writing_results_to_a_file)
@@ -372,9 +374,10 @@ class HBVSASKModel(object):
             else:
                 number_of_uncertain_params = len(parameter)
 
-            parameters_dict = hbv.parameters_configuration(
+            parameters_dict = utility.parameters_configuration(
                 parameters=parameter,
                 configurationObject=self.configurationObject,
+                default_par_info_dict=hbv.DEFAULT_PAR_INFO_DICT,
                 take_direct_value=take_direct_value
             )
             print(f"parameters_dict - {parameters_dict} \n")
@@ -579,7 +582,8 @@ class HBVSASKModel(object):
 
                 # dict_param_info_from_configurationObject = utility.get_param_info_dict_from_configurationObject(
                 #     self.configurationObject)
-                dict_param_info = hbv.get_param_info_dict(self.configurationObject)
+                dict_param_info = utility.get_param_info_dict(
+                    configurationObject=self.configurationObject, default_par_info_dict=hbv.DEFAULT_PAR_INFO_DICT)
 
                 # CD = 1 central differences; CD = 0 forward differences
                 # Assumption: parameters_dict is a dictionary of parameters of interest already computed above
