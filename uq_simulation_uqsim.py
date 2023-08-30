@@ -19,7 +19,7 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 pd.options.mode.chained_assignment = None
 
 # sys.path.insert(0, os.getcwd())
-sys.path.insert(0, '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEFPP')
+sys.path.insert(0, '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Hydro')
 
 from larsim import LarsimModelUQ
 from larsim import LarsimStatistics
@@ -64,8 +64,8 @@ if local_debugging:
     l = 6  # 10
     path_to_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/sparse_grid_nodes_weights")
     uqsim.args.parameters_file = path_to_file / f"KPU_d6_l{l}.asc" # f"KPU_d3_l{l}.asc"
-    uqsim.args.parameters_setup_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEFPP/configurations/KPU_HBV_d6.json")
-    # uqsim.args.parameters_setup_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEFPP/configurations_Larsim/KPU_Larsim_d5.json")
+    uqsim.args.parameters_setup_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Hydro/configurations/KPU_HBV_d6.json")
+    # uqsim.args.parameters_setup_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Hydro/configurations_Larsim/KPU_Larsim_d5.json")
 
     uqsim.args.sc_poly_rule = "three_terms_recurrence"  # "gram_schmidt" | "three_terms_recurrence" | "cholesky"
     uqsim.args.sc_poly_normed = False  # True
@@ -74,17 +74,17 @@ if local_debugging:
 
     # uqsim.args.inputModelDir = os.path.abspath(os.path.join('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2','Larsim-data'))
     uqsim.args.inputModelDir = pathlib.Path("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/HBV-SASK-data")
-    # uqsim.args.sourceDir = os.path.abspath(os.path.join('/dss/dsshome1/lxc0C/ga45met2', 'Repositories', 'UQEFPP'))
+    # uqsim.args.sourceDir = os.path.abspath(os.path.join('/dss/dsshome1/lxc0C/ga45met2', 'Repositories', 'UQEF-Hydro'))
     uqsim.args.sourceDir = pathlib.Path("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/HBV-SASK-data")
     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_ensemble_2013_all_tgb'))
     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_lai_may_cc_q_6_p_4_stat_trial'))
     uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs", 'precipitation_corrupted')) #sliding_window or continuous
     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_sc_kpu_l_6_d_5_p_3_2013'))
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
-    # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEFPP/configurations_Larsim/configurations_larsim_boundery_values.json'
-    # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEFPP/configurations_Larsim/configurations_larsim_4_may.json'
-    uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEFPP/configurations/configuration_hbv_4D_MC.json'
-    # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEFPP/configurations_Larsim/configurations_larsim_high_flow.json'
+    # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Hydro/configurations_Larsim/configurations_larsim_boundery_values.json'
+    # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Hydro/configurations_Larsim/configurations_larsim_4_may.json'
+    uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Hydro/configurations/configuration_hbv_4D_MC.json'
+    # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Hydro/configurations_Larsim/configurations_larsim_high_flow.json'
 
     uqsim.args.sampleFromStandardDist = True  # False
     # uqsim.args.transformToStandardDist = True
@@ -103,6 +103,10 @@ if local_debugging:
 
     uqsim.setup_configuration_object()
 
+DEFAULT_DICT_WHAT_TO_PLOT = {
+    "E_minus_std": False, "E_plus_std": False, "P10": False, "P90": False,
+    "StdDev": False, "Skew": False, "Kurt": False, "Sobol_m": True, "Sobol_m2": False, "Sobol_t": True
+}
 #####################################
 # additional path settings:
 #####################################
@@ -194,7 +198,9 @@ uqsim.statistics.update({"hbvsask"         : (lambda: HBVSASKStatistics.HBVSASKS
     compute_Sobol_t=uqsim.args.compute_Sobol_t,
     compute_Sobol_m=uqsim.args.compute_Sobol_m,
     save_samples=True,
-    inputModelDir=uqsim.args.inputModelDir
+    inputModelDir=uqsim.args.inputModelDir,
+    instantly_save_results_for_each_time_step=False,
+    dict_what_to_plot=DEFAULT_DICT_WHAT_TO_PLOT
 ))})
 
 #####################################

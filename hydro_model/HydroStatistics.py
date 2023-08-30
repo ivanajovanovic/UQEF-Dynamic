@@ -1388,7 +1388,7 @@ class HydroStatistics(Statistics):
         #     return None
         if not self.result_dict[qoi_column]:
             return None
-        
+
         keyIter = list(self.pdTimesteps)
         is_Sobol_t_computed = "Sobol_t" in self.result_dict[qoi_column][keyIter[0]]
         is_Sobol_m_computed = "Sobol_m" in self.result_dict[qoi_column][keyIter[0]]

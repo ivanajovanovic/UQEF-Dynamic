@@ -27,7 +27,7 @@ if __name__ == "__main__":
 
     # uncomment if you want to run analysis for Genz functions...
     list_of_genz_functions = ["oscillatory", "product_peak", "corner_peak", "gaussian", "continous", "discontinuous"]
-    path_to_saved_all_genz_functions = pathlib.Path("/work/ga45met/Backup/UQEFPP/sg_anaysis/genz_functions")
+    path_to_saved_all_genz_functions = pathlib.Path("/work/ga45met/Backup/UQEF-Hydro/sg_anaysis/genz_functions")
     read_saved_genz_functions = True
     anisotropic = True
 

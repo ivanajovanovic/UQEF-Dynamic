@@ -19,7 +19,7 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 pd.options.mode.chained_assignment = None
 
 # sys.path.insert(0, os.getcwd())
-sys.path.insert(0, '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEFPP')
+sys.path.insert(0, '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Hydro')
 
 from larsim import LarsimModelUQ
 from larsim import LarsimStatistics
@@ -57,11 +57,11 @@ if local_debugging:
     uqsim.args.read_nodes_from_file = False
 
     uqsim.args.inputModelDir = os.path.abspath(os.path.join('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2','Larsim-data'))
-    uqsim.args.sourceDir = os.path.abspath(os.path.join('/dss/dsshome1/lxc0C/ga45met2', 'Repositories', 'UQEFPP'))
+    uqsim.args.sourceDir = os.path.abspath(os.path.join('/dss/dsshome1/lxc0C/ga45met2', 'Repositories', 'UQEF-Hydro'))
     uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_ensemble_2013_may_lai_qoi_rmse'))
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
-    # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEFPP/configurations_Larsim/configurations_larsim_boundery_values.json'
-    uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEFPP/configurations_Larsim/configurations_larsim_lai_boundery_values.json'
+    # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Hydro/configurations_Larsim/configurations_larsim_boundery_values.json'
+    uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Hydro/configurations_Larsim/configurations_larsim_lai_boundery_values.json'
 
     uqsim.args.sampleFromStandardDist = False  # TODO Try with False|True
 

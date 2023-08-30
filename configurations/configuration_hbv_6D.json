@@ -15,7 +15,7 @@
 
       "run_full_timespan":"False",
       "spin_up_length":1095,
-      "simulation_length": 730,
+      "simulation_length": 30,
       "resolution": "daily",
 
       "cut_runs": "False",
@@ -23,8 +23,8 @@
     },
   "model_settings": {
     "basis": "Oldman_Basin",
-    "plotting": "True",
-    "writing_results_to_a_file": "True",
+    "plotting": "False",
+    "writing_results_to_a_file": "False",
     "corrupt_forcing_data": "False"
   },
   "model_paths": {
@@ -39,12 +39,12 @@
     "objective_function_qoi":["RMSE", "LogNSE", "KGE"],
     "calculate_GoF":"True",
     "objective_function":["MAE", "MSE", "RMSE", "NRMSE", "NSE", "LogNSE", "KGE"],
-    "mode":"sliding_window",
+    "mode":"continuous",
     "interval": 10,
     "min_periods": 5,
     "method": "avrg",
     "center": "left",
-    "compute_gradients":"True",
+    "compute_gradients":"False",
     "eps_gradients": 0.01,
     "gradient_method":"Forward Difference",
     "gradient_analysis": "True",

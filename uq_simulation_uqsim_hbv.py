@@ -19,7 +19,7 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 pd.options.mode.chained_assignment = None
 
 # sys.path.insert(0, os.getcwd())
-sys.path.insert(0, '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEFPP')
+sys.path.insert(0, '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Hydro')
 
 from larsim import LarsimModelUQ
 from larsim import LarsimStatistics
@@ -35,6 +35,11 @@ from productFunction import ProductFunctionStatistics
 
 from hbv_sask import HBVSASKModelUQ
 from hbv_sask import HBVSASKStatisticsMultipleQoI as HBVSASKStatistics
+
+DEFAULT_DICT_WHAT_TO_PLOT = {
+    "E_minus_std": False, "E_plus_std": False, "P10": False, "P90": False,
+    "StdDev": False, "Skew": False, "Kurt": False, "Sobol_m": True, "Sobol_m2": False, "Sobol_t": True
+}
 
 # instantiate UQsim
 uqsim = uqef.UQsim()
@@ -52,7 +57,7 @@ if local_debugging:
     uqsim.args.uncertain = "all"
     uqsim.args.chunksize = 1
 
-    uqsim.args.uq_method = "saltelli"  # "sc" | "saltelli" | "mc" | "ensemble"
+    uqsim.args.uq_method = "mc"  # "sc" | "saltelli" | "mc" | "ensemble"
     uqsim.args.mc_numevaluations = 1000
     uqsim.args.sampling_rule = "random"  # "random" | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
     uqsim.args.sc_q_order = 7  # 7 #10 3
@@ -63,7 +68,7 @@ if local_debugging:
     l = 7  # 10
     path_to_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/sparse_grid_nodes_weights")
     uqsim.args.parameters_file = path_to_file / f"KPU_d5_l{l}.asc" # f"KPU_d3_l{l}.asc"
-    uqsim.args.parameters_setup_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEFPP/configurations/KPU_HBV_d10.json")
+    uqsim.args.parameters_setup_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Hydro/configurations/KPU_HBV_d10.json")
 
     uqsim.args.sc_poly_rule = "three_terms_recurrence"  # "gram_schmidt" | "three_terms_recurrence" | "cholesky"
     uqsim.args.sc_poly_normed = False  # True
@@ -73,21 +78,22 @@ if local_debugging:
     uqsim.args.inputModelDir = pathlib.Path("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/HBV-SASK-data")
     uqsim.args.sourceDir = pathlib.Path("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/HBV-SASK-data")
     uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs",
-                                                              'saltelli_2006_trial_sliding_window_gof')) #gpce_d5_l7_p3_summer_2007_multti_qoi
+                                                              'trying_out_efficient_statistics_II')) #gpce_d5_l7_p3_summer_2007_multti_qoi
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
-    uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEFPP/configurations/configuration_hbv_10D.json'
+    uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Hydro/configurations/configuration_hbv_6D.json'
 
     uqsim.args.sampleFromStandardDist = True  # False
 
     uqsim.args.mpi = True
     uqsim.args.mpi_method = "MpiPoolSolver"  # "LinearSolver"
 
+    uqsim.args.instantly_save_results_for_each_time_step = True
     uqsim.args.uqsim_store_to_file = False
 
     uqsim.args.disable_statistics = False
     uqsim.args.parallel_statistics = True
-    uqsim.args.compute_Sobol_t = True
-    uqsim.args.compute_Sobol_m = True
+    uqsim.args.compute_Sobol_t = False
+    uqsim.args.compute_Sobol_m = False
 
     uqsim.args.num_cores = 1
 
@@ -170,8 +176,8 @@ uqsim.statistics.update({"ishigami"       : (lambda: IshigamiStatistics.Ishigami
     compute_Sobol_m=uqsim.args.compute_Sobol_m
 ))})
 uqsim.statistics.update({"productFunction": (lambda: ProductFunctionStatistics.ProductFunctionStatistics(uqsim.configuration_object))})
-uqsim.statistics.update({"hbvsask"         : (lambda: HBVSASKStatistics.HBVSASKStatistics(
-    configurationObject=uqsim.configuration_object, #uqsim.args.config_file,
+uqsim.statistics.update({"hbvsask"        : (lambda: HBVSASKStatistics.HBVSASKStatistics(
+    configurationObject=uqsim.configuration_object,  # uqsim.args.config_file,
     workingDir=uqsim.args.outputResultDir,  # .args.workingDir,
     sampleFromStandardDist=uqsim.args.sampleFromStandardDist,
     store_qoi_data_in_stat_dict=False,
@@ -184,8 +190,9 @@ uqsim.statistics.update({"hbvsask"         : (lambda: HBVSASKStatistics.HBVSASKS
     compute_Sobol_t=uqsim.args.compute_Sobol_t,
     compute_Sobol_m=uqsim.args.compute_Sobol_m,
     save_samples=True,
-    # qoi_column="Q_cms",
-    inputModelDir=uqsim.args.inputModelDir
+    inputModelDir=uqsim.args.inputModelDir,
+    instantly_save_results_for_each_time_step=uqsim.args.instantly_save_results_for_each_time_step,
+    dict_what_to_plot=DEFAULT_DICT_WHAT_TO_PLOT
 ))})
 
 #####################################
@@ -221,6 +228,7 @@ uqsim.simulate()
 #####################################
 
 if uqsim.is_master():
+    # This shows a way how to recompute samples from uqsim.solver.results
     # TODO This will be a lot of duplicated savings in case
     #  always_save_original_model_runs=True and run_and_save_simulations=True
     if uqsim.args.model == "larsim" and uqsim.args.disable_statistics:
@@ -256,20 +264,21 @@ if uqsim.args.model == "larsim":
         plot_unaltered_timeseries=strtobool(uqsim.configuration_object["model_settings"]["run_unaltered_sim"])
     )
 elif uqsim.args.model == "hbvsask":
+    pass
     # TODO This only for now - change the logic
-    uqsim.plot_statistics(display=False,
-                          plot_measured_timeseries=True,
-                          plot_forcing_timeseries=True,
-                          time_column_name = "TimeStamp",
-                          measured_df_column_to_draw="streamflow",
-                          measured_df_timestamp_column="index",
-                          streamflow_df_column_to_draw="streamflow",
-                          streamflow_df_timestamp_column="index",
-                          precipitation_df_column_to_draw="precipitation",
-                          precipitation_df_timestamp_column="index",
-                          temperature_df_column_to_draw="temperature",
-                          temperature_df_timestamp_column="index",
-                          )
+    # uqsim.plot_statistics(display=False,
+    #                       plot_measured_timeseries=True,
+    #                       plot_forcing_timeseries=True,
+    #                       time_column_name = "TimeStamp",
+    #                       measured_df_column_to_draw="streamflow",
+    #                       measured_df_timestamp_column="index",
+    #                       streamflow_df_column_to_draw="streamflow",
+    #                       streamflow_df_timestamp_column="index",
+    #                       precipitation_df_column_to_draw="precipitation",
+    #                       precipitation_df_timestamp_column="index",
+    #                       temperature_df_column_to_draw="temperature",
+    #                       temperature_df_timestamp_column="index",
+    #                       )
 else:
     uqsim.plot_statistics(display=False)
 

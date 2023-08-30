@@ -24,7 +24,7 @@
   "model_settings": {
     "basis": "Oldman_Basin",
     "plotting": "True",
-    "writing_results_to_a_file": "True",
+    "writing_results_to_a_file": "False",
     "corrupt_forcing_data": "False"
   },
   "model_paths": {

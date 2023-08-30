@@ -221,7 +221,7 @@ def compute_gpce_chaospy_uqefpp(model, param_names, dists, joint, jointStandard,
                          can_model_evaluate_all_vector_nodes=False, vector_model_output=False,
                          read_nodes_from_file=False, **kwargs):
     """
-    This method created a UQsim object and relays on routines from UQEF and UQEFPP
+    This method created a UQsim object and relays on routines from UQEF and UQEF-Hydro
     input model: name of the model in string format
     """
     # TODO Finish this function
@@ -238,7 +238,7 @@ def compute_gpce_chaospy(model, param_names, dists, joint, jointStandard, dim, a
                          can_model_evaluate_all_vector_nodes=False, vector_model_output=False,
                          read_nodes_from_file=False, **kwargs):
     """
-    This is all that UQEF+UQEFPP do in short, when uq_method=sc
+    This is all that UQEF+UQEF-Hydro do in short, when uq_method=sc
     - sparse_utility vs. non-sparse_utility
     - model output single vs. vector
     - transformation vs. not
@@ -1779,7 +1779,7 @@ if __name__ == "__main__":
 
     # uncomment if you want to run analysis for Genz functions...
     list_of_genz_functions = ["oscillatory", "product_peak", "corner_peak", "gaussian", "continous", "discontinuous"]
-    path_to_saved_all_genz_functions = pathlib.Path("/work/ga45met/Backup/UQEFPP/sg_anaysis/genz_functions")
+    path_to_saved_all_genz_functions = pathlib.Path("/work/ga45met/Backup/UQEF-Hydro/sg_anaysis/genz_functions")
     read_saved_genz_functions = True
     anisotropic = True
 
