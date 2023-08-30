@@ -31,6 +31,11 @@ from common import colors
 
 from common import utility
 
+DEFAULT_DICT_WHAT_TO_PLOT = {
+    "E_minus_std": False, "E_plus_std": False, "P10": False, "P90": False,
+    "StdDev": True, "Skew": False, "Kurt": False, "Sobol_m": True, "Sobol_m2": False, "Sobol_t": True
+}
+
 # TODO two cases - time_column_name is or is not an index column in returned data!?
 class Samples(object):
     def __init__(self, rawSamples, qoi_columns="Value", time_column_name="TimeStamp", **kwargs):
@@ -234,6 +239,9 @@ class HydroStatistics(Statistics):
         self._compute_Sobol_m = kwargs.get('compute_Sobol_m', True)
         self._compute_Sobol_m2 = kwargs.get('compute_Sobol_m2', False)
 
+        self.instantly_save_results_for_each_time_step = kwargs.get(
+            'instantly_save_results_for_each_time_step', False)
+
         #####################################
         # Set of configuration variables propagated via **kwargs or read from configurationObject
         # These are mainly model related configurations
@@ -246,6 +254,8 @@ class HydroStatistics(Statistics):
         else:
             self.corrupt_forcing_data = strtobool(self.configurationObject["model_settings"].get(
                 "corrupt_forcing_data", False))
+
+        self.dict_what_to_plot = kwargs.get("dict_what_to_plot", DEFAULT_DICT_WHAT_TO_PLOT)
         #####################################
         # Parameters related set-up part
         #####################################
@@ -559,6 +569,9 @@ class HydroStatistics(Statistics):
 
         self._set_timestep_qoi()
 
+        self.prepare_for_plotting(
+            plot_measured_timeseries=True, plot_forcing_timeseries=True, plot_unaltered_timeseries=False)
+
     ###################################################################################################################
     # TODO Write getters and setters!
 
@@ -571,8 +584,12 @@ class HydroStatistics(Statistics):
         elif self.samples is not None:
             self.timesteps = self.samples.get_simulation_timesteps()
         elif self.result_dict is not None:
-            self.timesteps = list(self.result_dict[self.list_qoi_column[0]].keys())
-
+            try:
+                self.timesteps = list(self.result_dict[self.list_qoi_column[0]].keys())
+            except KeyError as e:
+                print(f"Error in Statistics.set_timesteps - one is trying to infer timesteps from result_dict;"
+                      f"however, entry {self.list_qoi_column[0]} does not exist in the dict")
+                raise
         if self.timesteps is not None:
             self.pdTimesteps = [pd.Timestamp(timestep) for timestep in self.timesteps]
             self.numTimesteps = len(self.timesteps)
@@ -684,6 +701,37 @@ class HydroStatistics(Statistics):
 
     ###################################################################################################################
 
+    def _process_chunk_result_single_qoi_single_time_step(self, single_qoi_column, timestamp, result_dict):
+        result_dict.update({'qoi': single_qoi_column})
+        if self.instantly_save_results_for_each_time_step:
+            fileName = f"statistics_dictionary_{single_qoi_column}_{timestamp}.pkl"
+            fullFileName = os.path.abspath(os.path.join(str(self.workingDir), fileName))
+            with open(fullFileName, 'wb') as handle:
+                pickle.dump(result_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        else:
+            self.result_dict[single_qoi_column][timestamp] = result_dict
+
+    def _save_plot_and_clear_result_dict_single_qoi(self, single_qoi_column):
+        if self.instantly_save_results_for_each_time_step:
+            return
+
+        # In this case the results where collected in the self.result_dict dict and can be saved and plotted
+        # Saving Stat Dict for a single qoi as soon as it is computed/ all time steps are processed
+        fileName = "statistics_dictionary_qoi_" + single_qoi_column + ".pkl"
+        fullFileName = os.path.abspath(os.path.join(str(self.workingDir), fileName))
+        with open(fullFileName, 'wb') as handle:
+            pickle.dump(self.result_dict[single_qoi_column], handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+        # TODO Plotting Stat Dict as soon as it is computed
+        # TODO Think how to propagate extra argument to the plotting function
+        self.plotResults_single_qoi(
+            single_qoi_column=single_qoi_column,
+            dict_what_to_plot=self.dict_what_to_plot
+        )
+
+        # TODO - maybe freeing up the memory -
+        self.result_dict[single_qoi_column].clear()
+
     def calcStatisticsForMcParallel(self, chunksize=1, regression=False, *args, **kwargs):
         self.result_dict = defaultdict(dict)
 
@@ -756,18 +804,14 @@ class HydroStatistics(Statistics):
                     chunk_results = list(chunk_results_it)
                     for chunk_result in chunk_results:
                         for result in chunk_result:
-                            self.result_dict[single_qoi_column][result[0]] = result[1]
+                            self._process_chunk_result_single_qoi_single_time_step(
+                                single_qoi_column, timestamp=result[0],result_dict=result[1])
+                            if self.instantly_save_results_for_each_time_step:
+                                del result[1]
+                    del chunk_results_it
+                    del chunk_results
 
-                    # Saving Stat Dict as soon as it is computed
-                    # TODO - current problem of saving at this stage -
-                    #  single_qoi_column info is missed once saved dict is read
-                    fileName = "statistics_dictionary_qoi_" + single_qoi_column + ".pkl"
-                    fullFileName = os.path.abspath(os.path.join(str(self.workingDir), fileName))
-                    with open(fullFileName, 'wb') as handle:
-                        pickle.dump(self.result_dict[single_qoi_column], handle, protocol=pickle.HIGHEST_PROTOCOL)
-
-                    # TODO Plotting Stat Dict as soon as it is computed
-
+                    self._save_plot_and_clear_result_dict_single_qoi(single_qoi_column)
 
     def calcStatisticsForEnsembleParallel(self, chunksize=1, regression=False, *args, **kwargs):
         self.calcStatisticsForMcParallel(chunksize=chunksize, regression=False, *args, **kwargs)
@@ -825,16 +869,14 @@ class HydroStatistics(Statistics):
                     chunk_results = list(chunk_results_it)
                     for chunk_result in chunk_results:
                         for result in chunk_result:
-                            self.result_dict[single_qoi_column][result[0]] = result[1]
+                            self._process_chunk_result_single_qoi_single_time_step(
+                                single_qoi_column, timestamp=result[0],result_dict=result[1])
+                            if self.instantly_save_results_for_each_time_step:
+                                del result[1]
+                    del chunk_results_it
+                    del chunk_results
 
-                    # Saving Stat Dict as soon as it is computed
-                    # TODO - current problem, single_qoi_column info is missed once saved dict is read
-                    fileName = "statistics_dictionary_qoi_" + single_qoi_column + ".pkl"
-                    fullFileName = os.path.abspath(os.path.join(str(self.workingDir), fileName))
-                    with open(fullFileName, 'wb') as handle:
-                        pickle.dump(self.result_dict[single_qoi_column], handle, protocol=pickle.HIGHEST_PROTOCOL)
-
-                    # TODO Plotting Stat Dict as soon as it is computed
+                    self._save_plot_and_clear_result_dict_single_qoi(single_qoi_column)
 
     def calcStatisticsForScParallel(self, chunksize=1, regression=False, *args, **kwargs):
         self.result_dict = defaultdict(dict)
@@ -902,25 +944,14 @@ class HydroStatistics(Statistics):
                     chunk_results = list(chunk_results_it)
                     for chunk_result in chunk_results:
                         for result in chunk_result:
-                            # TODO - extend result[1] with {"qoi":single_qoi_column}
-                            result[1].update({'qoi': single_qoi_column})
-                            self.result_dict[single_qoi_column][result[0]] = result[1]
-                            # final_result_dict = {'qoi': single_qoi_column, **result[1]}
-                            # self.result_dict[single_qoi_column][result[0]] = final_result_dict
-                            # TODO should I doo result[1].clean(); would that delete the entries in self.result_dict?
+                            self._process_chunk_result_single_qoi_single_time_step(
+                                single_qoi_column, timestamp=result[0],result_dict=result[1])
+                            if self.instantly_save_results_for_each_time_step:
+                                del result[1]
+                    del chunk_results_it
+                    del chunk_results
 
-                    # Saving Stat Dict as soon as it is computed
-                    # TODO - current problem, single_qoi_column info is missed once saved dict is read
-                    fileName = "statistics_dictionary_qoi_" + single_qoi_column + ".pkl"
-                    fullFileName = os.path.abspath(os.path.join(str(self.workingDir), fileName))
-                    with open(fullFileName, 'wb') as handle:
-                        pickle.dump(self.result_dict[single_qoi_column], handle, protocol=pickle.HIGHEST_PROTOCOL)
-
-                    # TODO Plotting Stat Dict as soon as it is computed
-
-                    # TODO - maybe freeing up the memory - self.result_dict[single_qoi_column].clean(),
-                    #  it will letter be used only in saveToFile(), _plotStatisticsDict_plotly()
-                    #  and functions which do postprocessing
+                    self._save_plot_and_clear_result_dict_single_qoi(single_qoi_column)
 
     ###################################################################################################################
 
@@ -929,21 +960,31 @@ class HydroStatistics(Statistics):
             qoi_column = self.list_qoi_column[0]
         if timestamp is None:
             timestamp = self.pdTimesteps[0]
-        self._is_Sobol_t_computed = "Sobol_t" in self.result_dict[qoi_column][timestamp] #hasattr(self.result_dict[keyIter[0], "Sobol_t")
+        try:
+            self._is_Sobol_t_computed = "Sobol_t" in self.result_dict[qoi_column][
+                timestamp]  # hasattr(self.result_dict[keyIter[0], "Sobol_t")
+        except KeyError as e:
+            self._is_Sobol_t_computed = False
 
     def _check_if_Sobol_m_computed(self, timestamp=None, qoi_column=None):
         if qoi_column is None:
             qoi_column = self.list_qoi_column[0]
         if timestamp is None:
             timestamp = self.pdTimesteps[0]
-        self._is_Sobol_m_computed = "Sobol_m" in self.result_dict[qoi_column][timestamp]
+        try:
+            self._is_Sobol_m_computed = "Sobol_m" in self.result_dict[qoi_column][timestamp]
+        except KeyError as e:
+            self._is_Sobol_m_computed = False
 
     def _check_if_Sobol_m2_computed(self, timestamp=None, qoi_column=None):
         if qoi_column is None:
             qoi_column = self.list_qoi_column[0]
         if timestamp is None:
             timestamp = self.pdTimesteps[0]
-        self._is_Sobol_m2_computed = "Sobol_m2" in self.result_dict[qoi_column][timestamp]
+        try:
+            self._is_Sobol_m2_computed = "Sobol_m2" in self.result_dict[qoi_column][timestamp]
+        except KeyError as e:
+            self._is_Sobol_m2_computed = False
 
     ###################################################################################################################
 
@@ -951,10 +992,18 @@ class HydroStatistics(Statistics):
                    fileNameIdentIsFullName=False, **kwargs):
 
         for single_qoi_column in self.list_qoi_column:
-            fileName = "statistics_dictionary_qoi_" + single_qoi_column + ".pkl"
-            fullFileName = os.path.abspath(os.path.join(str(self.workingDir), fileName))
-            with open(fullFileName, 'wb') as handle:
-                pickle.dump(self.result_dict[single_qoi_column], handle, protocol=pickle.HIGHEST_PROTOCOL)
+            try:
+                fileName = "statistics_dictionary_qoi_" + single_qoi_column + ".pkl"
+                fullFileName = os.path.abspath(os.path.join(str(self.workingDir), fileName))
+                if self.result_dict[single_qoi_column]:
+                    with open(fullFileName, 'wb') as handle:
+                        pickle.dump(self.result_dict[single_qoi_column], handle, protocol=pickle.HIGHEST_PROTOCOL)
+                else:
+                    print(f"Entry {single_qoi_column} does not exist in HydroStatistics.result_dict, "
+                          f"therefore will not be saved")
+            except KeyError as e:
+                print(f"Entry {single_qoi_column} does not exist in HydroStatistics.result_dict, "
+                      f"therefore will not be saved")
 
         if self.active_scores_dict is not None:
             fileName = "active_scores_dict.pkl"
@@ -1088,6 +1137,7 @@ class HydroStatistics(Statistics):
         # current_row = starting_row
 
         if dict_what_to_plot is None:
+            # dict_what_to_plot = DEFAULT_DICT_WHAT_TO_PLOT
             dict_what_to_plot = {
                 "E_minus_std": False, "E_plus_std": False, "P10": False, "P90": False,
                 "StdDev": False, "Skew": False, "Kurt": False, "Sobol_m": False, "Sobol_m2": False, "Sobol_t": False
@@ -1099,32 +1149,37 @@ class HydroStatistics(Statistics):
             # dict_qoi_vs_plot_rows[single_qoi_column]["qoi"] = current_row
             # current_row += 1
             if result_dict is None:
-                result_dict = self.result_dict[single_qoi_column]
-
-            if "StdDev" in result_dict[keyIter[0]] and dict_what_to_plot.get("StdDev", False):
-                n_rows += 1
-                # dict_qoi_vs_plot_rows[single_qoi_column]["StdDev"] = current_row
-                # current_row += 1
-            if "Skew" in result_dict[keyIter[0]] and dict_what_to_plot.get("Skew", False):
-                n_rows += 1
-                # dict_qoi_vs_plot_rows[single_qoi_column]["Skew"] = current_row
-                # current_row += 1
-            if "Kurt" in result_dict[keyIter[0]] and dict_what_to_plot.get("Kurt", False):
-                n_rows += 1
-                # dict_qoi_vs_plot_rows[single_qoi_column]["Kurt"] = current_row
-                # current_row += 1
-            if "Sobol_m" in result_dict[keyIter[0]] and dict_what_to_plot.get("Sobol_m", False):
-                n_rows += 1
-                # dict_qoi_vs_plot_rows[single_qoi_column]["Sobol_m"] = current_row
-                # current_row += 1
-            if "Sobol_m2" in result_dict[keyIter[0]] and dict_what_to_plot.get("Sobol_m2", False):
-                n_rows += 1
-                # dict_qoi_vs_plot_rows[single_qoi_column]["Sobol_m2"] = current_row
-                # current_row += 1
-            if "Sobol_t" in result_dict[keyIter[0]] and dict_what_to_plot.get("Sobol_t", False):
-                n_rows += 1
-                # dict_qoi_vs_plot_rows[single_qoi_column]["Sobol_t"] = current_row
-                # current_row += 1
+                if self.result_dict[single_qoi_column]:
+                    result_dict = self.result_dict[single_qoi_column]
+                else:
+                    continue
+            if result_dict:
+                if "StdDev" in result_dict[keyIter[0]] and dict_what_to_plot.get("StdDev", False):
+                    n_rows += 1
+                    # dict_qoi_vs_plot_rows[single_qoi_column]["StdDev"] = current_row
+                    # current_row += 1
+                if "Skew" in result_dict[keyIter[0]] and dict_what_to_plot.get("Skew", False):
+                    n_rows += 1
+                    # dict_qoi_vs_plot_rows[single_qoi_column]["Skew"] = current_row
+                    # current_row += 1
+                if "Kurt" in result_dict[keyIter[0]] and dict_what_to_plot.get("Kurt", False):
+                    n_rows += 1
+                    # dict_qoi_vs_plot_rows[single_qoi_column]["Kurt"] = current_row
+                    # current_row += 1
+                if "Sobol_m" in result_dict[keyIter[0]] and dict_what_to_plot.get("Sobol_m", False):
+                    n_rows += 1
+                    # dict_qoi_vs_plot_rows[single_qoi_column]["Sobol_m"] = current_row
+                    # current_row += 1
+                if "Sobol_m2" in result_dict[keyIter[0]] and dict_what_to_plot.get("Sobol_m2", False):
+                    n_rows += 1
+                    # dict_qoi_vs_plot_rows[single_qoi_column]["Sobol_m2"] = current_row
+                    # current_row += 1
+                if "Sobol_t" in result_dict[keyIter[0]] and dict_what_to_plot.get("Sobol_t", False):
+                    n_rows += 1
+                    # dict_qoi_vs_plot_rows[single_qoi_column]["Sobol_t"] = current_row
+                    # current_row += 1
+            else:
+                continue
 
         return n_rows, starting_row
 
@@ -1134,7 +1189,7 @@ class HydroStatistics(Statistics):
                     fileNameIdentIsFullName=False, safe=True, **kwargs):
         raise NotImplementedError
 
-    def plotResults_single_qoi(self, single_qoi_column, dict_time_vs_qoi_stat, timestep=-1, display=False, fileName="",
+    def plotResults_single_qoi(self, single_qoi_column, dict_time_vs_qoi_stat=None, timestep=-1, display=False, fileName="",
                                fileNameIdent="", directory="./", fileNameIdentIsFullName=False, safe=True,
                                dict_what_to_plot=None, **kwargs):
         raise NotImplementedError
@@ -1154,12 +1209,19 @@ class HydroStatistics(Statistics):
         list_of_single_qoi_mean_df = []
         for single_qoi_column in self.list_qoi_column:
             keyIter = list(self.pdTimesteps)
-            mean_time_series = [self.result_dict[single_qoi_column][key]["E"] for key in keyIter]
+            try:
+                mean_time_series = [self.result_dict[single_qoi_column][key]["E"] for key in keyIter]
+            except KeyError as e:
+                continue
             qoi_column = [single_qoi_column] * len(keyIter)
             mean_df_single_qoi = pd.DataFrame(list(zip(qoi_column, mean_time_series, self.pdTimesteps)),
                                               columns=['qoi', 'mean_qoi', self.time_column_name])
             list_of_single_qoi_mean_df.append(mean_df_single_qoi)
-        self.qoi_mean_df = pd.concat(list_of_single_qoi_mean_df, ignore_index=True, sort=False, axis=0)
+
+        if list_of_single_qoi_mean_df:
+            self.qoi_mean_df = pd.concat(list_of_single_qoi_mean_df, ignore_index=True, sort=False, axis=0)
+        else:
+            self.qoi_mean_df = None
 
     def create_df_from_statistics_data(self, uq_method="sc", compute_measured_normalized_data=False):
         list_of_single_qoi_dfs = []
@@ -1167,10 +1229,13 @@ class HydroStatistics(Statistics):
             df_statistics_single_qoi = self.create_df_from_statistics_data_single_qoi(
                 qoi_column=single_qoi_column, uq_method=uq_method,
                 compute_measured_normalized_data=compute_measured_normalized_data)
-            df_statistics_single_qoi["qoi"] = single_qoi_column
-            list_of_single_qoi_dfs.append(df_statistics_single_qoi)
+            if df_statistics_single_qoi is not None:
+                df_statistics_single_qoi["qoi"] = single_qoi_column
+                list_of_single_qoi_dfs.append(df_statistics_single_qoi)
         if list_of_single_qoi_dfs:
             self.df_statistics = pd.concat(list_of_single_qoi_dfs, axis=0)
+        else:
+            self.df_statistics = None
 
     def _check_if_df_statistics_is_computed(self, recompute_if_not=False):
         if self.df_statistics is None or self.df_statistics.empty:
@@ -1217,17 +1282,26 @@ class HydroStatistics(Statistics):
                 qoi_column=single_qoi_column, si_type=si_type, uq_method=uq_method,
                 compute_measured_normalized_data=compute_measured_normalized_data
             )
-            single_si_df["qoi"] = single_qoi_column
-            single_si_df.reset_index(inplace=True)
-            single_si_df.rename(columns={single_si_df.index.name: self.time_column_name}, inplace=True)
-            list_of_single_qoi_dfs.append(single_si_df)
+            if single_si_df is not None:
+                single_si_df["qoi"] = single_qoi_column
+                single_si_df.reset_index(inplace=True)
+                single_si_df.rename(columns={single_si_df.index.name: self.time_column_name}, inplace=True)
+                list_of_single_qoi_dfs.append(single_si_df)
         if list_of_single_qoi_dfs:
             si_df = pd.concat(list_of_single_qoi_dfs, axis=0)
         return si_df
 
     def create_df_from_statistics_data_single_qoi(self, qoi_column, uq_method="sc",
                                                   compute_measured_normalized_data=False):
+        # try:
+        #     self.result_dict[qoi_column]
+        # except KeyError as e:
+        #     return None
+        if not self.result_dict[qoi_column]:
+            return None
+
         keyIter = list(self.pdTimesteps)
+
         mean_time_series = [self.result_dict[qoi_column][key]["E"] for key in keyIter]
         std_time_series = [self.result_dict[qoi_column][key]["StdDev"] for key in keyIter]
         p10_time_series = [self.result_dict[qoi_column][key]["P10"] for key in keyIter]
@@ -1308,6 +1382,13 @@ class HydroStatistics(Statistics):
         si_type should be: Sobol_t, Sobol_m or Sobol_m2
         :param compute_measured_normalized_data:
         """
+        # try:
+        #     self.result_dict[qoi_column]
+        # except KeyError as e:
+        #     return None
+        if not self.result_dict[qoi_column]:
+            return None
+        
         keyIter = list(self.pdTimesteps)
         is_Sobol_t_computed = "Sobol_t" in self.result_dict[qoi_column][keyIter[0]]
         is_Sobol_m_computed = "Sobol_m" in self.result_dict[qoi_column][keyIter[0]]
@@ -1397,10 +1478,14 @@ class HydroStatistics(Statistics):
             #         go.Scatter(x=self.pdTimesteps, y=[self.result_dict[key][si_type][i][0] for key in keyIter],
             #                    name=self.labels[i], legendgroup=self.labels[i], line_color=colors.COLORS[i]))
             # else:
-            fig.add_trace(
-                go.Scatter(x=self.pdTimesteps, y=[self.result_dict[qoi_column][key][si_type][i] for key in keyIter],
-                           name=self.labels[i], legendgroup=self.labels[i], line_color=colors.COLORS[i]))
-
+            try:
+                fig.add_trace(
+                    go.Scatter(x=self.pdTimesteps, y=[self.result_dict[qoi_column][key][si_type][i] for key in keyIter],
+                               name=self.labels[i], legendgroup=self.labels[i], line_color=colors.COLORS[i]))
+            except KeyError as e:
+                print(f"Error in plot_si_indices_over_time_single_qoi - "
+                      f"StatisticsObject.result_dict has not key {qoi_column}")
+                raise
         return fig
 
     ###################################################################################################################
