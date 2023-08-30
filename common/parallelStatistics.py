@@ -34,7 +34,7 @@ def _my_parallel_calc_stats_for_MC(keyIter_chunk, qoi_values_chunk, numEvaluatio
             local_result_dict["P10"] = local_result_dict["P10"][0]
             local_result_dict["P90"] = local_result_dict["P90"][0]
 
-        results.append((key, local_result_dict))
+        results.append([key, local_result_dict])
     return results
 
 
@@ -94,7 +94,7 @@ def _my_parallel_calc_stats_for_gPCE(keyIter_chunk, qoi_values_chunk, dist, poly
             local_result_dict["Sobol_m"] = cp.Sens_m(qoi_gPCE, dist)
             #local_result_dict["Sobol_m2"] = cp.Sens_m2(qoi_gPCE, dist) # second order sensitivity indices
 
-        results.append((key, local_result_dict))
+        results.append([key, local_result_dict])
     return results
 
 
@@ -137,5 +137,5 @@ def _my_parallel_calc_stats_for_mc_saltelli(keyIter_chunk, qoi_values_chunk, num
             local_result_dict["Sobol_m"] = saltelliSobolIndicesHelpingFunctions._Sens_m_sample(
                 qoi_values_saltelli, dim, numEvaluations, code=4)
 
-        results.append((key, local_result_dict))
+        results.append([key, local_result_dict])
     return results
