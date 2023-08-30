@@ -371,50 +371,45 @@ class HBVSASKStatistics(HydroStatistics.HydroStatistics):
 
         # HBV - Specific plotting of observed data, i.e., forcing data and measured streamflow
         if forcing and self.forcing_data_fetched:
+            reset_index_at_the_end = False
+            if self.forcing_df.index.name != self.time_column_name:
+                self.forcing_df.set_index(self.time_column_name, inplace=True)
+                reset_index_at_the_end = True
+
             # Precipitation
             column_to_draw = kwargs.get('precipitation_df_column_to_draw', 'precipitation')
-            timestamp_column = kwargs.get('precipitation_df_timestamp_column', 'TimeStamp')
             N_max = self.forcing_df[column_to_draw].max()
-            if timestamp_column == "index":
-                fig.add_trace(go.Bar(x=self.forcing_df.index,
-                                     y=self.forcing_df[column_to_draw],
-                                     name="Precipitation", marker_color='magenta'),
-                              row=1, col=1)
-            else:
-                fig.add_trace(go.Bar(x=self.forcing_df[timestamp_column],
-                                     y=self.forcing_df[column_to_draw],
-                                     name="Precipitation", marker_color='magenta'),
-                              row=1, col=1)
+            fig.add_trace(go.Bar(x=self.forcing_df.index,
+                                 y=self.forcing_df[column_to_draw],
+                                 name="Precipitation", marker_color='magenta'),
+                          row=1, col=1)
 
             # Temperature
             column_to_draw = kwargs.get('temperature_df_column_to_draw', 'temperature')
-            timestamp_column = kwargs.get('temperature_df_timestamp_column', 'TimeStamp')
-            if timestamp_column == "index":
-                fig.add_trace(go.Scatter(x=self.forcing_df.index,
-                                         y=self.forcing_df[column_to_draw],
-                                         name="Temperature", line_color='blue', mode='lines+markers'),
-                              row=2, col=1)
-            else:
-                fig.add_trace(go.Scatter(x=self.forcing_df[timestamp_column],
-                                         y=self.forcing_df[column_to_draw],
-                                         name="Temperature", line_color='blue', mode='lines+markers'),
-                              row=2, col=1)
+            fig.add_trace(go.Scatter(x=self.forcing_df.index,
+                                     y=self.forcing_df[column_to_draw],
+                                     name="Temperature", line_color='blue', mode='lines+markers'),
+                          row=2, col=1)
+
+            if reset_index_at_the_end:
+                self.forcing_df.reset_index(inplace=True)
+                self.forcing_df.rename(columns={self.forcing_df.index.name: self.time_column_name}, inplace=True)
 
             # Streamflow - hard-coded for HBV
             streamflow_df = self._get_measured_streamflow(time_column_name="TimeStamp",
                                                           streamflow_column_name="streamflow")
             column_to_draw = kwargs.get('streamflow_df_column_to_draw', 'streamflow')
-            timestamp_column = kwargs.get('streamflow_df_timestamp_column', 'TimeStamp')
-            if timestamp_column == "index":
-                fig.add_trace(go.Scatter(x=streamflow_df.index,
-                                         y=streamflow_df[column_to_draw],
-                                         name="Obs Streamflow", line_color='red', mode='lines'),
-                              row=3, col=1)
-            else:
-                fig.add_trace(go.Scatter(x=streamflow_df[timestamp_column],
-                                         y=streamflow_df[column_to_draw],
-                                         name="Obs Streamflow", line_color='red', mode='lines'),
-                              row=3, col=1)
+            reset_index_at_the_end = False
+            if streamflow_df.index.name != self.time_column_name:
+                streamflow_df.set_index(self.time_column_name, inplace=True)
+                reset_index_at_the_end = True
+            fig.add_trace(go.Scatter(x=streamflow_df.index,
+                                     y=streamflow_df[column_to_draw],
+                                     name="Obs Streamflow", line_color='red', mode='lines'),
+                          row=3, col=1)
+            if reset_index_at_the_end:
+                streamflow_df.reset_index(inplace=True)
+                streamflow_df.rename(columns={streamflow_df.index.name: self.time_column_name}, inplace=True)
 
         dict_qoi_vs_plot_rows = defaultdict(dict, {single_qoi_column: {} for single_qoi_column in self.list_qoi_column})
 
@@ -604,7 +599,7 @@ class HBVSASKStatistics(HydroStatistics.HydroStatistics):
                                   precipitation_column_name=precipitation_column_name,
                                   temperature_column_name=temperature_column_name)
 
-    def plotResults_single_qoi(self, single_qoi_column, dict_time_vs_qoi_stat, timestep=-1, display=False, fileName="",
+    def plotResults_single_qoi(self, single_qoi_column, dict_time_vs_qoi_stat=None, timestep=-1, display=False, fileName="",
                                fileNameIdent="", directory="./", fileNameIdentIsFullName=False, safe=True,
                                dict_what_to_plot=None, **kwargs):
 
@@ -660,50 +655,45 @@ class HBVSASKStatistics(HydroStatistics.HydroStatistics):
 
         # HBV - Specific plotting of observed data, i.e., forcing data and measured streamflow
         if forcing and self.forcing_data_fetched:
+            reset_index_at_the_end = False
+            if self.forcing_df.index.name != self.time_column_name:
+                self.forcing_df.set_index(self.time_column_name, inplace=True)
+                reset_index_at_the_end = True
+
             # Precipitation
             column_to_draw = kwargs.get('precipitation_df_column_to_draw', 'precipitation')
-            timestamp_column = kwargs.get('precipitation_df_timestamp_column', 'TimeStamp')
             N_max = self.forcing_df[column_to_draw].max()
-            if timestamp_column == "index":
-                fig.add_trace(go.Bar(x=self.forcing_df.index,
-                                     y=self.forcing_df[column_to_draw],
-                                     name="Precipitation", marker_color='magenta'),
-                              row=1, col=1)
-            else:
-                fig.add_trace(go.Bar(x=self.forcing_df[timestamp_column],
-                                     y=self.forcing_df[column_to_draw],
-                                     name="Precipitation", marker_color='magenta'),
-                              row=1, col=1)
+            fig.add_trace(go.Bar(x=self.forcing_df.index,
+                                 y=self.forcing_df[column_to_draw],
+                                 name="Precipitation", marker_color='magenta'),
+                          row=1, col=1)
 
             # Temperature
             column_to_draw = kwargs.get('temperature_df_column_to_draw', 'temperature')
-            timestamp_column = kwargs.get('temperature_df_timestamp_column', 'TimeStamp')
-            if timestamp_column == "index":
-                fig.add_trace(go.Scatter(x=self.forcing_df.index,
-                                         y=self.forcing_df[column_to_draw],
-                                         name="Temperature", line_color='blue', mode='lines+markers'),
-                              row=2, col=1)
-            else:
-                fig.add_trace(go.Scatter(x=self.forcing_df[timestamp_column],
-                                         y=self.forcing_df[column_to_draw],
-                                         name="Temperature", line_color='blue', mode='lines+markers'),
-                              row=2, col=1)
+            fig.add_trace(go.Scatter(x=self.forcing_df.index,
+                                     y=self.forcing_df[column_to_draw],
+                                     name="Temperature", line_color='blue', mode='lines+markers'),
+                          row=2, col=1)
+
+            if reset_index_at_the_end:
+                self.forcing_df.reset_index(inplace=True)
+                self.forcing_df.rename(columns={self.forcing_df.index.name: self.time_column_name}, inplace=True)
 
             # Streamflow - hard-coded for HBV
             streamflow_df = self._get_measured_streamflow(time_column_name="TimeStamp",
                                                           streamflow_column_name="streamflow")
             column_to_draw = kwargs.get('streamflow_df_column_to_draw', 'streamflow')
-            timestamp_column = kwargs.get('streamflow_df_timestamp_column', 'TimeStamp')
-            if timestamp_column == "index":
-                fig.add_trace(go.Scatter(x=streamflow_df.index,
-                                         y=streamflow_df[column_to_draw],
-                                         name="Obs Streamflow", line_color='red', mode='lines'),
-                              row=3, col=1)
-            else:
-                fig.add_trace(go.Scatter(x=streamflow_df[timestamp_column],
-                                         y=streamflow_df[column_to_draw],
-                                         name="Obs Streamflow", line_color='red', mode='lines'),
-                              row=3, col=1)
+            reset_index_at_the_end = False
+            if streamflow_df.index.name != self.time_column_name:
+                streamflow_df.set_index(self.time_column_name, inplace=True)
+                reset_index_at_the_end = True
+            fig.add_trace(go.Scatter(x=streamflow_df.index,
+                                     y=streamflow_df[column_to_draw],
+                                     name="Obs Streamflow", line_color='red', mode='lines'),
+                          row=3, col=1)
+            if reset_index_at_the_end:
+                streamflow_df.reset_index(inplace=True)
+                streamflow_df.rename(columns={streamflow_df.index.name: self.time_column_name}, inplace=True)
 
         dict_plot_rows = dict()
 
