@@ -18,6 +18,7 @@ from plotly.offline import iplot, plot
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import plotly.express as px
+import scipy
 from scipy import stats
 # from sklearn.preprocessing import MinMaxScaler
 import sys
@@ -30,11 +31,12 @@ from common import parallelStatistics
 from common import colors
 
 from common import utility
+from common import uqPostprocessing
 
-DEFAULT_DICT_WHAT_TO_PLOT = {
-    "E_minus_std": False, "E_plus_std": False, "P10": False, "P90": False,
-    "StdDev": True, "Skew": False, "Kurt": False, "Sobol_m": True, "Sobol_m2": False, "Sobol_t": True
-}
+# DEFAULT_DICT_WHAT_TO_PLOT = {
+#     "E_minus_std": False, "E_plus_std": False, "P10": False, "P90": False,
+#     "StdDev": True, "Skew": False, "Kurt": False, "Sobol_m": True, "Sobol_m2": False, "Sobol_t": True
+# }
 
 # TODO two cases - time_column_name is or is not an index column in returned data!?
 class Samples(object):
@@ -66,6 +68,7 @@ class Samples(object):
         list_of_single_index_parameter_gof_df = []
         list_of_gradient_matrix_dict = []
         for index_run, value in enumerate(rawSamples, ):
+            # print(f"DEBUGGING - index_run-{index_run}")
             if value is None:
                 # TODO write in some log file runs which have returned None, in case of sc break!
                 continue
@@ -107,6 +110,7 @@ class Samples(object):
 
         # TODO Add 'qoi' column
         if list_of_single_df:
+            # TODO Should I concat and sort based on Index_run!?!?  - HM, it is done later on in Statistics.Prepare
             self.df_simulation_result = pd.concat(list_of_single_df, ignore_index=True, sort=False, axis=0)
         else:
             self.df_simulation_result = None
@@ -218,9 +222,13 @@ class HydroStatistics(Statistics):
 
         self.sampleFromStandardDist = kwargs.get('sampleFromStandardDist', False)
 
-        # whether to store all original model outputs in the stat dict; note - this might take a lot of space
+        # if set to True original qoi values will be saved in the
+        # in the stat result dict under key "qoi_values"; note - this might take a lot of space
         self.store_qoi_data_in_stat_dict = kwargs.get('store_qoi_data_in_stat_dict', False)
+        # if set to True the computed gPCE model will be saved in the stat result dict under key "gPCE"
         self.store_gpce_surrogate = kwargs.get('store_gpce_surrogate', False)
+        # if set to True the computed gPCE model will be saved is a file for each qoi and each time-step;
+        # Note: no need to have both store_gpce_surrogate and save_gpce_surrogate set to True
         self.save_gpce_surrogate = kwargs.get('save_gpce_surrogate', False)
 
         # TODO: eventually make a non-MPI version
@@ -233,14 +241,21 @@ class HydroStatistics(Statistics):
             self.mpi_chunksize = kwargs.get('mpi_chunksize', 1)
             self.unordered = kwargs.get('unordered', False)
 
+        # if set to True, different arguments of the Samples class will be saved, e.g., df_simulation_result
         self.save_samples = kwargs.get('save_samples', True)
 
-        self._compute_Sobol_t = kwargs.get('compute_Sobol_t', True)
-        self._compute_Sobol_m = kwargs.get('compute_Sobol_m', True)
+        self._compute_Sobol_t = kwargs.get('compute_Sobol_t', False)
+        self._compute_Sobol_m = kwargs.get('compute_Sobol_m', False)
         self._compute_Sobol_m2 = kwargs.get('compute_Sobol_m2', False)
 
         self.instantly_save_results_for_each_time_step = kwargs.get(
             'instantly_save_results_for_each_time_step', False)
+
+        self.compute_total_indice_with_only_n_samples = kwargs.get(
+            'compute_total_indice_with_only_n_samples', False)
+        self.nodes_file = kwargs.get(
+            'nodes_file', "nodes.simnodes.zip")
+        self.nodes_file = self.workingDir / self.nodes_file
 
         #####################################
         # Set of configuration variables propagated via **kwargs or read from configurationObject
@@ -255,7 +270,7 @@ class HydroStatistics(Statistics):
             self.corrupt_forcing_data = strtobool(self.configurationObject["model_settings"].get(
                 "corrupt_forcing_data", False))
 
-        self.dict_what_to_plot = kwargs.get("dict_what_to_plot", DEFAULT_DICT_WHAT_TO_PLOT)
+        self.dict_what_to_plot = kwargs.get("dict_what_to_plot", utility.DEFAULT_DICT_WHAT_TO_PLOT)
         #####################################
         # Parameters related set-up part
         #####################################
@@ -278,6 +293,9 @@ class HydroStatistics(Statistics):
         self.samples = None
         # self.result_dict = dict()
         self.result_dict = None
+        self.groups = None
+
+        self.uqef_simulationNodes = None
 
         self.df_unaltered = None
         self.df_measured = None
@@ -340,6 +358,8 @@ class HydroStatistics(Statistics):
         self.list_objective_function_names_qoi = self.dict_processed_simulation_settings_from_config_file[
             "list_objective_function_names_qoi"]
 
+        self.objective_function = self.dict_processed_simulation_settings_from_config_file["objective_function"]
+
         self.mode = self.dict_processed_simulation_settings_from_config_file["mode"]
         self.method = self.dict_processed_simulation_settings_from_config_file["method"]
 
@@ -385,6 +405,8 @@ class HydroStatistics(Statistics):
         self.list_objective_function_qoi = self.dict_processed_simulation_settings_from_config_file["list_objective_function_qoi"]
         self.list_objective_function_names_qoi = self.dict_processed_simulation_settings_from_config_file[
             "list_objective_function_names_qoi"]
+
+        self.objective_function = self.dict_processed_simulation_settings_from_config_file["objective_function"]
 
         self.mode = self.dict_processed_simulation_settings_from_config_file["mode"]
         self.method = self.dict_processed_simulation_settings_from_config_file["method"]
@@ -514,6 +536,8 @@ class HydroStatistics(Statistics):
 
     ###################################################################################################################
 
+    # TODO Write version of the function which read already self.samples.df_simulation_result
+    # from some file and continues...
     def prepare(self, rawSamples, **kwargs):
         self.timesteps = kwargs.get('timesteps', None)
         self.solverTimes = kwargs.get('solverTimes', None)
@@ -565,6 +589,7 @@ class HydroStatistics(Statistics):
         self.pdTimesteps = [pd.Timestamp(timestep) for timestep in self.timesteps]
         self.numTimesteps = len(self.timesteps)
 
+        # This, though, does not hold for Saltelli's approach
         self.numEvaluations = self.number_of_unique_index_runs
 
         self._set_timestep_qoi()
@@ -672,13 +697,14 @@ class HydroStatistics(Statistics):
                 os.path.abspath(os.path.join(file_path, "df_time_aggregated_grad_analysis.pkl")), compression="gzip")
     ###################################################################################################################
 
-    def preparePolyExpanForMc(self, simulationNodes, numEvaluations, regression=None, order=None,
+    def prepareForMcStatistics(self, simulationNodes, numEvaluations, regression=None, order=None,
                               poly_normed=None, poly_rule=None, *args, **kwargs):
         self.numEvaluations = numEvaluations
         # TODO Think about this, tricky for saltelli, makes sense for mc
         # self.numEvaluations = self.number_of_unique_index_runs
         if regression:
             self.nodes = simulationNodes.distNodes
+            self.dim = self.nodes.shape[1]
             self.weights = None
             if self.sampleFromStandardDist:
                 self.dist = simulationNodes.joinedStandardDists
@@ -686,8 +712,9 @@ class HydroStatistics(Statistics):
                 self.dist = simulationNodes.joinedDists
             self.polynomial_expansion = cp.generate_expansion(order, self.dist, rule=poly_rule, normed=poly_normed)
 
-    def preparePolyExpanForSc(self, simulationNodes, order, poly_normed, poly_rule, *args, **kwargs):
+    def prepareForScStatistics(self, simulationNodes, order, poly_normed, poly_rule, *args, **kwargs):
         self.nodes = simulationNodes.distNodes
+        self.dim = self.nodes.shape[1]
         if self.sampleFromStandardDist:
             self.dist = simulationNodes.joinedStandardDists
         else:
@@ -695,26 +722,39 @@ class HydroStatistics(Statistics):
         self.weights = simulationNodes.weights
         self.polynomial_expansion = cp.generate_expansion(order, self.dist, rule=poly_rule, normed=poly_normed)
 
-    def preparePolyExpanForSaltelli(self, simulationNodes, numEvaluations=None, regression=None, order=None,
+    def prepareForMcSaltelliStatistics(self, simulationNodes, numEvaluations=None, regression=None, order=None,
                                     poly_normed=None, poly_rule=None, *args, **kwargs):
-        self.preparePolyExpanForMc(simulationNodes, numEvaluations, regression, order, poly_normed, poly_rule,
+        self.prepareForMcStatistics(simulationNodes, numEvaluations, regression, order, poly_normed, poly_rule,
                                    *args, **kwargs)
+        if self.compute_total_indice_with_only_n_samples:
+            assert self.nodes_file.is_file()
+            # print(f"DEBUGGING - self.nodes_file-{self.nodes_file}")
+            with open(self.nodes_file, 'rb') as f:
+                self.uqef_simulationNodes = pickle.load(f)
 
     ###################################################################################################################
+    def _save_statistics_dictionary_single_qoi_single_timestamp(self, single_qoi_column, timestamp, result_dict):
+        fileName = f"statistics_dictionary_{single_qoi_column}_{timestamp}.pkl"
+        fullFileName = os.path.abspath(os.path.join(str(self.workingDir), fileName))
+        with open(fullFileName, 'wb') as handle:
+            pickle.dump(result_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     def _process_chunk_result_single_qoi_single_time_step(self, single_qoi_column, timestamp, result_dict):
         result_dict.update({'qoi': single_qoi_column})
         if self.instantly_save_results_for_each_time_step:
-            fileName = f"statistics_dictionary_{single_qoi_column}_{timestamp}.pkl"
-            fullFileName = os.path.abspath(os.path.join(str(self.workingDir), fileName))
-            with open(fullFileName, 'wb') as handle:
-                pickle.dump(result_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+            # TODO maybe comment out all this part, in case this is performed in _my_parallel_calc_stats_for...
+            self._save_statistics_dictionary_single_qoi_single_timestamp(single_qoi_column, timestamp, result_dict)
         else:
             self.result_dict[single_qoi_column][timestamp] = result_dict
 
     def _save_plot_and_clear_result_dict_single_qoi(self, single_qoi_column):
         if self.instantly_save_results_for_each_time_step:
+            # In this case self.result_dict has already been emptied
             return
+
+        # print(f"DEBUGGING - self.result_dict[single_qoi_column] - {self.result_dict[single_qoi_column]}")
+        # print(f"DEBUGGING - self.dict_what_to_plot - {self.dict_what_to_plot}")
+        # print(f"DEBUGGING - self.pdTimesteps - {self.pdTimesteps}")
 
         # In this case the results where collected in the self.result_dict dict and can be saved and plotted
         # Saving Stat Dict for a single qoi as soon as it is computed/ all time steps are processed
@@ -723,41 +763,34 @@ class HydroStatistics(Statistics):
         with open(fullFileName, 'wb') as handle:
             pickle.dump(self.result_dict[single_qoi_column], handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-        # TODO Plotting Stat Dict as soon as it is computed
-        # TODO Think how to propagate extra argument to the plotting function
         self.plotResults_single_qoi(
             single_qoi_column=single_qoi_column,
-            dict_what_to_plot=self.dict_what_to_plot
+            dict_time_vs_qoi_stat = self.result_dict[single_qoi_column],
+            dict_what_to_plot=self.dict_what_to_plot,
+            directory=self.workingDir
         )
 
-        # TODO - maybe freeing up the memory -
+        # Freeing up the memory
+        # del self.result_dict[single_qoi_column]
         self.result_dict[single_qoi_column].clear()
 
     def calcStatisticsForMcParallel(self, chunksize=1, regression=False, *args, **kwargs):
         self.result_dict = defaultdict(dict)
 
         if self.rank == 0:
-            grouped = self.samples.df_simulation_result.groupby([self.time_column_name, ])
-            groups = grouped.groups
-
-            keyIter = list(groups.keys())
+            self._groupby_df_simulation_results()
+            keyIter = list(self.groups.keys())
 
         for single_qoi_column in self.list_qoi_column:
             if self.rank == 0:
                 list_of_simulations_df = [
-                    self.samples.df_simulation_result.loc[groups[key].values][single_qoi_column].values
+                    self.samples.df_simulation_result.loc[self.groups[key].values][single_qoi_column].values
                     for key in keyIter
                 ]
 
                 keyIter_chunk = list(more_itertools.chunked(keyIter, chunksize))
                 list_of_simulations_df_chunk = list(more_itertools.chunked(list_of_simulations_df, chunksize))
-
                 numEvaluations_chunk = [self.numEvaluations] * len(keyIter_chunk)
-
-                regressionChunks = [regression] * len(keyIter_chunk)
-                compute_Sobol_t_Chunks = [self._compute_Sobol_t] * len(keyIter_chunk)
-                compute_Sobol_m_Chunks = [self._compute_Sobol_m] * len(keyIter_chunk)
-                store_qoi_data_in_stat_dict_Chunks = [self.store_qoi_data_in_stat_dict] * len(keyIter_chunk)
 
                 if regression:
                     nodesChunks = [self.nodes] * len(keyIter_chunk)
@@ -766,32 +799,43 @@ class HydroStatistics(Statistics):
                     dimChunks = [self.dim] * len(keyIter_chunk)
                     polynomial_expansionChunks = [self.polynomial_expansion] * len(keyIter_chunk)
 
+                # TODO Probably all processes already have these data -
+                #  I would not have to propagate those if _parallel_calc_stats_for_gPCE would be a class method
+                regressionChunks = [regression] * len(keyIter_chunk)
+                compute_Sobol_t_Chunks = [self._compute_Sobol_t] * len(keyIter_chunk)
+                compute_Sobol_m_Chunks = [self._compute_Sobol_m] * len(keyIter_chunk)
+                store_qoi_data_in_stat_dict_Chunks = [self.store_qoi_data_in_stat_dict] * len(keyIter_chunk)
+
             with futures.MPICommExecutor(MPI.COMM_WORLD, root=0) as executor:
-                if executor is not None:  # master process
+                if executor is not None:  # master proces; or .\executor.mpi_comm.rank == 0
                     print(f"{self.rank}: computation of statistics for qoi {single_qoi_column} started...")
                     solver_time_start = time.time()
                     if regression:
-                        chunk_results_it = executor.map(parallelStatistics._my_parallel_calc_stats_for_gPCE,
-                                                        keyIter_chunk,
-                                                        list_of_simulations_df_chunk,
-                                                        distChunks,
-                                                        polynomial_expansionChunks,
-                                                        nodesChunks,
-                                                        weightsChunks,
-                                                        regressionChunks,
-                                                        compute_Sobol_t_Chunks,
-                                                        compute_Sobol_m_Chunks,
-                                                        store_qoi_data_in_stat_dict_Chunks,
-                                                        chunksize=self.mpi_chunksize,
-                                                        unordered=self.unordered)
+                        chunk_results_it = executor.map(
+                            parallelStatistics._parallel_calc_stats_for_gPCE,
+                            keyIter_chunk,
+                            list_of_simulations_df_chunk,
+                            distChunks,
+                            polynomial_expansionChunks,
+                            nodesChunks,
+                            weightsChunks,
+                            regressionChunks,
+                            compute_Sobol_t_Chunks,
+                            compute_Sobol_m_Chunks,
+                            store_qoi_data_in_stat_dict_Chunks,
+                            chunksize=self.mpi_chunksize,
+                            unordered=self.unordered
+                        )
                     else:
-                        chunk_results_it = executor.map(parallelStatistics._my_parallel_calc_stats_for_MC,
-                                                        keyIter_chunk,
-                                                        list_of_simulations_df_chunk,
-                                                        numEvaluations_chunk,
-                                                        store_qoi_data_in_stat_dict_Chunks,
-                                                        chunksize=self.mpi_chunksize,
-                                                        unordered=self.unordered)
+                        chunk_results_it = executor.map(
+                            parallelStatistics._parallel_calc_stats_for_MC,
+                            keyIter_chunk,
+                            list_of_simulations_df_chunk,
+                            numEvaluations_chunk,
+                            store_qoi_data_in_stat_dict_Chunks,
+                            chunksize=self.mpi_chunksize,
+                            unordered=self.unordered
+                        )
                     print(f"{self.rank}: computation for qoi {single_qoi_column} - waits for shutdown...")
                     sys.stdout.flush()
                     executor.shutdown(wait=True)
@@ -806,30 +850,27 @@ class HydroStatistics(Statistics):
                     for chunk_result in chunk_results:
                         for result in chunk_result:
                             self._process_chunk_result_single_qoi_single_time_step(
-                                single_qoi_column, timestamp=result[0],result_dict=result[1])
+                                single_qoi_column, timestamp=result[0], result_dict=result[1])
                             if self.instantly_save_results_for_each_time_step:
                                 del result[1]
+                    self._save_plot_and_clear_result_dict_single_qoi(single_qoi_column)
                     del chunk_results_it
                     del chunk_results
-
-                    self._save_plot_and_clear_result_dict_single_qoi(single_qoi_column)
 
     def calcStatisticsForEnsembleParallel(self, chunksize=1, regression=False, *args, **kwargs):
         self.calcStatisticsForMcParallel(chunksize=chunksize, regression=False, *args, **kwargs)
 
-    def calcStatisticsForSaltelliParallel(self, chunksize=1, regression=False, *args, **kwargs):
+    def calcStatisticsForMcSaltelliParallel(self, chunksize=1, regression=False, *args, **kwargs):
         self.result_dict = defaultdict(dict)
 
         if self.rank == 0:
-            grouped = self.samples.df_simulation_result.groupby([self.time_column_name, ])
-            groups = grouped.groups
-
-            keyIter = list(groups.keys())
+            self._groupby_df_simulation_results()
+            keyIter = list(self.groups.keys())
 
         for single_qoi_column in self.list_qoi_column:
             if self.rank == 0:
                 list_of_simulations_df = [
-                    self.samples.df_simulation_result.loc[groups[key].values][single_qoi_column].values
+                    self.samples.df_simulation_result.loc[self.groups[key].values][single_qoi_column].values
                     for key in keyIter
                 ]
 
@@ -843,20 +884,33 @@ class HydroStatistics(Statistics):
                 compute_Sobol_m_Chunks = [self._compute_Sobol_m] * len(keyIter_chunk)
                 store_qoi_data_in_stat_dict_Chunks = [self.store_qoi_data_in_stat_dict] * len(keyIter_chunk)
 
+                compute_total_indice_with_only_n_samples_chunks = [self.compute_total_indice_with_only_n_samples] * len(
+                    keyIter_chunk)
+                if self.compute_total_indice_with_only_n_samples and \
+                        self._compute_Sobol_t and self.uqef_simulationNodes is not None:
+                    samples_chunks = [self.uqef_simulationNodes.parameters.T[:self.numEvaluations]] * len(keyIter_chunk)
+                else:
+                    samples_chunks = [None] * len(keyIter_chunk)
+
             with futures.MPICommExecutor(MPI.COMM_WORLD, root=0) as executor:
                 if executor is not None:  # master process
                     print(f"{self.rank}: computation of statistics for qoi {single_qoi_column} started...")
                     solver_time_start = time.time()
-                    chunk_results_it = executor.map(parallelStatistics._my_parallel_calc_stats_for_mc_saltelli,
-                                                    keyIter_chunk,
-                                                    list_of_simulations_df_chunk,
-                                                    numEvaluations_chunk,
-                                                    dimChunks,
-                                                    compute_Sobol_t_Chunks,
-                                                    compute_Sobol_m_Chunks,
-                                                    store_qoi_data_in_stat_dict_Chunks,
-                                                    chunksize=self.mpi_chunksize,
-                                                    unordered=self.unordered)
+                    # TODO in case is compute_total_indice_with_only_n_samples True propagate UQEF.Samples.parameters
+                    chunk_results_it = executor.map(
+                        parallelStatistics._parallel_calc_stats_for_mc_saltelli,
+                        keyIter_chunk,
+                        list_of_simulations_df_chunk,
+                        numEvaluations_chunk,
+                        dimChunks,
+                        compute_Sobol_t_Chunks,
+                        compute_Sobol_m_Chunks,
+                        store_qoi_data_in_stat_dict_Chunks,
+                        compute_total_indice_with_only_n_samples_chunks,
+                        samples_chunks,
+                        chunksize=self.mpi_chunksize,
+                        unordered=self.unordered
+                    )
                     print(f"{self.rank}: computation for qoi {single_qoi_column} - waits for shutdown...")
                     sys.stdout.flush()
                     executor.shutdown(wait=True)
@@ -871,28 +925,28 @@ class HydroStatistics(Statistics):
                     for chunk_result in chunk_results:
                         for result in chunk_result:
                             self._process_chunk_result_single_qoi_single_time_step(
-                                single_qoi_column, timestamp=result[0],result_dict=result[1])
+                                single_qoi_column, timestamp=result[0], result_dict=result[1])
                             if self.instantly_save_results_for_each_time_step:
                                 del result[1]
+                    self._save_plot_and_clear_result_dict_single_qoi(single_qoi_column)
                     del chunk_results_it
                     del chunk_results
 
-                    self._save_plot_and_clear_result_dict_single_qoi(single_qoi_column)
 
     def calcStatisticsForScParallel(self, chunksize=1, regression=False, *args, **kwargs):
         self.result_dict = defaultdict(dict)
 
         if self.rank == 0:
-            grouped = self.samples.df_simulation_result.groupby([self.time_column_name, ])
-            groups = grouped.groups
-
-            keyIter = list(groups.keys())
+            self._groupby_df_simulation_results()
+            keyIter = list(self.groups.keys())
 
         for single_qoi_column in self.list_qoi_column:
             if self.rank == 0:
                 # TODO Potential Memory Problem
+                # TODO Should I as well transfer Index_run column
+                #  in order to be sure that right values were multiplied with right polynomials?
                 list_of_simulations_df = [
-                    self.samples.df_simulation_result.loc[groups[key].values][single_qoi_column].values
+                    self.samples.df_simulation_result.loc[self.groups[key].values][single_qoi_column].values
                     for key in keyIter
                 ]
 
@@ -917,21 +971,23 @@ class HydroStatistics(Statistics):
                     print(f"{self.rank}: computation of statistics for qoi {single_qoi_column} started...")
                     solver_time_start = time.time()
                     # TODO Potential Memory Problem
-                    chunk_results_it = executor.map(parallelStatistics._my_parallel_calc_stats_for_gPCE,
-                                                    keyIter_chunk,
-                                                    list_of_simulations_df_chunk,
-                                                    distChunks,
-                                                    polynomial_expansionChunks,
-                                                    nodesChunks,
-                                                    weightsChunks,
-                                                    regressionChunks,
-                                                    compute_Sobol_t_Chunks,
-                                                    compute_Sobol_m_Chunks,
-                                                    store_qoi_data_in_stat_dict_Chunks,
-                                                    store_gpce_surrogate_Chunks,
-                                                    save_gpce_surrogate_Chunks,
-                                                    chunksize=self.mpi_chunksize,
-                                                    unordered=self.unordered)
+                    chunk_results_it = executor.map(
+                        parallelStatistics._parallel_calc_stats_for_gPCE,
+                        keyIter_chunk,
+                        list_of_simulations_df_chunk,
+                        distChunks,
+                        polynomial_expansionChunks,
+                        nodesChunks,
+                        weightsChunks,
+                        regressionChunks,
+                        compute_Sobol_t_Chunks,
+                        compute_Sobol_m_Chunks,
+                        store_qoi_data_in_stat_dict_Chunks,
+                        store_gpce_surrogate_Chunks,
+                        save_gpce_surrogate_Chunks,
+                        chunksize=self.mpi_chunksize,
+                        unordered=self.unordered
+                    )
                     print(f"{self.rank}: computation for qoi {single_qoi_column} - waits for shutdown...")
                     sys.stdout.flush()
                     executor.shutdown(wait=True)
@@ -946,13 +1002,216 @@ class HydroStatistics(Statistics):
                     for chunk_result in chunk_results:
                         for result in chunk_result:
                             self._process_chunk_result_single_qoi_single_time_step(
-                                single_qoi_column, timestamp=result[0],result_dict=result[1])
+                                single_qoi_column, timestamp=result[0], result_dict=result[1])
                             if self.instantly_save_results_for_each_time_step:
                                 del result[1]
+                    self._save_plot_and_clear_result_dict_single_qoi(single_qoi_column)
                     del chunk_results_it
                     del chunk_results
 
-                    self._save_plot_and_clear_result_dict_single_qoi(single_qoi_column)
+
+    def calcStatisticsForMc(self, regression=False, *args, **kwargs):
+        self.result_dict = dict()
+        self._groupby_df_simulation_results()
+        # keyIter = list(self.groups.keys())
+
+        for single_qoi_column in self.list_qoi_column:
+            self.result_dict[single_qoi_column] = defaultdict(dict)
+
+            print(f"computation of statistics for qoi {single_qoi_column} started...")
+            solver_time_start = time.time()
+            print(f"computation for qoi {single_qoi_column} - waits for shutdown...")
+            sys.stdout.flush()
+            print(f"computation for qoi {single_qoi_column} - shut down...")
+            sys.stdout.flush()
+
+            for key, val_indices in self.groups.items():
+                qoi_values = self.samples.df_simulation_result.loc[val_indices.values][single_qoi_column].values
+                self.result_dict[single_qoi_column][key] = dict()
+
+                if self.store_qoi_data_in_stat_dict:
+                    self.result_dict[single_qoi_column][key]["qoi_values"] = qoi_values
+                if regression:
+                    qoi_gPCE = cp.fit_regression(self.polynomial_expansion, self.nodes, qoi_values)
+                    self._calc_stats_for_gPCE_single_qoi(self.dist, single_qoi_column, key, qoi_gPCE)
+                else:
+                    self.numEvaluations = len(qoi_values)
+                    # local_result_dict["E"] = np.sum(qoi_values, axis=0, dtype=np.float64) / self.numEvaluations
+                    self.result_dict[single_qoi_column][key]["E"] = np.mean(qoi_values, 0)
+                    self.result_dict[single_qoi_column][key]["Var"] = np.sum((qoi_values - self.result_dict[single_qoi_column][key]["E"]) ** 2, axis=0,
+                                                      dtype=np.float64) / (self.numEvaluations - 1)
+                    # local_result_dict["StdDev"] = np.sqrt(local_result_dict["Var"], dtype=np.float64)
+                    self.result_dict[single_qoi_column][key]["StdDev"] = np.std(qoi_values, 0, ddof=1)
+                    self.result_dict[single_qoi_column][key]["Skew"] = scipy.stats.skew(qoi_values, axis=0, bias=True)
+                    self.result_dict[single_qoi_column][key]["Kurt"] = scipy.stats.kurtosis(qoi_values, axis=0, bias=True)
+
+                    self.result_dict[single_qoi_column][key]["P10"] = np.percentile(qoi_values, 10, axis=0)
+                    self.result_dict[single_qoi_column][key]["P90"] = np.percentile(qoi_values, 90, axis=0)
+                    if isinstance(self.result_dict[single_qoi_column][key]["P10"], list) and len(self.result_dict[single_qoi_column][key]["P10"]) == 1:
+                        self.result_dict[single_qoi_column][key]["P10"] = self.result_dict[single_qoi_column][key]["P10"][0]
+                        self.result_dict[single_qoi_column][key]["P90"] = self.result_dict[single_qoi_column][key]["P90"][0]
+                if self.instantly_save_results_for_each_time_step:
+                    self._save_statistics_dictionary_single_qoi_single_timestamp(
+                        single_qoi_column=single_qoi_column, timestamp=key,
+                        result_dict=self.result_dict[single_qoi_column][key]
+                    )
+
+            solver_time_end = time.time()
+            solver_time = solver_time_end - solver_time_start
+            print(f"solver_time for qoi {single_qoi_column}: {solver_time}")
+
+            self._save_plot_and_clear_result_dict_single_qoi(single_qoi_column)
+
+    def calcStatisticsForMcSaltelli(self, regression=False, *args, **kwargs):
+        self.result_dict = dict()
+        self._groupby_df_simulation_results()
+        # keyIter = list(self.groups.keys())
+
+        for single_qoi_column in self.list_qoi_column:
+            self.result_dict[single_qoi_column] = defaultdict(dict)
+
+            print(f"computation of statistics for qoi {single_qoi_column} started...")
+            solver_time_start = time.time()
+            print(f"computation for qoi {single_qoi_column} - waits for shutdown...")
+            sys.stdout.flush()
+            print(f"computation for qoi {single_qoi_column} - shut down...")
+            sys.stdout.flush()
+
+            for key, val_indices in self.groups.items():
+                self.result_dict[single_qoi_column][key] = dict()
+
+                qoi_values = self.samples.df_simulation_result.loc[val_indices.values][single_qoi_column].values
+                qoi_values_saltelli = qoi_values[:, np.newaxis]
+                # standard_qoi_values = qoi_values_saltelli[:self.numEvaluations, :]
+                # standard_qoi_values = qoi_values_saltelli[:numEvaluations, :]
+                standard_qoi_values = qoi_values[:self.numEvaluations]
+
+                if self.store_qoi_data_in_stat_dict:
+                    self.result_dict[single_qoi_column][key]["qoi_values"] = qoi_values # for Saltelli this is N(d+2)xt
+                    # self.result_dict[single_qoi_column][key]["qoi_values"] = standard_qoi_values # for Saltelli this is Nxt
+                # local_result_dict["E"] = np.sum(qoi_values, axis=0, dtype=np.float64) / self.numEvaluations
+                self.result_dict[single_qoi_column][key]["E"] = np.mean(standard_qoi_values, 0)
+                self.result_dict[single_qoi_column][key]["Var"] = np.sum(
+                    (standard_qoi_values - self.result_dict[single_qoi_column][key]["E"]) ** 2, axis=0,
+                    dtype=np.float64) / (self.numEvaluations - 1)
+                # local_result_dict["StdDev"] = np.sqrt(local_result_dict["Var"], dtype=np.float64)
+                self.result_dict[single_qoi_column][key]["StdDev"] = np.std(standard_qoi_values, 0, ddof=1)
+                self.result_dict[single_qoi_column][key]["Skew"] = scipy.stats.skew(standard_qoi_values, axis=0,
+                                                                                    bias=True)
+                self.result_dict[single_qoi_column][key]["Kurt"] = scipy.stats.kurtosis(standard_qoi_values, axis=0,
+                                                                                        bias=True)
+                self.result_dict[single_qoi_column][key]["P10"] = np.percentile(standard_qoi_values, 10, axis=0)
+                self.result_dict[single_qoi_column][key]["P90"] = np.percentile(standard_qoi_values, 90, axis=0)
+                if isinstance(self.result_dict[single_qoi_column][key]["P10"], list) and len(
+                        self.result_dict[single_qoi_column][key]["P10"]) == 1:
+                    self.result_dict[single_qoi_column][key]["P10"] = \
+                    self.result_dict[single_qoi_column][key]["P10"][0]
+                    self.result_dict[single_qoi_column][key]["P90"] = \
+                    self.result_dict[single_qoi_column][key]["P90"][0]
+
+                if self.compute_total_indice_with_only_n_samples and self.uqef_simulationNodes is not None:
+                    if self._compute_Sobol_t:
+                        self.result_dict[key]["Sobol_t"] = \
+                            saltelliSobolIndicesHelpingFunctions.compute_total_sobol_indices_with_n_samples(
+                                samples=self.uqef_simulationNodes.parameters.T[:self.numEvaluations],
+                                Y=qoi_values_saltelli[:self.numEvaluations,:], D=self.dim, N=self.numEvaluations)
+                else:
+                    if self._compute_Sobol_t:
+                        self.result_dict[key]["Sobol_t"] = saltelliSobolIndicesHelpingFunctions._Sens_t_sample_4(
+                            qoi_values_saltelli, self.dim, self.numEvaluations)
+                    if self._compute_Sobol_m:
+                        self.result_dict[key]["Sobol_m"] = saltelliSobolIndicesHelpingFunctions._Sens_m_sample_4(
+                            qoi_values_saltelli, self.dim, self.numEvaluations)
+
+                if self.instantly_save_results_for_each_time_step:
+                    self._save_statistics_dictionary_single_qoi_single_timestamp(
+                        single_qoi_column=single_qoi_column, timestamp=key,
+                        result_dict=self.result_dict[single_qoi_column][key]
+                    )
+
+            solver_time_end = time.time()
+            solver_time = solver_time_end - solver_time_start
+            print(f"solver_time for qoi {single_qoi_column}: {solver_time}")
+
+            self._save_plot_and_clear_result_dict_single_qoi(single_qoi_column)
+
+    def calcStatisticsForSc(self, regression=False, *args, **kwargs):
+        self.result_dict = dict()
+        self._groupby_df_simulation_results()
+        # keyIter = list(self.groups.keys())
+
+        for single_qoi_column in self.list_qoi_column:
+            self.result_dict[single_qoi_column] = defaultdict(dict)
+
+            print(f"computation of statistics for qoi {single_qoi_column} started...")
+            solver_time_start = time.time()
+            print(f"computation for qoi {single_qoi_column} - waits for shutdown...")
+            sys.stdout.flush()
+            print(f"computation for qoi {single_qoi_column} - shut down...")
+            sys.stdout.flush()
+
+            for key, val_indices in self.groups.items():
+                qoi_values = self.samples.df_simulation_result.loc[val_indices.values][single_qoi_column].values
+                self.result_dict[single_qoi_column][key] = dict()
+                if self.store_qoi_data_in_stat_dict:
+                    self.result_dict[single_qoi_column][key]["qoi_values"] = qoi_values
+                if regression:
+                    qoi_gPCE = cp.fit_regression(self.polynomial_expansion, self.nodes, qoi_values)
+                else:
+                    qoi_gPCE = cp.fit_quadrature(self.polynomial_expansion, self.nodes, self.weights, qoi_values)
+                self._calc_stats_for_gPCE_single_qoi(self.dist, single_qoi_column, key, qoi_gPCE)
+                if self.instantly_save_results_for_each_time_step:
+                    self._save_statistics_dictionary_single_qoi_single_timestamp(
+                        single_qoi_column=single_qoi_column, timestamp=key,
+                        result_dict=self.result_dict[single_qoi_column][key]
+                    )
+            solver_time_end = time.time()
+            solver_time = solver_time_end - solver_time_start
+            print(f"solver_time for qoi {single_qoi_column}: {solver_time}")
+
+            self._save_plot_and_clear_result_dict_single_qoi(single_qoi_column)
+
+    def _groupby_df_simulation_results(self, columns_to_group_by: list=[]):
+        if not columns_to_group_by:
+            columns_to_group_by = [self.time_column_name,]
+        grouped = self.samples.df_simulation_result.groupby(columns_to_group_by)
+        self.groups = grouped.groups
+
+    def _calc_stats_for_gPCE_single_qoi(self, single_qoi_column, dist, key, qoi_gPCE):
+        if qoi_gPCE is None:
+            qoi_gPCE = self.qoi_gPCE
+
+        numPercSamples = 10 ** 5
+
+        if self.store_gpce_surrogate:
+            self.result_dict[single_qoi_column][key]["gPCE"] = qoi_gPCE
+        if self.save_gpce_surrogate:
+            self._save_gpce_surrogate_model(gpce=qoi_gPCE, qoi=single_qoi_column, timestamp=key)
+
+        self.result_dict[single_qoi_column][key]["E"] = float(cp.E(qoi_gPCE, dist))
+        self.result_dict[single_qoi_column][key]["Var"] = float(cp.Var(qoi_gPCE, dist))
+        self.result_dict[single_qoi_column][key]["StdDev"] = float(cp.Std(qoi_gPCE, dist))
+        #self.result_dict[single_qoi_column][key]["qoi_dist"] = cp.QoI_Dist(qoi_gPCE, dist) # not working!
+
+        # # generate QoI dist
+        # qoi_dist = cp.QoI_Dist(self.qoi_gPCE, dist)
+        # # generate sampling values for the qoi dist (you should know the min/max values for doing this)
+        # dist_sampling_values = np.linspace(min_value, max_value, 1e4, endpoint=True)
+        # # sample the QoI dist on the generated sampling values
+        # pdf_samples = qoi_dist.pdf(dist_sampling_values)
+
+        self.result_dict[single_qoi_column][key]["P10"] = float(cp.Perc(qoi_gPCE, 10, dist, numPercSamples))
+        self.result_dict[key]["P90"] = float(cp.Perc(qoi_gPCE, 90, dist, numPercSamples))
+        if isinstance(self.result_dict[single_qoi_column][key]["P10"], list) and len(self.result_dict[single_qoi_column][key]["P10"]) == 1:
+            self.result_dict[single_qoi_column][key]["P10"]= self.result_dict[single_qoi_column][key]["P10"][0]
+            self.result_dict[single_qoi_column][key]["P90"] = self.result_dict[single_qoi_column][key]["P90"][0]
+
+        if self._compute_Sobol_t:
+            self.result_dict[single_qoi_column][key]["Sobol_t"] = cp.Sens_t(qoi_gPCE, dist)
+        if self._compute_Sobol_m:
+            self.result_dict[single_qoi_column][key]["Sobol_m"] = cp.Sens_m(qoi_gPCE, dist)
+        if self._compute_Sobol_m2:
+            self.result_dict[single_qoi_column][key]["Sobol_m2"] = cp.Sens_m2(qoi_gPCE, dist)
 
     ###################################################################################################################
 
@@ -992,19 +1251,20 @@ class HydroStatistics(Statistics):
     def saveToFile(self, fileName="statistics_dict", fileNameIdent="", directory="./",
                    fileNameIdentIsFullName=False, **kwargs):
 
-        for single_qoi_column in self.list_qoi_column:
-            try:
-                fileName = "statistics_dictionary_qoi_" + single_qoi_column + ".pkl"
-                fullFileName = os.path.abspath(os.path.join(str(self.workingDir), fileName))
-                if self.result_dict[single_qoi_column]:
-                    with open(fullFileName, 'wb') as handle:
-                        pickle.dump(self.result_dict[single_qoi_column], handle, protocol=pickle.HIGHEST_PROTOCOL)
-                else:
-                    print(f"Entry {single_qoi_column} does not exist in HydroStatistics.result_dict, "
-                          f"therefore will not be saved")
-            except KeyError as e:
-                print(f"Entry {single_qoi_column} does not exist in HydroStatistics.result_dict, "
-                      f"therefore will not be saved")
+        if self.result_dict is not None and self.result_dict:
+            for single_qoi_column in self.list_qoi_column:
+                try:
+                    fileName = "statistics_dictionary_qoi_" + single_qoi_column + ".pkl"
+                    fullFileName = os.path.abspath(os.path.join(str(self.workingDir), fileName))
+                    if self.result_dict[single_qoi_column]:
+                        with open(fullFileName, 'wb') as handle:
+                            pickle.dump(self.result_dict[single_qoi_column], handle, protocol=pickle.HIGHEST_PROTOCOL)
+                    else:
+                        print(f"HydroStatistics.saveToFile() - Entry {single_qoi_column} does not exist anymore in "
+                              f"HydroStatistics.result_dict, therefore will not be saved")
+                except KeyError as e:
+                    print(f"HydroStatistics.saveToFile() - Entry {single_qoi_column} does not exist anymore in "
+                          f"HydroStatistics.result_dict, therefore will not be saved")
 
         if self.active_scores_dict is not None:
             fileName = "active_scores_dict.pkl"
@@ -1023,6 +1283,12 @@ class HydroStatistics(Statistics):
             fullFileName = os.path.abspath(os.path.join(str(self.workingDir), fileName))
             self.df_time_aggregated_grad_analysis.to_pickle(fullFileName, compression="gzip")
 
+    def _save_gpce_surrogate_model(self, gpce, qoi, timestamp):
+        # timestamp = pd.Timestamp(timestamp).strftime('%Y-%m-%d %X')
+        fileName = f"gpce_surrogate_{qoi}_{timestamp}.pkl"
+        fullFileName = os.path.abspath(os.path.join(str(self.workingDir), fileName))
+        with open(fullFileName, 'wb') as handle:
+            pickle.dump(gpce, handle, protocol=pickle.HIGHEST_PROTOCOL)
     ###################################################################################################################
 
     def _get_measured_single_qoi(self, timestepRange=None, time_column_name="TimeStamp",
@@ -1138,11 +1404,13 @@ class HydroStatistics(Statistics):
         # current_row = starting_row
 
         if dict_what_to_plot is None:
-            # dict_what_to_plot = DEFAULT_DICT_WHAT_TO_PLOT
-            dict_what_to_plot = {
-                "E_minus_std": False, "E_plus_std": False, "P10": False, "P90": False,
-                "StdDev": False, "Skew": False, "Kurt": False, "Sobol_m": False, "Sobol_m2": False, "Sobol_t": False
-            }
+            if self.dict_what_to_plot is not None:
+                dict_what_to_plot = self.dict_what_to_plot
+            else:
+                dict_what_to_plot = {
+                    "E_minus_std": False, "E_plus_std": False, "P10": False, "P90": False,
+                    "StdDev": False, "Skew": False, "Kurt": False, "Sobol_m": False, "Sobol_m2": False, "Sobol_t": False
+                }
 
         # dict_qoi_vs_plot_rows = defaultdict(dict, {single_qoi_column: {} for single_qoi_column in list_qoi_column_to_plot})
 
@@ -1497,10 +1765,16 @@ class HydroStatistics(Statistics):
         # TODO Finish this
         raise NotImplementedError
 
-    def compute_gof_over_different_time_series_single_qoi(self, df_statistics,
-                                               objective_function="MAE", qoi="Q", measuredDF_column_names="measured"):
-        # TODO Finish this
-        raise NotImplementedError
+    def compute_gof_over_different_time_series_single_qoi(self, objective_function=None, qoi_column="Q",
+                                                          measuredDF_column_names="measured"):
+
+        self._check_if_df_statistics_is_computed(recompute_if_not=True)
+        if objective_function is None:
+            objective_function = self.objective_function
+        uqPostprocessing.compute_gof_over_different_time_series(df_statistics=self.df_statistics,
+                                                                objective_function=objective_function,
+                                                                qoi_column=qoi_column,
+                                                                measuredDF_column_names=measuredDF_column_names)
 
     def calculate_p_factor_single_qoi(self, qoi_column, df_statistics=None,
                            column_lower_uncertainty_bound="P10", column_upper_uncertainty_bound="P90",

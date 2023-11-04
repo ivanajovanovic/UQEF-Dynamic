@@ -34,7 +34,7 @@ def rank_stats(f, N, dim):
 
 def compute_total_sobol_indices_with_n_samples(samples, Y, D, N):
     """
-    : param samples: UQEF.Samples.parameters
+    : param samples: UQEF.Samples.parameters; should be of the size NxD
     :param Y:  function evaluations dim(Y) = (N x t)
     :param D: Stochastic dimension
     :param N: Number of samples
@@ -54,6 +54,7 @@ def compute_total_sobol_indices_with_n_samples(samples, Y, D, N):
         # numerator = np.mean((A - A_B[j]) ** 2, axis=0) / 2  # np.mean((A-A_B[j].T)**2, -1)
         N_j = px[argpiinv[:, j] - 1, j]
         YN_j = Y[N_j, :]
+        # print(f"DEBUGGING - shape of YN_j - {YN_j.shape}")
         numerator = (np.mean(Y * YN_j, axis=0) - mean**2)
         s_t_j = numerator[0] / denominator[0]
         s_t.append(s_t_j)
