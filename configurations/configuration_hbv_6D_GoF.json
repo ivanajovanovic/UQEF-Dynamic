@@ -7,8 +7,8 @@
       "start_hour": 0,
       "start_minute": 0,
 
-      "end_day": 30,
-      "end_month": 9,
+      "end_day": 10,
+      "end_month": 10,
       "end_year": 2006,
       "end_hour": 0,
       "end_minute": 0,
@@ -32,13 +32,14 @@
   },
   "simulation_settings": {
     "qoi":"GoF",
-    "qoi_column":["Q_cms", "AET"],
-    "read_measured_data": ["True", "False"],
-    "qoi_column_measured":["streamflow", "None"],
-    "objective_function_qoi":["RMSE", "LogNSE"],
+    "qoi_column":"Q_cms",
+    "transform_model_output":"None",
+    "read_measured_data": "True",
+    "qoi_column_measured":"streamflow",
+    "objective_function_qoi":["RMSE", "LogNSE", "KGE"],
     "calculate_GoF":"True",
-    "objective_function":["MAE", "MSE", "RMSE", "NRMSE", "NSE", "LogNSE", "KGE"],
-    "mode":"sliding_window",
+    "objective_function":["RMSE", "MAE", "MSE", "NRMSE", "NSE", "LogNSE", "KGE"],
+    "mode":"continuous",
     "interval": 10,
     "min_periods": 5,
     "method": "avrg",
@@ -64,6 +65,34 @@
       "lower": 0.0,
       "upper": 10.0,
       "default": 5.0
+    },
+    {
+      "name": "ETF",
+      "distribution": "Uniform",
+      "lower": 0.0,
+      "upper": 1.0,
+      "default": 0.5
+    },
+    {
+      "name": "FC",
+      "distribution": "Uniform",
+      "lower": 50.0,
+      "upper": 1000.0,
+      "default": 100
+    },
+    {
+      "name": "FRAC",
+      "distribution": "Uniform",
+      "lower": 0.1,
+      "upper": 0.9,
+      "default": 0.5
+    },
+    {
+      "name": "K2",
+      "distribution": "Uniform",
+      "lower": 0.0,
+      "upper": 0.1,
+      "default": 0.025
     }
 
   ],

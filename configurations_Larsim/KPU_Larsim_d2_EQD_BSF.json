@@ -1,0 +1,18 @@
+{
+  "parameters": [
+    {
+      "name":"EQD",
+      "type":"tape35",
+      "distribution":"Uniform",
+      "lower": 0,
+      "upper": 1
+    },
+    {
+      "name": "BSF",
+      "type": "tape35",
+      "distribution": "Uniform",
+      "lower": 0,
+      "upper": 1
+    }
+  ]
+}
