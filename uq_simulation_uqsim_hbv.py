@@ -57,17 +57,17 @@ if local_debugging:
     uqsim.args.uncertain = "all"
     uqsim.args.chunksize = 1
 
-    uqsim.args.uq_method = "ensemble"  # "sc" | "saltelli" | "mc" | "ensemble"
+    uqsim.args.uq_method = "sc"  # "sc" | "saltelli" | "mc" | "ensemble"
     uqsim.args.mc_numevaluations = 1000
     uqsim.args.sampling_rule = "random"  # "random" | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
-    uqsim.args.sc_q_order = 7  # 7 #10 3
-    uqsim.args.sc_p_order = 3  # 4, 5, 6, 8
+    uqsim.args.sc_q_order = 5  # 7 #10 3
+    uqsim.args.sc_p_order = 2  # 4, 5, 6, 8
     uqsim.args.sc_quadrature_rule = "clenshaw_curtis"  # "p" "genz_keister_24" "leja"
 
-    uqsim.args.read_nodes_from_file = False  # True
-    l = 7  # 10
+    uqsim.args.read_nodes_from_file = True  # True
+    l = 5  # 10
     path_to_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/sparse_grid_nodes_weights")
-    uqsim.args.parameters_file = path_to_file / f"KPU_d5_l{l}.asc" # f"KPU_d3_l{l}.asc"
+    uqsim.args.parameters_file = path_to_file / f"KPU_d10_l{l}.asc" # f"KPU_d3_l{l}.asc"
     uqsim.args.parameters_setup_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Hydro/configurations/KPU_HBV_d10.json")
 
     uqsim.args.sc_poly_rule = "three_terms_recurrence"  # "gram_schmidt" | "three_terms_recurrence" | "cholesky"
@@ -78,22 +78,22 @@ if local_debugging:
     uqsim.args.inputModelDir = pathlib.Path("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/HBV-SASK-data")
     uqsim.args.sourceDir = pathlib.Path("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/HBV-SASK-data")
     uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs",
-                                                              'trying_out_ensemble')) #gpce_d5_l7_p3_summer_2007_multti_qoi
+                                                              'gpce_d10_l5_p2_short')) #gpce_d5_l7_p3_summer_2007_multti_qoi
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
-    uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Hydro/configurations/configuration_hbv_6D_ensemble.json'
+    uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Hydro/configurations/configuration_hbv_10D.json'
 
     uqsim.args.sampleFromStandardDist = True  # False
 
     uqsim.args.mpi = True
     uqsim.args.mpi_method = "MpiPoolSolver"  # "LinearSolver"
 
-    uqsim.args.instantly_save_results_for_each_time_step = False
+    uqsim.args.instantly_save_results_for_each_time_step = True
     uqsim.args.uqsim_store_to_file = False
 
     uqsim.args.disable_statistics = False
     uqsim.args.parallel_statistics = True
-    uqsim.args.compute_Sobol_t = False
-    uqsim.args.compute_Sobol_m = False
+    uqsim.args.compute_Sobol_t = True
+    uqsim.args.compute_Sobol_m = True
 
     uqsim.args.num_cores = 1
 
