@@ -5,6 +5,7 @@ import pathlib
 import pandas as pd
 import pickle
 import time
+from collections import defaultdict
 
 # importing modules/libs for plotting
 from plotly.subplots import make_subplots
@@ -14,7 +15,7 @@ import plotly.express as px
 # from plotly.offline import plot
 import plotly.offline as pyo
 # Set notebook mode to work in offline
-pyo.init_notebook_mode()
+# pyo.init_notebook_mode()
 
 import matplotlib.pyplot as plt
 
@@ -38,7 +39,7 @@ hbv_model_data_path = pathlib.Path("/work/ga45met/Hydro_Models/HBV-SASK-data")
 inputModelDir = hbv_model_data_path
 basis = "Oldman_Basin"  # 'Banff_Basin'
 # TODO - change these paths accordingly
-configurationObject = pathlib.Path('/work/ga45met/mnt/linux_cluster_2/UQEFPP/configurations/configuration_hbv_5D.json')
+configurationObject = pathlib.Path('/work/ga45met/mnt/linux_cluster_2/UQEF-Hydro/configurations/configuration_hbv_5D.json')
 # 8D Saltelli 10 000 Q_cms, AET - 141
 workingDir = pathlib.Path('/work/ga45met/mnt/linux_cluster_scratch_hbv_2/hbv_uq_cm2.0141/')
 # 5D Sparse-gPCE l=6, p=3 Q_cms May_2005- gpce_d5_l6_p3
@@ -47,8 +48,9 @@ workingDir = pathlib.Path('/work/ga45met/mnt/linux_cluster_scratch_hbv_2/gpce_d5
 workingDir = pathlib.Path('/work/ga45met/mnt/linux_cluster_scratch_hbv_2/hbv_uq_cm2.0155/')
 # 10D Saltelli GoF sliding window Q_cms 2006 - 171
 workingDir = pathlib.Path('/work/ga45met/mnt/linux_cluster_scratch_hbv_2/hbv_uq_cm2.0171/')
+# 6D gPCE l=, p=3 Q_cms 2006- 173
+workingDir = pathlib.Path('/work/ga45met/mnt/linux_cluster_scratch_hbv_2/hbv_uq_cm2.0173/')
 
-# workingDir = pathlib.Path('/work/ga45met/mnt/linux_cluster_scratch_hbv_2/grad_analysisi_in_statistics')
 nodes_file = workingDir / "nodes.simnodes.zip"
 parameters_file = workingDir / "parameters.pkl"
 args_file = workingDir / 'uqsim_args.pkl'
@@ -75,6 +77,7 @@ output_stat_graph_filename = str(output_stat_graph_filename)
 flux_df_path = workingDir / 'flux_df_0.pkl'
 gof_df_path = workingDir / 'gof_0.pkl'
 parameters_dict_path = workingDir / 'parameters_HBVSASK_run_0.pkl'
+
 
 def update_output_file_paths_based_on_workingDir(workingDir):
     global nodes_file, parameters_file, args_file, configuration_object_file, \
@@ -116,6 +119,7 @@ def update_output_file_paths_for_specific_model_run(workingDir, index_run=0):
     flux_df_path = workingDir / f'flux_df_{index_run}.pkl'
     gof_df_path = workingDir / f'gof_{index_run}.pkl'
     parameters_dict_path = workingDir / f'parameters_HBVSASK_run_{index_run}.pkl'
+
 
 update_output_file_paths_based_on_workingDir(workingDir)
 update_output_file_paths_for_specific_model_run(workingDir, index_run=0)
@@ -163,8 +167,12 @@ df_simulation_result = None
 statisticsObject = uqPostprocessing.create_statistics_object(
     configurationObject, uqsim_args_dict, workingDir, model="hbvsask")
 
+### Way of doing thinks when instantly_save_results_for_each_time_step is False...
 statistics_dictionary = uqPostprocessing.read_all_saved_statistics_dict(
     workingDir, statisticsObject.list_qoi_column)
+### Way of doing thinks when instantly_save_results_for_each_time_step is True...
+statistics_dictionary = uqPostprocessing.read_all_saved_statistics_dict(
+    workingDir, [statisticsObject.list_qoi_column[0],], single_timestamp_single_file=True)
 
 uqPostprocessing.extend_statistics_object(
     statisticsObject=statisticsObject,
@@ -229,7 +237,7 @@ for single_qoi in statisticsObject.list_qoi_column:
     )
     fig.show()
 
-fig = uqPostprocessing.plot_forcing_mean_predicted_and_observed_all_qoi(
+fig, _ = uqPostprocessing.plot_forcing_mean_predicted_and_observed_all_qoi(
     statisticsObject, directory=directory_for_saving_plots, fileName="Datailed_plot_all_qois.html")
 fig.show()
 
@@ -279,4 +287,9 @@ for single_qoi in statisticsObject.list_qoi_column:
     fileName = directory_for_saving_plots + f"Sobol_Total_Time_Signal_{single_qoi}.html"
     pyo.plot(fig, filename=fileName)
     fig.show()
+
+# GPCE surrogate if computed:
+gPCE_model = defaultdict()
+for single_date in statisticsObject.pdTimesteps:
+    gPCE_model[single_date] = statisticsObject.result_dict["Q_cms"][single_date]['gPCE']
 

@@ -898,10 +898,10 @@ qoi_column="Q_cms"
 
 
 # df_statistics_and_measured
-uqPostprocessing.compute_gof_over_different_time_series(
-    statisticsObject.df_statistics, 
-    objective_function=["MAE", "NSE", "LogNSE", "RMSE", "NRMSE", "KGE"], 
-    qoi=qoi_column, measuredDF_column_names=["measured"])
+uqPostprocessing.compute_gof_over_different_time_series(statisticsObject.df_statistics,
+                                                        objective_function=["MAE", "NSE", "LogNSE", "RMSE", "NRMSE",
+                                                                            "KGE"], qoi_column=qoi_column,
+                                                        measuredDF_column_names=["measured"])
 
 
 # In[228]:

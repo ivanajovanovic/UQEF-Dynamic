@@ -23,6 +23,10 @@ import plotly.graph_objects as go
 import seaborn as sns
 from tabulate import tabulate
 
+DEFAULT_DICT_WHAT_TO_PLOT = {
+    "E_minus_std": False, "E_plus_std": False, "P10": False, "P90": False,
+    "StdDev": False, "Skew": False, "Kurt": False, "Sobol_m": False, "Sobol_m2": False, "Sobol_t": False
+}
 
 # TODO Update this class with new changes
 class UQOutputPaths(object):
@@ -1186,7 +1190,10 @@ def parameters_configuration(parameters, configurationObject, default_par_info_d
                 elif "default" in single_param:
                     parameters_dict[single_param['name']] = single_param["default"]
                 else:
-                    parameters_dict[single_param['name']] = default_par_info_dict[single_param['name']]
+                    if isinstance(default_par_info_dict[single_param['name']], dict):
+                        parameters_dict[single_param['name']] = default_par_info_dict[single_param['name']]["default"]
+                    else:
+                        parameters_dict[single_param['name']] = default_par_info_dict[single_param['name']]
     return parameters_dict
 
 
