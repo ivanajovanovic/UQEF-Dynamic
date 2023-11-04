@@ -1,7 +1,10 @@
+import datetime
 from collections import defaultdict
 import numpy as np
 import pathlib
 import time
+from mpi4py import MPI
+import mpi4py
 
 import os
 import sys
@@ -13,8 +16,25 @@ from uq_sparseSpACE import *
 
 from sparseSpACE.Integrator import *
 
+#####################################
+### MPI infos:
+#####################################
 comm = MPI.COMM_WORLD
+size = MPI.COMM_WORLD.Get_size()
 rank = MPI.COMM_WORLD.Get_rank()
+name = MPI.Get_processor_name()
+version = MPI.Get_library_version()
+version2 = MPI.Get_version()
+
+if rank == 0: print("MPI version: {}".format(version))
+if rank == 0: print("MPI2 version: {}".format(version2))
+if rank == 0: print("MPI3 version: {}".format(MPI.VERSION))
+if rank == 0: print("mpi4py version: {}".format(mpi4py.__version__))
+
+print("rank {}: starttime: {}".format(rank, datetime.datetime.now().strftime('%Y.%m.%d %H:%M:%S')))
+
+def is_master(mpi):
+    return mpi is False or (mpi is True and rank == 0)
 
 if __name__ == "__main__":
 
@@ -42,15 +62,91 @@ if __name__ == "__main__":
     # current_output_folder = "var1_gpce_gl_p8_q9"
 
     ######Ishigami Var 2&4#######
-    # list_of_dict_run_setups = [
-    #     {"model": "ishigami", "list_of_function_ids": None,
-    #      "current_output_folder": "var2_gpce_kpu_p9_l16_max103_lmax3_boundary_adaptive",
-    #      "variant": 2, "quadrature_rule": "kpu", "q_order": 16, "p_order": 9, "sparse_quadrature": True,
-    #      "read_nodes_from_file": True, 'l': 16, "gridName": "Trapezoidal", "lmin": 1, "lmax": 3,
-    #      "max_evals": 1000, "tolerance": 10**-6,
-    #      "modified_basis": False, "boundary_points": True, "spatiallyAdaptive": True,
-    #      "norm_spatiallyAdaptive": 2, "rebalancing": True
-    #      },
+    list_of_dict_run_setups = [
+        # {"model": "ishigami", "list_of_function_ids": None,
+        #  "current_output_folder": "var2_gpce_kpu_p7_l12_max2000_lmax3_modified_basis_adaptive",
+        #  "variant": 2, "quadrature_rule": "kpu", "q_order": 12, "p_order": 7,
+        #  "poly_normed": False,"sampleFromStandardDist": True, "sparse_quadrature": True,
+        #  "read_nodes_from_file": True, 'level_sg': 12,
+        #  "gridName": "Trapezoidal", "lmin": 1, "lmax": 3,
+        #  "max_evals": 2000, "tolerance": 10**-3,
+        #  "modified_basis": True, "boundary_points": False, "spatiallyAdaptive": True,
+        #  "norm_spatiallyAdaptive": 2, "rebalancing": True, "margin": 0.8,
+        #  "build_sg_for_e_and_var": True,
+        #  "compute_mean": True, "compute_var": True,
+        #  "compute_Sobol_m": True, "compute_Sobol_t": True,
+        #  "operation": "UncertaintyQuantification"
+        #  },
+        # {"model": "ishigami", "list_of_function_ids": None,
+        #  "current_output_folder": "var2_gpce_kpu_p7_l12_max500_lmax3_boundary_adaptive",
+        #  "variant": 2, "quadrature_rule": "kpu", "q_order": 12, "p_order": 7,
+        #  "poly_normed": False, "sampleFromStandardDist": True, "sparse_quadrature": True,
+        #  "read_nodes_from_file": True, 'level_sg': 12,
+        #  "gridName": "Trapezoidal", "lmin": 1, "lmax": 3,
+        #  "max_evals": 500, "tolerance": 10 ** -3,
+        #  "modified_basis": False, "boundary_points": True, "spatiallyAdaptive": True,
+        #  "norm_spatiallyAdaptive": 2, "rebalancing": True, "margin": 0.8,
+        #  "build_sg_for_e_and_var": True,
+        #  "compute_mean": True, "compute_var": True,
+        #  "compute_Sobol_m": True, "compute_Sobol_t": True,
+        #  "operation": "UncertaintyQuantification"
+        #  },
+        {"model": "ishigami", "list_of_function_ids": None,
+         "current_output_folder": "var2_gpce_kpu_p7_l12_max1000_lmax3_boundary_adaptive",
+         "variant": 2, "quadrature_rule": "kpu", "q_order": 12, "p_order": 7,
+         "poly_normed": False, "sampleFromStandardDist": True, "sparse_quadrature": True,
+         "read_nodes_from_file": True, 'level_sg': 12,
+         "gridName": "Trapezoidal", "lmin": 1, "lmax": 3,
+         "max_evals": 1000, "tolerance": 10 ** -3,
+         "modified_basis": False, "boundary_points": True, "spatiallyAdaptive": True,
+         "norm_spatiallyAdaptive": 2, "rebalancing": True, "margin": 0.8,
+         "build_sg_for_e_and_var": True,
+         "compute_mean": True, "compute_var": True,
+         "compute_Sobol_m": True, "compute_Sobol_t": True,
+         "operation": "UncertaintyQuantification"
+         },
+        {"model": "ishigami", "list_of_function_ids": None,
+         "current_output_folder": "var2_gpce_kpu_p7_l12_max2000_lmax3_boundary_adaptive",
+         "variant": 2, "quadrature_rule": "kpu", "q_order": 12, "p_order": 7,
+         "poly_normed": False, "sampleFromStandardDist": True, "sparse_quadrature": True,
+         "read_nodes_from_file": True, 'level_sg': 12,
+         "gridName": "Trapezoidal", "lmin": 1, "lmax": 3,
+         "max_evals": 2000, "tolerance": 10 ** -3,
+         "modified_basis": False, "boundary_points": True, "spatiallyAdaptive": True,
+         "norm_spatiallyAdaptive": 2, "rebalancing": True, "margin": 0.8,
+         "build_sg_for_e_and_var": True,
+         "compute_mean": True, "compute_var": True,
+         "compute_Sobol_m": True, "compute_Sobol_t": True,
+         "operation": "UncertaintyQuantification"
+         },
+        # {"model": "ishigami", "list_of_function_ids": None,
+        #  "current_output_folder": "var2_gpce_kpu_p7_l12_max3000_lmax3_boundary_adaptive",
+        #  "variant": 2, "quadrature_rule": "kpu", "q_order": 12, "p_order": 7,
+        #  "poly_normed": False, "sampleFromStandardDist": True, "sparse_quadrature": True,
+        #  "read_nodes_from_file": True, 'level_sg': 12,
+        #  "gridName": "Trapezoidal", "lmin": 1, "lmax": 3,
+        #  "max_evals": 3000, "tolerance": 10 ** -3,
+        #  "modified_basis": False, "boundary_points": True, "spatiallyAdaptive": True,
+        #  "norm_spatiallyAdaptive": 2, "rebalancing": True, "margin": 0.8,
+        #  "build_sg_for_e_and_var": True,
+        #  "compute_mean": True, "compute_var": True,
+        #  "compute_Sobol_m": True, "compute_Sobol_t": True,
+        #  "operation": "UncertaintyQuantification"
+        #  },
+        # {"model": "ishigami", "list_of_function_ids": None,
+        #  "current_output_folder": "var2_gpce_kpu_p7_l12_max4000_lmax3_boundary_adaptive",
+        #  "variant": 2, "quadrature_rule": "kpu", "q_order": 12, "p_order": 7,
+        #  "poly_normed": False, "sampleFromStandardDist": True, "sparse_quadrature": True,
+        #  "read_nodes_from_file": True, 'level_sg': 12,
+        #  "gridName": "Trapezoidal", "lmin": 1, "lmax": 3,
+        #  "max_evals": 4000, "tolerance": 10 ** -3,
+        #  "modified_basis": False, "boundary_points": True, "spatiallyAdaptive": True,
+        #  "norm_spatiallyAdaptive": 2, "rebalancing": True, "margin": 0.8,
+        #  "build_sg_for_e_and_var": True,
+        #  "compute_mean": True, "compute_var": True,
+        #  "compute_Sobol_m": True, "compute_Sobol_t": True,
+        #  "operation": "UncertaintyQuantification"
+        #  },
     #     {"model": "ishigami", "list_of_function_ids": None,
     #      "current_output_folder": "var2_gpce_kpu_p9_l16_max103_lmax3_modified_adaptive",
     #      "variant": 2, "quadrature_rule": "kpu", "q_order": 16, "p_order": 9, "sparse_quadrature": True,
@@ -123,7 +219,7 @@ if __name__ == "__main__":
     #      "modified_basis": False, "boundary_points": False, "spatiallyAdaptive": False,
     #      "norm_spatiallyAdaptive": 2, "rebalancing": True
     #      },
-    # ]
+    ]
 
     ######corner_peak Var 2#######
     # list_of_dict_run_setups = [
@@ -283,98 +379,98 @@ if __name__ == "__main__":
     # ]
 
     ######discontinuous Var 2#######
-    list_of_dict_run_setups = [
-        {"model": "discontinuous", "list_of_function_ids": [2, ],
-         "current_output_folder": "var2_gpce_gl_p9_q9_max103_lmax2_boundary_adaptive",
-         "variant": 2, "quadrature_rule": "g", "q_order": 9, "p_order": 9, "sparse_quadrature": False,
-         "read_nodes_from_file": False, 'l': 16, "gridName": "Trapezoidal", "lmin": 1, "lmax": 2,
-         "max_evals": 1000, "tolerance": 10 ** -6,
-         "modified_basis": False, "boundary_points": True, "spatiallyAdaptive": True,
-         "norm_spatiallyAdaptive": 2, "rebalancing": True,
-         "compute_mean": False, "compute_var": False
-         },
-        {"model": "discontinuous", "list_of_function_ids": [2,],
-         "current_output_folder": "var2_gpce_gl_p9_q9_max103_lmax3_boundary_adaptive",
-         "variant": 2, "quadrature_rule": "g", "q_order": 9, "p_order": 9, "sparse_quadrature": False,
-         "read_nodes_from_file": False, 'l': 16, "gridName": "Trapezoidal", "lmin": 1, "lmax": 3,
-         "max_evals": 1000, "tolerance": 10 ** -6,
-         "modified_basis": False, "boundary_points": True, "spatiallyAdaptive": True,
-         "norm_spatiallyAdaptive": 2, "rebalancing": True,
-         "compute_mean": False, "compute_var": False
-         },
-        {"model": "discontinuous", "list_of_function_ids": [2, ],
-         "current_output_folder": "var2_gpce_gl_p9_q9_max104_lmax3_boundary_adaptive",
-         "variant": 2, "quadrature_rule": "g", "q_order": 9, "p_order": 9, "sparse_quadrature": False,
-         "read_nodes_from_file": False, 'l': 16, "gridName": "Trapezoidal", "lmin": 1, "lmax": 3,
-         "max_evals": 10000, "tolerance": 10 ** -6,
-         "modified_basis": False, "boundary_points": True, "spatiallyAdaptive": True,
-         "norm_spatiallyAdaptive": 2, "rebalancing": True,
-         "compute_mean": False, "compute_var": False
-         },
-        {"model": "discontinuous", "list_of_function_ids": [2, ],
-         "current_output_folder": "var2_gpce_gl_p9_q9_max105_lmax3_boundary_adaptive",
-         "variant": 2, "quadrature_rule": "g", "q_order": 9, "p_order": 9, "sparse_quadrature": False,
-         "read_nodes_from_file": False, 'l': 16, "gridName": "Trapezoidal", "lmin": 1, "lmax": 3,
-         "max_evals": 100000, "tolerance": 10 ** -6,
-         "modified_basis": False, "boundary_points": True, "spatiallyAdaptive": True,
-         "norm_spatiallyAdaptive": 2, "rebalancing": True,
-         "compute_mean": False, "compute_var": False
-         },
-        # {"model": "discontinuous", "list_of_function_ids": [2, ],
-        #  "current_output_folder": "var2_gpce_gl_p9_q9_max105_lmax3_modified_adaptive",
-        #  "variant": 2, "quadrature_rule": "g", "q_order": 9, "p_order": 9, "sparse_quadrature": False,
-        #  "read_nodes_from_file": False, 'l': 16, "gridName": "Trapezoidal", "lmin": 1, "lmax": 3,
-        #  "max_evals": 100000, "tolerance": 10 ** -6,
-        #  "modified_basis": True, "boundary_points": False, "spatiallyAdaptive": True,
-        #  "norm_spatiallyAdaptive": 2, "rebalancing": True,
-        #  "compute_mean": False, "compute_var": False
-        #  },
-        {"model": "discontinuous", "list_of_function_ids": [2, ],
-         "current_output_folder": "var2_gpce_gl_p9_q9_lmax2_boundary_nonadaptive",
-         "variant": 2, "quadrature_rule": "g", "q_order": 9, "p_order": 9, "sparse_quadrature": False,
-         "read_nodes_from_file": False, 'l': 16, "gridName": "Trapezoidal", "lmin": 1, "lmax": 2,
-         "max_evals": 100000, "tolerance": 10 ** -6,
-         "modified_basis": False, "boundary_points": True, "spatiallyAdaptive": False,
-         "norm_spatiallyAdaptive": 2, "rebalancing": True,
-         "compute_mean": False, "compute_var": False
-         },
-        {"model": "discontinuous", "list_of_function_ids": [2, ],
-         "current_output_folder": "var2_gpce_gl_p9_q9_lmax3_boundary_nonadaptive",
-         "variant": 2, "quadrature_rule": "g", "q_order": 9, "p_order": 9, "sparse_quadrature": False,
-         "read_nodes_from_file": False, 'l': 16, "gridName": "Trapezoidal", "lmin": 1, "lmax": 3,
-         "max_evals": 100000, "tolerance": 10 ** -6,
-         "modified_basis": False, "boundary_points": True, "spatiallyAdaptive": False,
-         "norm_spatiallyAdaptive": 2, "rebalancing": True,
-         "compute_mean": False, "compute_var": False
-         },
-        {"model": "discontinuous", "list_of_function_ids": [2, ],
-         "current_output_folder": "var2_gpce_gl_p9_q9_lmax3_modified_nonadaptive",
-         "variant": 2, "quadrature_rule": "g", "q_order": 9, "p_order": 9, "sparse_quadrature": False,
-         "read_nodes_from_file": False, 'l': 16, "gridName": "Trapezoidal", "lmin": 1, "lmax": 3,
-         "max_evals": 100000, "tolerance": 10 ** -6,
-         "modified_basis": True, "boundary_points": False, "spatiallyAdaptive": False,
-         "norm_spatiallyAdaptive": 2, "rebalancing": True,
-         "compute_mean": False, "compute_var": False
-         },
-        {"model": "discontinuous", "list_of_function_ids": [2, ],
-         "current_output_folder": "var2_gpce_gl_p9_q9_lmax3_nonadaptive",
-         "variant": 2, "quadrature_rule": "g", "q_order": 9, "p_order": 9, "sparse_quadrature": False,
-         "read_nodes_from_file": False, 'l': 16, "gridName": "Trapezoidal", "lmin": 1, "lmax": 3,
-         "max_evals": 100000, "tolerance": 10 ** -6,
-         "modified_basis": False, "boundary_points": False, "spatiallyAdaptive": False,
-         "norm_spatiallyAdaptive": 2, "rebalancing": True,
-         "compute_mean": False, "compute_var": False
-         },
-        {"model": "discontinuous", "list_of_function_ids": [2, ],
-         "current_output_folder": "var2_gpce_gl_p9_q9_lmax4_boundary_nonadaptive",
-         "variant": 2, "quadrature_rule": "g", "q_order": 9, "p_order": 9, "sparse_quadrature": False,
-         "read_nodes_from_file": False, 'l': 16, "gridName": "Trapezoidal", "lmin": 1, "lmax": 4,
-         "max_evals": 100000, "tolerance": 10 ** -6,
-         "modified_basis": False, "boundary_points": True, "spatiallyAdaptive": False,
-         "norm_spatiallyAdaptive": 2, "rebalancing": True,
-         "compute_mean": False, "compute_var": False
-         },
-    ]
+    # list_of_dict_run_setups = [
+    #     {"model": "discontinuous", "list_of_function_ids": [2, ],
+    #      "current_output_folder": "var2_gpce_gl_p9_q9_max103_lmax2_boundary_adaptive",
+    #      "variant": 2, "quadrature_rule": "g", "q_order": 9, "p_order": 9, "sparse_quadrature": False,
+    #      "read_nodes_from_file": False, 'l': 16, "gridName": "Trapezoidal", "lmin": 1, "lmax": 2,
+    #      "max_evals": 1000, "tolerance": 10 ** -6,
+    #      "modified_basis": False, "boundary_points": True, "spatiallyAdaptive": True,
+    #      "norm_spatiallyAdaptive": 2, "rebalancing": True,
+    #      "compute_mean": False, "compute_var": False
+    #      },
+    #     {"model": "discontinuous", "list_of_function_ids": [2,],
+    #      "current_output_folder": "var2_gpce_gl_p9_q9_max103_lmax3_boundary_adaptive",
+    #      "variant": 2, "quadrature_rule": "g", "q_order": 9, "p_order": 9, "sparse_quadrature": False,
+    #      "read_nodes_from_file": False, 'l': 16, "gridName": "Trapezoidal", "lmin": 1, "lmax": 3,
+    #      "max_evals": 1000, "tolerance": 10 ** -6,
+    #      "modified_basis": False, "boundary_points": True, "spatiallyAdaptive": True,
+    #      "norm_spatiallyAdaptive": 2, "rebalancing": True,
+    #      "compute_mean": False, "compute_var": False
+    #      },
+    #     {"model": "discontinuous", "list_of_function_ids": [2, ],
+    #      "current_output_folder": "var2_gpce_gl_p9_q9_max104_lmax3_boundary_adaptive",
+    #      "variant": 2, "quadrature_rule": "g", "q_order": 9, "p_order": 9, "sparse_quadrature": False,
+    #      "read_nodes_from_file": False, 'l': 16, "gridName": "Trapezoidal", "lmin": 1, "lmax": 3,
+    #      "max_evals": 10000, "tolerance": 10 ** -6,
+    #      "modified_basis": False, "boundary_points": True, "spatiallyAdaptive": True,
+    #      "norm_spatiallyAdaptive": 2, "rebalancing": True,
+    #      "compute_mean": False, "compute_var": False
+    #      },
+    #     {"model": "discontinuous", "list_of_function_ids": [2, ],
+    #      "current_output_folder": "var2_gpce_gl_p9_q9_max105_lmax3_boundary_adaptive",
+    #      "variant": 2, "quadrature_rule": "g", "q_order": 9, "p_order": 9, "sparse_quadrature": False,
+    #      "read_nodes_from_file": False, 'l': 16, "gridName": "Trapezoidal", "lmin": 1, "lmax": 3,
+    #      "max_evals": 100000, "tolerance": 10 ** -6,
+    #      "modified_basis": False, "boundary_points": True, "spatiallyAdaptive": True,
+    #      "norm_spatiallyAdaptive": 2, "rebalancing": True,
+    #      "compute_mean": False, "compute_var": False
+    #      },
+    #     # {"model": "discontinuous", "list_of_function_ids": [2, ],
+    #     #  "current_output_folder": "var2_gpce_gl_p9_q9_max105_lmax3_modified_adaptive",
+    #     #  "variant": 2, "quadrature_rule": "g", "q_order": 9, "p_order": 9, "sparse_quadrature": False,
+    #     #  "read_nodes_from_file": False, 'l': 16, "gridName": "Trapezoidal", "lmin": 1, "lmax": 3,
+    #     #  "max_evals": 100000, "tolerance": 10 ** -6,
+    #     #  "modified_basis": True, "boundary_points": False, "spatiallyAdaptive": True,
+    #     #  "norm_spatiallyAdaptive": 2, "rebalancing": True,
+    #     #  "compute_mean": False, "compute_var": False
+    #     #  },
+    #     {"model": "discontinuous", "list_of_function_ids": [2, ],
+    #      "current_output_folder": "var2_gpce_gl_p9_q9_lmax2_boundary_nonadaptive",
+    #      "variant": 2, "quadrature_rule": "g", "q_order": 9, "p_order": 9, "sparse_quadrature": False,
+    #      "read_nodes_from_file": False, 'l': 16, "gridName": "Trapezoidal", "lmin": 1, "lmax": 2,
+    #      "max_evals": 100000, "tolerance": 10 ** -6,
+    #      "modified_basis": False, "boundary_points": True, "spatiallyAdaptive": False,
+    #      "norm_spatiallyAdaptive": 2, "rebalancing": True,
+    #      "compute_mean": False, "compute_var": False
+    #      },
+    #     {"model": "discontinuous", "list_of_function_ids": [2, ],
+    #      "current_output_folder": "var2_gpce_gl_p9_q9_lmax3_boundary_nonadaptive",
+    #      "variant": 2, "quadrature_rule": "g", "q_order": 9, "p_order": 9, "sparse_quadrature": False,
+    #      "read_nodes_from_file": False, 'l': 16, "gridName": "Trapezoidal", "lmin": 1, "lmax": 3,
+    #      "max_evals": 100000, "tolerance": 10 ** -6,
+    #      "modified_basis": False, "boundary_points": True, "spatiallyAdaptive": False,
+    #      "norm_spatiallyAdaptive": 2, "rebalancing": True,
+    #      "compute_mean": False, "compute_var": False
+    #      },
+    #     {"model": "discontinuous", "list_of_function_ids": [2, ],
+    #      "current_output_folder": "var2_gpce_gl_p9_q9_lmax3_modified_nonadaptive",
+    #      "variant": 2, "quadrature_rule": "g", "q_order": 9, "p_order": 9, "sparse_quadrature": False,
+    #      "read_nodes_from_file": False, 'l': 16, "gridName": "Trapezoidal", "lmin": 1, "lmax": 3,
+    #      "max_evals": 100000, "tolerance": 10 ** -6,
+    #      "modified_basis": True, "boundary_points": False, "spatiallyAdaptive": False,
+    #      "norm_spatiallyAdaptive": 2, "rebalancing": True,
+    #      "compute_mean": False, "compute_var": False
+    #      },
+    #     {"model": "discontinuous", "list_of_function_ids": [2, ],
+    #      "current_output_folder": "var2_gpce_gl_p9_q9_lmax3_nonadaptive",
+    #      "variant": 2, "quadrature_rule": "g", "q_order": 9, "p_order": 9, "sparse_quadrature": False,
+    #      "read_nodes_from_file": False, 'l': 16, "gridName": "Trapezoidal", "lmin": 1, "lmax": 3,
+    #      "max_evals": 100000, "tolerance": 10 ** -6,
+    #      "modified_basis": False, "boundary_points": False, "spatiallyAdaptive": False,
+    #      "norm_spatiallyAdaptive": 2, "rebalancing": True,
+    #      "compute_mean": False, "compute_var": False
+    #      },
+    #     {"model": "discontinuous", "list_of_function_ids": [2, ],
+    #      "current_output_folder": "var2_gpce_gl_p9_q9_lmax4_boundary_nonadaptive",
+    #      "variant": 2, "quadrature_rule": "g", "q_order": 9, "p_order": 9, "sparse_quadrature": False,
+    #      "read_nodes_from_file": False, 'l': 16, "gridName": "Trapezoidal", "lmin": 1, "lmax": 4,
+    #      "max_evals": 100000, "tolerance": 10 ** -6,
+    #      "modified_basis": False, "boundary_points": True, "spatiallyAdaptive": False,
+    #      "norm_spatiallyAdaptive": 2, "rebalancing": True,
+    #      "compute_mean": False, "compute_var": False
+    #      },
+    # ]
 
     # list_of_dict_run_setups = [
     #     {"model": "corner_peak", "list_of_function_ids": [1, ],
@@ -430,7 +526,7 @@ if __name__ == "__main__":
         p_order = single_setup_dict["p_order"]
         sparse_quadrature = single_setup_dict["sparse_quadrature"]
         read_nodes_from_file = single_setup_dict["read_nodes_from_file"]
-        l = single_setup_dict["l"]
+        level_sg = single_setup_dict.get("level_sg", 10)
 
         gridName = single_setup_dict["gridName"]
         lmin = single_setup_dict["lmin"]
@@ -477,15 +573,35 @@ if __name__ == "__main__":
                 # all_weights[i] = single_weights
                 current_output_folder_single_model = f"{current_output_folder}_model_{i}"
                 dictionary_with_inf_about_the_run_single_model = main_routine(
-                    model, current_output_folder_single_model, coeffs=single_coeffs, weights=single_weights,
-                    variant=variant, quadrature_rule=quadrature_rule, q_order=q_order, p_order=p_order,
-                    sparse_quadrature=sparse_quadrature, read_nodes_from_file=read_nodes_from_file, l=l,
-                    gridName=gridName, lmin=lmin, lmax=lmax, max_evals=max_evals, tolerance=tolerance,
-                    modified_basis=modified_basis, boundary_points=boundary_points, spatiallyAdaptive=spatiallyAdaptive,
-                    rebalancing=rebalancing, norm_spatiallyAdaptive=norm_spatiallyAdaptive,
-                    build_sg_for_e_and_var=build_sg_for_e_and_var,
-                    compute_mean=compute_mean,
-                    compute_var=compute_var
+                coeffs=single_coeffs, weights=single_weights,
+                model=model,
+                current_output_folder=current_output_folder_single_model,
+                variant=single_setup_dict["variant"],
+                quadrature_rule=single_setup_dict["quadrature_rule"],
+                q_order=single_setup_dict["q_order"], p_order=single_setup_dict["p_order"],
+                poly_normed=single_setup_dict["poly_normed"],
+                sampleFromStandardDist=single_setup_dict["sampleFromStandardDist"],
+                sparse_quadrature=single_setup_dict["sparse_quadrature"],
+                read_nodes_from_file=single_setup_dict["read_nodes_from_file"],
+                level_sg=single_setup_dict["level_sg"],
+                gridName=single_setup_dict["gridName"],
+                lmin=single_setup_dict["lmin"],
+                lmax=single_setup_dict["lmax"],
+                max_evals=single_setup_dict["max_evals"],
+                tolerance=single_setup_dict["tolerance"],
+                modified_basis=single_setup_dict["modified_basis"],
+                boundary_points=single_setup_dict["boundary_points"],
+                spatiallyAdaptive=single_setup_dict["spatiallyAdaptive"],
+                rebalancing=single_setup_dict["rebalancing"],
+                margin=single_setup_dict["margin"],
+                norm_spatiallyAdaptive=single_setup_dict["norm_spatiallyAdaptive"],
+                build_sg_for_e_and_var=single_setup_dict["build_sg_for_e_and_var"],
+                compute_mean=single_setup_dict["compute_mean"],
+                compute_var=single_setup_dict["compute_var"],
+                compute_Sobol_m=single_setup_dict["compute_Sobol_m"],
+                compute_Sobol_t=single_setup_dict["compute_Sobol_t"],
+                operation=single_setup_dict["operation"]
+
                 )
                 # dictionary_with_inf_about_the_run.append(dictionary_with_inf_about_the_run_single_model)
                 dictionary_with_inf_about_the_run[i] = dictionary_with_inf_about_the_run_single_model
@@ -496,15 +612,33 @@ if __name__ == "__main__":
                 #     pickle.dump(dictionary_with_inf_about_the_run, handle, protocol=pickle.HIGHEST_PROTOCOL)
         else:
             dictionary_with_inf_about_the_run = main_routine(
-                model, current_output_folder,
-                variant=variant, quadrature_rule=quadrature_rule, q_order=q_order, p_order=p_order,
-                sparse_quadrature=sparse_quadrature, read_nodes_from_file=read_nodes_from_file, l=l,
-                gridName=gridName, lmin=lmin, lmax=lmax, max_evals=max_evals, tolerance=tolerance,
-                modified_basis=modified_basis, boundary_points=boundary_points, spatiallyAdaptive=spatiallyAdaptive,
-                rebalancing=rebalancing, norm_spatiallyAdaptive=norm_spatiallyAdaptive,
-                build_sg_for_e_and_var=build_sg_for_e_and_var,
-                compute_mean=compute_mean,
-                compute_var=compute_var
+                model=single_setup_dict["model"],
+                current_output_folder=single_setup_dict["current_output_folder"],
+                variant=single_setup_dict["variant"],
+                quadrature_rule=single_setup_dict["quadrature_rule"],
+                q_order=single_setup_dict["q_order"], p_order=single_setup_dict["p_order"],
+                poly_normed=single_setup_dict["poly_normed"],
+                sampleFromStandardDist=single_setup_dict["sampleFromStandardDist"],
+                sparse_quadrature=single_setup_dict["sparse_quadrature"],
+                read_nodes_from_file=single_setup_dict["read_nodes_from_file"],
+                level_sg=single_setup_dict["level_sg"],
+                gridName=single_setup_dict["gridName"],
+                lmin=single_setup_dict["lmin"],
+                lmax=single_setup_dict["lmax"],
+                max_evals=single_setup_dict["max_evals"],
+                tolerance=single_setup_dict["tolerance"],
+                modified_basis=single_setup_dict["modified_basis"],
+                boundary_points=single_setup_dict["boundary_points"],
+                spatiallyAdaptive=single_setup_dict["spatiallyAdaptive"],
+                rebalancing=single_setup_dict["rebalancing"],
+                margin=single_setup_dict["margin"],
+                norm_spatiallyAdaptive=single_setup_dict["norm_spatiallyAdaptive"],
+                build_sg_for_e_and_var=single_setup_dict["build_sg_for_e_and_var"],
+                compute_mean=single_setup_dict["compute_mean"],
+                compute_var=single_setup_dict["compute_var"],
+                compute_Sobol_m=single_setup_dict["compute_Sobol_m"],
+                compute_Sobol_t=single_setup_dict["compute_Sobol_t"],
+                operation=single_setup_dict["operation"]
             )
         end_time = time.time()
         duration = end_time - start_time

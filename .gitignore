@@ -1,3 +1,6 @@
+.png
+.pdf
+
 # Don't track content of these folders
 model_runs/
 saves/
