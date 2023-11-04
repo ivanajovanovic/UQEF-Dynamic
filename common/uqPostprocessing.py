@@ -5,6 +5,7 @@ Many of these functions exist as well as part of HydroStatistics methods
 @author: Ivana Jovanovic Buha
 """
 import chaospy as cp
+import os
 import numpy as np
 import pandas as pd
 import pickle
@@ -17,7 +18,7 @@ import plotly.express as px
 import plotly.offline as pyo
 # Set notebook mode to work in offline
 
-pyo.init_notebook_mode()
+# pyo.init_notebook_mode()
 import matplotlib.pyplot as plt
 pd.options.plotting.backend = "plotly"
 
@@ -136,24 +137,42 @@ def extracting_statistics_df_for_single_qoi(statisticsObject, qoi="Q_cms"):
     pass
 
 
-def read_all_saved_statistics_dict(workingDir, list_qoi_column):
+def read_all_saved_statistics_dict(workingDir, list_qoi_column, single_timestamp_single_file=False):
+    if single_timestamp_single_file:
+        all_files = os.listdir(workingDir)
+        list_TimeStamp = set() # []
+        for filename in all_files:
+            parts = filename.split('_')
+            if parts[0] == "statistics" and parts[-1].endswith(".pkl"):
+                single_timestep = parts[-1].split('.')[0]
+                list_TimeStamp.add(single_timestep)  # pd.Timestamp(single_timestep)
     statistics_dictionary = defaultdict(dict)
     for single_qoi in list_qoi_column:
-        statistics_dictionary_file_temp = workingDir / f"statistics_dictionary_qoi_{single_qoi}.pkl"
-        assert statistics_dictionary_file_temp.is_file()
-        with open(statistics_dictionary_file_temp, 'rb') as f:
-            statistics_dictionary_temp = pickle.load(f)
-        statistics_dictionary[single_qoi] = statistics_dictionary_temp
+        if single_timestamp_single_file:
+            statistics_dictionary[single_qoi] = dict()
+            for single_timestep in list_TimeStamp:
+                statistics_dictionary_file_temp = workingDir / f"statistics_dictionary_{single_qoi}_{single_timestep}.pkl"
+                assert statistics_dictionary_file_temp.is_file(), \
+                    f"The file for qoi-{single_qoi} and time-stamp-{single_timestep} does not exist"
+                with open(statistics_dictionary_file_temp, 'rb') as f:
+                    statistics_dictionary_temp = pickle.load(f)
+                statistics_dictionary[single_qoi][pd.Timestamp(single_timestep)] = statistics_dictionary_temp
+        else:
+            statistics_dictionary_file_temp = workingDir / f"statistics_dictionary_qoi_{single_qoi}.pkl"
+            assert statistics_dictionary_file_temp.is_file()
+            with open(statistics_dictionary_file_temp, 'rb') as f:
+                statistics_dictionary_temp = pickle.load(f)
+            statistics_dictionary[single_qoi] = statistics_dictionary_temp
     return statistics_dictionary
 
 
-def compute_gof_over_different_time_series(df_statistics,
-                                           objective_function="MAE", qoi="Q", measuredDF_column_names="measured"):
+def compute_gof_over_different_time_series(df_statistics, objective_function="MAE", qoi_column="Q",
+                                           measuredDF_column_names="measured"):
     """
     This function will run only for a single station
     """
-    if not isinstance(qoi, list):
-        qoi = [qoi, ]
+    if not isinstance(qoi_column, list):
+        qoi_column = [qoi_column, ]
 
     if not isinstance(measuredDF_column_names, list):
         measuredDF_column_names = [measuredDF_column_names, ]
@@ -162,7 +181,7 @@ def compute_gof_over_different_time_series(df_statistics,
         objective_function = [objective_function, ]
 
     result_dict = defaultdict(dict)
-    for idx, single_qoi in enumerate(qoi):
+    for idx, single_qoi in enumerate(qoi_column):
         result_dict[single_qoi] = defaultdict(dict)
         df_statistics_single_qoi = df_statistics.loc[df_statistics['qoi'] == single_qoi]
 
@@ -217,7 +236,8 @@ def compute_gof_over_different_time_series(df_statistics,
             result_dict[single_qoi][single_objective_function]["gof_means_p10"] = gof_means_p10
             result_dict[single_qoi][single_objective_function]["gof_means_p90"] = gof_means_p90
 
-            print(f"gof_means_unalt:{gof_means_unalt} \ngof_means_mean:{gof_means_mean} \n"
+            print(f"{single_objective_function} - Comparing measured time series and different computed time series"
+                  f"\n gof_means_unalt:{gof_means_unalt} \ngof_means_mean:{gof_means_mean} \n"
                   f"gof_means_mean_m_std:{gof_means_mean_m_std} \ngof_means_mean_p_std:{gof_means_mean_p_std} \n"
                   f"gof_means_p10:{gof_means_p10} \ngof_means_p90:{gof_means_p90} \n")
             
@@ -227,17 +247,21 @@ def redo_all_statistics(
     raise NotImplementedError
 
 ###################################################################################################################
-# Set of different functions for analyzinf df_statistics DataFrame
+# Set of different functions for analyzing df_statistics DataFrame
     # produced as part of UQ simulation - these function may go to utility as well?
 ###################################################################################################################
 
 
-def describe_df_statistics(single_qoi, df_statistics_and_measured):
-    df_statistics_and_measured_single_qoi_subset = df_statistics_and_measured.loc[
-        df_statistics_and_measured['qoi'] == single_qoi]
-    result = df_statistics_and_measured_single_qoi_subset.describe(include=np.number)
-    print(f"{single_qoi}\n\n")
-    print(result)
+def describe_df_statistics(df_statistics_and_measured, single_qoi=None):
+    if single_qoi is None:
+        result = df_statistics_and_measured.describe(include=np.number)
+        print(result)
+    else:
+        df_statistics_and_measured_single_qoi_subset = df_statistics_and_measured.loc[
+            df_statistics_and_measured['qoi'] == single_qoi]
+        result = df_statistics_and_measured_single_qoi_subset.describe(include=np.number)
+        print(f"{single_qoi}\n\n")
+        print(result)
 
 
 def _get_sensitivity_indices_subset_of_big_df_statistics(df_statistics, single_qoi, param_names,
@@ -320,8 +344,19 @@ def compute_df_statistics_columns_correlation(
         plt.show()
 
 
+###################################################################################################################
+# Set of functions for plotting and or computing (KDE-based) CDFs and PDFs - these function may go to utility as well?
+###################################################################################################################
+
 def plot_parameters_sensitivity_indices_vs_temp_prec_measured(
         df_statistics, single_qoi, param_names, si_type="Sobol_t"):
+    """
+    :param df_statistics:
+    :param single_qoi:
+    :param param_names:
+    :param si_type:
+    :return:
+    """
     df_statistics_and_measured_single_qoi_subset = _get_sensitivity_indices_subset_of_big_df_statistics(
         df_statistics, single_qoi, param_names, si_type)
     num_param = len(param_names)
@@ -335,6 +370,7 @@ def plot_parameters_sensitivity_indices_vs_temp_prec_measured(
         if i % 3 == 0:
             if si_type == "Sobol_t":
                 ax.scatter(*df_statistics_and_measured_single_qoi_subset[[f"Sobol_t_{param}", "measured"]].values.T)
+                # ax.scatter(*df_statistics_and_measured_single_qoi_subset[["measured", f"sobol_t_{param}", ]].values.T)
             elif si_type == "Sobol_m":
                 ax.scatter(*df_statistics_and_measured_single_qoi_subset[[f"Sobol_m_{param}", "measured"]].values.T)
             elif si_type == "Sobol_m2":
@@ -361,10 +397,14 @@ def plot_parameters_sensitivity_indices_vs_temp_prec_measured(
     # set labels
     for i in range(num_param):
         param = param_names[i]
-        plt.setp(axs[-1, i], xlabel=f'{param}')
+        plt.setp(axs[-1, i], xlabel=f'{si_type} {param}')
+        # plt.setp(axs[:, i], ylabel=f'{param}')
     plt.setp(axs[0, 0], ylabel='measured')
     plt.setp(axs[1, 0], ylabel='precipitation')
     plt.setp(axs[2, 0], ylabel='temperature')
+    # plt.setp(axs[0, :], xlabel='measured')
+    # plt.setp(axs[1, :], xlabel='precipitation')
+    # plt.setp(axs[2, :], xlabel='temperature')
 
 
 def plot_cdfs_of_parameters_sensitivity_indices(df_statistics, single_qoi, param_names, si_type="Sobol_t"):
@@ -383,8 +423,8 @@ def plot_cdfs_of_parameters_sensitivity_indices(df_statistics, single_qoi, param
         elif si_type == "Sobol_m2":
             param_eval = df_statistics_and_measured_single_qoi_subset[f"Sobol_m2_{param_name}"].values
         distribution = cp.GaussianKDE(param_eval, h_mat=0.005 ** 2)
-        axs[i,].plot(t, distribution.cdf(t), label=f"KDE m {param_name}")
-        plt.setp(axs[i,], xlabel=f'{param_name}')
+        axs[i,].plot(t, distribution.cdf(t), label=f"KDE CDF {si_type} {param_name}")
+        plt.setp(axs[i,], xlabel=f'{si_type}_{param_name}')
         axs[i,].grid()
     # plt.legend()
     plt.setp(axs[0], ylabel='CDF')
@@ -392,7 +432,8 @@ def plot_cdfs_of_parameters_sensitivity_indices(df_statistics, single_qoi, param
 
 
 def single_param_single_qoi_sensitivity_indices_GaussianKDE(
-        df_statistics, single_qoi, param_name, si_type="Sobol_t", plot=True, plot_pdf_or_cdf="pdf"):
+        df_statistics, single_qoi, param_name, si_type="Sobol_t", plot=True, plot_pdf_or_cdf="pdf",
+        h_mat=0.02, alpha=0.5):
     df_statistics_and_measured_single_qoi_subset = _get_sensitivity_indices_subset_of_big_df_statistics(
         df_statistics, single_qoi, param_name, si_type)
     column_to_keep = None
@@ -405,14 +446,14 @@ def single_param_single_qoi_sensitivity_indices_GaussianKDE(
     samples = df_statistics_and_measured_single_qoi_subset[column_to_keep].values
 
     t = np.linspace(0, 1.0, 1000)
-    distribution = cp.GaussianKDE(samples, h_mat=0.02 ** 2)
+    distribution = cp.GaussianKDE(samples, h_mat=h_mat ** 2)
 
     if plot:
-        if plot_pdf_or_cdf=="pdf":
-            plt.hist(samples, bins=100, density=True, alpha=0.5)
-            plt.plot(t, distribution.pdf(t), label="0.05")
-        elif plot_pdf_or_cdf=="cdf":
-            plt.plot(t, distribution.cdf(t), label="0.05")
+        if plot_pdf_or_cdf == "pdf":
+            plt.hist(samples, bins=100, density=True, alpha=alpha)
+            plt.plot(t, distribution.pdf(t), label=f"PDF - {si_type} {single_qoi} {param_name}")
+        elif plot_pdf_or_cdf == "cdf":
+            plt.plot(t, distribution.cdf(t), label=f"CDF - {si_type} {single_qoi} {param_name}")
         else:
             raise Exception()
         plt.legend()
@@ -421,6 +462,38 @@ def single_param_single_qoi_sensitivity_indices_GaussianKDE(
     return distribution
 
 
+def gof_values_GaussianKDE(df_index_parameter_gof, gof_list=None, plot=True, plot_pdf_or_cdf="pdf"):
+    result_dic_of_distributions = defaultdict()
+    if gof_list is None:
+        gof_list = utility._get_gof_columns_df_index_parameter_gof(
+            df_index_parameter_gof)
+
+    if plot:
+        fig, axs = plt.subplots(1, len(gof_list), figsize=(20, 10))
+
+    for i in range(len(gof_list)):
+        single_gof = gof_list[i]
+        min_single_gof = df_index_parameter_gof[single_gof].min() - abs(df_index_parameter_gof[single_gof].min())*0.001
+        max_single_gof = df_index_parameter_gof[single_gof].max() + abs(df_index_parameter_gof[single_gof].max())*0.001
+        t = np.linspace(min_single_gof, max_single_gof, 1000)
+        gof_eval = df_index_parameter_gof[single_gof].values
+        distribution = cp.GaussianKDE(gof_eval, h_mat=0.005 ** 2)
+        result_dic_of_distributions[single_gof] = distribution
+        if plot:
+            if plot_pdf_or_cdf == "pdf":
+                axs[i,].hist(gof_eval, bins=100, density=True, alpha=0.5)
+                axs[i,].plot(t, distribution.pdf(t), label=f"KDE PDF {single_gof} {gof_list}")
+            elif plot_pdf_or_cdf == "cdf":
+                axs[i,].plot(t, distribution.cdf(t), label=f"KDE CDF {single_gof} {gof_list}")
+            else:
+                raise Exception()
+            plt.setp(axs[i,], xlabel=f'{single_gof}')
+            axs[i,].grid()
+    if plot:
+        plt.setp(axs[0], ylabel=f'{plot_pdf_or_cdf}')
+        plt.show()
+
+    return result_dic_of_distributions
 ###################################################################################################################
 # Set of functions for plotting - these function may go to utility as well?
 ###################################################################################################################
@@ -450,13 +523,13 @@ def plot_si_and_normalized_measured_time_signal_single_qoi(
 
 
 def plot_forcing_mean_predicted_and_observed_all_qoi(statisticsObject, directory="./", fileName="simulation_big_plot.html"):
-    measured_columns_names_set = set()
+    measured_column_names_set = set()
     for single_qoi in statisticsObject.list_qoi_column:
-        measured_columns_names_set.add(statisticsObject.dict_corresponding_original_qoi_column[single_qoi])
+        measured_column_names_set.add(statisticsObject.dict_corresponding_original_qoi_column[single_qoi])
 
-    total_number_of_rows = 2 + len(statisticsObject.list_qoi_column) + len(measured_columns_names_set)
+    total_number_of_rows = 2 + len(statisticsObject.list_qoi_column) + len(measured_column_names_set)
     fig = make_subplots(
-        rows=total_number_of_rows, cols=1,
+        rows=total_number_of_rows, cols=1, shared_xaxes=True
         #     subplot_titles=tuple(statisticsObject.list_qoi_column)
     )
     n_row = 3
@@ -484,13 +557,13 @@ def plot_forcing_mean_predicted_and_observed_all_qoi(statisticsObject, directory
                         f"statisticsObject.df_statistics object is still not computed - make sure to first call"
                         f"statisticsObject.create_df_from_statistics_data")
 
-    measured_columns_names_set = set()
+    measured_column_names_set = set()
     for single_qoi in statisticsObject.list_qoi_column:
         df_statistics_single_qoi = statisticsObject.df_statistics.loc[
             statisticsObject.df_statistics['qoi'] == single_qoi]
         corresponding_measured_column = statisticsObject.dict_corresponding_original_qoi_column[single_qoi]
-        if corresponding_measured_column not in measured_columns_names_set:
-            measured_columns_names_set.add(corresponding_measured_column)
+        if corresponding_measured_column not in measured_column_names_set:
+            measured_column_names_set.add(corresponding_measured_column)
             fig.add_trace(
                 go.Scatter(
                     x=df_statistics_single_qoi['TimeStamp'],
@@ -516,9 +589,11 @@ def plot_forcing_mean_predicted_and_observed_all_qoi(statisticsObject, directory
     fig.update_layout(xaxis=dict(type="date"))
     if not str(directory).endswith("/"):
         directory = str(directory) + "/"
+    if fileName is None:
+        fileName = "datailed_plot_all_qois.html"
     fileName = directory + fileName
     pyo.plot(fig, filename=fileName)
-    return fig
+    return fig, n_row
 
 
 def plotting_function_single_qoi(
@@ -566,7 +641,8 @@ def plotting_function_single_qoi(
 
     fig = make_subplots(
         rows=n_rows, cols=1,
-        subplot_titles=subplot_titles
+        subplot_titles=subplot_titles,
+        shared_xaxes=True,
     )
 
     fig.add_trace(
