@@ -68,26 +68,38 @@ class IshigamiStatistics(Statistics):
         self.number_of_unique_index_runs = None
         self.numEvaluations = None
         self.samples = None
-        self.result_dict = None
+        # self.result_dict = None
 
         self.solverTimes = None
         self.work_package_indexes = None
 
+        self.result_dict = dict()
+
     def get_analytical_sobol_indices(self):
-        v = self.a**2/8 + (self.b*np.pi**4)/5 + (self.b**2*np.pi**8)/18 + 0.5
-        vm1 = 0.5*(1+(self.b*np.pi**4)/5)**2
+        # vm1 = 0.5*(1+(self.b*np.pi**4)/5)**2
+        vm1 = (self.b*np.pi**4)/5 + ((self.b**2)*np.pi**8)/50 + 0.5  # Sudret!
         vm2 = self.a**2/8
-        vm3 = 0
+        vm3 = 0.0
+        vm12 = 0.0
+        vm23 = 0.0
+        vm13 = 8 * self.b**2 * np.pi ** 8 / 225
+        # vm13 = 19 * self.b**2 * np.pi ** 8 / 450  # Ravi!
+        vm123 = 0.0
+
+        # v = self.a**2/8 + (self.b*np.pi**4)/5 + (self.b**2*np.pi**8)/18 + 0.5
+        v = vm1 + vm2 + vm13
+        assert np.abs(v - (vm1 + vm2 + vm13)) < 0.001
+
         sm1 = vm1/v
         sm2 = vm2/v
-        sm3 = vm3/v
+        sm3 = 0.0
 
-        vt1 = 0.5*(1+(self.b*np.pi**4)/5)**2 + 8*self.b**2*np.pi**8/225
-        vt2 = self.a**2/8
-        vt3 = 8*self.b**2*np.pi**8/225
-        st1 = vt1/v
-        st2 = vt2/v
-        st3 = vt3/v
+        # vt1 = 0.5*(1+(self.b*np.pi**4)/5)**2 + 8*self.b**2*np.pi**8/225
+        # vt2 = self.a**2/8
+        # vt3 = 8*self.b**2*np.pi**8/225
+        st1 = (vm1 + vm13)/v
+        st2 = vm2/v
+        st3 = vm13/v
 
         # Sobol_m_analytical = np.array([0.3138/0.3139, 0.4424/0.4424, 0.0/0.0000], dtype=np.float64)
         self.sobol_m_analytical = np.array([sm1, sm2, sm3], dtype=np.float64)
@@ -128,7 +140,7 @@ class IshigamiStatistics(Statistics):
         else:
             # self.E_qoi = np.sum(self.qoi, axis=0, dtype=np.float64) / numEvaluations
             self.E_qoi = np.mean(self.qoi, 0)
-            #self.Var_qoi = np.sum(self.qoi ** 2, 0) / numEvaluations - self.E_qoi ** 2
+            #self.Var_qoi = np.sum(self.qoi ** 2, 0) / numEvaluations - self.E_qoi ** 2  # UQQEF-Test model
             self.Var_qoi = np.sum((self.qoi - self.E_qoi) ** 2, axis=0, dtype=np.float64)/(numEvaluations-1)
             # self.StdDev_qoi = np.sqrt(self.Var_qoi, dtype=np.float64)
             self.StdDev_qoi = np.std(self.qoi, 0, ddof=1)
@@ -139,9 +151,10 @@ class IshigamiStatistics(Statistics):
             self.P10_qoi = self.P10_qoi[0]
             self.P90_qoi = self.P90_qoi[0]
 
-        print(f"STATISTICS INFO: calcStatisticsForSc function is done!")
+        self._write_statistics_to_result_dict()
+        print(f"STATISTICS INFO: calcStatisticsForMC function is done!")
 
-    def calcStatisticsForSaltelli(self, rawSamples, timesteps,
+    def calcStatisticsForMcSaltelli(self, rawSamples, timesteps,
                             simulationNodes, numEvaluations, order, regression, poly_normed, poly_rule, solverTimes,
                             work_package_indexes, original_runtime_estimator=None, *args, **kwargs):
         
@@ -166,17 +179,17 @@ class IshigamiStatistics(Statistics):
 
         #self.E_qoi = np.sum(self.qoi, axis=0, dtype=np.float64) / (2*numEvaluations)
         # self.E_qoi = np.sum(standard_qoi, axis=0, dtype=np.float64) / numEvaluations
-        self.E_qoi = np.mean(self.qoi[:(2 * numEvaluations)], 0)
+        self.E_qoi = np.mean(self.qoi[:(numEvaluations)], 0)
 
         #self.Var_qoi = np.sum( (self.qoi - self.E_qoi) ** 2, axis=0, dtype=np.float64) / (2*numEvaluations-1)
         # self.Var_qoi = np.sum((standard_qoi - self.E_qoi) ** 2, axis=0, dtype=np.float64) / (numEvaluations - 1)
-        self.Var_qoi = np.sum((self.qoi[:(2 * numEvaluations)] - self.E_qoi) ** 2, axis=0, dtype=np.float64)/(2*numEvaluations - 1)
+        self.Var_qoi = np.sum((self.qoi[:(numEvaluations)] - self.E_qoi) ** 2, axis=0, dtype=np.float64)/(numEvaluations - 1)
 
         # self.StdDev_qoi = np.sqrt(self.qoi, dtype=np.float64)
-        self.StdDev_qoi = np.std(self.qoi[:(2 * numEvaluations)], 0, ddof=1)
+        self.StdDev_qoi = np.std(self.qoi[:(numEvaluations)], 0, ddof=1)
 
-        self.P10_qoi = np.percentile(self.qoi[:(2 * numEvaluations)], 10, axis=0)
-        self.P90_qoi = np.percentile(self.qoi[:(2 * numEvaluations)], 90, axis=0)
+        self.P10_qoi = np.percentile(self.qoi[:(numEvaluations)], 10, axis=0)
+        self.P90_qoi = np.percentile(self.qoi[:(numEvaluations)], 90, axis=0)
 
         if isinstance(self.P10_qoi, list) and len(self.P10_qoi) == 1:
             self.P10_qoi = self.P10_qoi[0]
@@ -198,7 +211,8 @@ class IshigamiStatistics(Statistics):
         print("self.Sobol_t_qoi.shape")
         print(self.Sobol_t_qoi.shape)
 
-        print(f"STATISTICS INFO: calcStatisticsForSc function is done!")
+        self._write_statistics_to_result_dict()
+        print(f"STATISTICS INFO: calcStatisticsForSallteli function is done!")
 
     def calcStatisticsForSc(self, rawSamples, timesteps,
                             simulationNodes, order, regression, poly_normed, poly_rule, solverTimes,
@@ -234,6 +248,7 @@ class IshigamiStatistics(Statistics):
         else:
             self.qoi_gPCE = cp.fit_quadrature(polynomial_expansion, nodes, weights, self.qoi)
         self._calc_stats_for_gPCE(dist)
+        self._write_statistics_to_result_dict()
 
         print(f"STATISTICS INFO: calcStatisticsForSc function is done!")
 
@@ -255,6 +270,10 @@ class IshigamiStatistics(Statistics):
         if self._compute_Sobol_m2:
             self.Sobol_m2_qoi = cp.Sens_m2(qoi_gPCE, dist)
 
+        self.Skew = cp.Skew(qoi_gPCE, dist).round(4)
+        self.Kurt = cp.Kurt(qoi_gPCE, dist)
+        self.QoI_Dist = cp.QoI_Dist(qoi_gPCE, dist)
+
         self.P10_qoi = float(cp.Perc(qoi_gPCE, 10, dist, numPercSamples))
         self.P90_qoi = float(cp.Perc(qoi_gPCE, 90, dist, numPercSamples))
         if isinstance(self.P10_qoi, (list)) and len(self.P10_qoi) == 1:
@@ -264,6 +283,35 @@ class IshigamiStatistics(Statistics):
         gpceFileName = os.path.abspath(os.path.join(str(self.workingDir), "gpce.pkl"))
         with open(gpceFileName, 'wb') as handle:
             pickle.dump(qoi_gPCE, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+    def _write_statistics_to_result_dict(self):
+        if hasattr(self, "qoi_gPCE"):
+            self.result_dict["gPCE"] = self.qoi_gPCE
+        if hasattr(self, "E_qoi"):
+            self.result_dict["E"] = self.E_qoi
+        if hasattr(self, "Var_qoi"):
+            self.result_dict["Var"] = self.Var_qoi
+        if hasattr(self, "StdDev_qoi"):
+            self.result_dict["StdDev"] = self.StdDev_qoi
+
+        if hasattr(self, "Skew"):
+            self.result_dict["Skew"] = self.Skew
+        if hasattr(self, "Kurt"):
+            self.result_dict["Kurt"] = self.Kurt
+        if hasattr(self, "QoI_Dist"):
+            self.result_dict["qoi_dist"] = self.QoI_Dist
+
+        if hasattr(self, "P10_qoi"):
+            self.result_dict["qoi_dist"] = self.P10_qoi
+        if hasattr(self, "P10"):
+            self.result_dict["P90"] = self.P90_qoi
+
+        if hasattr(self, "Sobol_m_qoi"):
+            self.result_dict["Sobol_m"] = self.Sobol_m_qoi
+        if hasattr(self, "Sobol_m2_qoi"):
+            self.result_dict["Sobol_m2"] = self.Sobol_m2_qoi
+        if hasattr(self, "Sobol_t_qoi"):
+            self.result_dict["Sobol_t"] = self.Sobol_t_qoi
 
     def _check_if_Sobol_t_computed(self):
         if hasattr(self, "Sobol_t_qoi"):
@@ -309,19 +357,24 @@ class IshigamiStatistics(Statistics):
             print(f"Sobol_m2_qoi: {self.Sobol_m2_qoi}")
 
         v = self.a**2/8 + (self.b*np.pi**4)/5 + (self.b**2*np.pi**8)/18 + 0.5
-        vm1 = 0.5*(1+(self.b*np.pi**4)/5)**2
+        # vm1 = 0.5*(1+(self.b*np.pi**4)/5)**2
+        vm1 = (self.b*np.pi**4)/5 + ((self.b**2)*np.pi**8)/50 + 0.5  # Sudret!
         vm2 = self.a**2/8
         vm3 = 0
+        vm13 = 8 * self.b**2 * np.pi ** 8 / 225
+        v = vm1 + vm2 + vm13
+        assert np.abs(v - (vm1 + vm2 + vm13)) < 0.001
+
         sm1 = vm1/v
         sm2 = vm2/v
-        sm3 = vm3/v
+        sm3 = 0.0
 
-        vt1 = 0.5*(1+(self.b*np.pi**4)/5)**2 + 8*self.b**2*np.pi**8/225
-        vt2 = self.a**2/8
-        vt3 = 8*self.b**2*np.pi**8/225
-        st1 = vt1/v
-        st2 = vt2/v
-        st3 = vt3/v
+        # vt1 = 0.5*(1+(self.b*np.pi**4)/5)**2 + 8*self.b**2*np.pi**8/225
+        # vt2 = vm2
+        # vt3 = 8*self.b**2*np.pi**8/225
+        st1 = (vm1 + vm13)/v
+        st2 = vm2/v
+        st3 = vm13/v
 
         # Sobol_m_analytical = np.array([0.3138/0.3139, 0.4424/0.4424, 0.0/0.0000], dtype=np.float64)
         Sobol_m_analytical = np.array([sm1, sm2, sm3], dtype=np.float64)

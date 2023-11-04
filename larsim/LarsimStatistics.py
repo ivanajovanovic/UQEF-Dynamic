@@ -405,7 +405,7 @@ class LarsimStatistics(Statistics):
         self.samples_station_names = self.samples.get_simulation_stations()
         self.reset_station_of_interest()
 
-    def preparePolyExpanForMc(self, simulationNodes, numEvaluations, regression=None, order=None,
+    def prepareForMcStatistics(self, simulationNodes, numEvaluations, regression=None, order=None,
                               poly_normed=None, poly_rule=None, *args, **kwargs):
         self.numEvaluations = numEvaluations
         # TODO Think about this, tricky for saltelli, makes sense for mc
@@ -419,7 +419,7 @@ class LarsimStatistics(Statistics):
                 self.dist = simulationNodes.joinedDists
             self.polynomial_expansion = cp.generate_expansion(order, self.dist, rule=poly_rule, normed=poly_normed)
 
-    def preparePolyExpanForSc(self, simulationNodes, order, poly_normed, poly_rule, *args, **kwargs):
+    def prepareForScStatistics(self, simulationNodes, order, poly_normed, poly_rule, *args, **kwargs):
         self.nodes = simulationNodes.distNodes
         if self.sampleFromStandardDist:
             self.dist = simulationNodes.joinedStandardDists
@@ -428,9 +428,9 @@ class LarsimStatistics(Statistics):
         self.weights = simulationNodes.weights
         self.polynomial_expansion = cp.generate_expansion(order, self.dist, rule=poly_rule, normed=poly_normed)
 
-    def preparePolyExpanForSaltelli(self, simulationNodes, numEvaluations=None, regression=None, order=None,
+    def prepareForMcSaltelliStatistics(self, simulationNodes, numEvaluations=None, regression=None, order=None,
                                     poly_normed=None, poly_rule=None, *args, **kwargs):
-        self.preparePolyExpanForMc(simulationNodes, numEvaluations, regression, order, poly_normed, poly_rule,
+        self.prepareForMcStatistics(simulationNodes, numEvaluations, regression, order, poly_normed, poly_rule,
                                    *args, **kwargs)
 
     def calcStatisticsForMcParallel(self, chunksize=1, regression=False, *args, **kwargs):
@@ -465,7 +465,7 @@ class LarsimStatistics(Statistics):
             if executor is not None:  # master process
                 solver_time_start = time.time()
                 if regression:
-                    chunk_results_it = executor.map(parallelStatistics._my_parallel_calc_stats_for_gPCE,
+                    chunk_results_it = executor.map(parallelStatistics._parallel_calc_stats_for_gPCE,
                                                     keyIter_chunk,
                                                     list_of_simulations_df_chunk,
                                                     distChunks,
@@ -479,7 +479,7 @@ class LarsimStatistics(Statistics):
                                                     chunksize=self.mpi_chunksize,
                                                     unordered=self.unordered)
                 else:
-                    chunk_results_it = executor.map(parallelStatistics._my_parallel_calc_stats_for_MC,
+                    chunk_results_it = executor.map(parallelStatistics._parallel_calc_stats_for_MC,
                                                     keyIter_chunk,
                                                     list_of_simulations_df_chunk,
                                                     numEvaluations_chunk,
@@ -534,7 +534,7 @@ class LarsimStatistics(Statistics):
         with futures.MPICommExecutor(MPI.COMM_WORLD, root=0) as executor:
             if executor is not None:  # master process
                 solver_time_start = time.time()
-                chunk_results_it = executor.map(parallelStatistics._my_parallel_calc_stats_for_gPCE,
+                chunk_results_it = executor.map(parallelStatistics._parallel_calc_stats_for_gPCE,
                                                 keyIter_chunk,
                                                 list_of_simulations_df_chunk,
                                                 distChunks,
@@ -565,7 +565,7 @@ class LarsimStatistics(Statistics):
                     for result in chunk_result:
                         self.result_dict[result[0]] = result[1]
 
-    def calcStatisticsForSaltelliParallel(self, chunksize=1, regression=False, *args, **kwargs):
+    def calcStatisticsForMcSaltelliParallel(self, chunksize=1, regression=False, *args, **kwargs):
         if self.rank == 0:
             grouped = self.samples.df_simulation_result.groupby(['Stationskennung', 'TimeStamp'])
             groups = grouped.groups
@@ -589,7 +589,7 @@ class LarsimStatistics(Statistics):
         with futures.MPICommExecutor(MPI.COMM_WORLD, root=0) as executor:
             if executor is not None:  # master process
                 solver_time_start = time.time()
-                chunk_results_it = executor.map(parallelStatistics._my_parallel_calc_stats_for_mc_saltelli,
+                chunk_results_it = executor.map(parallelStatistics._parallel_calc_stats_for_mc_saltelli,
                                                 keyIter_chunk,
                                                 list_of_simulations_df_chunk,
                                                 numEvaluations_chunk,
@@ -784,7 +784,7 @@ class LarsimStatistics(Statistics):
         if self._compute_Sobol_m2:
             self.result_dict[key]["Sobol_m2"] = cp.Sens_m2(qoi_gPCE, dist)  # second order sensitivity indices
 
-    def calcStatisticsForSaltelli(self, rawSamples, timesteps,
+    def calcStatisticsForMcSaltelli(self, rawSamples, timesteps,
                             simulationNodes, numEvaluations, order, regression, poly_normed, poly_rule, solverTimes,
                             work_package_indexes, original_runtime_estimator=None,  *args, **kwargs):
 
@@ -863,7 +863,7 @@ class LarsimStatistics(Statistics):
                 # self.result_dict[key]["Sobol_m"] = saltelliSobolIndicesHelpingFunctions._Sens_m_sample_3
                 # (qoi_values_saltelli, self.dim, numEvaluations)
 
-        print(f"[LARSIM STAT INFO] calcStatisticsForSaltelli function is done!")
+        print(f"[LARSIM STAT INFO] calcStatisticsForMcSaltelli function is done!")
 
     ###################################################################################################################
 
