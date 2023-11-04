@@ -7,15 +7,15 @@
       "start_hour": 0,
       "start_minute": 0,
 
-      "end_day": 30,
-      "end_month": 9,
+      "end_day": 10,
+      "end_month": 10,
       "end_year": 2006,
       "end_hour": 0,
       "end_minute": 0,
 
       "run_full_timespan":"False",
       "spin_up_length":1095,
-      "simulation_length": 30,
+      "simulation_length": 5,
       "resolution": "daily",
 
       "cut_runs": "False",
@@ -31,11 +31,11 @@
     "hbv_model_path": "Hydro_Models/HBV-SASK-data"
   },
   "simulation_settings": {
-    "qoi":["Q_cms","AET"],
-    "qoi_column":["Q_cms","AET"],
-    "transform_model_output":["log", "log"],
-    "read_measured_data": ["True","False"],
-    "qoi_column_measured":["streamflow","None"],
+    "qoi":"Q_cms",
+    "qoi_column":"Q_cms",
+    "transform_model_output":"None",
+    "read_measured_data": "True",
+    "qoi_column_measured":"streamflow",
     "objective_function_qoi":["RMSE", "LogNSE"],
     "calculate_GoF":"True",
     "objective_function":["MAE", "MSE", "RMSE", "NRMSE", "NSE", "LogNSE", "KGE"],
@@ -44,7 +44,7 @@
     "min_periods": 5,
     "method": "avrg",
     "center": "left",
-    "compute_gradients":"True",
+    "compute_gradients":"False",
     "eps_gradients": 0.01,
     "gradient_method":"Forward Difference",
     "gradient_analysis": "True",
@@ -57,14 +57,16 @@
       "distribution": "Uniform",
       "lower": -4.0,
       "upper": 4.0,
-      "default": 0.0
+      "default": 0.0,
+      "values_list": [-4.0, -1.0, 0.0, 1.0, 4.0]
     },
     {
       "name": "C0",
       "distribution": "Uniform",
       "lower": 0.0,
       "upper": 10.0,
-      "default": 5.0
+      "default": 5.0,
+      "values_list": [0.0, 2.0, 5.0, 8.0, 10.0]
     }
   ],
   "unused_parameters": [
