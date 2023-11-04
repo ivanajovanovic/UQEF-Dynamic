@@ -30,7 +30,8 @@ class IshigamiModel(object):
     def __init__(self, configurationObject,  *args, **kwargs):
         # Model.__init__(self)
 
-        if isinstance(configurationObject, dict):
+
+        if isinstance(configurationObject, dict) or configurationObject is None:
             self.configurationObject = configurationObject
         else:
             with open(configurationObject) as f:
