@@ -335,7 +335,7 @@ class HBVSASKModel(object):
         return list(self.full_data_range)
 
     def run(self, i_s=[0, ], parameters=None, raise_exception_on_model_break=None, *args, **kwargs):
-        print(f"[HVBSASK INFO] {i_s} parameter: {parameters}")
+        # print(f"[HVBSASK INFO] {i_s} parameters: {parameters}")
 
         if raise_exception_on_model_break is None:
             raise_exception_on_model_break = self.raise_exception_on_model_break
@@ -377,10 +377,10 @@ class HBVSASKModel(object):
             parameters_dict = utility.parameters_configuration(
                 parameters=parameter,
                 configurationObject=self.configurationObject,
-                default_par_info_dict=hbv.DEFAULT_PAR_INFO_DICT,
+                default_par_info_dict=hbv.DEFAULT_PAR_VALUES_DICT,
                 take_direct_value=take_direct_value
             )
-            print(f"parameters_dict - {parameters_dict} \n")
+            print(f"[HVBSASK INFO] {i_s} parameters_dict - {parameters_dict} \n")
 
             start = time.time()
 

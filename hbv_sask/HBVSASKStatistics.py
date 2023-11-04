@@ -404,7 +404,7 @@ class HBVSASKStatistics(Statistics):
 
         self.numbTimesteps = len(self.timesteps)
 
-    def preparePolyExpanForMc(self, simulationNodes, numEvaluations, regression=None, order=None,
+    def prepareForMcStatistics(self, simulationNodes, numEvaluations, regression=None, order=None,
                               poly_normed=None, poly_rule=None, *args, **kwargs):
         self.numEvaluations = numEvaluations
         # TODO Think about this, tricky for saltelli, makes sense for mc
@@ -418,7 +418,7 @@ class HBVSASKStatistics(Statistics):
                 self.dist = simulationNodes.joinedDists
             self.polynomial_expansion = cp.generate_expansion(order, self.dist, rule=poly_rule, normed=poly_normed)
 
-    def preparePolyExpanForSc(self, simulationNodes, order, poly_normed, poly_rule, *args, **kwargs):
+    def prepareForScStatistics(self, simulationNodes, order, poly_normed, poly_rule, *args, **kwargs):
         self.nodes = simulationNodes.distNodes
         if self.sampleFromStandardDist:
             self.dist = simulationNodes.joinedStandardDists
@@ -427,9 +427,9 @@ class HBVSASKStatistics(Statistics):
         self.weights = simulationNodes.weights
         self.polynomial_expansion = cp.generate_expansion(order, self.dist, rule=poly_rule, normed=poly_normed)
 
-    def preparePolyExpanForSaltelli(self, simulationNodes, numEvaluations=None, regression=None, order=None,
+    def prepareForMcSaltelliStatistics(self, simulationNodes, numEvaluations=None, regression=None, order=None,
                                     poly_normed=None, poly_rule=None, *args, **kwargs):
-        self.preparePolyExpanForMc(simulationNodes, numEvaluations, regression, order, poly_normed, poly_rule,
+        self.prepareForMcStatistics(simulationNodes, numEvaluations, regression, order, poly_normed, poly_rule,
                                    *args, **kwargs)
 
     def calcStatisticsForMcParallel(self, chunksize=1, regression=False, *args, **kwargs):
@@ -465,7 +465,7 @@ class HBVSASKStatistics(Statistics):
                 print(f"{self.rank}: computation of statistics started...")
                 solver_time_start = time.time()
                 if regression:
-                    chunk_results_it = executor.map(parallelStatistics._my_parallel_calc_stats_for_gPCE,
+                    chunk_results_it = executor.map(parallelStatistics._parallel_calc_stats_for_gPCE,
                                                     keyIter_chunk,
                                                     list_of_simulations_df_chunk,
                                                     distChunks,
@@ -479,7 +479,7 @@ class HBVSASKStatistics(Statistics):
                                                     chunksize=self.mpi_chunksize,
                                                     unordered=self.unordered)
                 else:
-                    chunk_results_it = executor.map(parallelStatistics._my_parallel_calc_stats_for_MC,
+                    chunk_results_it = executor.map(parallelStatistics._parallel_calc_stats_for_MC,
                                                     keyIter_chunk,
                                                     list_of_simulations_df_chunk,
                                                     numEvaluations_chunk,
@@ -533,7 +533,7 @@ class HBVSASKStatistics(Statistics):
             if executor is not None:  # master process
                 print(f"{self.rank}: computation of statistics started...")
                 solver_time_start = time.time()
-                chunk_results_it = executor.map(parallelStatistics._my_parallel_calc_stats_for_gPCE,
+                chunk_results_it = executor.map(parallelStatistics._parallel_calc_stats_for_gPCE,
                                                 keyIter_chunk,
                                                 list_of_simulations_df_chunk,
                                                 distChunks,
@@ -562,7 +562,7 @@ class HBVSASKStatistics(Statistics):
                     for result in chunk_result:
                         self.result_dict[result[0]] = result[1]
 
-    def calcStatisticsForSaltelliParallel(self, chunksize=1, regression=False, *args, **kwargs):
+    def calcStatisticsForMcSaltelliParallel(self, chunksize=1, regression=False, *args, **kwargs):
         if self.rank == 0:
             grouped = self.samples.df_simulation_result.groupby([self.time_column_name, ])
             groups = grouped.groups
@@ -587,7 +587,7 @@ class HBVSASKStatistics(Statistics):
             if executor is not None:  # master process
                 print(f"{self.rank}: computation of statistics started...")
                 solver_time_start = time.time()
-                chunk_results_it = executor.map(parallelStatistics._my_parallel_calc_stats_for_mc_saltelli,
+                chunk_results_it = executor.map(parallelStatistics._parallel_calc_stats_for_mc_saltelli,
                                                 keyIter_chunk,
                                                 list_of_simulations_df_chunk,
                                                 numEvaluations_chunk,

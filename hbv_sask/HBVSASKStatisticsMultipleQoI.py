@@ -93,19 +93,19 @@ class HBVSASKStatistics(HydroStatistics.HydroStatistics):
 
     ###################################################################################################################
 
-    def preparePolyExpanForMc(self, simulationNodes, numEvaluations, regression=None, order=None,
+    def prepareForMcStatistics(self, simulationNodes, numEvaluations, regression=None, order=None,
                               poly_normed=None, poly_rule=None, *args, **kwargs):
-        super(HBVSASKStatistics, self).preparePolyExpanForMc(simulationNodes, numEvaluations, regression, order,
-                              poly_normed, poly_rule, *args, **kwargs)
+        super(HBVSASKStatistics, self).prepareForMcStatistics(simulationNodes, numEvaluations, regression, order,
+                                                              poly_normed, poly_rule, *args, **kwargs)
 
-    def preparePolyExpanForSc(self, simulationNodes, order, poly_normed, poly_rule, *args, **kwargs):
-        super(HBVSASKStatistics, self).preparePolyExpanForSc(simulationNodes, order, poly_normed, poly_rule,
-                                                             *args, **kwargs)
+    def prepareForScStatistics(self, simulationNodes, order, poly_normed, poly_rule, *args, **kwargs):
+        super(HBVSASKStatistics, self).prepareForScStatistics(simulationNodes, order, poly_normed, poly_rule,
+                                                              *args, **kwargs)
 
-    def preparePolyExpanForSaltelli(self, simulationNodes, numEvaluations=None, regression=None, order=None,
+    def prepareForMcSaltelliStatistics(self, simulationNodes, numEvaluations=None, regression=None, order=None,
                                     poly_normed=None, poly_rule=None, *args, **kwargs):
-        super(HBVSASKStatistics, self).preparePolyExpanForSaltelli(simulationNodes, numEvaluations, regression, order,
-                                                             poly_normed, poly_rule, *args, **kwargs)
+        super(HBVSASKStatistics, self).prepareForMcSaltelliStatistics(simulationNodes, numEvaluations, regression, order,
+                                                                      poly_normed, poly_rule, *args, **kwargs)
 
     ###################################################################################################################
 
@@ -118,8 +118,8 @@ class HBVSASKStatistics(HydroStatistics.HydroStatistics):
     def calcStatisticsForScParallel(self, chunksize=1, regression=False, *args, **kwargs):
         super(HBVSASKStatistics, self).calcStatisticsForScParallel(chunksize, regression, *args, **kwargs)
 
-    def calcStatisticsForSaltelliParallel(self, chunksize=1, regression=False, *args, **kwargs):
-        super(HBVSASKStatistics, self).calcStatisticsForSaltelliParallel(chunksize, regression, *args, **kwargs)
+    def calcStatisticsForMcSaltelliParallel(self, chunksize=1, regression=False, *args, **kwargs):
+        super(HBVSASKStatistics, self).calcStatisticsForMcSaltelliParallel(chunksize, regression, *args, **kwargs)
 
     ###################################################################################################################
 
@@ -367,7 +367,10 @@ class HBVSASKStatistics(HydroStatistics.HydroStatistics):
 
         n_rows, starting_row = self._compute_number_of_rows_for_plotting(dict_what_to_plot, forcing)
 
-        fig = make_subplots(rows=n_rows, cols=1, print_grid=True, shared_xaxes=False, vertical_spacing=0.1)
+        fig = make_subplots(
+            rows=n_rows, cols=1, print_grid=True,
+            shared_xaxes=True, vertical_spacing=0.1
+        )
 
         # HBV - Specific plotting of observed data, i.e., forcing data and measured streamflow
         if forcing and self.forcing_data_fetched:
@@ -638,10 +641,13 @@ class HBVSASKStatistics(HydroStatistics.HydroStatistics):
             dict_time_vs_qoi_stat = self.result_dict[single_qoi_column]
 
         if dict_what_to_plot is None:
-            dict_what_to_plot = {
-                "E_minus_std": False, "E_plus_std": False, "P10": False, "P90": False,
-                "StdDev": False, "Skew": False, "Kurt": False, "Sobol_m": False, "Sobol_m2": False, "Sobol_t": False
-            }
+            if self.dict_what_to_plot is not None:
+                dict_what_to_plot = self.dict_what_to_plot
+            else:
+                dict_what_to_plot = {
+                    "E_minus_std": False, "E_plus_std": False, "P10": False, "P90": False,
+                    "StdDev": False, "Skew": False, "Kurt": False, "Sobol_m": False, "Sobol_m2": False, "Sobol_t": False
+                }
 
         # self._check_if_Sobol_t_computed(keyIter[0], qoi_column=single_qoi_column)
         # self._check_if_Sobol_m_computed(keyIter[0], qoi_column=single_qoi_column)
@@ -650,7 +656,8 @@ class HBVSASKStatistics(HydroStatistics.HydroStatistics):
             dict_what_to_plot, forcing, list_qoi_column_to_plot=[single_qoi_column,], result_dict=dict_time_vs_qoi_stat)
 
         fig = make_subplots(rows=n_rows, cols=1,
-                            print_grid=True, shared_xaxes=False,
+                            print_grid=True,
+                            shared_xaxes=True,
                             vertical_spacing=0.1)
 
         # HBV - Specific plotting of observed data, i.e., forcing data and measured streamflow
@@ -794,7 +801,7 @@ class HBVSASKStatistics(HydroStatistics.HydroStatistics):
             dict_plot_rows["Sobol_m2"] = starting_row
             starting_row += 1
 
-        if "Sobol_t" in dict_time_vs_qoi_stat[keyIter[0]] and dict_what_to_plot.get("Sobol_m", False):
+        if "Sobol_t" in dict_time_vs_qoi_stat[keyIter[0]] and dict_what_to_plot.get("Sobol_t", False):
             for i in range(len(self.labels)):
                 name = self.labels[i] + "_" + single_qoi_column + "_S_t"
                 fig.add_trace(go.Scatter(
@@ -831,7 +838,7 @@ class HBVSASKStatistics(HydroStatistics.HydroStatistics):
         if "Sobol_m2" in dict_time_vs_qoi_stat[keyIter[0]] and dict_what_to_plot.get("Sobol_m2", False):
             fig.update_yaxes(title_text=f"S. SI", showgrid=True, range=[0, 1],
                              row=dict_plot_rows["Sobol_m2"], col=1)
-        if "Sobol_t" in dict_time_vs_qoi_stat[keyIter[0]] and dict_what_to_plot.get("Sobol_m", False):
+        if "Sobol_t" in dict_time_vs_qoi_stat[keyIter[0]] and dict_what_to_plot.get("Sobol_t", False):
             fig.update_yaxes(title_text=f"T. SI", showgrid=True, range=[0, 1],
                              row=dict_plot_rows["Sobol_t"], col=1)
 
@@ -852,7 +859,7 @@ class HBVSASKStatistics(HydroStatistics.HydroStatistics):
 
         total_number_of_rows = 2 + len(self.list_qoi_column) + len(measured_columns_names_set)
         fig = make_subplots(
-            rows=total_number_of_rows, cols=1,
+            rows=total_number_of_rows, cols=1, shared_xaxes=True
             #     subplot_titles=tuple(self.list_qoi_column)
         )
         n_row = 3
