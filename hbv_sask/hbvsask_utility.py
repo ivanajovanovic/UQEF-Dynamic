@@ -461,7 +461,7 @@ def PlotEverything(flux, state, forcing, start, end, freq):
 # #
 # #     return parameters_dict, info_dict_on_perturbed_param
 #
-# def update_parameter_dic_for_gradient(parameters, configurationObject, take_direct_value=False,
+# def update_parameter_dict_for_gradient_computation(parameters, configurationObject, take_direct_value=False,
 #                                       perturb_single_param_around_nominal=False,
 #                                       parameter_index_to_perturb=0, eps_val=1e-4
 #                                       ):
