@@ -8,18 +8,33 @@ import scipy
 # from saltelliSobolIndicesHelpingFunctions import *
 from . import saltelliSobolIndicesHelpingFunctions
 
-def _parallel_calc_stats_for_MC(keyIter_chunk, qoi_values_chunk, numEvaluations, store_qoi_data_in_stat_dict=False):
+def _parallel_calc_stats_for_MC(
+        keyIter_chunk, qoi_values_chunk, numEvaluations, dim, compute_Sobol_t=False, store_qoi_data_in_stat_dict=False,
+        compute_sobol_total_indices_with_samples=False, samples=None):
     results = []
-    # for ip in range(0, len(keyIter_chunk)):  # for each peace of work
-    for timestamp, qoi_values in zip(keyIter_chunk, qoi_values_chunk):
-        # key = keyIter_chunk[ip]
-        # qoi_values = qoi_values_chunk[ip]
-        #
+    # for timestamp, qoi_values in zip(keyIter_chunk, qoi_values_chunk):
+    for ip in range(0, len(keyIter_chunk)):  # for each peace of work
+        timestamp = keyIter_chunk[ip]
+        qoi_values = qoi_values_chunk[ip]
+
+        if isinstance(numEvaluations, list):
+            numEvaluations = numEvaluations[ip]
+        numEvaluations = len(qoi_values)
+        if isinstance(dim, list):
+            dim = dim[ip]
+        if isinstance(compute_Sobol_t, list):
+            compute_Sobol_t = compute_Sobol_t[ip]
+        if isinstance(store_qoi_data_in_stat_dict, list):
+            store_qoi_data_in_stat_dict = store_qoi_data_in_stat_dict[ip]
+        if isinstance(compute_sobol_total_indices_with_samples, list):
+            compute_sobol_total_indices_with_samples = compute_sobol_total_indices_with_samples[ip]
+        if isinstance(samples, list):
+            samples = samples[ip]
+
         local_result_dict = dict()
+
         if store_qoi_data_in_stat_dict:
             local_result_dict["qoi_values"] = qoi_values
-
-        numEvaluations = len(qoi_values)
 
         # local_result_dict["E"] = np.sum(qoi_values, axis=0, dtype=np.float64) / numEvaluations
         local_result_dict["E"] = np.mean(qoi_values, 0)
@@ -43,6 +58,10 @@ def _parallel_calc_stats_for_MC(keyIter_chunk, qoi_values_chunk, numEvaluations,
         #     fullFileName = os.path.abspath(os.path.join(str(workingDir), fileName))
         #     with open(fullFileName, 'wb') as handle:
         #         pickle.dump(local_result_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+        if compute_Sobol_t and compute_sobol_total_indices_with_samples and samples is not None:
+            local_result_dict["Sobol_t"] = saltelliSobolIndicesHelpingFunctions.compute_total_sobol_indices_with_n_samples(
+                samples=samples, Y=qoi_values[:numEvaluations, np.newaxis], D=dim, N=numEvaluations)
 
         results.append([timestamp, local_result_dict])
     return results
@@ -110,7 +129,7 @@ def _parallel_calc_stats_for_gPCE(keyIter_chunk, qoi_values_chunk, dist, polynom
 
 def _parallel_calc_stats_for_mc_saltelli(
         keyIter_chunk, qoi_values_chunk, numEvaluations, dim, compute_Sobol_t=False,
-        compute_Sobol_m=False, store_qoi_data_in_stat_dict=False, compute_total_indice_with_only_n_samples=False,
+        compute_Sobol_m=False, store_qoi_data_in_stat_dict=False, compute_sobol_total_indices_with_samples=False,
         samples=None):
     results = []
     for ip in range(0, len(keyIter_chunk)):  # for each peace of work
@@ -133,7 +152,6 @@ def _parallel_calc_stats_for_mc_saltelli(
         qoi_values_saltelli = qoi_values[:, np.newaxis]
         # standard_qoi_values = qoi_values_saltelli[:numEvaluations, :]
         standard_qoi_values = qoi_values[:numEvaluations]
-
         # extended_standard_qoi_values = qoi_values_saltelli[:(2 * numEvaluations), :]
 
         if store_qoi_data_in_stat_dict:
@@ -157,7 +175,7 @@ def _parallel_calc_stats_for_mc_saltelli(
             local_result_dict["P10"] = local_result_dict["P10"][0]
             local_result_dict["P90"] = local_result_dict["P90"][0]
 
-        if compute_total_indice_with_only_n_samples and samples is not None:
+        if compute_sobol_total_indices_with_samples and samples is not None:
             if compute_Sobol_t:
                 # print(f"DEBUGGING - standard_qoi_values.shape - {standard_qoi_values.shape}")
                 # print(f"DEBUGGING - qoi_values_saltelli.shape - {qoi_values_saltelli.shape}")
