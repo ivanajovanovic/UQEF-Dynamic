@@ -47,7 +47,7 @@ uqsim = uqef.UQsim()
 # change args locally for testing and debugging
 #####################################
 
-local_debugging = True
+local_debugging = False
 if local_debugging:
     save_solver_results = False
 
@@ -56,7 +56,7 @@ if local_debugging:
     uqsim.args.uncertain = "all"
     uqsim.args.chunksize = 1
 
-    uqsim.args.uq_method = "ensemble"  # "sc" | "saltelli" | "mc" | "ensemble"
+    uqsim.args.uq_method = "mc"  # "sc" | "saltelli" | "mc" | "ensemble"
     uqsim.args.mc_numevaluations = 100
     uqsim.args.sampling_rule = "random"  # "random" | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
     uqsim.args.sc_q_order = 5  # 7 #10 3
@@ -81,7 +81,7 @@ if local_debugging:
     uqsim.args.sourceDir = pathlib.Path("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/HBV-SASK-data")
     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_ensemble_2013_all_tgb'))
     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_lai_may_cc_q_6_p_4_stat_trial'))
-    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs", 'playing_with_ensemble')) #sliding_window or continuous
+    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs", 'mc_with_sobol_computation')) #sliding_window or continuous
     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_sc_kpu_l_6_d_5_p_3_2013'))
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
     # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Hydro/configurations_Larsim/configurations_larsim_boundery_values.json'
@@ -95,13 +95,11 @@ if local_debugging:
     uqsim.args.mpi_method = "MpiPoolSolver"  # "LinearSolver"
 
     uqsim.args.disable_statistics = False
-    uqsim.args.disable_calc_statistics = True
+    uqsim.args.disable_calc_statistics = False
     uqsim.args.parallel_statistics = True  # False
 
     uqsim.args.instantly_save_results_for_each_time_step = False
     uqsim.args.uqsim_store_to_file = False
-
-    compute_total_indice_with_only_n_samples = True  # This is only relevant in the mc-saltelli's approach
 
     uqsim.args.compute_Sobol_t = True  # True False
     uqsim.args.compute_Sobol_m = False  # True False
@@ -110,16 +108,20 @@ if local_debugging:
 
     uqsim.setup_configuration_object()
 
-    utility.DEFAULT_DICT_WHAT_TO_PLOT = {
-        "E_minus_std": False, "E_plus_std": False, "P10": True, "P90": True,
-        "StdDev": True, "Skew": False, "Kurt": False, "Sobol_m": False, "Sobol_m2": False, "Sobol_t": True
-    }
 
 # TODO - add these variables to uqef.args
+utility.DEFAULT_DICT_WHAT_TO_PLOT = {
+    "E_minus_std": False, "E_plus_std": False, "P10": True, "P90": True,
+    "StdDev": True, "Skew": False, "Kurt": False, "Sobol_m": False, "Sobol_m2": False, "Sobol_t": True
+}
+compute_sobol_total_indices_with_samples = True  # This is only relevant in the mc-saltelli's approach
+if uqsim.args.uq_method == "mc" and uqsim.args.compute_Sobol_t:
+    compute_sobol_total_indices_with_samples = True
+save_samples = False
+collect_and_save_state_data = False
 store_qoi_data_in_stat_dict = False
 store_gpce_surrogate = True
 save_gpce_surrogate = False
-save_samples=True
 #####################################
 # additional path settings:
 #####################################
@@ -211,10 +213,11 @@ uqsim.statistics.update({"hbvsask"         : (lambda: HBVSASKStatistics.HBVSASKS
     compute_Sobol_t=uqsim.args.compute_Sobol_t,
     compute_Sobol_m=uqsim.args.compute_Sobol_m,
     save_samples=save_samples,
+    collect_and_save_state_data=collect_and_save_state_data,
     inputModelDir=uqsim.args.inputModelDir,
     instantly_save_results_for_each_time_step=uqsim.args.instantly_save_results_for_each_time_step,
     dict_what_to_plot=utility.DEFAULT_DICT_WHAT_TO_PLOT,
-    compute_total_indice_with_only_n_samples=compute_total_indice_with_only_n_samples
+    compute_sobol_total_indices_with_samples=compute_sobol_total_indices_with_samples
 ))})
 
 #####################################
