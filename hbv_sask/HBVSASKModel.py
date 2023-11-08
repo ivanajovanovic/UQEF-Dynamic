@@ -195,9 +195,14 @@ class HBVSASKModel(object):
 
         if "spin_up_length" in kwargs:
             self.spin_up_length = kwargs["spin_up_length"]
+        elif "warm_up_length" in kwargs:
+            self.spin_up_length = kwargs["warm_up_length"]
         else:
             try:
-                self.spin_up_length = self.configurationObject["time_settings"]["spin_up_length"]
+                if "spin_up_length" in self.configurationObject["time_settings"]:
+                    self.spin_up_length = self.configurationObject["time_settings"]["spin_up_length"]
+                elif "warm_up_length" in self.configurationObject["time_settings"]:
+                    self.spin_up_length = self.configurationObject["time_settings"]["warm_up_length"]
             except KeyError:
                 self.spin_up_length = 0  # 365*3
 
@@ -431,7 +436,7 @@ class HBVSASKModel(object):
             state_df['Index_run'] = i
             # Parse state_df between start_date_predictions, end_date + 1
             state_df.set_index(self.time_column_name, inplace=True)
-            state_df = state_df[self.start_date_predictions:]
+            state_df = state_df[self.simulation_range]  #  state_df = state_df[self.start_date_predictions:]
 
             # Append measured data to flux_df, i.e., merge flux_df and self.time_series_measured_data_df[self.qoi_column_measured]
             if merge_output_with_measured_data:
@@ -443,8 +448,6 @@ class HBVSASKModel(object):
             ######################################################################################################
             # Some basic transformation of model output
             ######################################################################################################
-            # TODO - think about this, extend this, maybe perform transformation to ground truth column as well,
-            #  and rewrite the content of self.list_qoi_column
             for idx, single_qoi_column in enumerate(self.list_qoi_column):
                 single_transformation = self.list_transform_model_output[idx]
                 if single_transformation is not None and single_transformation != "None":
