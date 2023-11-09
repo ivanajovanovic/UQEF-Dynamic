@@ -1,4 +1,4 @@
-# Forward Uncertainty Quantification of the Larsim Water Balance Model
+# Software tool for Efficient Forward Uncertainty Quantification of Dynamical Models
 
 This repository contains code for performing forward uncertainty quantification of the Larsim Model.
 
