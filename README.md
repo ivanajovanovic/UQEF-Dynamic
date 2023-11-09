@@ -65,52 +65,52 @@ Before each run, perform the following steps:
 
 ### Brief documentation for the input arguments:
 
---smoketest: A flag to run a test of the script to verify the environment.
---uqsim_file: The file to load or store the UQsim state.
---uqsim_store_to_file: A flag to store the UQsim state to a file.
---uqsim_restore_from_file: A flag to restore the UQsim state from a file.
---disable_calc_statistics: A flag to disable the calculation of statistics.
---disable_recalc_statistics: A flag to disable the recalculation of statistics.
---disable_statistics: A flag to disable statistics.
--im, --inputModelDir: The directory of the input model.
--om, --outputModelDir: The directory to store the output model.
--or, --outputResultDir: The directory to store the output results.
--src, --sourceDir: The source directory.
---model: The model to use.
---model_variant: The variant of the model to use.
---simulate_wait: A flag to enable waiting during simulation.
---uncertain: The uncertain parameter settings.
---uq_method: The UQ method to use.
---regression: A flag to enable regression.
---mc_numevaluations: The number of evaluations for the Monte Carlo method.
---sc_q_order: The number of collocation points in each direction for the Stochastic Collocation method.
---sc_p_order: The number of terms in Polynomial Chaos Expansion.
---sc_sparse_quadrature: A flag to enable sparse quadrature for the Stochastic Collocation method.
---sc_quadrature_rule: The quadrature rule for the Stochastic Collocation method.
---sc_poly_normed: A flag to enable normalized polynomials for the Stochastic Collocation method.
---sc_poly_rule: The polynomial rule for the Stochastic Collocation method.
---sampling_rule: The sampling rule to use.
---transformToStandardDist: A flag to enable transformation to standard distribution.
---sampleFromStandardDist: A flag to enable sampling from standard distribution.
---config_file: The configuration file to use.
---read_nodes_from_file: A flag to enable reading nodes from a file.
---parameters_file: The parameters file to use.
---parameters_setup_file: The parameters setup file to use.
---parallel: A flag to enable parallel execution.
---num_cores: The number of cores to use for parallel execution.
---mpi: A flag to enable MPI.
---mpi_method: The MPI method to use.
---mpi_combined_parallel: A flag to enable combined parallel execution with MPI.
---instantly_save_results_for_each_time_step: A flag to enable saving results for each time step instantly.
---parallel_statistics: A flag to enable parallel statistics.
---compute_Sobol_t: A flag to enable computation of Sobol t-statistics.
---compute_Sobol_m: A flag to enable computation of Sobol m-statistics.
---compute_Sobol_m2: A flag to enable computation of Sobol m2-statistics.
---chunksize: The chunk size to use.
---mpi_chunksize: The chunk size to use with MPI.
---analyse_runtime: A flag to enable runtime analysis.
---opt_runtime: A flag to enable runtime optimization.
---opt_runtime_gpce_Dir: The directory for GPCE runtime optimization.
---opt_algorithm: The algorithm to use for optimization.
---opt_strategy: The strategy to use for optimization.
+--smoketest: A flag to run a test of the script to verify the environment.\
+--uqsim_file: The file to load or store the UQsim state.\
+--uqsim_store_to_file: A flag to store the UQsim state to a file.\
+--uqsim_restore_from_file: A flag to restore the UQsim state from a file.\
+--disable_calc_statistics: A flag to disable the calculation of statistics.\
+--disable_recalc_statistics: A flag to disable the recalculation of statistics.\
+--disable_statistics: A flag to disable statistics.\
+-im, --inputModelDir: The directory of the input model.\
+-om, --outputModelDir: The directory to store the output model.\
+-or, --outputResultDir: The directory to store the output results.\
+-src, --sourceDir: The source directory.\
+--model: The model to use.\
+--model_variant: The variant of the model to use.\
+--simulate_wait: A flag to enable waiting during simulation.\
+--uncertain: The uncertain parameter settings.\
+--uq_method: The UQ method to use.\
+--regression: A flag to enable regression.\
+--mc_numevaluations: The number of evaluations for the Monte Carlo method.\
+--sc_q_order: The number of collocation points in each direction for the Stochastic Collocation method.\
+--sc_p_order: The number of terms in Polynomial Chaos Expansion.\
+--sc_sparse_quadrature: A flag to enable sparse quadrature for the Stochastic Collocation method.\
+--sc_quadrature_rule: The quadrature rule for the Stochastic Collocation method.\
+--sc_poly_normed: A flag to enable normalized polynomials for the Stochastic Collocation method.\
+--sc_poly_rule: The polynomial rule for the Stochastic Collocation method.\
+--sampling_rule: The sampling rule to use.\
+--transformToStandardDist: A flag to enable transformation to standard distribution.\
+--sampleFromStandardDist: A flag to enable sampling from standard distribution.\
+--config_file: The configuration file to use.\
+--read_nodes_from_file: A flag to enable reading nodes from a file.\
+--parameters_file: The parameters file to use.\
+--parameters_setup_file: The parameters setup file to use.\
+--parallel: A flag to enable parallel execution.\
+--num_cores: The number of cores to use for parallel execution.\
+--mpi: A flag to enable MPI.\
+--mpi_method: The MPI method to use.\
+--mpi_combined_parallel: A flag to enable combined parallel execution with MPI.\
+--instantly_save_results_for_each_time_step: A flag to enable saving results for each time step instantly.\
+--parallel_statistics: A flag to enable parallel statistics.\
+--compute_Sobol_t: A flag to enable computation of Sobol t-statistics.\
+--compute_Sobol_m: A flag to enable computation of Sobol m-statistics.\
+--compute_Sobol_m2: A flag to enable computation of Sobol m2-statistics.\
+--chunksize: The chunk size to use.\
+--mpi_chunksize: The chunk size to use with MPI.\
+--analyse_runtime: A flag to enable runtime analysis.\
+--opt_runtime: A flag to enable runtime optimization.\
+--opt_runtime_gpce_Dir: The directory for GPCE runtime optimization.\
+--opt_algorithm: The algorithm to use for optimization.\
+--opt_strategy: The strategy to use for optimization.\
 
