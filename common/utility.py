@@ -4,16 +4,20 @@ Set of utility functions for preparing and/or postprocessing data for UQ runs of
 @author: Ivana Jovanovic Buha
 """
 
-import chaospy as cp
+# Standard library imports
 from collections import defaultdict
 import datetime
 from distutils.util import strtobool
-import dill
 import json
-import matplotlib.pyplot as plt
-import numpy as np
 import os
 import os.path as osp
+from typing import List, Optional, Dict, Any, Union
+
+# Third party imports
+import chaospy as cp
+import dill
+import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import pathlib
 import pickle
@@ -605,10 +609,14 @@ def get_full_path_of_file(file: pathlib.PosixPath):
 def get_home_directory():
     return pathlib.Path.home()
 
+
+###################################################################################################################
+# Functions for working with configuration files and configuration objects
+###################################################################################################################
+
 ###################################################################################################################
 # Time configurations
 ###################################################################################################################
-
 
 def parse_datetime_configuration(time_settings_config):
     """
@@ -668,7 +676,7 @@ def return_configuration_object(configurationObject):
             "[Error] You have to specify the Configuration Object or provide the path to the .json file!\n")
 
 
-def check_if_configurationObject_is_in_right_format_and_return(configurationObject, raise_error=True):
+def check_if_configurationObject_is_in_right_format_and_return(configurationObject: Union[dict, pd.DataFrame, str, pathlib.PosixPath, Any], raise_error: Optional[bool] = True):
     if isinstance(configurationObject, dict) or isinstance(configurationObject, pd.DataFrame):
         return configurationObject
     elif isinstance(configurationObject, str) or isinstance(configurationObject, pathlib.PosixPath):
@@ -716,13 +724,150 @@ def read_configuration_object_dill(configurationObject, element=None):
         return configuration_object[element]
 
 
-def read_simulation_settings_from_configuration_object(configurationObject, **kwargs):
-    # TODO Delete unnecessary copy() below...
-    configurationObject = check_if_configurationObject_is_in_right_format_and_return(configurationObject,
-                                                                                     raise_error=False)
+def get_configuration_value(key: str, config_dict: dict, default_value: Any, **kwargs) -> Any:
+    """
+    Get a configuration value from a dictionary or kwargs.
 
+    Args:
+        key (str): The key to look for in the dictionary and kwargs.
+        config_dict (dict): The dictionary to look for the key in.
+        default_value (Any): The default value to return if the key is not found.
+        **kwargs: Optional keyword arguments to look for the key in.
+
+    Returns:
+        The value associated with the key, or the default value if the key is not found.
+    """
+    if key in kwargs:
+        return kwargs[key]
+    else:
+        return config_dict.get(key, default_value)
+
+
+def get_simulation_settings(configurationObject, key_from_configurationObject="simulation_settings"):
+    """
+    Get the simulation settings from a configuration object.
+
+    Args:
+        configurationObject (dict): The configuration object containing the simulation settings.
+        key_from_configurationObject (str): The key to look for in the configuration object.
+
+    Returns:
+        dict: The simulation settings, or an empty dictionary if the configuration object is None or doesn't contain the simulation settings.
+    """
+    configurationObject = check_if_configurationObject_is_in_right_format_and_return(configurationObject, raise_error=False)
+    if configurationObject is None:
+        return {}
+
+    return configurationObject.get(key_from_configurationObject, {})
+
+
+def handle_multiple_qoi(qoi, qoi_column, result_dict):
+    """
+    Handles the logic related to multiple quantities of interest (qoi).
+
+    Args:
+        qoi: The quantity of interest.
+        qoi_column: The column of the quantity of interest.
+        result_dict: The result dictionary where the results are stored.
+
+    Returns:
+        The updated result dictionary.
+    """
+    multiple_qoi = False
+    number_of_qois = 1
+    if (isinstance(qoi, list) and isinstance(qoi_column, list)) or (qoi == "GoF" and isinstance(qoi_column, list)):
+        multiple_qoi = True
+        number_of_qois = len(qoi_column)
+    return multiple_qoi, number_of_qois
+
+
+def handle_transform_model_output(transform_model_output, result_dict, dict_config_simulation_settings):
+    """
+    Handles the logic related to the 'transform_model_output' configuration.
+
+    Args:
+        transform_model_output: The 'transform_model_output' configuration value.
+        result_dict: The result dictionary where the results are stored.
+        dict_config_simulation_settings: The dictionary containing the simulation settings.
+
+    Returns:
+        The updated 'transform_model_output' configuration value.
+    """
+    if result_dict["multiple_qoi"]:
+        try:
+            for idx, single_transform_model_output in enumerate(transform_model_output):
+                if single_transform_model_output == "None":
+                    transform_model_output[idx] = None
+        except KeyError:
+            transform_model_output = [None] * result_dict["number_of_qois"]
+    else:
+        if transform_model_output == "None":
+            transform_model_output = None
+
+    return transform_model_output
+
+
+def read_simulation_settings_from_configuration_object_refactored(configurationObject: dict, **kwargs) -> dict:
+    # TODO finish this function
+    result_dict = dict()
+    dict_config_simulation_settings = get_simulation_settings(configurationObject)
+
+    if "qoi" in kwargs:
+        qoi = kwargs['qoi']
+    else:
+        qoi = dict_config_simulation_settings.get("qoi", "Q")
+    result_dict["qoi"] = qoi
+
+    if "qoi_column" in kwargs:
+        qoi_column = kwargs['qoi_column']
+    else:
+        qoi_column = dict_config_simulation_settings.get("qoi_column", "Value")
+    result_dict["qoi_column"] = qoi_column
+
+    multiple_qoi, number_of_qois = handle_multiple_qoi(qoi, qoi_column, result_dict)
+    result_dict["multiple_qoi"] = multiple_qoi
+    result_dict["number_of_qois"] = number_of_qois
+
+    transform_model_output = get_configuration_value("transform_model_output", dict_config_simulation_settings, "None", **kwargs)
+    transform_model_output = handle_transform_model_output(transform_model_output, result_dict, dict_config_simulation_settings)
+    result_dict["transform_model_output"] = transform_model_output
+
+    # handle_read_measured_data
+    # handle_qoi_column_measured
+    # handle_calculate_GoF
+    # handle_objective_function
+    # handle_mode_and_center
+    # handle_compute_gradients
+
+    return result_dict
+
+def read_simulation_settings_from_configuration_object(configurationObject: dict, **kwargs) -> dict:
+    """
+        Reads simulation settings from a configuration object and returns a dictionary of settings.
+
+        This function reads various simulation settings such as 'qoi', 'qoi_column', 'transform_model_output', 
+        'read_measured_data', 'qoi_column_measured', 'calculate_GoF', 'objective_function', etc. from the 
+        configuration object. For some settings it will first check if the value occures kwargs,
+        just then in the configuration object, and if not the default value might be used.
+
+        Args:
+            configurationObject (dict): The configuration object containing simulation settings.
+            **kwargs: Optional keyword arguments for overriding settings in the configuration object.
+
+        Returns:
+            result_dict: A dictionary containing the simulation settings.
+
+        Raises:
+            ValueError: If 'read_measured_data' is True but 'qoi_column_measured' is None.
+            Exception: If 'mode' is not one of 'continuous', 'sliding_window', 'resampling'.
+            Exception: If 'center' is not one of 'center', 'left', 'right'.
+            Exception: If 'method' is not one of 'avrg', 'max', 'min'.
+    """
+    # TODO Refactor this long function into smaller functions.
     result_dict = dict()
 
+    configurationObject = check_if_configurationObject_is_in_right_format_and_return(configurationObject,
+                                                                                     raise_error=False)
     if configurationObject is None:
         return result_dict
 
@@ -741,27 +886,30 @@ def read_simulation_settings_from_configuration_object(configurationObject, **kw
         qoi_column = dict_config_simulation_settings.get("qoi_column", "Value")
     result_dict["qoi_column"] = qoi_column
 
-    temp = result_dict["qoi_column"]
+    # temp = result_dict["qoi_column"]
 
-    multiple_qoi = False
-    number_of_qois = 1
-    if (isinstance(qoi, list) and isinstance(qoi_column, list)) or (qoi == "GoF" and isinstance(qoi_column, list)):
-        multiple_qoi = True
-        number_of_qois = len(qoi_column)
+    # multiple_qoi = False
+    # number_of_qois = 1
+    # if (isinstance(qoi, list) and isinstance(qoi_column, list)) or (qoi == "GoF" and isinstance(qoi_column, list)):
+    #     multiple_qoi = True
+    #     number_of_qois = len(qoi_column)
+    # result_dict["multiple_qoi"] = multiple_qoi
+    # result_dict["number_of_qois"] = number_of_qois
+    multiple_qoi, number_of_qois = handle_multiple_qoi(qoi, qoi_column, result_dict)
     result_dict["multiple_qoi"] = multiple_qoi
     result_dict["number_of_qois"] = number_of_qois
-
+    
     if "transform_model_output" in kwargs:
         transform_model_output = kwargs['transform_model_output']
     else:
-        if multiple_qoi:
+        if result_dict["multiple_qoi"]:
             try:
                 transform_model_output = dict_config_simulation_settings["transform_model_output"]
                 for idx, single_transform_model_output in enumerate(transform_model_output):
                     if single_transform_model_output == "None":
                         transform_model_output[idx] = None
             except KeyError:
-                transform_model_output = [None] * number_of_qois
+                transform_model_output = [None] * result_dict["number_of_qois"]
         else:
             transform_model_output = dict_config_simulation_settings.get("transform_model_output", "None")
             if transform_model_output == "None":
@@ -771,13 +919,13 @@ def read_simulation_settings_from_configuration_object(configurationObject, **kw
     if "read_measured_data" in kwargs:
         read_measured_data = kwargs['read_measured_data']
     else:
-        if multiple_qoi:
+        if result_dict["multiple_qoi"]:
             read_measured_data = []
             try:
                 temp = dict_config_simulation_settings["read_measured_data"]
             except KeyError:
-                temp = ["False"] * number_of_qois
-            for i in range(number_of_qois):
+                temp = ["False"] * result_dict["number_of_qois"]
+            for i in range(result_dict["number_of_qois"]):
                 if isinstance(temp[i], str):
                     read_measured_data.append(strtobool(temp[i]))
                 else:
@@ -790,21 +938,21 @@ def read_simulation_settings_from_configuration_object(configurationObject, **kw
     if "qoi_column_measured" in kwargs:
         qoi_column_measured = kwargs['qoi_column_measured']
     else:
-        if multiple_qoi:
+        if result_dict["multiple_qoi"]:
             try:
                 qoi_column_measured = dict_config_simulation_settings["qoi_column_measured"]
                 for idx, single_qoi_column_measured in enumerate(qoi_column_measured):
                     if single_qoi_column_measured == "None":
                         qoi_column_measured[idx] = None
             except KeyError:
-                qoi_column_measured = [None] * number_of_qois
+                qoi_column_measured = [None] * result_dict["number_of_qois"]
         else:
             qoi_column_measured = dict_config_simulation_settings.get("qoi_column_measured", "streamflow")
             if qoi_column_measured == "None":
                 qoi_column_measured = None
     result_dict["qoi_column_measured"] = qoi_column_measured
 
-    if multiple_qoi:
+    if result_dict["multiple_qoi"]:
         for idx, single_read_measured_data in enumerate(read_measured_data):
             if single_read_measured_data and qoi_column_measured[idx] is None:
                 # raise ValueError
@@ -815,7 +963,7 @@ def read_simulation_settings_from_configuration_object(configurationObject, **kw
             read_measured_data = False
     result_dict["read_measured_data"] = read_measured_data
 
-    if multiple_qoi:
+    if result_dict["multiple_qoi"]:
         assert len(read_measured_data) == len(qoi_column)
         assert len(read_measured_data) == len(qoi_column_measured)
 
@@ -823,7 +971,7 @@ def read_simulation_settings_from_configuration_object(configurationObject, **kw
     # self.calculate_GoF has to follow the self.read_measured_data which tells if ground truth data for that qoi is available
     list_calculate_GoF = [False, ]
     if calculate_GoF:
-        if multiple_qoi:
+        if result_dict["multiple_qoi"]:
             list_calculate_GoF = [False] * len(read_measured_data)
             for idx, single_read_measured_data in enumerate(read_measured_data):
                 list_calculate_GoF[idx] = single_read_measured_data
@@ -841,7 +989,7 @@ def read_simulation_settings_from_configuration_object(configurationObject, **kw
     list_objective_function_names_qoi = None
     if qoi == "GoF":
         # take only those Outputs of Interest that have measured data
-        if multiple_qoi:
+        if result_dict["multiple_qoi"]:
             updated_qoi_column = []
             updated_qoi_column_measured = []
             updated_read_measured_data = []
@@ -1057,15 +1205,38 @@ def read_simulation_settings_from_configuration_object(configurationObject, **kw
 #         else:
 #             self.list_qoi_column = list_qoi_column_processed
 
+#####################################
+# Functions related to parameters, mainly reading parameters from configuration object
 
-def get_param_info_dict_from_configurationObject(configurationObject):
+
+def get_list_of_parameters_dicts_from_configuration_dict(configurationObject: Union[dict, List, Any], raise_error:Optional[bool]=False) -> List[dict]:
     configurationObject = check_if_configurationObject_is_in_right_format_and_return(configurationObject,
-                                                                                     raise_error=False)
+                                                                                     raise_error=raise_error)
+    result_list = []
+    if configurationObject is None and not raise_error:
+        return result_list
+    elif configurationObject is None and raise_error:
+        raise Exception("configurationObject is None!")
+    result_list = configurationObject["parameters"]
+    return result_list
+
+
+def get_param_info_dict_from_configurationObject(configurationObject: Union[dict, List, Any])-> Dict[str, dict]:
+    """
+    :param configurationObject: dictionary storing information about parameters
+    :return: dictionary storing just some information about parameters
+    """
+    if isinstance(configurationObject, dict):
+        list_of_parameters = get_list_of_parameters_dicts_from_configuration_dict(configurationObject, raise_error=True)
+    elif isinstance(configurationObject, list):
+        list_of_parameters = configurationObject
+    
     result_dict = dict()
-    if configurationObject is None:
+
+    if not list_of_parameters or list_of_parameters is None:
         return result_dict
-    list_of_parameters_from_json = configurationObject["parameters"]
-    for _, param_entry_dict in enumerate(list_of_parameters_from_json):
+
+    for param_entry_dict in list_of_parameters:
         param_name = param_entry_dict.get("name")
         distribution = param_entry_dict.get("distribution", None)
         if "lower_limit" in param_entry_dict:
@@ -1091,17 +1262,25 @@ def get_param_info_dict_from_configurationObject(configurationObject):
         }
     return result_dict
 
-#####################################
 
-
-def get_param_info_dict(default_par_info_dict, configurationObject=None):
+def get_param_info_dict(default_par_info_dict: dict, configurationObject: Union[dict, List, Any]= None)-> Dict[str, dict]:
+    """
+    This function differs from get_param_info_dict_from_configurationObject in that it also fills in the missing paramter information from default_par_info_dict
+    :param default_par_info_dict: dictionary storing information about parameters
+    :param configurationObject: dictionary storing information about parameters
+    :return: filtered dictionary storing information about parameters obtained both from default_par_info_dict and configurationObject
+    """
     configurationObject = check_if_configurationObject_is_in_right_format_and_return(
         configurationObject, raise_error=False)
     result_dict = defaultdict(dict)
 
     # list_of_params_names_from_configurationObject = []
-    if configurationObject is not None:
-        for param_entry_dict in configurationObject["parameters"]:
+    if isinstance(configurationObject, dict):
+        list_of_parameters = get_list_of_parameters_dicts_from_configuration_dict(configurationObject, raise_error=False)
+    elif isinstance(configurationObject, list):
+        list_of_parameters = configurationObject
+    if list_of_parameters and list_of_parameters is not None:
+        for param_entry_dict in list_of_parameters:
             param_name = param_entry_dict.get("name")
             # list_of_params_names_from_configurationObject.append(param_name)
             distribution = param_entry_dict.get("distribution", None)
@@ -1154,7 +1333,7 @@ def get_param_info_dict(default_par_info_dict, configurationObject=None):
     return result_dict
 
 
-def parameters_configuration(parameters, configurationObject, default_par_info_dict, take_direct_value=False):
+def parameters_configuration(parameters, configurationObject: Union[dict, List], default_par_info_dict, take_direct_value: bool = False) -> dict:
     """
     Note: If not take_direct_value and parameters!= None, parameters_dict will contain
     some value for every single parameter in configurationObject (e.g., it might at the end have more entries that the
@@ -1162,10 +1341,12 @@ def parameters_configuration(parameters, configurationObject, default_par_info_d
     :param parameters:
     :type parameters: dictionary or array storing all uncertain parameters
        in the same order as parameters are listed in configurationObject
-    :param configurationObject:
-    :param take_direct_value:
-    :return:
+    :param configurationObject (dict, List): dictionary storing information about parameters, 
+    or list dictionaries where each dictionary stores information about the particular parameter    
+    :param take_direct_value: if True, then parameters_dict will contain the value of parameters
+    :return parameters_dict: dictionary storing parameter names as keys and parameter values as values
     """
+    # TODO rename this function to configurin_parameter_values
     parameters_dict = dict() #defaultdict()  # copy.deepcopy(DEFAULT_PAR_VALUES_DICT)
 
     if parameters is None:
@@ -1175,8 +1356,11 @@ def parameters_configuration(parameters, configurationObject, default_par_info_d
         parameters_dict = parameters
     else:
         uncertain_param_counter = 0
-        configurationObject = check_if_configurationObject_is_in_right_format_and_return(configurationObject)
-        for single_param in configurationObject['parameters']:
+        if isinstance(configurationObject, dict):
+            list_of_parameters = get_list_of_parameters_dicts_from_configuration_dict(configurationObject, raise_error=True)
+        elif isinstance(configurationObject, list):
+            list_of_parameters = configurationObject
+        for single_param in list_of_parameters:
             if single_param['distribution'] != "None":
                 # TODO Does it make sense to round the value of parameters?
                 parameters_dict[single_param['name']] = parameters[uncertain_param_counter]
