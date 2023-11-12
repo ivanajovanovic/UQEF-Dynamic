@@ -344,7 +344,8 @@ class HBVSASKModel(object):
             self.time_series_measured_data_df = self.time_series_measured_data_df.loc[
                 (self.time_series_measured_data_df[time_column_name] >= self.start_date) & (self.time_series_measured_data_df[time_column_name] <= self.end_date)]
         else:
-            self.time_series_measured_data_df = self.time_series_measured_data_df[self.start_date:self.end_date]
+            # self.time_series_measured_data_df = self.time_series_measured_data_df[self.start_date:self.end_date]
+            self.time_series_measured_data_df = self.time_series_measured_data_df.loc[self.simulation_range]
 
     def _plot_input_data(self, time_column_name="TimeStamp", precipitation_column_name="precipitation",
                          temperature_column_name="temperature", read_measured_streamflow=True,
@@ -400,19 +401,20 @@ class HBVSASKModel(object):
 
     def run(
             self, i_s: Optional[List[int]] = [0, ], 
-            parameters: Optional[Dict[str, Any]] = None, raise_exception_on_model_break: Optional[bool] = None, *args, **kwargs
+            parameters: Optional[Union[Dict[str, Any], List[Any]]] = None,
+            raise_exception_on_model_break: Optional[Union[bool, Any]] = None, *args, **kwargs
             ):
         """
             This is the main function to run the HBVSASK model.
 
             Parameters:
-            i_s (Optional[List[int]]): A list of unique model run ids. Default is [0].
-            parameters (Optional[Union[Dict[str, Any], List[Any]]]): A dictionary of parameters to be used in the model; 
+            :i_s (Optional[List[int]]): A list of unique model run ids. Default is [0].
+            :parameters (Optional[Union[Dict[str, Any], List[Any]]]): A dictionary of parameters to be used in the model;
             or a list of values for the parameters specified in the configuration file. Default is None.
-            raise_exception_on_model_break (Optional[bool]): If True, the function will raise an exception when the model breaks. 
+            :raise_exception_on_model_break (Optional[Union[bool, Any]]): If True, the function will raise an exception when the model breaks.
             Important when uq_method is gPCE. Default is None.
-            *args: Variable length argument list.
-            **kwargs: Arbitrary keyword arguments.
+            :*args: Variable length argument list.
+            :**kwargs: Arbitrary keyword arguments.
 
             Returns: 
             List[Tuple[Dict[str, Any], float]]: A list of tuples for each model run; each tuple is in the form (result_dict, runtime); 
@@ -520,7 +522,7 @@ class HBVSASKModel(object):
             state_df['Index_run'] = unique_run_index
             # Parse state_df between start_date_predictions, end_date + 1
             state_df.set_index(self.time_column_name, inplace=True)
-            state_df = state_df[self.simulation_range]  #  state_df = state_df[self.start_date_predictions:]
+            state_df = state_df[self.start_date_predictions:]  #  state_df = state_df[self.simulation_range]
 
             # Append measured data to flux_df, i.e., merge flux_df and self.time_series_measured_data_df[self.qoi_column_measured]
             if merge_output_with_measured_data:
