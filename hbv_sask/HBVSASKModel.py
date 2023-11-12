@@ -47,10 +47,10 @@ class HBVSASKModelConfigurations:
     def __init__(self, configurationObject: dict, *args: Any, **kwargs: Any):
         self.configurationObject = configurationObject
         
-        self.run_full_timespan = self.get_value_from_kwargs_or_config_dict_bool(self.RUN_FULL_TIMESPAN, self.TIME_SETTINGS, **kwargs, default='False')
-        self.writing_results_to_a_file = self.get_value_from_kwargs_or_config_dict_bool(self.WRITING_RESULTS_TO_A_FILE, self.MODEL_SETTINGS, **kwargs, default="True")
-        self.plotting = self.get_value_from_kwargs_or_config_dict_bool(self.PLOTTING, self.MODEL_SETTINGS, **kwargs, default="True")
-        self.corrupt_forcing_data = self.get_value_from_kwargs_or_config_dict_bool(self.CORRUPT_FORCING_DATA, self.MODEL_SETTINGS, **kwargs,default="False")
+        self.run_full_timespan = self.get_value_from_kwargs_or_config_dict_bool(self.RUN_FULL_TIMESPAN, self.TIME_SETTINGS, kwargs, default='False')
+        self.writing_results_to_a_file = self.get_value_from_kwargs_or_config_dict_bool(self.WRITING_RESULTS_TO_A_FILE, self.MODEL_SETTINGS, kwargs, default="True")
+        self.plotting = self.get_value_from_kwargs_or_config_dict_bool(self.PLOTTING, self.MODEL_SETTINGS, kwargs, default="True")
+        self.corrupt_forcing_data = self.get_value_from_kwargs_or_config_dict_bool(self.CORRUPT_FORCING_DATA, self.MODEL_SETTINGS, kwargs,default="False")
         
         self.uq_method = kwargs.get(self.UQ_METHOD, None)
         self.raise_exception_on_model_break = kwargs.get(self.RAISE_EXCEPTION_ON_MODEL_BREAK, False)
@@ -86,7 +86,7 @@ class HBVSASKModelConfigurations:
         else:
             return strtobool(self.configurationObject[section].get(key, default))
     
-    def get_value_from_kwargs_or_config_dict_bool(self, key: str, section: str, kwargs: dict, default: Optional[Any] = None):
+    def get_value_from_kwargs_or_config_dict(self, key: str, section: str, kwargs: dict, default: Optional[Any] = None):
         if key in kwargs:
             return kwargs[key]
         else:
