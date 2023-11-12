@@ -344,8 +344,8 @@ class HBVSASKModel(object):
             self.time_series_measured_data_df = self.time_series_measured_data_df.loc[
                 (self.time_series_measured_data_df[time_column_name] >= self.start_date) & (self.time_series_measured_data_df[time_column_name] <= self.end_date)]
         else:
-            # self.time_series_measured_data_df = self.time_series_measured_data_df[self.start_date:self.end_date]
-            self.time_series_measured_data_df = self.time_series_measured_data_df.loc[self.simulation_range]
+            self.time_series_measured_data_df = self.time_series_measured_data_df[self.start_date:self.end_date]
+            # self.time_series_measured_data_df = self.time_series_measured_data_df.loc[self.simulation_range]
 
     def _plot_input_data(self, time_column_name="TimeStamp", precipitation_column_name="precipitation",
                          temperature_column_name="temperature", read_measured_streamflow=True,
@@ -594,7 +594,7 @@ class HBVSASKModel(object):
 
             ######################################################################################################
             # process result to compute the final QoI - this part is if QoI should be something
-            # different than the model output itself
+            # different from the model output itself
             # self.qoi = "GoF" | "Q" | ["Q_cms","AET"]
             # self.mode = "continuous" | "sliding_window" | "resampling"
             ######################################################################################################
@@ -660,7 +660,7 @@ class HBVSASKModel(object):
             ######################################################################################################
 
             if self.compute_gradients or self.compute_active_subspaces:
-                gradient_matrix_dict = self._compute_gradient_matrix(
+                flux_df, gradient_matrix_dict = self._compute_gradient_matrix(
                     unique_run_index=unique_run_index, 
                     flux_df=flux_df, 
                     parameters_dict=parameters_dict, 
@@ -1087,7 +1087,7 @@ class HBVSASKModel(object):
                                             single_objective_function_name_qoi)
                                 )
 
-                                flux_df = flux_df.loc[self.simulation_range]
+                                # flux_df = flux_df.loc[self.simulation_range]
                                 if self.CD:
                                     grad = (flux_plus_h_df[new_column_name] - flux_minus_h_df[new_column_name]) / h
                                 else:
@@ -1202,4 +1202,4 @@ class HBVSASKModel(object):
         # flux_df.reset_index(inplace=True)
         # flux_df.rename(columns={"index": self.time_column_name}, inplace=True)
 
-        return gradient_matrix_dict, h_vector
+        return flux_df, gradient_matrix_dict
