@@ -77,7 +77,7 @@ def _parallel_calc_stats_for_gPCE(keyIter_chunk, qoi_values_chunk, dist, polynom
                                   store_qoi_data_in_stat_dict=False, store_gpce_surrogate=False,
                                   save_gpce_surrogate=False):
     results = []
-    for ip in range(0, len(keyIter_chunk)):  # for each peace of work
+    for ip in range(0, len(keyIter_chunk)):  # for each piece of work
         key = keyIter_chunk[ip]
         qoi_values = qoi_values_chunk[ip]
         local_result_dict = dict()
@@ -97,7 +97,7 @@ def _parallel_calc_stats_for_gPCE(keyIter_chunk, qoi_values_chunk, dist, polynom
             # TODO create a unique file with key and save it in a working directory
             # TODO add workingDir single_qoi_column
             # timestamp = pd.Timestamp(key).strftime('%Y-%m-%d %X')
-            # fileName = f"gpce_surrogate_{single_qoi_column}_{timestamp}.pkl"
+            # fileName = f"gpce_surrogate_{single_qoi_column}_{key}.pkl"
             # fullFileName = os.path.abspath(os.path.join(str(workingDir), fileName))
             # with open(fullFileName, 'wb') as handle:
             #     pickle.dump(qoi_gPCE, handle, protocol=pickle.HIGHEST_PROTOCOL)
