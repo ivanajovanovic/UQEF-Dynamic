@@ -47,7 +47,7 @@ uqsim = uqef.UQsim()
 # change args locally for testing and debugging
 #####################################
 
-local_debugging = True
+local_debugging = False
 if local_debugging:
     save_solver_results = False
 
@@ -117,7 +117,7 @@ utility.DEFAULT_DICT_WHAT_TO_PLOT = {
 compute_sobol_total_indices_with_samples = True  # This is only relevant in the mc-saltelli's approach
 if uqsim.args.uq_method == "mc" and uqsim.args.compute_Sobol_t:
     compute_sobol_total_indices_with_samples = True
-save_samples = True
+save_samples = False
 collect_and_save_state_data = False
 store_qoi_data_in_stat_dict = False
 store_gpce_surrogate = True
