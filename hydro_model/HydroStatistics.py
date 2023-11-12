@@ -358,101 +358,38 @@ class HydroStatistics(Statistics):
         self.solverTimes = None
         self.work_package_indexes = None
 
-        ##################################
-        self.dict_processed_simulation_settings_from_config_file = \
-            utility.read_simulation_settings_from_configuration_object(self.configurationObject, **kwargs)
+        self.dict_processed_simulation_settings_from_config_file = None
+        self.set_attributes_based_on_dict_processed_simulation_settings_from_config_file(**kwargs)
 
-        self.qoi = self.dict_processed_simulation_settings_from_config_file["qoi"]
-        self.qoi_column = self.dict_processed_simulation_settings_from_config_file["qoi_column"]
-        self.transform_model_output = self.dict_processed_simulation_settings_from_config_file["transform_model_output"]
-        self.multiple_qoi = self.dict_processed_simulation_settings_from_config_file["multiple_qoi"]
-        self.number_of_qois = self.dict_processed_simulation_settings_from_config_file["number_of_qois"]
-        self.qoi_column_measured = self.dict_processed_simulation_settings_from_config_file["qoi_column_measured"]
-        self.read_measured_data = self.dict_processed_simulation_settings_from_config_file["read_measured_data"]
+    def set_attributes_based_on_dict_processed_simulation_settings_from_config_file(self, **kwargs):
+        if self.dict_processed_simulation_settings_from_config_file is None:
+            self.set_dict_processed_simulation_settings_from_config_file(**kwargs)
 
-        # self.objective_function_qoi = self.dict_processed_simulation_settings_from_config_file["objective_function_qoi"]
-        # self.objective_function_names_qoi = self.dict_processed_simulation_settings_from_config_file["objective_function_names_qoi"]
+        self.assign_values(self.dict_processed_simulation_settings_from_config_file)
 
-        # list versions of the above variables
-        self.list_qoi_column = self.dict_processed_simulation_settings_from_config_file["list_qoi_column"]
-        self.list_qoi_column_measured = self.dict_processed_simulation_settings_from_config_file["list_qoi_column_measured"]
-        self.list_read_measured_data = self.dict_processed_simulation_settings_from_config_file["list_read_measured_data"]
-        self.list_transform_model_output = self.dict_processed_simulation_settings_from_config_file["list_transform_model_output"]
-
-        self.dict_qoi_column_and_measured_info = self.dict_processed_simulation_settings_from_config_file[
-            "dict_qoi_column_and_measured_info"]
-
-        self.list_objective_function_qoi = self.dict_processed_simulation_settings_from_config_file["list_objective_function_qoi"]
-        self.list_objective_function_names_qoi = self.dict_processed_simulation_settings_from_config_file[
-            "list_objective_function_names_qoi"]
-
-        self.objective_function = self.dict_processed_simulation_settings_from_config_file["objective_function"]
-
-        self.mode = self.dict_processed_simulation_settings_from_config_file["mode"]
-        self.method = self.dict_processed_simulation_settings_from_config_file["method"]
-
-        self.compute_gradients = self.dict_processed_simulation_settings_from_config_file["compute_gradients"]
-        self.compute_active_subspaces = self.dict_processed_simulation_settings_from_config_file["compute_active_subspaces"]
-        self.save_gradient_related_runs = self.dict_processed_simulation_settings_from_config_file["save_gradient_related_runs"]
-        self.gradient_analysis = self.dict_processed_simulation_settings_from_config_file["gradient_analysis"]
-
+        # additional assignments based on attributes set from dict_processed_simulation_settings_from_config_file
         self.list_original_model_output_columns = self.list_qoi_column.copy()
         self.dict_corresponding_original_qoi_column = defaultdict()
         self.additional_qoi_columns_besides_original_model_output = False
         self.qoi_is_a_single_number = False
         self.list_grad_columns = []
 
-        self._infer_qoi_column_names(**kwargs)
+        self.infer_qoi_column_names(**kwargs)
 
-    def _set_dict_processed_simulation_settings_from_config_file(self, dict_processed_simulation_settings_from_config_file=None, **kwargs):
+    def set_dict_processed_simulation_settings_from_config_file(
+            self, dict_processed_simulation_settings_from_config_file=None, **kwargs):
         if dict_processed_simulation_settings_from_config_file is None:
-            self.dict_processed_simulation_settings_from_config_file = utility.read_simulation_settings_from_configuration_object(
+            self.dict_processed_simulation_settings_from_config_file = \
+                utility.read_simulation_settings_from_configuration_object(
             self.configurationObject, **kwargs)
+        else:
+            self.dict_processed_simulation_settings_from_config_file = dict_processed_simulation_settings_from_config_file
 
-    def _set_attributes_based_on_dict_processed_simulation_settings_from_config_file(self, **kwargs):
-        self.qoi = self.dict_processed_simulation_settings_from_config_file["qoi"]
-        self.qoi_column = self.dict_processed_simulation_settings_from_config_file["qoi_column"]
-        self.transform_model_output = self.dict_processed_simulation_settings_from_config_file["transform_model_output"]
-        self.multiple_qoi = self.dict_processed_simulation_settings_from_config_file["multiple_qoi"]
-        self.number_of_qois = self.dict_processed_simulation_settings_from_config_file["number_of_qois"]
-        self.qoi_column_measured = self.dict_processed_simulation_settings_from_config_file["qoi_column_measured"]
-        self.read_measured_data = self.dict_processed_simulation_settings_from_config_file["read_measured_data"]
+    def assign_values(self, config_dict):
+        for key, value in config_dict.items():
+            setattr(self, key, value)
 
-        # self.objective_function_qoi = self.dict_processed_simulation_settings_from_config_file["objective_function_qoi"]
-        # self.objective_function_names_qoi = self.dict_processed_simulation_settings_from_config_file["objective_function_names_qoi"]
-
-        # list versions of the above variables
-        self.list_qoi_column = self.dict_processed_simulation_settings_from_config_file["list_qoi_column"]
-        self.list_qoi_column_measured = self.dict_processed_simulation_settings_from_config_file["list_qoi_column_measured"]
-        self.list_read_measured_data = self.dict_processed_simulation_settings_from_config_file["list_read_measured_data"]
-        self.list_transform_model_output = self.dict_processed_simulation_settings_from_config_file["list_transform_model_output"]
-
-        self.dict_qoi_column_and_measured_info = self.dict_processed_simulation_settings_from_config_file[
-            "dict_qoi_column_and_measured_info"]
-
-        self.list_objective_function_qoi = self.dict_processed_simulation_settings_from_config_file["list_objective_function_qoi"]
-        self.list_objective_function_names_qoi = self.dict_processed_simulation_settings_from_config_file[
-            "list_objective_function_names_qoi"]
-
-        self.objective_function = self.dict_processed_simulation_settings_from_config_file["objective_function"]
-
-        self.mode = self.dict_processed_simulation_settings_from_config_file["mode"]
-        self.method = self.dict_processed_simulation_settings_from_config_file["method"]
-
-        self.compute_gradients = self.dict_processed_simulation_settings_from_config_file["compute_gradients"]
-        self.compute_active_subspaces = self.dict_processed_simulation_settings_from_config_file["compute_active_subspaces"]
-        self.save_gradient_related_runs = self.dict_processed_simulation_settings_from_config_file["save_gradient_related_runs"]
-        self.gradient_analysis = self.dict_processed_simulation_settings_from_config_file["gradient_analysis"]
-
-        self.list_original_model_output_columns = self.list_qoi_column.copy()
-        self.dict_corresponding_original_qoi_column = defaultdict()
-        self.additional_qoi_columns_besides_original_model_output = False
-        self.qoi_is_a_single_number = False
-        self.list_grad_columns = []
-
-        self._infer_qoi_column_names(**kwargs)
-
-    def _infer_qoi_column_names(self, **kwargs):
+    def infer_qoi_column_names(self, **kwargs):
         # TODO Make one general function from this one in uqPostprocessing or utilities...
         # TODO Is this redundant with self.store_qoi_data_in_stat_dict
         always_process_original_model_output = kwargs.get("always_process_original_model_output", False)
@@ -789,6 +726,9 @@ class HydroStatistics(Statistics):
             self._save_statistics_dictionary_single_qoi_single_timestamp(single_qoi_column, timestamp, result_dict)
         else:
             self.result_dict[single_qoi_column][timestamp] = result_dict
+        # TODO - think if this should be done here or in the _parallel_calc_stats_for_gPCE...
+        if self.save_gpce_surrogate and "gPCE" in result_dict:
+            self._save_gpce_surrogate_model(gpce=result_dict["gPCE"], qoi=single_qoi_column, timestamp=timestamp)
 
     def _save_plot_and_clear_result_dict_single_qoi(self, single_qoi_column):
         if self.instantly_save_results_for_each_time_step:
