@@ -70,6 +70,8 @@ class Samples(object):
         list_of_gradient_matrix_dict = []
         list_of_single_state_df = []
         for index_run, value in enumerate(rawSamples, ):
+            df_result = None
+            state_df = None
             # print(f"DEBUGGING - index_run-{index_run}")
             if value is None:
                 # TODO write in some log file runs which have returned None, in case of sc break!
@@ -81,8 +83,6 @@ class Samples(object):
             elif isinstance(value, dict):
                 if "result_time_series" in value:
                     df_result = value["result_time_series"]
-                else:
-                    df_result = None
                 if "parameters_dict" in value:
                     list_index_parameters_dict.append(value["parameters_dict"])
                 if "gof_df" in value:
@@ -95,32 +95,28 @@ class Samples(object):
                 if collect_and_save_state_data:
                     if "state_df" in value:
                         state_df = value["state_df"]
-                    else:
-                        state_df = None
             else:
                 df_result = value
 
             # logic in Statistics is opposite the one in a Model, e.g.,
             # it is assumed that time_column is not an index in DFs
-            if isinstance(df_result, pd.DataFrame) and df_result.index.name == time_column_name:
-                df_result = df_result.reset_index()
-                df_result.rename(columns={df_result.index.name: time_column_name}, inplace=True)
+            if df_result is not None:
+                if isinstance(df_result, pd.DataFrame) and df_result.index.name == time_column_name:
+                    df_result = df_result.reset_index()
+                    df_result.rename(columns={df_result.index.name: time_column_name}, inplace=True)
+                if time_column_name not in list(df_result.columns):
+                    raise Exception(f"Error in Samples class - {time_column_name} is not in the "
+                                    f"columns of the result DataFrame")
+                if extract_only_qoi_columns:
+                    list_of_single_df.append(df_result[qoi_columns])
+                else:
+                    list_of_single_df.append(df_result)
 
             if state_df is not None:
                 if isinstance(state_df, pd.DataFrame) and state_df.index.name == time_column_name:
                     state_df = state_df.reset_index()
                     state_df.rename(columns={state_df.index.name: time_column_name}, inplace=True)
                 list_of_single_state_df.append(state_df)
-
-            if time_column_name not in list(df_result):
-                raise Exception(f"Error in Samples class - {time_column_name} is not in the "
-                                f"columns of the result DataFrame")
-
-            if df_result is not None:
-                if extract_only_qoi_columns:
-                    list_of_single_df.append(df_result[qoi_columns])
-                else:
-                    list_of_single_df.append(df_result)
 
         # TODO Add 'qoi' column
         if list_of_single_df:
