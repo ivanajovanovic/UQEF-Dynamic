@@ -47,10 +47,10 @@ class HBVSASKModelConfigurations:
     def __init__(self, configurationObject: dict, *args: Any, **kwargs: Any):
         self.configurationObject = configurationObject
         
-        self.run_full_timespan = self.get_value_from_kwargs_or_config_dict_bool(self.RUN_FULL_TIMESPAN, self.TIME_SETTINGS, 'False', kwargs)
-        self.writing_results_to_a_file = self.get_value_from_kwargs_or_config_dict_bool(self.WRITING_RESULTS_TO_A_FILE, self.MODEL_SETTINGS, "True", kwargs)
-        self.plotting = self.get_value_from_kwargs_or_config_dict_bool(self.PLOTTING, self.MODEL_SETTINGS, "True", kwargs)
-        self.corrupt_forcing_data = self.get_value_from_kwargs_or_config_dict_bool(self.CORRUPT_FORCING_DATA, self.MODEL_SETTINGS, "False", kwargs)
+        self.run_full_timespan = self.get_value_from_kwargs_or_config_dict_bool(self.RUN_FULL_TIMESPAN, self.TIME_SETTINGS, **kwargs, default='False')
+        self.writing_results_to_a_file = self.get_value_from_kwargs_or_config_dict_bool(self.WRITING_RESULTS_TO_A_FILE, self.MODEL_SETTINGS, **kwargs, default="True")
+        self.plotting = self.get_value_from_kwargs_or_config_dict_bool(self.PLOTTING, self.MODEL_SETTINGS, **kwargs, default="True")
+        self.corrupt_forcing_data = self.get_value_from_kwargs_or_config_dict_bool(self.CORRUPT_FORCING_DATA, self.MODEL_SETTINGS, **kwargs,default="False")
         
         self.uq_method = kwargs.get(self.UQ_METHOD, None)
         self.raise_exception_on_model_break = kwargs.get(self.RAISE_EXCEPTION_ON_MODEL_BREAK, False)
@@ -463,7 +463,7 @@ class HBVSASKModel(object):
             else:
                 number_of_uncertain_params = len(parameter)
 
-            parameters_dict = utility.parameters_configuration(
+            parameters_dict = utility.configuring_parameter_values(
                 parameters=parameter,
                 configurationObject=self.configurationObject["parameters"],
                 default_par_info_dict=hbv.DEFAULT_PAR_VALUES_DICT,

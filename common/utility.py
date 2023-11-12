@@ -1335,6 +1335,12 @@ def get_param_info_dict(default_par_info_dict: dict, configurationObject: Union[
 
 def parameters_configuration(parameters, configurationObject: Union[dict, List], default_par_info_dict, take_direct_value: bool = False) -> dict:
     """
+    This function is only for legacy purposes. Use configuring_parameter_values instead
+    """
+    return configuring_parameter_values(parameters, configurationObject, default_par_info_dict, take_direct_value=take_direct_value)
+
+def configuring_parameter_values(parameters, configurationObject: Union[dict, List], default_par_info_dict, take_direct_value: bool = False) -> dict:
+    """
     Note: If not take_direct_value and parameters!= None, parameters_dict will contain
     some value for every single parameter in configurationObject (e.g., it might at the end have more entries that the
     input parameters variable)
@@ -1346,7 +1352,7 @@ def parameters_configuration(parameters, configurationObject: Union[dict, List],
     :param take_direct_value: if True, then parameters_dict will contain the value of parameters
     :return parameters_dict: dictionary storing parameter names as keys and parameter values as values
     """
-    # TODO rename this function to configurin_parameter_values
+    # TODO rename this function to configuring_parameter_values
     parameters_dict = dict() #defaultdict()  # copy.deepcopy(DEFAULT_PAR_VALUES_DICT)
 
     if parameters is None:
@@ -1418,7 +1424,7 @@ def parameters_configuration(parameters, configurationObject: Union[dict, List],
 #
 #             if parameter_lower_limit is None or parameter_upper_limit is None:
 #                 raise Exception(
-#                     'ERROR in parameters_configuration: perturb_sinlge_param_around_nominal is set to True but '
+#                     'ERROR in configuring_parameter_values: perturb_sinlge_param_around_nominal is set to True but '
 #                     'parameter_lower_limit or parameter_upper_limit are not specified!')
 #             else:
 #                 param_h = eps_val * (parameter_upper_limit - parameter_lower_limit)
