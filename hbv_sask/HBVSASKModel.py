@@ -471,7 +471,7 @@ class HBVSASKModel(object):
                 default_par_info_dict=hbv.DEFAULT_PAR_VALUES_DICT,
                 take_direct_value=take_direct_value
             )
-            print(f"[HVBSASK INFO] {i_s} parameters_dict - {parameters_dict} \n")
+            # print(f"[HVBSASK INFO] {i_s} parameters_dict - {parameters_dict} \n")
 
             start = time.time()
 
