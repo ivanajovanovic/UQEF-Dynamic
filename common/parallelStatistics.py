@@ -74,7 +74,7 @@ def _parallel_calc_stats_for_SC(keyIter_chunk, qoi_values_chunk, dist, polynomia
 
 def _parallel_calc_stats_for_gPCE(keyIter_chunk, qoi_values_chunk, dist, polynomial_expansion, nodes, weights=None,
                                   regression=False, compute_Sobol_t=False, compute_Sobol_m=False,
-                                  store_qoi_data_in_stat_dict=False, store_gpce_surrogate=False,
+                                  store_qoi_data_in_stat_dict=False, store_gpce_surrogate_in_stat_dict=False,
                                   save_gpce_surrogate=False):
     results = []
     for ip in range(0, len(keyIter_chunk)):  # for each piece of work
@@ -90,7 +90,7 @@ def _parallel_calc_stats_for_gPCE(keyIter_chunk, qoi_values_chunk, dist, polynom
 
         numPercSamples = 10 ** 5
 
-        if store_gpce_surrogate:
+        if store_gpce_surrogate_in_stat_dict:
             local_result_dict["gPCE"] = qoi_gPCE
 
         if save_gpce_surrogate:

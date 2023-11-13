@@ -246,9 +246,10 @@ class HydroStatistics(Statistics):
         # in the stat result dict under key "qoi_values"; note - this might take a lot of space
         self.store_qoi_data_in_stat_dict = kwargs.get('store_qoi_data_in_stat_dict', False)
         # if set to True the computed gPCE model will be saved in the stat result dict under key "gPCE"
-        self.store_gpce_surrogate = kwargs.get('store_gpce_surrogate', False)
+        self.store_gpce_surrogate_in_stat_dict = kwargs.get('store_gpce_surrogate_in_stat_dict', False)
         # if set to True the computed gPCE model will be saved is a file for each qoi and each time-step;
-        # Note: no need to have both store_gpce_surrogate and save_gpce_surrogate set to True
+        # Note: no need to have both store_gpce_surrogate_in_stat_dict and save_gpce_surrogate set to True; 
+        # however current implamantion requires that store_gpce_surrogate_in_stat_dict is set to True if save_gpce_surrogate is set to True
         self.save_gpce_surrogate = kwargs.get('save_gpce_surrogate', False)
 
         # TODO: eventually make a non-MPI version
@@ -954,7 +955,7 @@ class HydroStatistics(Statistics):
                 compute_Sobol_t_Chunks = [self._compute_Sobol_t] * len(keyIter_chunk)
                 compute_Sobol_m_Chunks = [self._compute_Sobol_m] * len(keyIter_chunk)
                 store_qoi_data_in_stat_dict_Chunks = [self.store_qoi_data_in_stat_dict] * len(keyIter_chunk)
-                store_gpce_surrogate_Chunks = [self.store_gpce_surrogate] * len(keyIter_chunk)
+                store_gpce_surrogate_in_stat_dict_Chunks = [self.store_gpce_surrogate_in_stat_dict] * len(keyIter_chunk)
                 save_gpce_surrogate_Chunks = [self.save_gpce_surrogate] * len(keyIter_chunk)
 
             with futures.MPICommExecutor(MPI.COMM_WORLD, root=0) as executor:
@@ -974,7 +975,7 @@ class HydroStatistics(Statistics):
                         compute_Sobol_t_Chunks,
                         compute_Sobol_m_Chunks,
                         store_qoi_data_in_stat_dict_Chunks,
-                        store_gpce_surrogate_Chunks,
+                        store_gpce_surrogate_in_stat_dict_Chunks,
                         save_gpce_surrogate_Chunks,
                         chunksize=self.mpi_chunksize,
                         unordered=self.unordered
@@ -999,7 +1000,6 @@ class HydroStatistics(Statistics):
                     self._save_plot_and_clear_result_dict_single_qoi(single_qoi_column)
                     del chunk_results_it
                     del chunk_results
-
 
     def calcStatisticsForMc(self, regression=False, *args, **kwargs):
         self.result_dict = dict()
@@ -1180,7 +1180,7 @@ class HydroStatistics(Statistics):
 
         numPercSamples = 10 ** 5
 
-        if self.store_gpce_surrogate:
+        if self.store_gpce_surrogate_in_stat_dict:
             self.result_dict[single_qoi_column][key]["gPCE"] = qoi_gPCE
         if self.save_gpce_surrogate:
             self._save_gpce_surrogate_model(gpce=qoi_gPCE, qoi=single_qoi_column, timestamp=key)
