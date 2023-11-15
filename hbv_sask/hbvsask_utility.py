@@ -853,6 +853,7 @@ def HBV_SASK(forcing, long_term, par_values_dict, initial_condition_df, printing
     Q = Q1_routed + Q2
     Q_cms = (Q * watershed_area * 1000) / (24 * 3600)
     Q_cms[Q_cms < 1e-4] = 1e-4
+    AET[AET < 1e-5] = 1e-5
     flux["Q_cms"] = Q_cms #.conjugate()
     # Make sure flows will never get negative values because of numerical errors
     # flux["Q_cms"][flux["Q_cms"] < 10 ** -5] = 10 ** -5
