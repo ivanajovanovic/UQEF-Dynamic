@@ -33,10 +33,10 @@
   "simulation_settings": {
     "qoi":"Q_cms",
     "qoi_column":"Q_cms",
-    "transform_model_output":"None",
+    "transform_model_output":"log",
     "read_measured_data": "True",
     "qoi_column_measured":"streamflow",
-    "objective_function_qoi":["RMSE", "LogNSE"],
+    "objective_function_qoi":["RMSE", "NSE"],
     "calculate_GoF":"True",
     "objective_function":["MAE", "MSE", "RMSE", "NRMSE", "NSE", "LogNSE", "KGE"],
     "mode":"continuous",
