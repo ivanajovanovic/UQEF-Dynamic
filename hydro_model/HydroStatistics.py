@@ -266,6 +266,9 @@ class HydroStatistics(Statistics):
         self.save_samples = kwargs.get('save_samples', False)
         self.collect_and_save_state_data = kwargs.get('collect_and_save_state_data', False)
 
+        self.compute_stat_on_delta_qoi = kwargs.get('compute_stat_on_delta_qoi', False)
+
+        # TODO no need for these variables to be private...
         self._compute_Sobol_t = kwargs.get('compute_Sobol_t', False)
         self._compute_Sobol_m = kwargs.get('compute_Sobol_m', False)
         self._compute_Sobol_m2 = kwargs.get('compute_Sobol_m2', False)

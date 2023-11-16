@@ -819,7 +819,7 @@ class HBVSASKStatistics(HydroStatistics.HydroStatistics):
             fig.update_yaxes(title_text="T [c]", showgrid=True, row=2, col=1)
             fig.update_yaxes(title_text="Q [cms]", showgrid=True, row=3, col=1)
 
-        fig.update_yaxes(title_text=single_qoi_column, showgrid=True, side='right',
+        fig.update_yaxes(title_text=single_qoi_column, showgrid=True, side='left',
                          row=dict_plot_rows["qoi"], col=1)
         # fig.update_yaxes(title_text=f"Std. Dev. [{single_qoi_column}]", side='left', showgrid=True,
         #                  row=starting_row+1, col=1)
