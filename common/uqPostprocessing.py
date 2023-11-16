@@ -337,7 +337,7 @@ def compute_df_statistics_columns_correlation(
     if plot:
         import seaborn as sns
         sns.set(style="darkgrid")
-        mask = np.triu(np.ones_like(corr_df_statistics_and_measured_single_qoi_subset, dtype=np.bool))
+        mask = np.triu(np.ones_like(corr_df_statistics_and_measured_single_qoi_subset, dtype=bool))
         fig, axs = plt.subplots(figsize=(11, 9))
         sns.heatmap(corr_df_statistics_and_measured_single_qoi_subset, mask=mask, square=True, annot=True,
                     linewidths=.5)
