@@ -47,7 +47,7 @@ uqsim = uqef.UQsim()
 # change args locally for testing and debugging
 #####################################
 
-local_debugging = True
+local_debugging = False
 if local_debugging:
     save_solver_results = False
 
