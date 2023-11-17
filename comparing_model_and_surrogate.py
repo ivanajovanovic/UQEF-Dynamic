@@ -471,12 +471,12 @@ if __name__ == '__main__':
     fig.update_xaxes(fixedrange=True, showspikes=True, spikemode='across', spikesnap="cursor", spikedash='solid', spikethickness=2, spikecolor='grey')
     fig.update_yaxes(autorange="reversed", row=1, col=1)
     fig.update_yaxes(fixedrange=True)
-    fig.update_layout(title_text="Detailed plot of most important time-series plus ensamle of surrogate (gPCE) evaluations")
+    fig.update_layout(title_text="Detailed plot of most important time-series plus ensemble of surrogate (gPCE) evaluations")
     fig.update_layout(xaxis=dict(type="date"))
     fig.update_layout(xaxis_range=[min(statisticsObject.pdTimesteps),
                                    max(statisticsObject.pdTimesteps)])
     # fig.update_layout(yaxis_type=scale, hovermode="x", spikedistance=-1)
-    fileName = "datailed_plot_all_qois_plus_gpce_ensamble.html"
+    fileName = "datailed_plot_all_qois_plus_gpce_ensemble.html"
     fileName = directory_for_saving_plots + fileName
     pyo.plot(fig, filename=fileName)
 

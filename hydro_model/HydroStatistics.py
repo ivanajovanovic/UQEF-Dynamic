@@ -246,7 +246,6 @@ class HydroStatistics(Statistics):
         # however current implamantion requires that store_gpce_surrogate_in_stat_dict is set to True if save_gpce_surrogate is set to True
         self.save_gpce_surrogate = kwargs.get('save_gpce_surrogate', False)
 
-        # TODO: eventually make a non-MPI version
         self.parallel_statistics = kwargs.get('parallel_statistics', False)
         if self.parallel_statistics:
             self.size = MPI.COMM_WORLD.Get_size()
@@ -285,6 +284,10 @@ class HydroStatistics(Statistics):
         self.time_column_name = kwargs.get("time_column_name", "TimeStamp")
         self.forcing_data_column_names = kwargs.get("forcing_data_column_names", "precipitation")
 
+        self.resolution = self.configurationObject["time_settings"]["resolution"]
+        if self.resolution != "daily" and self.resolution != "hourly" and self.resolution != "minute":
+            raise Exception(f"Error in Statistics class - resolution is not daily, hourly or minute")
+
         if "corrupt_forcing_data" in kwargs:
             self.corrupt_forcing_data = kwargs['corrupt_forcing_data']
         else:
@@ -292,6 +295,7 @@ class HydroStatistics(Statistics):
                 "corrupt_forcing_data", False))
 
         self.dict_what_to_plot = kwargs.get("dict_what_to_plot", utility.DEFAULT_DICT_WHAT_TO_PLOT)
+
         #####################################
         # Parameters related set-up part
         #####################################
@@ -361,6 +365,12 @@ class HydroStatistics(Statistics):
 
         self.assign_values(self.dict_processed_simulation_settings_from_config_file)
 
+        if self.autoregressive_model_first_order and (self.qoi == "GoF" or self.mode == "sliding_window"):
+            print(f"Possible error in the configuration file - autoregressive_model_first_order is set to True, \
+            but qoi is GoF or mode is sliding_window. Setting autoregressive_model_first_order to False!")
+            self.autoregressive_model_first_order = False
+        self.compute_stat_on_delta_qoi = self.autoregressive_model_first_order
+
         # additional assignments based on attributes set from dict_processed_simulation_settings_from_config_file
         self.list_original_model_output_columns = self.list_qoi_column.copy()
         self.dict_corresponding_original_qoi_column = defaultdict()
@@ -384,7 +394,13 @@ class HydroStatistics(Statistics):
             setattr(self, key, value)
 
     def infer_qoi_column_names(self, **kwargs):
+        """
+        This function largely depends on the way different qoi columns were computed and named in the Model class!
+        :param kwargs:
+        :return:
+        """
         # TODO Make one general function from this one in uqPostprocessing or utilities...
+        # TODO Think if this function should be moved to the Model class or utility and then info propagated!?
         # TODO Is this redundant with self.store_qoi_data_in_stat_dict
         always_process_original_model_output = kwargs.get("always_process_original_model_output", False)
         list_qoi_column_processed = []
@@ -402,8 +418,15 @@ class HydroStatistics(Statistics):
                             self.qoi_is_a_single_number = True
                             # TODO in this case QoI is a single number, not a time-series!!!
             else:
-                # here, model output itself is regarded as a QoI
-                pass
+                if self.autoregressive_model_first_order:
+                    for single_qoi_column in self.list_qoi_column:
+                        new_column_name = "delta_" + single_qoi_column
+                        list_qoi_column_processed.append(new_column_name)
+                        dict_corresponding_original_qoi_column[new_column_name] = single_qoi_column
+                        self.additional_qoi_columns_besides_original_model_output = True
+                else:
+                    # here, model output itself is regarded as a QoI
+                    pass
                 # list_qoi_column_processed.append(self.list_qoi_column)
         elif self.mode == "sliding_window":
             if self.qoi == "GoF":
@@ -497,6 +520,15 @@ class HydroStatistics(Statistics):
 
     # TODO Write version of the function which read already self.samples.df_simulation_result
     # from some file and continues...
+    def _get_list_of_columns_to_filter_from_results(self):
+        list_of_columns_to_filter_from_results = self.list_qoi_column + list(
+            self.dict_corresponding_original_qoi_column.values)
+        if self.corrupt_forcing_data:
+            list_of_columns_to_filter_from_results = list_of_columns_to_filter_from_results + [
+                self.forcing_data_column_names]
+        list_of_columns_to_filter_from_results = list(set(list_of_columns_to_filter_from_results))
+        return list_of_columns_to_filter_from_results
+
     def prepare(self, rawSamples, **kwargs):
         self.timesteps = kwargs.get('timesteps', None)
         self.solverTimes = kwargs.get('solverTimes', None)
@@ -506,17 +538,16 @@ class HydroStatistics(Statistics):
         # TODO a couple of similar/redundant variables
         # self.store_qoi_data_in_stat_dict, self.extract_only_qoi_columns always_process_original_model_output
 
-        list_of_columns_to_filter_from_results = self.list_qoi_column.copy()
-        if self.corrupt_forcing_data:
-            list_of_columns_to_filter_from_results = self.list_qoi_column + [self.forcing_data_column_names]
+        list_of_columns_to_filter_from_results = self._get_list_of_columns_to_filter_from_results()
 
-        self.samples = Samples(rawSamples, qoi_column=list_of_columns_to_filter_from_results,
+        self.samples = Samples(rawSamples,
+                               qoi_columns=list_of_columns_to_filter_from_results,
                                time_column_name=self.time_column_name,
                                extract_only_qoi_columns=self.extract_only_qoi_columns,
                                original_model_output_column=self.list_original_model_output_columns,
                                qoi_is_a_single_number=self.qoi_is_a_single_number,
                                grad_columns=self.list_grad_columns,
-                               collect_and_save_state_data=self.collect_and_save_state_data
+                               collect_and_save_state_data=self.collect_and_save_state_data,
                                )
 
         if self.samples is not None:
@@ -551,12 +582,20 @@ class HydroStatistics(Statistics):
             # Read info about the time from propagated model runs, i.e., samples
             self.timesteps = self.samples.get_simulation_timesteps()
             self.timesteps_min = self.samples.get_timesteps_min()
+            self.timesteps_min_minus_one = utility.compute_previous_timestamp(
+                self.timesteps_min, resolution=self.resolution)
             self.timesteps_max = self.samples.get_timesteps_max()
             self.number_of_unique_index_runs = self.samples.get_number_of_runs()
 
         self.pdTimesteps = [pd.Timestamp(timestep) for timestep in self.timesteps]
         self.numTimesteps = len(self.timesteps)
 
+        if self.autoregressive_model_first_order:
+            self.get_measured_data(
+                time_column_name=self.time_column_name,
+                timestepRange=[self.timesteps_min_minus_one, self.timesteps_max],
+                qoi_column_name=self.list_original_model_output_columns  # or list(self.dict_corresponding_original_qoi_column.values)
+            )
         # This, though, does not hold for Saltelli's approach
         # self.numEvaluations = self.number_of_unique_index_runs
 
@@ -571,6 +610,16 @@ class HydroStatistics(Statistics):
     def set_result_dict(self, result_dict):
         self.result_dict = result_dict
         # TODO Should I update self.timesteps self.pdTimesteps self.numTimesteps based on self.result_dict??/
+
+    # def _compute_previous_timestep(self, timestamp):
+    #     if self.resolution == "daily":
+    #         # pd.DateOffset(days=1)
+    #         previous_timestamp = pd.to_datetime(timestamp) - pd.Timedelta(days=1)
+    #     elif self.resolution == "hourly":
+    #         previous_timestamp = pd.to_datetime(timestamp) - pd.Timedelta(h=1)
+    #     elif self.resolution == "minute":
+    #         previous_timestamp = pd.to_datetime(timestamp) - pd.Timedelta(m=1)
+    #     return previous_timestamp
 
     def set_timesteps(self, timesteps=None):
         if timesteps is not None:
@@ -601,6 +650,8 @@ class HydroStatistics(Statistics):
             self.timesteps_min = self.samples.get_timesteps_min()
         elif self.timesteps is not None:
             self.timesteps_min = min(self.timesteps)
+        self.timesteps_min_minus_one = utility.compute_previous_timestamp(
+            self.timesteps_min, resolution=self.resolution)
 
     def set_timesteps_max(self, timesteps_max=None):
         if timesteps_max is not None:
@@ -707,6 +758,42 @@ class HydroStatistics(Statistics):
                                    *args, **kwargs)
 
     ###################################################################################################################
+    def _if_autoregressive_model_first_order_do_modification(self,
+                                single_qoi_column, timestamp, result_dict):
+        """
+        This function checks if the autoregressive_model_first_order is set to True and if so, modifies the result_dict,
+        i.e.m mean computed value of the QoI, by adding to the value of the QoI at the previous time step.
+        :param single_qoi_column:
+        :param timestamp:
+        :param result_dict:
+        :return:
+        """
+        df_measured_subset = None
+        if self.measured_fetched and self.df_measured is not None:
+            if single_qoi_column in list(self.df_measured["qoi"].unique()):
+                df_measured_subset = self.df_measured.loc[self.df_measured["qoi"] == single_qoi_column][[
+                    self.time_column_name, "measured"]]
+
+            elif self.dict_corresponding_original_qoi_column[single_qoi_column] \
+                    in list(self.df_measured["qoi"].unique()):
+                df_measured_subset = self.df_measured.loc[
+                    self.df_measured["qoi"] == self.dict_corresponding_original_qoi_column[single_qoi_column]][[
+                    self.time_column_name, "measured"]]
+
+        if df_measured_subset is not None:
+            reset_index = False
+            if not df_measured_subset.index.name == self.time_column_name:
+                df_measured_subset.set_index(self.time_column_name, inplace=True)
+                reset_index = True
+            # previous_timestamp = self.pdTimesteps[self.pdTimesteps.index(timestamp) - 1]
+            # Compute the previous timestamp
+            previous_timestamp = utility.compute_previous_timestamp(
+                timestamp=timestamp, resolution=self.resolution)
+            result_dict["E"] = result_dict["E"] + df_measured_subset.loc[previous_timestamp]["measured"].values[0]
+            if reset_index:
+                df_measured_subset.reset_index(inplace=True)
+                df_measured_subset.rename(columns={"index": self.time_column_name}, inplace=True)
+
     def _save_statistics_dictionary_single_qoi_single_timestamp(self, single_qoi_column, timestamp, result_dict):
         fileName = f"statistics_dictionary_{single_qoi_column}_{timestamp}.pkl"
         fullFileName = os.path.abspath(os.path.join(str(self.workingDir), fileName))
@@ -715,6 +802,9 @@ class HydroStatistics(Statistics):
 
     def _process_chunk_result_single_qoi_single_time_step(self, single_qoi_column, timestamp, result_dict):
         result_dict.update({'qoi': single_qoi_column})
+        if self.autoregressive_model_first_order:
+            self._if_autoregressive_model_first_order_do_modification(
+                single_qoi_column, timestamp, result_dict)
         if self.instantly_save_results_for_each_time_step:
             # TODO maybe comment out all this part, in case this is performed in _my_parallel_calc_stats_for...
             self._save_statistics_dictionary_single_qoi_single_timestamp(single_qoi_column, timestamp, result_dict)
@@ -760,14 +850,20 @@ class HydroStatistics(Statistics):
 
         for single_qoi_column in self.list_qoi_column:
             if self.rank == 0:
+                keyIter_chunk = list(more_itertools.chunked(keyIter, chunksize))
+                numEvaluations_chunk = [self.numEvaluations] * len(keyIter_chunk)
+
+                # TODO Think about some more efficient way of doing this, e.g., generator or iterator
                 list_of_simulations_df = [
                     self.samples.df_simulation_result.loc[self.groups[key].values][single_qoi_column].values
                     for key in keyIter
                 ]
-
-                keyIter_chunk = list(more_itertools.chunked(keyIter, chunksize))
                 list_of_simulations_df_chunk = list(more_itertools.chunked(list_of_simulations_df, chunksize))
-                numEvaluations_chunk = [self.numEvaluations] * len(keyIter_chunk)
+
+                generator_of_simulations_df = (
+                    self.samples.df_simulation_result.loc[self.groups[key].values][single_qoi_column].values
+                    for key in keyIter
+                )
 
                 if regression:
                     nodesChunks = [self.nodes] * len(keyIter_chunk)
@@ -788,8 +884,10 @@ class HydroStatistics(Statistics):
                 if self.compute_sobol_total_indices_with_samples and \
                         self._compute_Sobol_t and self.uqef_simulationNodes is not None:
                     samples_chunks = [self.uqef_simulationNodes.parameters.T[:self.numEvaluations]] * len(keyIter_chunk)
+                    samples = self.uqef_simulationNodes.parameters.T[:self.numEvaluations]
                 else:
                     samples_chunks = [None] * len(keyIter_chunk)
+                    samples = None
 
             with futures.MPICommExecutor(MPI.COMM_WORLD, root=0) as executor:
                 if executor is not None:  # master proces; or .\executor.mpi_comm.rank == 0
@@ -812,16 +910,29 @@ class HydroStatistics(Statistics):
                             unordered=self.unordered
                         )
                     else:
+                        # chunk_results_it = executor.map(
+                        #     parallelStatistics._parallel_calc_stats_for_MC,
+                        #     keyIter_chunk,
+                        #     list_of_simulations_df_chunk,
+                        #     numEvaluations_chunk,
+                        #     dimChunks,
+                        #     compute_Sobol_t_Chunks,
+                        #     store_qoi_data_in_stat_dict_Chunks,
+                        #     compute_sobol_total_indices_with_samples_chunks,
+                        #     samples_chunks,
+                        #     chunksize=self.mpi_chunksize,
+                        #     unordered=self.unordered
+                        # )
                         chunk_results_it = executor.map(
                             parallelStatistics._parallel_calc_stats_for_MC,
-                            keyIter_chunk,
-                            list_of_simulations_df_chunk,
-                            numEvaluations_chunk,
-                            dimChunks,
-                            compute_Sobol_t_Chunks,
-                            store_qoi_data_in_stat_dict_Chunks,
-                            compute_sobol_total_indices_with_samples_chunks,
-                            samples_chunks,
+                            keyIter,
+                            generator_of_simulations_df,
+                            self.numEvaluations,
+                            self.dim,
+                            self._compute_Sobol_t,
+                            self.store_qoi_data_in_stat_dict,
+                            self.compute_sobol_total_indices_with_samples,
+                            samples,
                             chunksize=self.mpi_chunksize,
                             unordered=self.unordered
                         )
@@ -931,17 +1042,20 @@ class HydroStatistics(Statistics):
 
         for single_qoi_column in self.list_qoi_column:
             if self.rank == 0:
-                # TODO Potential Memory Problem
+                keyIter_chunk = list(more_itertools.chunked(keyIter, chunksize))
+
                 # TODO Should I as well transfer Index_run column
                 #  in order to be sure that right values were multiplied with right polynomials?
-                list_of_simulations_df = [
+                # list_of_simulations_df = [
+                #     self.samples.df_simulation_result.loc[self.groups[key].values][single_qoi_column].values
+                #     for key in keyIter
+                # ]
+                # list_of_simulations_df_chunk = list(more_itertools.chunked(list_of_simulations_df, chunksize))
+
+                generator_of_simulations_df = (
                     self.samples.df_simulation_result.loc[self.groups[key].values][single_qoi_column].values
                     for key in keyIter
-                ]
-
-                keyIter_chunk = list(more_itertools.chunked(keyIter, chunksize))
-                # TODO Potential Memory Problem
-                list_of_simulations_df_chunk = list(more_itertools.chunked(list_of_simulations_df, chunksize))
+                )
 
                 nodesChunks = [self.nodes] * len(keyIter_chunk)
                 distChunks = [self.dist] * len(keyIter_chunk)
@@ -959,21 +1073,37 @@ class HydroStatistics(Statistics):
                 if executor is not None:  # master process
                     print(f"{self.rank}: computation of statistics for qoi {single_qoi_column} started...")
                     solver_time_start = time.time()
-                    # TODO Potential Memory Problem
+                    # chunk_results_it = executor.map(
+                    #     parallelStatistics._parallel_calc_stats_for_gPCE,
+                    #     keyIter_chunk,
+                    #     list_of_simulations_df_chunk,
+                    #     distChunks,
+                    #     polynomial_expansionChunks,
+                    #     nodesChunks,
+                    #     weightsChunks,
+                    #     regressionChunks,
+                    #     compute_Sobol_t_Chunks,
+                    #     compute_Sobol_m_Chunks,
+                    #     store_qoi_data_in_stat_dict_Chunks,
+                    #     store_gpce_surrogate_in_stat_dict_Chunks,
+                    #     save_gpce_surrogate_Chunks,
+                    #     chunksize=self.mpi_chunksize,
+                    #     unordered=self.unordered
+                    # )
                     chunk_results_it = executor.map(
                         parallelStatistics._parallel_calc_stats_for_gPCE,
                         keyIter_chunk,
-                        list_of_simulations_df_chunk,
-                        distChunks,
-                        polynomial_expansionChunks,
-                        nodesChunks,
-                        weightsChunks,
-                        regressionChunks,
-                        compute_Sobol_t_Chunks,
-                        compute_Sobol_m_Chunks,
-                        store_qoi_data_in_stat_dict_Chunks,
-                        store_gpce_surrogate_in_stat_dict_Chunks,
-                        save_gpce_surrogate_Chunks,
+                        generator_of_simulations_df,
+                        self.dist,
+                        self.polynomial_expansion,
+                        self.nodes,
+                        self.weights,
+                        regression,
+                        self._compute_Sobol_t,
+                        self._compute_Sobol_m,
+                        self.store_qoi_data_in_stat_dict,
+                        self.store_gpce_surrogate_in_stat_dict,
+                        self.save_gpce_surrogate,
                         chunksize=self.mpi_chunksize,
                         unordered=self.unordered
                     )
@@ -1299,7 +1429,6 @@ class HydroStatistics(Statistics):
          :param kwargs:
          :return: set self.df_measured to be a pd.DataFrame with three columns "TimeStamp", "qoi", "measured"
          """
-        # In this particular set-up, we only have access to the measured streamflow
 
         if not isinstance(qoi_column_name, list):
             qoi_column_name = [qoi_column_name, ]
@@ -1310,18 +1439,23 @@ class HydroStatistics(Statistics):
         list_df_measured_single_qoi = []
         for single_qoi_column in qoi_column_name:
 
+            # Trying to find the original model output column name corresponding to the single_qoi_column
+            # e.g., single_qoi_column = "streamflow" and the original model output column name is "Q_cms"
             if single_qoi_column not in self.list_original_model_output_columns:
+                # in this case, single_qoi_column is either one of the measured column names (e.g., streamflow),
+                # or is one of the new qoi column names (e.g., delta_Q_cms)
                 is_single_qoi_column_in_measured_column_names = False
                 for temp in self.list_original_model_output_columns:
-                    if single_qoi_column == self.dict_qoi_column_and_measured_info[temp][1]:
-                        is_single_qoi_column_in_measured_column_names = True
+                    if single_qoi_column == self.dict_qoi_column_and_measured_info[temp][1] \
+                            or temp == self.dict_corresponding_original_qoi_column[single_qoi_column]:
                         single_qoi_column = temp
+                        is_single_qoi_column_in_measured_column_names = True
                         break
                 if not is_single_qoi_column_in_measured_column_names:
                     continue
 
+            # finally, single_qoi_column should be one among the original model output columns
             single_qoi_column_info = self.dict_qoi_column_and_measured_info[single_qoi_column]
-
             single_qoi_read_measured_data = single_qoi_column_info[0]
             single_qoi_column_measured = single_qoi_column_info[1]
             single_qoi_transform_model_output = single_qoi_column_info[2]

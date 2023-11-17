@@ -200,6 +200,11 @@ class HBVSASKModel(object):
         config_dict = utility.read_simulation_settings_from_configuration_object(self.configurationObject, **kwargs)
         self.assign_values(config_dict)
 
+        if self.autoregressive_model_first_order and (self.qoi == "GoF" or self.mode == "sliding_window"):
+            print(f"Possible error in the configuration file - autoregressive_model_first_order is set to True, \
+            but qoi is GoF or mode is sliding_window. Setting autoregressive_model_first_order to False!")
+            self.autoregressive_model_first_order = False
+
         #####################################
         # streamflow is of special importance here (i.e., for HBVSASK), 
         # since we have saved/measured/ground truth that for it and it is inside input data
@@ -251,6 +256,16 @@ class HBVSASKModel(object):
                 )
             except KeyError:
                 self.start_date, self.end_date = hbv._get_full_time_span(self.basis)
+
+        if "resolution" in kwargs:
+            self.resolution = kwargs["resolution"]
+        else:
+            try:
+                self.resolution = self.configurationObject["time_settings"].get("resolution", "daily")
+            except KeyError:
+                self.resolution = "daily"
+        if self.resolution != "daily" and self.resolution != "hourly" and self.resolution != "minute":
+            raise Exception(f"Error in Statistics class - resolution is not daily, hourly or minute")
 
         if "spin_up_length" in kwargs:
             self.spin_up_length = kwargs["spin_up_length"]
@@ -440,6 +455,8 @@ class HBVSASKModel(object):
         corrupt_forcing_data = kwargs.get("corrupt_forcing_data", self.corrupt_forcing_data)
 
         merge_output_with_measured_data = kwargs.get("merge_output_with_measured_data", False)
+        # if any(self.list_calculate_GoF) or self.autoregressive_model_first_order:
+        #     merge_output_with_measured_data = True
         if any(self.list_calculate_GoF):
             merge_output_with_measured_data = True
         # if not any(self.list_read_measured_data):
@@ -513,7 +530,8 @@ class HBVSASKModel(object):
             # Create a final df - state
             last_date = time_series_list[-1]
             time_series_list_plus_one_day = time_series_list.copy()
-            time_series_list_plus_one_day.append(pd.to_datetime(last_date) + pd.DateOffset(days=1))
+            # time_series_list_plus_one_day.append(pd.to_datetime(last_date) + pd.DateOffset(days=1))
+            time_series_list_plus_one_day.append(pd.to_datetime(last_date) + pd.Timedelta(days=1))
             state_df = pd.DataFrame(
                 list(zip(time_series_list_plus_one_day, state["SWE"], state["SMS"], state["S1"], state["S2"])),
                 columns=[self.time_column_name, 'initial_SWE', 'initial_SMS', 'S1', 'S2', ]
@@ -527,7 +545,8 @@ class HBVSASKModel(object):
             # Append measured data to flux_df, i.e., merge flux_df and self.time_series_measured_data_df[self.qoi_column_measured]
             if merge_output_with_measured_data:
                 list_qoi_column_measured_to_filter = [
-                    single_qoi_column_measured for single_qoi_column_measured in self.list_qoi_column_measured if single_qoi_column_measured is not None]
+                    single_qoi_column_measured for single_qoi_column_measured in self.list_qoi_column_measured \
+                    if single_qoi_column_measured is not None and single_qoi_column_measured != "None"]
                 flux_df = flux_df.merge(
                     self.time_series_measured_data_df[list_qoi_column_measured_to_filter], left_index=True, right_index=True)
 
@@ -622,6 +641,9 @@ class HBVSASKModel(object):
                                 flux_df[new_column_name] = index_parameter_gof_dict_single_qoi[
                                     single_objective_function_name_qoi]
                     index_parameter_gof_DF = pd.DataFrame(index_parameter_gof_list_of_dicts)
+                elif self.autoregressive_model_first_order:
+                    self._compute_autoregressive_model_first_order(flux_df=flux_df)
+                    self._dropna_from_df_and_update_simulation_range(flux_df, update_simulation_range=True)
 
             elif self.mode == "sliding_window":
                 if self.center == "center":
@@ -770,6 +792,29 @@ class HBVSASKModel(object):
                 df.rename(columns={"index": self.time_column_name}, inplace=True)
             else:
                 self.simulation_range = df.index
+
+    def _compute_autoregressive_model_first_order(self, flux_df):
+        reset_index = False
+        # Make sure that flux_df has time_column_name as index and that it is sorted
+        if not flux_df.index.name == self.time_column_name:
+            flux_df.set_index(self.time_column_name, inplace=True)
+            reset_index = True
+        flux_df.sort_index(inplace=True)
+        for idx, single_qoi_column in enumerate(self.list_qoi_column):
+            new_column_name = "delta_" + single_qoi_column
+            if self.list_read_measured_data[idx] and self.list_qoi_column_measured[idx] is not None:
+                single_qoi_column_measured = self.list_qoi_column_measured[idx]
+                for timestamp in flux_df.index[1:]:
+                    previous_timestamp = utility.compute_previous_timestamp(timestamp, self.resolution)
+                    flux_df.at[timestamp, new_column_name] = (
+                            flux_df.at[previous_timestamp, single_qoi_column_measured] -
+                            flux_df.at[timestamp, single_qoi_column]
+                    )
+            else:
+                flux_df[new_column_name] = flux_df[single_qoi_column].diff()
+        if reset_index:
+            flux_df.reset_index(inplace=True)
+            flux_df.rename(columns={"index": self.time_column_name}, inplace=True)
 
     def _calculate_GoF_on_data_subset(self, ser, df, qoi_column, qoi_column_idx, objective_function_name_qoi):
         # df_subset = df.iloc[ser.index]

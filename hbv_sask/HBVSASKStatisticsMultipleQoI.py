@@ -134,82 +134,8 @@ class HBVSASKStatistics(HydroStatistics.HydroStatistics):
 
     def get_measured_data(self, timestepRange=None, time_column_name="TimeStamp",
                           qoi_column_name="streamflow", **kwargs):
-        """
-
-        :param timestepRange:
-        :param time_column_name:
-        :param qoi_column_name:
-        :param kwargs:
-        :return: set self.df_measured to be a pd.DataFrame with three columns "TimeStamp", "qoi", "measured"
-        """
-        # In this particular set-up, we only have access to the measured streamflow
-
-        if not isinstance(qoi_column_name, list):
-            qoi_column_name = [qoi_column_name, ]
-
-        transform_measured_data_as_original_model = kwargs.get(
-            "transform_measured_data_as_original_model", True)
-
-        list_df_measured_single_qoi = []
-        for single_qoi_column in qoi_column_name:
-
-            if single_qoi_column not in self.list_original_model_output_columns:
-                is_single_qoi_column_in_measured_column_names = False
-                for temp in self.list_original_model_output_columns:
-                    if single_qoi_column == self.dict_qoi_column_and_measured_info[temp][1]:
-                        is_single_qoi_column_in_measured_column_names = True
-                        single_qoi_column = temp
-                        break
-                if not is_single_qoi_column_in_measured_column_names:
-                    continue
-
-            single_qoi_column_info = self.dict_qoi_column_and_measured_info[single_qoi_column]
-
-            single_qoi_read_measured_data = single_qoi_column_info[0]
-            single_qoi_column_measured = single_qoi_column_info[1]
-            single_qoi_transform_model_output = single_qoi_column_info[2]
-
-            if not single_qoi_read_measured_data:
-                continue
-
-            # hard-coded for HBV
-            if single_qoi_column == "Q_cms":
-                df_measured_single_qoi = self._get_measured_streamflow(
-                    timestepRange=timestepRange, time_column_name=time_column_name,
-                    streamflow_column_name=single_qoi_column_measured, **kwargs)
-            else:
-                df_measured_single_qoi = self._get_measured_single_qoi(
-                    timestepRange=timestepRange, time_column_name=time_column_name,
-                    qoi_column_measured=single_qoi_column_measured, **kwargs)
-
-            # This data will be used for plotting or comparing with approximated data
-            # Perform the same transformation as on original model output
-            if transform_measured_data_as_original_model:
-                if single_qoi_transform_model_output is not None and single_qoi_transform_model_output != "None":
-                    utility.transform_column_in_df(
-                        df_measured_single_qoi,
-                        transformation_function_str=single_qoi_transform_model_output,
-                        column_name=single_qoi_column_measured,
-                        new_column_name=single_qoi_column_measured)
-
-            if df_measured_single_qoi.index.name == time_column_name:
-                df_measured_single_qoi.reset_index(inplace=True)
-                df_measured_single_qoi.rename(columns={df_measured_single_qoi.index.name: time_column_name},
-                                              inplace=True)
-
-            df_measured_single_qoi.rename(columns={single_qoi_column_measured: "measured"},
-                                          inplace=True)
-
-            df_measured_single_qoi["qoi"] = single_qoi_column
-            df_measured_single_qoi = df_measured_single_qoi[[time_column_name, "measured", "qoi"]]
-            list_df_measured_single_qoi.append(df_measured_single_qoi)
-
-        if list_df_measured_single_qoi:
-            self.df_measured = pd.concat(list_df_measured_single_qoi, ignore_index=True, sort=False, axis=0)
-            self.measured_fetched = True
-        else:
-            self.df_measured = None
-            self.measured_fetched = False
+        super(HBVSASKStatistics, self).get_measured_data(
+            timestepRange, time_column_name, qoi_column_name, **kwargs)
 
     def get_unaltered_run_data(self, timestepRange=None, time_column_name="TimeStamp", qoi_column_name="streamflow",
                               **kwargs):
@@ -227,7 +153,12 @@ class HBVSASKStatistics(HydroStatistics.HydroStatistics):
     ##########################
     def _get_measured_single_qoi(self, timestepRange=None, time_column_name="TimeStamp",
         qoi_column_measured="measured", **kwargs):
-        raise NotImplementedError
+        if qoi_column_measured == "streamflow":
+            return self._get_measured_streamflow(
+                timestepRange=timestepRange, time_column_name=time_column_name,
+                streamflow_column_name=qoi_column_measured, **kwargs)
+        else:
+            raise NotImplementedError
 
     def _get_measured_streamflow(self, timestepRange=None, time_column_name="TimeStamp",
                                  streamflow_column_name="streamflow", **kwargs):
@@ -305,6 +236,8 @@ class HBVSASKStatistics(HydroStatistics.HydroStatistics):
 
     def plotResults(self, timestep=-1, display=False, fileName="", fileNameIdent="", directory="./",
                     fileNameIdentIsFullName=False, safe=True, dict_what_to_plot=None, **kwargs):
+
+        timestepRange = (min(self.pdTimesteps), max(self.pdTimesteps))
 
         plot_measured_timeseries = kwargs.get('plot_measured_timeseries', False)
         plot_unaltered_timeseries = kwargs.get('plot_unaltered_timeseries', False)
@@ -567,6 +500,8 @@ class HBVSASKStatistics(HydroStatistics.HydroStatistics):
     def prepare_for_plotting(self, timestep=-1, display=False,
                     fileName="", fileNameIdent="", directory="./",
                     fileNameIdentIsFullName=False, safe=True, **kwargs):
+        timestepRange = (min(self.pdTimesteps), max(self.pdTimesteps))
+
         plot_measured_timeseries = kwargs.get('plot_measured_timeseries', False)
         plot_unaltered_timeseries = kwargs.get('plot_unaltered_timeseries', False)
         plot_forcing_timeseries = kwargs.get('plot_forcing_timeseries', False)
