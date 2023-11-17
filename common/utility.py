@@ -654,7 +654,15 @@ def parse_datetime_configuration(time_settings_config):
                                hour=end_hour, minute=end_minute)
     return [start_dt, end_dt]
 
-
+def compute_previous_timestamp(timestamp, resolution):
+    if resolution == "daily":
+        # pd.DateOffset(days=1)
+        previous_timestamp = pd.to_datetime(timestamp) - pd.Timedelta(days=1)
+    elif resolution == "hourly":
+        previous_timestamp = pd.to_datetime(timestamp) - pd.Timedelta(h=1)
+    elif resolution == "minute":
+        previous_timestamp = pd.to_datetime(timestamp) - pd.Timedelta(m=1)
+    return previous_timestamp
 ###################################################################################################################
 # Reading, extract data and manipulate configuration file/object
 ###################################################################################################################
@@ -898,7 +906,10 @@ def read_simulation_settings_from_configuration_object(configurationObject: dict
     multiple_qoi, number_of_qois = handle_multiple_qoi(qoi, qoi_column, result_dict)
     result_dict["multiple_qoi"] = multiple_qoi
     result_dict["number_of_qois"] = number_of_qois
-    
+
+    result_dict["autoregressive_model_first_order"] = strtobool(dict_config_simulation_settings.get(\
+        "autoregressive_model_first_order", "False"))
+
     if "transform_model_output" in kwargs:
         transform_model_output = kwargs['transform_model_output']
     else:
@@ -987,7 +998,7 @@ def read_simulation_settings_from_configuration_object(configurationObject: dict
     objective_function_names_qoi = None
     list_objective_function_qoi = None
     list_objective_function_names_qoi = None
-    if qoi == "GoF":
+    if result_dict["qoi"] == "GoF":
         # take only those Outputs of Interest that have measured data
         if result_dict["multiple_qoi"]:
             updated_qoi_column = []
