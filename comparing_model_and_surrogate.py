@@ -119,7 +119,7 @@ def evaluate_gPCE_model_single_date(single_date, single_qoi, result_dict, nodes)
 if __name__ == '__main__':
     model = "hbvsask"  # "larsim"
     single_qoi = "Q_cms"
-    sampling_rule = "halton"  # 'sobol' 'random'
+    sampling_rule = "random"  # 'sobol' 'random' 'halton' 'latin_hypercube'
     number_of_samples = 100
     sampleFromStandardDist = True
 

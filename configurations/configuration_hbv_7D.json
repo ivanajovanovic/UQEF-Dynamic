@@ -33,14 +33,14 @@
   "simulation_settings": {
     "qoi":"Q_cms",
     "qoi_column":"Q_cms",
-    "autoregressive_model_first_order":"False",
+    "autoregressive_model_first_order":"True",
     "transform_model_output":"None",
     "read_measured_data": "True",
     "qoi_column_measured":"streamflow",
     "objective_function_qoi":["RMSE", "LogNSE", "KGE"],
     "calculate_GoF":"True",
     "objective_function":["MAE", "MSE", "RMSE", "NRMSE", "NSE", "LogNSE", "KGE"],
-    "mode":"sliding_window",
+    "mode":"continuous",
     "interval": 10,
     "min_periods": 5,
     "method": "avrg",
@@ -94,6 +94,13 @@
       "lower": 50.0,
       "upper": 1000.0,
       "default": 100
+    },
+    {
+      "name": "beta",
+      "distribution": "Uniform",
+      "lower": 0.4,
+      "upper": 7.0,
+      "default": 2.0
     }
   ],
   "unused_parameters": [
@@ -103,13 +110,6 @@
       "lower": 0.0,
       "upper": 1.0,
       "default": 0.5
-    },
-    {
-      "name": "beta",
-      "distribution": "Uniform",
-      "lower": 1.0,
-      "upper": 3.0,
-      "default": 2.0
     },
     {
       "name": "K1",

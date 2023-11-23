@@ -522,7 +522,7 @@ class HydroStatistics(Statistics):
     # from some file and continues...
     def _get_list_of_columns_to_filter_from_results(self):
         list_of_columns_to_filter_from_results = self.list_qoi_column + list(
-            self.dict_corresponding_original_qoi_column.values)
+            self.dict_corresponding_original_qoi_column.values())
         if self.corrupt_forcing_data:
             list_of_columns_to_filter_from_results = list_of_columns_to_filter_from_results + [
                 self.forcing_data_column_names]
@@ -758,6 +758,34 @@ class HydroStatistics(Statistics):
                                    *args, **kwargs)
 
     ###################################################################################################################
+    def _get_measured_qoi_at_previous_timestamp_if_autoressive_module_first_order(self, single_qoi_column, timestamp):
+        df_measured_subset = None
+        if self.measured_fetched and self.df_measured is not None:
+            if single_qoi_column in list(self.df_measured["qoi"].unique()):
+                df_measured_subset = self.df_measured.loc[self.df_measured["qoi"] == single_qoi_column][[
+                    self.time_column_name, "measured"]]
+
+            elif self.dict_corresponding_original_qoi_column[single_qoi_column] \
+                    in list(self.df_measured["qoi"].unique()):
+                df_measured_subset = self.df_measured.loc[
+                    self.df_measured["qoi"] == self.dict_corresponding_original_qoi_column[single_qoi_column]][[
+                    self.time_column_name, "measured"]]
+
+        if df_measured_subset is not None:
+            reset_index = False
+            if not df_measured_subset.index.name == self.time_column_name:
+                df_measured_subset.set_index(self.time_column_name, inplace=True)
+                reset_index = True
+            previous_timestamp = utility.compute_previous_timestamp(
+                timestamp=timestamp, resolution=self.resolution)
+            measured_qoi_at_previous_timestamp = df_measured_subset.loc[previous_timestamp]["measured"] #.values[0]
+            if reset_index:
+                df_measured_subset.reset_index(inplace=True)
+                df_measured_subset.rename(columns={"index": self.time_column_name}, inplace=True)
+        else:
+            measured_qoi_at_previous_timestamp = None
+        return measured_qoi_at_previous_timestamp
+
     def _if_autoregressive_model_first_order_do_modification(self,
                                 single_qoi_column, timestamp, result_dict):
         """
@@ -789,7 +817,9 @@ class HydroStatistics(Statistics):
             # Compute the previous timestamp
             previous_timestamp = utility.compute_previous_timestamp(
                 timestamp=timestamp, resolution=self.resolution)
-            result_dict["E"] = result_dict["E"] + df_measured_subset.loc[previous_timestamp]["measured"].values[0]
+            result_dict["E"] = result_dict["E"] + df_measured_subset.loc[previous_timestamp]["measured"] #.values[0]
+            if result_dict["E"]<1e-10:
+                result_dict["E"] = 0.0
             if reset_index:
                 df_measured_subset.reset_index(inplace=True)
                 df_measured_subset.rename(columns={"index": self.time_column_name}, inplace=True)
@@ -858,12 +888,27 @@ class HydroStatistics(Statistics):
                     self.samples.df_simulation_result.loc[self.groups[key].values][single_qoi_column].values
                     for key in keyIter
                 ]
+
+                # list_of_simulations_df = []
+                # for key in keyIter:
+                #     timestamp = self.groups[key].values
+                #     measured_qoi_at_previous_timestamp = self._get_measured_qoi_at_previous_timestamp_if_autoressive_module_first_order(
+                #         single_qoi_column, timestamp=timestamp)
+                #     if measured_qoi_at_previous_timestamp is not None:
+                #         self.samples.df_simulation_result.loc[timestamp][single_qoi_column] = \
+                #             self.samples.df_simulation_result.loc[timestamp][single_qoi_column] + measured_qoi_at_previous_timestamp
+                #         if self.samples.df_simulation_result.loc[timestamp][single_qoi_column] < 1e-10:
+                #             self.samples.df_simulation_result.loc[timestamp][single_qoi_column] = 0.0
+                #     list_of_simulations_df.append(
+                #         self.samples.df_simulation_result.loc[timestamp][single_qoi_column].values
+                #     )
+
                 list_of_simulations_df_chunk = list(more_itertools.chunked(list_of_simulations_df, chunksize))
 
-                generator_of_simulations_df = (
-                    self.samples.df_simulation_result.loc[self.groups[key].values][single_qoi_column].values
-                    for key in keyIter
-                )
+                # generator_of_simulations_df = (
+                #     self.samples.df_simulation_result.loc[self.groups[key].values][single_qoi_column].values
+                #     for key in keyIter
+                # )
 
                 if regression:
                     nodesChunks = [self.nodes] * len(keyIter_chunk)
@@ -910,32 +955,32 @@ class HydroStatistics(Statistics):
                             unordered=self.unordered
                         )
                     else:
-                        # chunk_results_it = executor.map(
-                        #     parallelStatistics._parallel_calc_stats_for_MC,
-                        #     keyIter_chunk,
-                        #     list_of_simulations_df_chunk,
-                        #     numEvaluations_chunk,
-                        #     dimChunks,
-                        #     compute_Sobol_t_Chunks,
-                        #     store_qoi_data_in_stat_dict_Chunks,
-                        #     compute_sobol_total_indices_with_samples_chunks,
-                        #     samples_chunks,
-                        #     chunksize=self.mpi_chunksize,
-                        #     unordered=self.unordered
-                        # )
                         chunk_results_it = executor.map(
                             parallelStatistics._parallel_calc_stats_for_MC,
-                            keyIter,
-                            generator_of_simulations_df,
-                            self.numEvaluations,
-                            self.dim,
-                            self._compute_Sobol_t,
-                            self.store_qoi_data_in_stat_dict,
-                            self.compute_sobol_total_indices_with_samples,
-                            samples,
+                            keyIter_chunk,
+                            list_of_simulations_df_chunk, #generator_of_simulations_df
+                            numEvaluations_chunk,
+                            dimChunks,
+                            compute_Sobol_t_Chunks,
+                            store_qoi_data_in_stat_dict_Chunks,
+                            compute_sobol_total_indices_with_samples_chunks,
+                            samples_chunks,
                             chunksize=self.mpi_chunksize,
                             unordered=self.unordered
                         )
+                        # chunk_results_it = executor.map(
+                        #     parallelStatistics._parallel_calc_stats_for_MC,
+                        #     keyIter,
+                        #     generator_of_simulations_df,
+                        #     self.numEvaluations,
+                        #     self.dim,
+                        #     self._compute_Sobol_t,
+                        #     self.store_qoi_data_in_stat_dict,
+                        #     self.compute_sobol_total_indices_with_samples,
+                        #     samples,
+                        #     chunksize=self.mpi_chunksize,
+                        #     unordered=self.unordered
+                        # )
                     print(f"{self.rank}: computation for qoi {single_qoi_column} - waits for shutdown...")
                     sys.stdout.flush()
                     executor.shutdown(wait=True)
@@ -1044,18 +1089,19 @@ class HydroStatistics(Statistics):
             if self.rank == 0:
                 keyIter_chunk = list(more_itertools.chunked(keyIter, chunksize))
 
+                # TODO Memory problem - I should not store all the simulations in the memory!
                 # TODO Should I as well transfer Index_run column
                 #  in order to be sure that right values were multiplied with right polynomials?
-                # list_of_simulations_df = [
-                #     self.samples.df_simulation_result.loc[self.groups[key].values][single_qoi_column].values
-                #     for key in keyIter
-                # ]
-                # list_of_simulations_df_chunk = list(more_itertools.chunked(list_of_simulations_df, chunksize))
-
-                generator_of_simulations_df = (
+                list_of_simulations_df = [
                     self.samples.df_simulation_result.loc[self.groups[key].values][single_qoi_column].values
                     for key in keyIter
-                )
+                ]
+                list_of_simulations_df_chunk = list(more_itertools.chunked(list_of_simulations_df, chunksize))
+
+                # generator_of_simulations_df = (
+                #     self.samples.df_simulation_result.loc[self.groups[key].values][single_qoi_column].values
+                #     for key in keyIter
+                # )
 
                 nodesChunks = [self.nodes] * len(keyIter_chunk)
                 distChunks = [self.dist] * len(keyIter_chunk)
@@ -1073,40 +1119,40 @@ class HydroStatistics(Statistics):
                 if executor is not None:  # master process
                     print(f"{self.rank}: computation of statistics for qoi {single_qoi_column} started...")
                     solver_time_start = time.time()
-                    # chunk_results_it = executor.map(
-                    #     parallelStatistics._parallel_calc_stats_for_gPCE,
-                    #     keyIter_chunk,
-                    #     list_of_simulations_df_chunk,
-                    #     distChunks,
-                    #     polynomial_expansionChunks,
-                    #     nodesChunks,
-                    #     weightsChunks,
-                    #     regressionChunks,
-                    #     compute_Sobol_t_Chunks,
-                    #     compute_Sobol_m_Chunks,
-                    #     store_qoi_data_in_stat_dict_Chunks,
-                    #     store_gpce_surrogate_in_stat_dict_Chunks,
-                    #     save_gpce_surrogate_Chunks,
-                    #     chunksize=self.mpi_chunksize,
-                    #     unordered=self.unordered
-                    # )
                     chunk_results_it = executor.map(
                         parallelStatistics._parallel_calc_stats_for_gPCE,
                         keyIter_chunk,
-                        generator_of_simulations_df,
-                        self.dist,
-                        self.polynomial_expansion,
-                        self.nodes,
-                        self.weights,
-                        regression,
-                        self._compute_Sobol_t,
-                        self._compute_Sobol_m,
-                        self.store_qoi_data_in_stat_dict,
-                        self.store_gpce_surrogate_in_stat_dict,
-                        self.save_gpce_surrogate,
+                        list_of_simulations_df_chunk, #generator_of_simulations_df,
+                        distChunks,
+                        polynomial_expansionChunks,
+                        nodesChunks,
+                        weightsChunks,
+                        regressionChunks,
+                        compute_Sobol_t_Chunks,
+                        compute_Sobol_m_Chunks,
+                        store_qoi_data_in_stat_dict_Chunks,
+                        store_gpce_surrogate_in_stat_dict_Chunks,
+                        save_gpce_surrogate_Chunks,
                         chunksize=self.mpi_chunksize,
                         unordered=self.unordered
                     )
+                    # chunk_results_it = executor.map(
+                    #     parallelStatistics._parallel_calc_stats_for_gPCE,
+                    #     keyIter_chunk,
+                    #     generator_of_simulations_df,
+                    #     self.dist,
+                    #     self.polynomial_expansion,
+                    #     self.nodes,
+                    #     self.weights,
+                    #     regression,
+                    #     self._compute_Sobol_t,
+                    #     self._compute_Sobol_m,
+                    #     self.store_qoi_data_in_stat_dict,
+                    #     self.store_gpce_surrogate_in_stat_dict,
+                    #     self.save_gpce_surrogate,
+                    #     chunksize=self.mpi_chunksize,
+                    #     unordered=self.unordered
+                    # )
                     print(f"{self.rank}: computation for qoi {single_qoi_column} - waits for shutdown...")
                     sys.stdout.flush()
                     executor.shutdown(wait=True)

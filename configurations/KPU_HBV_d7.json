@@ -35,6 +35,12 @@
       "distribution": "Uniform",
       "lower": 0.0,
       "upper": 1.0
+    },
+    {
+      "name": "beta",
+      "distribution": "Uniform",
+      "lower": 0.0,
+      "upper": 1.0
     }
   ]
 }
