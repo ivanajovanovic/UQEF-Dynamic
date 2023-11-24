@@ -301,6 +301,9 @@ class HBVSASKModel(object):
         self.end_date = pd.Timestamp(self.end_date)
         self.start_date_predictions = pd.Timestamp(self.start_date_predictions)
 
+        # print(f"DEBUGGING - self.start_date {self.start_date}")
+        # print(f"DEBUGGING - self.start_date_predictions {self.start_date_predictions}")
+        # print(f"DEBUGGING - self.end_date {self.end_date}")
         # print(f"start_date-{self.start_date}; spin_up_length-{self.spin_up_length};
         # start_date_predictions-{self.start_date_predictions}")
         # print(
@@ -360,6 +363,8 @@ class HBVSASKModel(object):
                 (self.time_series_measured_data_df[time_column_name] >= self.start_date) & (self.time_series_measured_data_df[time_column_name] <= self.end_date)]
         else:
             self.time_series_measured_data_df = self.time_series_measured_data_df[self.start_date:self.end_date]
+            # print(f"DEBUGGING - self.end_date {self.end_date}")
+            # print(f"DEBUGGING - self.time_series_measured_data_df.index-{self.time_series_measured_data_df.index}\n")
             # self.time_series_measured_data_df = self.time_series_measured_data_df.loc[self.simulation_range]
 
     def _plot_input_data(self, time_column_name="TimeStamp", precipitation_column_name="precipitation",
@@ -525,7 +530,8 @@ class HBVSASKModel(object):
             flux_df['Index_run'] = unique_run_index
             # Parse flux_df between start_date_predictions, end_date
             flux_df.set_index(self.time_column_name, inplace=True)
-            flux_df = flux_df.loc[self.simulation_range]  # flux_df[self.start_date_predictions:self.end_date]
+            # flux_df = flux_df.loc[self.simulation_range]  # flux_df[self.start_date_predictions:self.end_date]
+            flux_df = flux_df[flux_df.index.isin(self.simulation_range)]
 
             # Create a final df - state
             last_date = time_series_list[-1]
@@ -541,7 +547,7 @@ class HBVSASKModel(object):
             # Parse state_df between start_date_predictions, end_date + 1
             state_df.set_index(self.time_column_name, inplace=True)
             state_df = state_df[self.start_date_predictions:]  #  state_df = state_df[self.simulation_range]
-
+    
             # Append measured data to flux_df, i.e., merge flux_df and self.time_series_measured_data_df[self.qoi_column_measured]
             if merge_output_with_measured_data:
                 list_qoi_column_measured_to_filter = [
@@ -590,15 +596,18 @@ class HBVSASKModel(object):
 
             index_parameter_gof_DF = None
             # Note - it does not make sense to have both qoi=GoF and calculate_GoF=True at the same time
+            # condition_for_computing_index_parameter_gof_DF = \
+            #     (self.calculate_GoF and not self.qoi == "GoF") or \
+            #     (self.calculate_GoF and self.qoi == "GoF" and self.mode == "sliding_window")
             condition_for_computing_index_parameter_gof_DF = \
-                (self.calculate_GoF and not self.qoi == "GoF") or \
-                (self.calculate_GoF and self.qoi == "GoF" and self.mode == "sliding_window")
+                (any(self.list_calculate_GoF) and not self.qoi == "GoF") or \
+                (any(self.list_calculate_GoF) and self.qoi == "GoF" and self.mode == "sliding_window")
             if condition_for_computing_index_parameter_gof_DF:
                 index_parameter_gof_list_of_dicts = []
                 for idx, single_qoi_column in enumerate(self.list_qoi_column):
                     if self.list_calculate_GoF[idx] and self.list_read_measured_data[idx]:
                         index_parameter_gof_dict_single_qoi = self._calculate_GoF(
-                            measuredDF=self.time_series_measured_data_df,
+                            measuredDF=flux_df, #self.time_series_measured_data_df,
                             predictedDF=flux_df,
                             gof_list=self.objective_function,
                             measuredDF_time_column_name=self.time_column_name,
@@ -698,7 +707,8 @@ class HBVSASKModel(object):
             runtime = end - start
 
             self._dropna_from_df_and_update_simulation_range(flux_df, update_simulation_range=True)
-            flux_df = flux_df.loc[self.simulation_range]
+            # flux_df = flux_df.loc[self.simulation_range]
+            flux_df = flux_df[flux_df.index.isin(self.simulation_range)]
 
             result_dict = {"run_time": runtime,
                            "result_time_series": flux_df,
