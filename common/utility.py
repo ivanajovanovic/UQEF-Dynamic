@@ -500,9 +500,9 @@ def calculateGoodnessofFit_simple(measuredDF, predictedDF, gof_list,
     # It might be as well that one of DataFrames does not contain all the timesteps the other one does
     # therefore, apply one of these two filtering functions
     # assert measuredDF_time_column_name == simulatedDF_time_column_name, "Assertion failed in utility.calculateGoodnessofFit_simple"
-    predictedDF, measuredDF = filter_two_DF_on_common_timesteps(predictedDF, measuredDF,
-                                                                column_name_df1=measuredDF_time_column_name,
-                                                                column_name_df2=simulatedDF_time_column_name)
+    if id(measuredDF) != id(predictedDF):
+        predictedDF, measuredDF = filter_two_DF_on_common_timesteps(
+            DF1=measuredDF, DF2=predictedDF, column_name_df1=measuredDF_time_column_name, column_name_df2=simulatedDF_time_column_name)
     #predictedDF, measuredDF = align_dataFrames_timewise_2(predictedDF, measuredDF)
 
     if return_dict:
