@@ -467,6 +467,11 @@ class HBVSASKModel(object):
         # if not any(self.list_read_measured_data):
         #     merge_output_with_measured_data = False
 
+         # HBV Specific input data
+        forcing = kwargs.get("forcing", self.time_series_measured_data_df)
+        long_term = kwargs.get("long_term", self.precipitation_temperature_monthly_df)
+        initial_condition_df = kwargs.get("initial_condition_df", self.initial_condition_df)
+
         results_array = []
         for ip in range(0, len(i_s)):  # for each peace of work
             unique_run_index = i_s[ip]  # i is unique index run
@@ -505,15 +510,19 @@ class HBVSASKModel(object):
                 curr_working_dir = self.workingDir
 
             # Running the model
-            flux, state = hbv.HBV_SASK(forcing=self.time_series_measured_data_df,
-                                       long_term=self.precipitation_temperature_monthly_df,
-                                       par_values_dict=parameters_dict, initial_condition_df=self.initial_condition_df,
-                                       printing=False, time_column_name=self.time_column_name,
-                                       precipitation_column_name=self.precipitation_column_name,
-                                       temperature_column_name=self.temperature_column_name,
-                                       long_term_precipitation_column_name=self.long_term_precipitation_column_name,
-                                       long_term_temperature_column_name=self.long_term_temperature_column_name,
-                                       corrupt_forcing_data=corrupt_forcing_data)
+            flux, state = hbv.HBV_SASK(
+                forcing=forcing,
+                long_term=long_term,
+                par_values_dict=parameters_dict,
+                initial_condition_df=initial_condition_df,
+                printing=False,
+                time_column_name=self.time_column_name,
+                precipitation_column_name=self.precipitation_column_name,
+                temperature_column_name=self.temperature_column_name,
+                long_term_precipitation_column_name=self.long_term_precipitation_column_name,
+                long_term_temperature_column_name=self.long_term_temperature_column_name,
+                corrupt_forcing_data=corrupt_forcing_data
+            )
 
             ######################################################################################################
             # Processing model output
@@ -697,7 +706,8 @@ class HBVSASKModel(object):
                     parameters_dict=parameters_dict, 
                     index_parameter_gof_DF=index_parameter_gof_DF, 
                     time_series_list=time_series_list, 
-                    center=center
+                    center=center,
+                    **kwargs
                 )
 
             ######################################################################################################
@@ -921,7 +931,9 @@ class HBVSASKModel(object):
                 # return pd.DataFrame([{**parameters_dict, **gof_dict}, ])
                 return pd.DataFrame({**parameters_dict, **gof_dict})
             
-    def _compute_gradient_matrix(self, unique_run_index, flux_df, parameters_dict, index_parameter_gof_DF, time_series_list, center=False):
+    def _compute_gradient_matrix(
+            self, unique_run_index, flux_df, parameters_dict, index_parameter_gof_DF,
+            time_series_list, center=False, **kwargs):
         h_vector = []
         dict_of_grad_estimation_vector = defaultdict(list)
         # gradient_vectors_dict = defaultdict(list)
@@ -930,6 +942,10 @@ class HBVSASKModel(object):
         list_of_columns_to_filter = [self.time_column_name, ] + self.list_qoi_column
 
         # flux_df.set_index(self.time_column_name, inplace=True)
+
+        forcing = kwargs.get("forcing", self.time_series_measured_data_df)
+        long_term = kwargs.get("long_term", self.precipitation_temperature_monthly_df)
+        initial_condition_df = kwargs.get("initial_condition_df", self.initial_condition_df)
 
         # dict_param_info_from_configurationObject = utility.get_param_info_dict_from_configurationObject(
         #     self.configurationObject)
@@ -962,15 +978,18 @@ class HBVSASKModel(object):
             updated_parameter_dict[single_param_name] = single_param_value + param_h
 
             # 2.2 Run the model; forward run always; backward run only when CD=1 & 2.3. Do some postprocessing
-            flux_plus_h, _ = hbv.HBV_SASK(forcing=self.time_series_measured_data_df,
-                                            long_term=self.precipitation_temperature_monthly_df,
-                                            par_values_dict=updated_parameter_dict,
-                                            initial_condition_df=self.initial_condition_df, printing=False,
-                                            time_column_name=self.time_column_name,
-                                            precipitation_column_name=self.precipitation_column_name,
-                                            temperature_column_name=self.temperature_column_name,
-                                            long_term_precipitation_column_name=self.long_term_precipitation_column_name,
-                                            long_term_temperature_column_name=self.long_term_temperature_column_name)
+            flux_plus_h, _ = hbv.HBV_SASK(
+                forcing=forcing,
+                long_term=long_term,
+                par_values_dict=updated_parameter_dict,
+                initial_condition_df=initial_condition_df,
+                printing=False,
+                time_column_name=self.time_column_name,
+                precipitation_column_name=self.precipitation_column_name,
+                temperature_column_name=self.temperature_column_name,
+                long_term_precipitation_column_name=self.long_term_precipitation_column_name,
+                long_term_temperature_column_name=self.long_term_temperature_column_name
+            )
             h = param_h
 
             # Create a final df - flux with +dh parameter value
@@ -1006,15 +1025,18 @@ class HBVSASKModel(object):
                 updated_parameter_dict[single_param_name] = single_param_value - param_h
 
                 # Run the model for -dh
-                flux_minus_h, _ = hbv.HBV_SASK(forcing=self.time_series_measured_data_df,
-                                                long_term=self.precipitation_temperature_monthly_df,
-                                                par_values_dict=updated_parameter_dict,
-                                                initial_condition_df=self.initial_condition_df, printing=False,
-                                                time_column_name=self.time_column_name,
-                                                precipitation_column_name=self.precipitation_column_name,
-                                                temperature_column_name=self.temperature_column_name,
-                                                long_term_precipitation_column_name=self.long_term_precipitation_column_name,
-                                                long_term_temperature_column_name=self.long_term_temperature_column_name)
+                flux_minus_h, _ = hbv.HBV_SASK(
+                    forcing=forcing,
+                    long_term=long_term,
+                    par_values_dict=updated_parameter_dict,
+                    initial_condition_df=initial_condition_df,
+                    printing=False,
+                    time_column_name=self.time_column_name,
+                    precipitation_column_name=self.precipitation_column_name,
+                    temperature_column_name=self.temperature_column_name,
+                    long_term_precipitation_column_name=self.long_term_precipitation_column_name,
+                    long_term_temperature_column_name=self.long_term_temperature_column_name
+                )
                 h = 2*param_h
 
                 # Create a final df - flux with -dh parameter value
