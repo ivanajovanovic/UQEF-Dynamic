@@ -525,8 +525,8 @@ def read_initial_conditions(initial_condition_file, return_dict_or_df="dict", ti
     if str(initial_condition_file).endswith('.inp'):
         initial_condition_dict = defaultdict(list)
         initial_condition_dict["WatershedArea_km2"] = []
-        initial_condition_dict["initial_SWE"] = []
-        initial_condition_dict["initial_SMS"] = []
+        initial_condition_dict["SWE"] = []
+        initial_condition_dict["SMS"] = []
         initial_condition_dict["S1"] = []
         initial_condition_dict["S2"] = []
 
@@ -783,8 +783,8 @@ def HBV_SASK(forcing, long_term, par_values_dict, initial_condition_df, printing
     LP = LP * FC
 
     watershed_area = initial_condition_df["WatershedArea_km2"].values[0]
-    initial_SWE = float(initial_condition_df["initial_SWE"].values[0])
-    initial_SMS = float(initial_condition_df["initial_SMS"].values[0])
+    initial_SWE = float(initial_condition_df["SWE"].values[0])
+    initial_SMS = float(initial_condition_df["SMS"].values[0])
     initial_S1 = float(initial_condition_df["S1"].values[0])
     initial_S2 = float(initial_condition_df["S2"].values[0])
 
@@ -899,8 +899,8 @@ def run_the_model(hbv_model_path, config_file, par_values_dict, run_full_timespa
     # Preparing paths
     path_to_input = hbv_model_path / basis
     # initial_condition_file = path_to_input / "initial_condition.inp"
-    # initial_condition_file = path_to_input / "state_df.pkl"
-    initial_condition_file = path_to_input / "state_const_df.pkl"
+    initial_condition_file = path_to_input / "state_df.pkl"
+    # initial_condition_file = path_to_input / "state_const_df.pkl"
     monthly_data_inp = path_to_input / "monthly_data.inp"
     precipitation_temperature_inp = path_to_input / "Precipitation_Temperature.inp"
     streamflow_inp = path_to_input / "streamflow.inp"
@@ -1029,7 +1029,7 @@ def run_the_model(hbv_model_path, config_file, par_values_dict, run_full_timespa
     time_series_list.append(pd.to_datetime(last_date) + pd.DateOffset(days=1))
     state_df = pd.DataFrame(
         list(zip(time_series_list, state["SWE"], state["SMS"], state["S1"], state["S2"])),
-        columns=[time_column_name, 'initial_SWE', 'initial_SMS', 'S1', 'S2', ]
+        columns=[time_column_name, 'SWE', 'SMS', 'S1', 'S2', ]
     )
     state_df['WatershedArea_km2'] = initial_condition_df["WatershedArea_km2"].values[0]
 
@@ -1123,4 +1123,4 @@ if __name__ == "__main__":
 
     Q = flux["Q_cms"]
     ET = flux["AET"]
-    SM = state["initial_SMS"]
+    SM = state["SMS"]
