@@ -1,6 +1,6 @@
 {
   "parameters": [
-        {
+    {
       "name": "TT",
       "distribution": "Uniform",
       "lower": 0.0,
@@ -19,6 +19,12 @@
       "upper": 1.0
     },
     {
+      "name": "FC",
+      "distribution": "Uniform",
+      "lower": 0.0,
+      "upper": 1.0
+    },
+    {
       "name": "FRAC",
       "distribution": "Uniform",
       "lower": 0.0,
@@ -26,12 +32,6 @@
     },
     {
       "name": "K2",
-      "distribution": "Uniform",
-      "lower": 0.0,
-      "upper": 1.0
-    },
-    {
-      "name": "FC",
       "distribution": "Uniform",
       "lower": 0.0,
       "upper": 1.0
