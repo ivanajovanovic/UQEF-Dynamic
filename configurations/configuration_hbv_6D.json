@@ -38,7 +38,7 @@
     "read_measured_data": "True",
     "qoi_column_measured":"streamflow",
     "objective_function_qoi":["RMSE", "LogNSE", "KGE"],
-    "calculate_GoF":"False",
+    "calculate_GoF":"True",
     "objective_function":["MAE", "MSE", "RMSE", "NRMSE", "NSE", "LogNSE", "KGE"],
     "mode":"continuous",
     "interval": 10,
