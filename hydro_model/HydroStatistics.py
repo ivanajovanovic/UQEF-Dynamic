@@ -758,7 +758,7 @@ class HydroStatistics(Statistics):
                                    *args, **kwargs)
 
     ###################################################################################################################
-    def _get_measured_qoi_at_previous_timestamp_if_autoressive_module_first_order(self, single_qoi_column, timestamp):
+    def _get_measured_qoi_at_previous_timestamp_if_autoregressive_module_first_order(self, single_qoi_column, timestamp):
         df_measured_subset = None
         if self.measured_fetched and self.df_measured is not None:
             if single_qoi_column in list(self.df_measured["qoi"].unique()):
@@ -892,7 +892,7 @@ class HydroStatistics(Statistics):
                 # list_of_simulations_df = []
                 # for key in keyIter:
                 #     timestamp = self.groups[key].values
-                #     measured_qoi_at_previous_timestamp = self._get_measured_qoi_at_previous_timestamp_if_autoressive_module_first_order(
+                #     measured_qoi_at_previous_timestamp = self._get_measured_qoi_at_previous_timestamp_if_autoregressive_module_first_order(
                 #         single_qoi_column, timestamp=timestamp)
                 #     if measured_qoi_at_previous_timestamp is not None:
                 #         self.samples.df_simulation_result.loc[timestamp][single_qoi_column] = \

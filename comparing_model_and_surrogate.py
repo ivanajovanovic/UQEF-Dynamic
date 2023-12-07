@@ -18,9 +18,7 @@ from collections import defaultdict
 # for parallel computing
 import multiprocessing
 # import concurrent.futures
-
 import psutil
-
 # for message passing
 # from mpi4py import MPI
 
@@ -80,7 +78,7 @@ def update_output_file_paths_based_on_workingDir(workingDir):
     df_time_varying_grad_analysis_file = workingDir / "df_time_varying_grad_analysis.pkl"
     df_time_aggregated_grad_analysis_file = workingDir / "df_time_aggregated_grad_analysis.pkl"
 
-    # Files produced by UQEF.Statistics and tatistics
+    # Files produced by UQEF.Statistics and statistics
     statistics_dictionary_file = workingDir / "statistics_dictionary_qoi_Value.pkl"
 
     # Active Subspaces related files

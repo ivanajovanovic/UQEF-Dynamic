@@ -449,7 +449,21 @@ class HBVSASKModel(object):
             :raise_exception_on_model_break (Optional[Union[bool, Any]]): If True, the function will raise an exception when the model breaks.
             Important when uq_method is gPCE. Default is None.
             :*args: Variable length argument list.
-            :**kwargs: Arbitrary keyword arguments.
+            :**kwargs (dict, optional): Additional keyword arguments.
+            Can include:
+                - take_direct_value (bool): If True, the function will take the direct value of the parameter. Default is False.
+                - createNewFolder (bool): If True, the function will create a new folder for the results. Default is False.
+                - deleteFolderAfterwards (bool): If True, the function will delete the folder after the results are retrieved. Default is True.
+                - writing_results_to_a_file (bool): If True, the function will write the results to a file. Default is self.writing_results_to_a_file.
+                - plotting (bool): If True, the function will plot the results. Default is self.plotting.
+                - corrupt_forcing_data (bool): If True, the function will corrupt the forcing data. Default is self.corrupt_forcing_data.
+                - merge_output_with_measured_data (bool): If True, the function will merge the output with the measured data. Default is False.
+                - start_date (pd.Timestamp): The start date of the model run. Default is self.start_date.
+                - start_date_predictions (pd.Timestamp): The start date of the model run predictions. Default is self.start_date_predictions.
+                - end_date (pd.Timestamp): The end date of the model run. Default is self.end_date.
+                - forcing (pd.DataFrame): The forcing dataframe of the model run. Default is self.forcing.
+                - long_term (pd.DataFrame): The long-term dataframe of the model run. Default is self.long_term.
+                - initial_condition_df (pd.DataFrame): The initial condition dataframe of the model run. Default is self.initial_condition_df.
 
             Returns: 
             List[Tuple[Dict[str, Any], float]]: A list of tuples for each model run; each tuple is in the form (result_dict, runtime); 
@@ -531,7 +545,7 @@ class HBVSASKModel(object):
 
         ######################################################################################################
         results_array = []
-        for ip in range(0, len(i_s)):  # for each peace of work
+        for ip in range(0, len(i_s)):  # for each piece of work
             unique_run_index = i_s[ip]  # i is unique index run
 
             if parameters is not None:
@@ -842,6 +856,40 @@ class HBVSASKModel(object):
                 # fig.show()
 
         return results_array
+
+    def run_model_single_time_stamp(self, date_of_interest, i_s: Optional[List[int]] = [0, ],
+                                    parameters: Optional[Union[Dict[str, Any], List[Any]]] = None,
+                                    raise_exception_on_model_break: Optional[Union[bool, Any]] = None, *args, **kwargs):
+        """
+        This function runs the HBVSASK model for a single time stamp. It is a wrapper around the self.run() function.
+
+        Parameters:
+            Look up at the definition of the run funtion for more details.
+
+        Returns:
+            - The self.run() function is called and returned
+
+        """
+        assert date_of_interest >= self.start_date_predictions, \
+            "Sorry, the date of interest is before start_date_predictions"
+        assert date_of_interest <= self.end_date, "Sorry, the date of interest is after end_date"
+
+        # HBV Specific input data - modify the forcing data and initial condition data based on the date of interest
+        forcing = kwargs.get("forcing", self.time_series_measured_data_df)
+        forcing = forcing.loc[[date_of_interest, ], :]  # .copy()
+        initial_condition_df = kwargs.get("initial_condition_df", None)
+        if initial_condition_df is None:
+            date_of_interest_minus_one = pd.to_datetime(date_of_interest) - pd.DateOffset(days=1)
+            initial_condition_df = hbv.read_initial_conditions(
+                self.initial_condition_file, timestamp=date_of_interest_minus_one,
+                time_column_name=self.time_column_name)
+        kwargs["forcing"] = forcing
+        kwargs["initial_condition_df"] = initial_condition_df
+
+        return self.run(
+            i_s=i_s, parameters=parameters, raise_exception_on_model_break=raise_exception_on_model_break,
+            *args, **kwargs
+        )
 
     def _create_flux_df(self, model_output_flux_dict, time_series_list):
         results = pd.DataFrame(
