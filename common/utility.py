@@ -359,7 +359,7 @@ def transform_column_in_df(df, transformation_function_str, column_name, new_col
         raise NotImplementedError("For know only log transformation is supported")
 
 #####################################
-# Utility for calculating different GoF/Objective/Likelihood funtions/metrices
+# Utility for calculating different GoF/Objective/Likelihood functions/metrices
 #####################################
 from . import objectivefunctions
 
@@ -609,6 +609,31 @@ def get_full_path_of_file(file: pathlib.PosixPath):
 def get_home_directory():
     return pathlib.Path.home()
 
+
+def update_output_file_paths_based_on_workingDir(workingDir):
+    nodes_file = workingDir / "nodes.simnodes.zip"
+    parameters_file = workingDir / "parameters.pkl"
+    args_file = workingDir / 'uqsim_args.pkl'
+    configuration_object_file = workingDir / "configurationObject"
+
+    # Files produced by Samples class
+    df_all_simulations_file = workingDir / "df_all_simulations.pkl"
+    df_all_index_parameter_gof_file = workingDir / "df_all_index_parameter_gof_values.pkl"
+    df_all_index_parameter_file = workingDir / "df_all_index_parameter_values.pkl"
+    df_time_varying_grad_analysis_file = workingDir / "df_time_varying_grad_analysis.pkl"
+    df_time_aggregated_grad_analysis_file = workingDir / "df_time_aggregated_grad_analysis.pkl"
+
+    # Files produced by UQEF.Statistics and statistics
+    statistics_dictionary_file = workingDir / "statistics_dictionary_qoi_Value.pkl"
+
+    # Active Subspaces related files
+    dict_of_approx_matrix_c_file = workingDir / "dict_of_approx_matrix_c.pkl"
+    dict_of_matrix_c_eigen_decomposition_file = workingDir / "dict_of_matrix_c_eigen_decomposition.pkl"
+
+    return nodes_file, parameters_file, args_file, configuration_object_file, \
+           df_all_simulations_file, df_all_index_parameter_gof_file, df_all_index_parameter_file, \
+           df_time_varying_grad_analysis_file, df_time_aggregated_grad_analysis_file, \
+           statistics_dictionary_file, dict_of_approx_matrix_c_file, dict_of_matrix_c_eigen_decomposition_file
 
 ###################################################################################################################
 # Functions for working with configuration files and configuration objects
