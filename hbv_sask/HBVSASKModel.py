@@ -63,8 +63,8 @@ class HBVSASKModelConfigurations:
         # self.initial_condition_file = self.inputModelDir_basis / "initial_condition.inp"
         initial_condition_file = kwargs.get("initial_condition_file", "state_df.pkl")
         # initial_condition_file = kwargs.get("initial_condition_file", "state_const_df.pkl")
-        if self.run_full_timespan:
-            initial_condition_file = kwargs.get("initial_condition_file", "state_const_df.pkl")
+        # if self.run_full_timespan:
+        #     initial_condition_file = kwargs.get("initial_condition_file", "state_const_df.pkl")
         monthly_data_inp = kwargs.get("monthly_data_inp", "monthly_data.inp")
         precipitation_temperature_inp = kwargs.get("precipitation_temperature_inp", "Precipitation_Temperature.inp")
         streamflow_inp = kwargs.get("streamflow_inp", "streamflow.inp")
@@ -176,8 +176,8 @@ class HBVSASKModel(object):
         # self.initial_condition_file = self.inputModelDir_basis / "initial_condition.inp"
         initial_condition_file = kwargs.get("initial_condition_file", "state_df.pkl")
         # initial_condition_file = kwargs.get("initial_condition_file", "state_const_df.pkl")
-        if self.run_full_timespan:
-            initial_condition_file = kwargs.get("initial_condition_file", "state_const_df.pkl")
+        # if self.run_full_timespan:
+        #     initial_condition_file = kwargs.get("initial_condition_file", "state_const_df.pkl")
         monthly_data_inp = kwargs.get("monthly_data_inp", "monthly_data.inp")
         precipitation_temperature_inp = kwargs.get("precipitation_temperature_inp", "Precipitation_Temperature.inp")
         streamflow_inp = kwargs.get("streamflow_inp", "streamflow.inp")
@@ -277,6 +277,8 @@ class HBVSASKModel(object):
                     self.spin_up_length = self.configurationObject["time_settings"]["spin_up_length"]
                 elif "warm_up_length" in self.configurationObject["time_settings"]:
                     self.spin_up_length = self.configurationObject["time_settings"]["warm_up_length"]
+                else:
+                    raise KeyError
             except KeyError:
                 self.spin_up_length = 0  # 365*3
 
@@ -489,10 +491,11 @@ class HBVSASKModel(object):
         corrupt_forcing_data = kwargs.get("corrupt_forcing_data", self.corrupt_forcing_data)
 
         merge_output_with_measured_data = kwargs.get("merge_output_with_measured_data", False)
-        # if any(self.list_calculate_GoF) or self.autoregressive_model_first_order:
-        #     merge_output_with_measured_data = True
-        if any(self.list_calculate_GoF):
+        # TODO - add an extra opion when autoregressive_model_first_order is set to True to choose between measred data and previous model output
+        if any(self.list_calculate_GoF) or self.autoregressive_model_first_order:
             merge_output_with_measured_data = True
+        # if any(self.list_calculate_GoF):
+        #     merge_output_with_measured_data = True
         # if not any(self.list_read_measured_data):
         #     merge_output_with_measured_data = False
 
