@@ -41,9 +41,9 @@ pd.options.mode.chained_assignment = None
 linux_cluster_run = False
 # sys.path.insert(0, os.getcwd())
 if linux_cluster_run:
-    sys.path.insert(0, '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Hydro')
+    sys.path.insert(0, '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic')
 else:
-    sys.path.insert(0, '/work/ga45met/mnt/linux_cluster_2/UQEF-Hydro')
+    sys.path.insert(0, '/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic')
 
 from common import utility
 from common import uqPostprocessing

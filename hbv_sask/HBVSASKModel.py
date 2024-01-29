@@ -161,7 +161,7 @@ class HBVSASKModel(object):
                 "corrupt_forcing_data", "False"))
 
         #####################################
-        # these set of control variables are for UQEF & UQEF-Hydro framework...
+        # these set of control variables are for UQEF & UQEF-Dynamic framework...
         #####################################
 
         self.uq_method = kwargs.get('uq_method', None)

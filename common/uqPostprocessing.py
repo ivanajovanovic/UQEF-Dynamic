@@ -24,7 +24,7 @@ pd.options.plotting.backend = "plotly"
 
 # sys.path.insert(0, os.getcwd())
 import sys
-sys.path.insert(0, '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Hydro')
+sys.path.insert(0, '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic')
 
 from common import colors
 #

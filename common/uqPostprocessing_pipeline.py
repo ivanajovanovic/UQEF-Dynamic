@@ -39,7 +39,7 @@ hbv_model_data_path = pathlib.Path("/work/ga45met/Hydro_Models/HBV-SASK-data")
 inputModelDir = hbv_model_data_path
 basis = "Oldman_Basin"  # 'Banff_Basin'
 # TODO - change these paths accordingly
-configurationObject = pathlib.Path('/work/ga45met/mnt/linux_cluster_2/UQEF-Hydro/configurations/configuration_hbv_5D.json')
+configurationObject = pathlib.Path('/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic/configurations/configuration_hbv_5D.json')
 # 8D Saltelli 10 000 Q_cms, AET - 141
 workingDir = pathlib.Path('/work/ga45met/mnt/linux_cluster_scratch_hbv_2/hbv_uq_cm2.0141/')
 # 5D Sparse-gPCE l=6, p=3 Q_cms May_2005- gpce_d5_l6_p3

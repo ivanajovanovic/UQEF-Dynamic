@@ -75,12 +75,8 @@ if local_debugging:
     uqsim.args.outputResultDir = str(uqsim.args.outputResultDir)  # for now reast of the code expects path in the string
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
 
-    #uqsim.args.config_file = "/home/ga45met/Repositories/Larsim/UQEF-Hydro/configurations_Larsim/configurations_larsim_master_lai.json"
-    # uqsim.args.config_file = '/work/ga45met/mnt/linux_cluster_2/UQEF-Hydro/configurations_Larsim/configurations_larsim_high_flow_small.json'
     uqsim.args.config_file = pathlib.Path(
-        '/work/ga45met/mnt/linux_cluster_2/UQEF-Hydro/configurations_Larsim/configurations_larsim_high_flow.json')
-    #uqsim.args.config_file = '/home/ga45met/mnt/linux_cluster_2/UQEF-Hydro/configurations_Larsim/configurations_larsim_master_lai_small.json'
-    #uqsim.args.config_file = "/home/ga45met/Repositories/Larsim/UQEF-Hydro/configurations_Larsim/configuration_larsim_updated_lai_jun.json"
+        '/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic/configurations_Larsim/configurations_larsim_high_flow.json')
 
     uqsim.args.sampleFromStandardDist = True
     uqsim.args.transformToStandardDist = True
