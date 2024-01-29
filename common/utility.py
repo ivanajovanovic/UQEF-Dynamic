@@ -1388,7 +1388,6 @@ def configuring_parameter_values(parameters, configurationObject: Union[dict, Li
     :param take_direct_value: if True, then parameters_dict will contain the value of parameters
     :return parameters_dict: dictionary storing parameter names as keys and parameter values as values
     """
-    # TODO rename this function to configuring_parameter_values
     parameters_dict = dict() #defaultdict()  # copy.deepcopy(DEFAULT_PAR_VALUES_DICT)
 
     if parameters is None:

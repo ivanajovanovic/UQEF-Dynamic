@@ -61,18 +61,18 @@ if local_debugging:
     uqsim.args.sampling_rule = "random"  # "random" | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
     uqsim.args.sc_q_order = 5  # 7 #10 3
     uqsim.args.sc_p_order = 2  # 4, 5, 6, 8
-    uqsim.args.sc_quadrature_rule = "clenshaw_curtis"  # "p" "genz_keister_24" "leja"
+    uqsim.args.sc_quadrature_rule = "p"  # "p" "genz_keister_24" "leja" "clenshaw_curtis"
 
     uqsim.args.read_nodes_from_file = False
-    l = 10  # 10
+    l = 5  # 10
     path_to_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/sparse_grid_nodes_weights")
-    uqsim.args.parameters_file = path_to_file / f"KPU_d2_l{l}.asc" # f"KPU_d3_l{l}.asc"
-    uqsim.args.parameters_setup_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Hydro/configurations/KPU_HBV_d2.json")
+    uqsim.args.parameters_file = path_to_file / f"KPU_d6_l{l}.asc" # f"KPU_d3_l{l}.asc"
+    uqsim.args.parameters_setup_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Hydro/configurations/KPU_HBV_d6.json")
     # uqsim.args.parameters_setup_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Hydro/configurations_Larsim/KPU_Larsim_d5.json")
 
     uqsim.args.sc_poly_rule = "three_terms_recurrence"  # "gram_schmidt" | "three_terms_recurrence" | "cholesky"
     uqsim.args.sc_poly_normed = False  # True
-    uqsim.args.sc_sparse_quadrature = False  # False
+    uqsim.args.sc_sparse_quadrature = True  # False
     uqsim.args.regression = False
 
     # uqsim.args.inputModelDir = os.path.abspath(os.path.join('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2','Larsim-data'))
@@ -81,12 +81,15 @@ if local_debugging:
     uqsim.args.sourceDir = pathlib.Path("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/HBV-SASK-data")
     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_ensemble_2013_all_tgb'))
     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_lai_may_cc_q_6_p_4_stat_trial'))
-    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs", 'mc_with_sobol_computation_delta_q')) #sliding_window or continuous
+    # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs", 'mc_with_sobol_computation_delta_q')) #sliding_window or continuous
+    # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs", 'sc_q5_p2_6d_2006_short_auto')) #sliding_window or continuous
+    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs", 'mc_12d_2006_short'))
     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_sc_kpu_l_6_d_5_p_3_2013'))
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
     # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Hydro/configurations_Larsim/configurations_larsim_boundery_values.json'
     # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Hydro/configurations_Larsim/configurations_larsim_4_may.json'
-    uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Hydro/configurations/configuration_hbv_10D_MC.json'
+    # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Hydro/configurations/configuration_hbv_10D_MC.json'
+    uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Hydro/configurations/configuration_hbv_12D_MC.json'
     # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Hydro/configurations_Larsim/configurations_larsim_high_flow.json'
 
     uqsim.args.sampleFromStandardDist = True  # False
@@ -119,7 +122,7 @@ if uqsim.args.uq_method == "mc" and uqsim.args.compute_Sobol_t:
     compute_sobol_total_indices_with_samples = True
 save_samples = True  # True for sc
 collect_and_save_state_data = False
-store_qoi_data_in_stat_dict = False
+store_qoi_data_in_stat_dict = False  # if set to True, the qoi_values entry is stored in the stat_dict 
 store_gpce_surrogate_in_stat_dict = True
 save_gpce_surrogate = False
 #####################################

@@ -31,14 +31,14 @@
     "hbv_model_path": "Hydro_Models/HBV-SASK-data"
   },
   "simulation_settings": {
-    "qoi":"Q_cms",
-    "qoi_column":"Q_cms",
+    "qoi":"AET",
+    "qoi_column":"AET",
     "autoregressive_model_first_order":"False",
     "transform_model_output":"None",
-    "read_measured_data": "True",
+    "read_measured_data": "False",
     "qoi_column_measured":"streamflow",
     "objective_function_qoi":["RMSE", "LogNSE", "KGE"],
-    "calculate_GoF":"True",
+    "calculate_GoF":"False",
     "objective_function":["MAE", "MSE", "RMSE", "NRMSE", "NSE", "LogNSE", "KGE"],
     "mode":"continuous",
     "interval": 10,
