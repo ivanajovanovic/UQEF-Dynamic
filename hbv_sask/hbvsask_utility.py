@@ -18,25 +18,25 @@ from common import utility
 #####################################
 
 epsilon = sys.float_info.epsilon
-DEFAULT_PAR_VALUES_DICT = {'TT': 0.0, 'C0': 5.0, 'ETF': 0.5, 'LP': 0.5, 'FC': 100,
-                           'beta': 2.0, 'FRAC': 0.5, 'K1': 0.5, 'alpha': 2.0, 'K2': 0.025,
+DEFAULT_PAR_VALUES_DICT = {'TT': 0.0, 'C0': 0.5, 'ETF': 0.2, 'LP': 0.5, 'FC': 250,
+                           'beta': 2.0, 'FRAC': 0.3, 'K1': 0.5, 'alpha': 2.0, 'K2': 0.05,
                            'UBAS': 1, 'PM': 1, "M": 1.0, "VAR_M": 1e-4}
 
-DEFAULT_PAR_VALUES_DICT_EXTEND = {'TT': 0.0, 'C0': 5.0, 'ETF': 0.5, 'LP': 0.5, 'FC': 100,
-                           'beta': 2.0, 'FRAC': 0.5, 'K1': 0.5, 'alpha': 2.0, 'K2': 0.025,
+DEFAULT_PAR_VALUES_DICT_EXTEND = {'TT': 0.0, 'C0': 0.5, 'ETF': 0.2, 'LP': 0.5, 'FC': 250,
+                           'beta': 2.0, 'FRAC': 0.3, 'K1': 0.5, 'alpha': 2.0, 'K2': 0.05,
                            'UBAS': 1, 'PM': 1, "M": 1.0, "VAR_M": 1e-4}
 
 DEFAULT_PAR_INFO_DICT = {
     'TT': {"lower": -4.0, "upper": 4.0, "default": 0.0},
-    'C0': {"lower": 0.0, "upper": 10.0, "default": 5.0},
-    'ETF': {"lower": 0.0, "upper": 1.0, "default": 0.5},
+    'C0': {"lower": 0.0, "upper": 5.0, "default": 0.5},
+    'ETF': {"lower": 0.0, "upper": 1.0, "default": 0.2},
     'LP': {"lower": 0.0, "upper": 1.0, "default": 0.5},
-    'FC': {"lower": 50.0, "upper": 500.0, "default": 100.0},
+    'FC': {"lower": 50.0, "upper": 1000.0, "default": 250.0},
     'beta': {"lower": 1.0, "upper": 3.0, "default": 2.0},
-    'FRAC': {"lower": 0.1, "upper": 0.9, "default": 0.5},
+    'FRAC': {"lower": 0.1, "upper": 0.9, "default": 0.3},
     'K1': {"lower": 0.05, "upper": 1.0, "default": 0.5},
     'alpha': {"lower": 1.0, "upper": 3.0, "default": 2.0},
-    'K2': {"lower": 0.0, "upper": 0.05, "default": 0.025},
+    'K2': {"lower": 0.0, "upper": 0.1, "default": 0.05},
     'UBAS': {"lower": 1.0, "upper": 3.0, "default": 1.0},
     'PM':{"lower": 0.5, "upper": 2.0, "default": 1.0},
     'M':{"lower": 0.9, "upper": 1.0, "default": 1.0},
@@ -799,7 +799,7 @@ def HBV_SASK(forcing, long_term, par_values_dict, initial_condition_df, printing
         r = np.random.normal(loc=M, scale=np.sqrt(VAR_M), size=period_length)
         precipitation_array = np.multiply(r, precipitation_array)
 
-    # TODO - Think avout adding option for corrupting the precipitation, e.g., Ajami et. al. 2007
+    # TODO - Think about adding option for corrupting the precipitation, e.g., Ajami et. al. 2007
     P = PM * precipitation_array
     T = forcing[temperature_column_name].to_numpy()
 
