@@ -799,7 +799,7 @@ def HBV_SASK(forcing, long_term, par_values_dict, initial_condition_df, printing
         r = np.random.normal(loc=M, scale=np.sqrt(VAR_M), size=period_length)
         precipitation_array = np.multiply(r, precipitation_array)
 
-    # TODO - Think avout adding option for corrupting the precipitation, e.g., Ajami et. al. 2007
+    # TODO - Think about adding option for corrupting the precipitation, e.g., Ajami et. al. 2007
     P = PM * precipitation_array
     T = forcing[temperature_column_name].to_numpy()
 
