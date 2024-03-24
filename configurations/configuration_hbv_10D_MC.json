@@ -2,19 +2,19 @@
     "time_settings":
     {
       "start_day": 1,
-      "start_month": 10,
+      "start_month": 9,
       "start_year": 2002,
       "start_hour": 0,
       "start_minute": 0,
 
       "end_day": 10,
-      "end_month": 10,
+      "end_month": 11,
       "end_year": 2006,
       "end_hour": 0,
       "end_minute": 0,
 
       "run_full_timespan":"False",
-      "spin_up_length":1095,
+      "spin_up_length":1125,
       "simulation_length": 395,
       "resolution": "daily",
 
@@ -22,7 +22,7 @@
       "timestep": 5
     },
   "model_settings": {
-    "basis": "Oldman_Basin",
+    "basis": "Banff_Basin",
     "plotting": "False",
     "writing_results_to_a_file": "False",
     "corrupt_forcing_data": "False"
@@ -31,17 +31,17 @@
     "hbv_model_path": "Hydro_Models/HBV-SASK-data"
   },
   "simulation_settings": {
-    "qoi":"Q_cms",
+    "qoi":"GoF",
     "qoi_column":"Q_cms",
-    "autoregressive_model_first_order":"True",
+    "autoregressive_model_first_order":"False",
     "transform_model_output":"None",
     "read_measured_data": "True",
     "qoi_column_measured":"streamflow",
-    "objective_function_qoi":["RMSE", "NSE"],
+    "objective_function_qoi":"RMSE",
     "calculate_GoF":"True",
     "objective_function":["MAE", "MSE", "RMSE", "NRMSE", "NSE", "LogNSE", "KGE"],
-    "mode":"continuous",
-    "interval": 10,
+    "mode":"sliding_window",
+    "interval": 30,
     "min_periods": 5,
     "method": "avrg",
     "center": "center",
@@ -82,6 +82,13 @@
       "default": 250
     },
     {
+      "name": "beta",
+      "distribution": "Uniform",
+      "lower": 1.0,
+      "upper": 4.0,
+      "default": 2.0
+    },
+    {
       "name": "FRAC",
       "distribution": "Uniform",
       "lower": 0.01,
@@ -101,13 +108,6 @@
       "lower": 0.0,
       "upper": 1.0,
       "default": 0.5
-    },
-    {
-      "name": "beta",
-      "distribution": "Uniform",
-      "lower": 1.0,
-      "upper": 3.0,
-      "default": 2.0
     },
     {
       "name": "K1",

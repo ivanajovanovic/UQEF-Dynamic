@@ -3,19 +3,19 @@
     {
       "start_day": 1,
       "start_month": 10,
-      "start_year": 2002,
+      "start_year": 2003,
       "start_hour": 0,
       "start_minute": 0,
 
       "end_day": 10,
       "end_month": 10,
-      "end_year": 2006,
+      "end_year": 2007,
       "end_hour": 0,
       "end_minute": 0,
 
       "run_full_timespan":"False",
       "spin_up_length":1095,
-      "simulation_length": 395,
+      "simulation_length": 2,
       "resolution": "daily",
 
       "cut_runs": "False",
@@ -33,7 +33,7 @@
   "simulation_settings": {
     "qoi":"Q_cms",
     "qoi_column":"Q_cms",
-    "autoregressive_model_first_order":"True",
+    "autoregressive_model_first_order":"False",
     "transform_model_output":"None",
     "read_measured_data": "True",
     "qoi_column_measured":"streamflow",
@@ -82,6 +82,13 @@
       "default": 250
     },
     {
+      "name": "beta",
+      "distribution": "Uniform",
+      "lower": 0.4,
+      "upper": 5.0,
+      "default": 2.0
+    },
+    {
       "name": "FRAC",
       "distribution": "Uniform",
       "lower": 0.01,
@@ -94,13 +101,6 @@
       "lower": 0.0,
       "upper": 0.1,
       "default": 0.025
-    },
-    {
-      "name": "beta",
-      "distribution": "Uniform",
-      "lower": 0.4,
-      "upper": 5.0,
-      "default": 2.0
     }
   ],
   "unused_parameters": [

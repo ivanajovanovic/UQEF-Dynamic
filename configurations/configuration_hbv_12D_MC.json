@@ -106,7 +106,7 @@
       "name": "beta",
       "distribution": "Uniform",
       "lower": 1.0,
-      "upper": 3.0,
+      "upper": 4.0,
       "default": 2.0
     },
     {
