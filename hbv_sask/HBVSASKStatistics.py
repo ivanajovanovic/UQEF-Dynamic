@@ -1,202 +1,27 @@
-import chaospy as cp
 from collections import defaultdict
 from distutils.util import strtobool
-from functools import reduce
-import json
-import itertools
-import matplotlib.pyplot as plotter
-import more_itertools
-from mpi4py import MPI
-import mpi4py.futures as futures
-import numpy as np
-import os
 import pandas as pd
-from pandas.plotting import register_matplotlib_converters
 import pathlib
-import pickle
 from plotly.offline import iplot, plot
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-import plotly.express as px
-import time
-import sys
 
-from uqef.stat import Statistics
-
-from common import saltelliSobolIndicesHelpingFunctions
-from common import parallelStatistics
+# from uqef.stat import Statistics
+#
+# from common import saltelliSobolIndicesHelpingFunctions
+# from common import parallelStatistics
 from common import colors
-
+#
 from common import utility
+from hydro_model import HydroStatistics
 from hbv_sask import hbvsask_utility as hbv
 
 
-# TODO - changed logic, update, TimeStamp is an index column of raw model runs returned by simulations
-class HBVSASKSamples(object):
-    def __init__(self, rawSamples, configurationObject, qoi_column="Value", time_column_name="TimeStamp", **kwargs):
-        if isinstance(configurationObject, dict):
-            self.configurationObject = configurationObject
-        else:
-            with open(configurationObject) as f:
-                self.configurationObject = json.load(f)
+class HBVSASKStatistics(HydroStatistics.HydroStatistics):
 
-        self.time_column_name = time_column_name
-
-        qoi_columns = [qoi_column, ]  # ["Q_cms", ]
-        qoi_columns = qoi_columns + [self.time_column_name, "Index_run"]  # "streamflow"
-        self.extract_only_qoi_columns = kwargs.get('extract_only_qoi_columns', False)
-
-        try:
-            calculate_GoF = strtobool(self.configurationObject["output_settings"]["calculate_GoF"])
-            compute_gradients = strtobool(self.configurationObject["simulation_settings"]["compute_gradients"])
-        except KeyError:
-            calculate_GoF = False
-            compute_gradients = False
-
-        list_of_single_df = []
-        list_index_parameters_dict = []
-        list_of_single_index_parameter_gof_df = []
-        list_of_gradient_matrix_dict = []
-        for index_run, value in enumerate(rawSamples, ):
-            if value is None:
-                # TODO write in some log file runs which have returned None, in case of sc break!
-                continue
-            if isinstance(value, tuple):
-                df_result = value[0]
-                list_index_parameters_dict.append(value[1])
-            elif isinstance(value, dict):
-                if "result_time_series" in value:
-                    df_result = value["result_time_series"]
-                else:
-                    df_result = None
-                if "parameters_dict" in value:
-                    list_index_parameters_dict.append(value["parameters_dict"])
-                if "gof_df" in value and calculate_GoF:
-                    list_of_single_index_parameter_gof_df.append(value["gof_df"])
-                if "gradient_matrix_dict" in value and compute_gradients:
-                    gradient_matrix_dict = value["gradient_matrix_dict"]
-                    if gradient_matrix_dict is not None:
-                        # TODO Extract only entry for station and one or multiple gofs
-                        list_of_gradient_matrix_dict.append(gradient_matrix_dict)
-            else:
-                df_result = value
-
-            if isinstance(df_result, pd.DataFrame) and df_result.index.name==self.time_column_name:
-                df_result = df_result.reset_index()
-                df_result.rename(columns={df_result.index.name: self.time_column_name}, inplace=True)
-
-            if self.time_column_name not in list(df_result):
-                raise Exception(f"Error in Samples class - {self.time_column_name} is not in the "
-                                f"columns of the result DataFrame")
-
-            if df_result is not None:
-                if self.extract_only_qoi_columns:
-                    list_of_single_df.append(df_result[qoi_columns])
-                else:
-                    list_of_single_df.append(df_result)
-
-        if list_of_single_df:
-            self.df_simulation_result = pd.concat(list_of_single_df, ignore_index=True, sort=False, axis=0)
-        else:
-            self.df_simulation_result = None
-
-        if list_index_parameters_dict:
-            self.df_index_parameter_values = pd.DataFrame(list_index_parameters_dict)
-        else:
-            self.df_index_parameter_values = None
-
-        if list_of_single_index_parameter_gof_df:
-            self.df_index_parameter_gof_values = pd.concat(list_of_single_index_parameter_gof_df,
-                                                           ignore_index=True, sort=False, axis=0)
-        else:
-            self.df_index_parameter_gof_values = None
-
-        if list_of_gradient_matrix_dict:
-            # self.list_of_gradient_matrix_dict = list_of_gradient_matrix_dict
-            gradient_matrix_dict = defaultdict(list)
-            self.dict_of_approx_matrix_c = defaultdict(list)
-            self.dict_of_matrix_c_eigen_decomposition = defaultdict(list)
-
-            for single_gradient_matrix_dict in list_of_gradient_matrix_dict:
-                for key, value in single_gradient_matrix_dict.items():
-                    gradient_matrix_dict[key].append(np.array(value))
-
-            for key in gradient_matrix_dict.keys():
-                # for single_objective_function in self.list_objective_function_qoi:
-                self.dict_of_approx_matrix_c[key] = \
-                    sum(gradient_matrix_dict[key]) / len(gradient_matrix_dict[key])
-                self.dict_of_matrix_c_eigen_decomposition[key] = np.linalg.eigh(self.dict_of_approx_matrix_c[key])
-                # np.linalg.eig(self.dict_of_approx_matrix_c[key])
-        else:
-            self.dict_of_approx_matrix_c = None
-            self.dict_of_matrix_c_eigen_decomposition = None
-
-    def save_samples_to_file(self, file_path='./'):
-        file_path = str(file_path)
-        if self.df_simulation_result is not None:
-            self.df_simulation_result.to_pickle(
-                os.path.abspath(os.path.join(file_path, "df_all_simulations.pkl")), compression="gzip")
-
-    def save_index_parameter_values(self, file_path='./'):
-        file_path = str(file_path)
-        if self.df_index_parameter_values is not None:
-            self.df_index_parameter_values.to_pickle(
-                os.path.abspath(os.path.join(file_path, "df_all_index_parameter_values.pkl")), compression="gzip")
-
-    def save_index_parameter_gof_values(self, file_path='./'):
-        file_path = str(file_path)
-        if self.df_index_parameter_gof_values is not None:
-            self.df_index_parameter_gof_values.to_pickle(
-                os.path.abspath(os.path.join(file_path, "df_all_index_parameter_gof_values.pkl")), compression="gzip")
-
-    def save_dict_of_approx_matrix_c(self, file_path='./'):
-        file_path = str(file_path)
-        if self.dict_of_matrix_c_eigen_decomposition is not None:
-            fileName = os.path.abspath(os.path.join(file_path, "dict_of_approx_matrix_c.pkl"))
-            with open(fileName, 'wb') as handle:
-                pickle.dump(self.dict_of_approx_matrix_c, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
-    def save_dict_of_matrix_c_eigen_decomposition(self, file_path='./'):
-        file_path = str(file_path)
-        if self.dict_of_matrix_c_eigen_decomposition is not None:
-            fileName = os.path.abspath(os.path.join(file_path, "dict_of_matrix_c_eigen_decomposition.pkl"))
-            with open(fileName, 'wb') as handle:
-                pickle.dump(self.dict_of_matrix_c_eigen_decomposition, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
-    def get_number_of_runs(self, index_run_column_name="Index_run"):
-        return self.df_simulation_result[index_run_column_name].nunique()
-
-    def get_simulation_timesteps(self, time_stamp_column="TimeStamp"):
-        if self.df_simulation_result is not None:
-            return list(self.df_simulation_result[time_stamp_column].unique())
-        else:
-            return None
-
-    def get_timesteps_min(self, time_stamp_column="TimeStamp"):
-        if self.df_simulation_result is not None:
-            return self.df_simulation_result[time_stamp_column].min()
-        else:
-            return None
-
-    def get_timesteps_max(self, time_stamp_column="TimeStamp"):
-        if self.df_simulation_result is not None:
-            return self.df_simulation_result[time_stamp_column].max()
-        else:
-            return None
-
-
-class HBVSASKStatistics(Statistics):
     def __init__(self, configurationObject, workingDir=None, *args, **kwargs):
-        Statistics.__init__(self)
-
-        if isinstance(configurationObject, dict):
-            self.configurationObject = configurationObject
-        else:
-            with open(configurationObject) as f:
-                self.configurationObject = json.load(f)
-
-        # in the statistics class specification of the workingDir is necessary
-        self.workingDir = pathlib.Path(workingDir)
+        super(HBVSASKStatistics, self).__init__(configurationObject, workingDir, *args, **kwargs)
+        # Statistics.__init__(self)
 
         if "basis" in kwargs:
             self.basis = kwargs['basis']
@@ -208,38 +33,14 @@ class HBVSASKStatistics(Statistics):
         self.inputModelDir_basis = self.inputModelDir / self.basis
 
         #####################################
-        # Set of configuration variables propagated via UQsim.args and/or **kwargs
-        # These are mainly UQ simulation - related configurations
-        #####################################
-        self.uq_method = kwargs.get('uq_method', None)
-
-        self.sampleFromStandardDist = kwargs.get('sampleFromStandardDist', False)
-
-        # wheather to store all original model outputs in the stat dict; note - this might take a lot of space
-        self.store_qoi_data_in_stat_dict = kwargs.get('store_qoi_data_in_stat_dict', False)
-
-        # TODO: eventually make a non-MPI version
-        self.parallel_statistics = kwargs.get('parallel_statistics', False)
-        if self.parallel_statistics:
-            self.size = MPI.COMM_WORLD.Get_size()
-            self.rank = MPI.COMM_WORLD.Get_rank()
-            self.name = MPI.Get_processor_name()
-            self.version = MPI.Get_library_version()
-            self.mpi_chunksize = kwargs.get('mpi_chunksize', 1)
-            self.unordered = kwargs.get('unordered', False)
-
-        self.save_samples = kwargs.get('save_samples', True)
-
-        self._compute_Sobol_t = kwargs.get('compute_Sobol_t', True)
-        self._compute_Sobol_m = kwargs.get('compute_Sobol_m', True)
-        self._compute_Sobol_m2 = kwargs.get('compute_Sobol_m2', False)
-
-        #####################################
         # Set of configuration variables propagated via **kwargs or read from configurationObject
         # These are mainly model related configurations
         #####################################
         # This is actually index name in the propageted results DataFrame
         self.time_column_name = kwargs.get("time_column_name", "TimeStamp")
+        self.precipitation_column_name = kwargs.get("precipitation_column_name", "precipitation")
+        self.temperature_column_name = kwargs.get("temperature_column_name", "temperature")
+        self.forcing_data_column_names = [self.precipitation_column_name, self.temperature_column_name]
 
         if "run_full_timespan" in kwargs:
             self.run_full_timespan = kwargs['run_full_timespan']
@@ -247,17 +48,17 @@ class HBVSASKStatistics(Statistics):
             self.run_full_timespan = strtobool(
                 self.configurationObject["time_settings"].get("run_full_timespan", 'False'))
 
-        dict_processed_config_simulation_settings = utility.read_simulation_settings_from_configuration_object(
-            self.configurationObject, **kwargs)
+        if "corrupt_forcing_data" in kwargs:
+            self.corrupt_forcing_data = kwargs['corrupt_forcing_data']
+        else:
+            self.corrupt_forcing_data = strtobool(self.configurationObject["model_settings"].get(
+                "corrupt_forcing_data", False))
 
-        self.qoi = dict_processed_config_simulation_settings["qoi"]
-        self.qoi_column = dict_processed_config_simulation_settings["qoi_column"]
-        self.multiple_qoi = dict_processed_config_simulation_settings["multiple_qoi"]
-        self.number_of_qois = dict_processed_config_simulation_settings["number_of_qois"]
-        self.qoi_column_measured = dict_processed_config_simulation_settings["qoi_column_measured"]
-        self.read_measured_data = dict_processed_config_simulation_settings["read_measured_data"]
-
+        #####################################
         # streamflow is of special importance here, since we have saved/measured/ground truth that for it and it is inside input data
+        # self.streamflow_column_name = kwargs.get("streamflow_column_name", "streamflow")
+        #####################################
+
         self.read_measured_streamflow = False
         if self.multiple_qoi:
             for idx, single_qoi_column in enumerate(self.qoi_column):
@@ -269,572 +70,405 @@ class HBVSASKStatistics(Statistics):
                 self.read_measured_streamflow = self.read_measured_data
                 self.streamflow_column_name = self.qoi_column_measured
 
-        self.objective_function_qoi = dict_processed_config_simulation_settings["objective_function_qoi"]
-        self.objective_function_names_qoi = dict_processed_config_simulation_settings["objective_function_names_qoi"]
+    ###################################################################################################################
 
-        # list versions of above variables
-        self.list_qoi_column = dict_processed_config_simulation_settings["list_qoi_column"]
-        self.list_qoi_column_measured = dict_processed_config_simulation_settings["list_qoi_column_measured"]
-        self.list_read_measured_data = dict_processed_config_simulation_settings["list_read_measured_data"]
-        self.list_objective_function_qoi = dict_processed_config_simulation_settings["list_objective_function_qoi"]
-        self.list_objective_function_names_qoi = dict_processed_config_simulation_settings[
-            "list_objective_function_names_qoi"]
-
-        self.mode = dict_processed_config_simulation_settings["mode"]
-        self.method = dict_processed_config_simulation_settings["method"]
-
-        self.compute_gradients = dict_processed_config_simulation_settings["compute_gradients"]
-        self.compute_active_subspaces = dict_processed_config_simulation_settings["compute_active_subspaces"]
-        self.save_gradient_related_runs = dict_processed_config_simulation_settings["save_gradient_related_runs"]
-
-        #####################################
-        # Parameters related set-up part
-        #####################################
-        self.nodeNames = []
-        try:
-            list_of_parameters = self.configurationObject["parameters"]
-        except KeyError as e:
-            print(f"HBVSASK Statistics: parameters key does "
-                  f"not exists in the configurationObject{e}")
-            raise
-        for i in list_of_parameters:
-            if self.uq_method == "ensemble" or i["distribution"] != "None":
-                self.nodeNames.append(i["name"])
-        self.dim = len(self.nodeNames)
-        self.labels = [nodeName.strip() for nodeName in self.nodeNames]
-
-        #####################################
-        # Initialize different variables of the Statisitc class
-        #####################################
-        self.df_unaltered = None
-        self.df_measured = None
-        self.unaltered_computed = False
-        self.mesaured_fetched = False
-        self.forcing_data_fetched = False
-
-        self._is_Sobol_t_computed = False
-        self._is_Sobol_m_computed = False
-        self._is_Sobol_m2_computed = False
-
-        self.timesteps = None
-        self.timesteps_min = None
-        self.timesteps_max = None
-        self.numbTimesteps = None
-        self.pdTimesteps = None
-        self.number_of_unique_index_runs = None
-        self.numEvaluations = None
-        self.samples = None
-        # self.result_dict = dict()
-        self.result_dict = None
-
-        self.qoi_mean_df = None
-        self.gof_mean_measured = None
-
-        self.active_scores_dict = None
-
-        self.solverTimes = None
-        self.work_package_indexes = None
-
-    def set_timesteps(self, timesteps=None):
-        if timesteps is not None:
-            self.timesteps = timesteps
-        elif self.samples is not None:
-            self.timesteps = self.samples.get_simulation_timesteps()
-        self.pdTimesteps = [pd.Timestamp(timestep) for timestep in self.timesteps]
-
-    def set_pdTimesteps(self, pdTimesteps):
-        self.pdTimesteps = pdTimesteps
-
-    def set_timesteps_min(self, timesteps_min):
-        if timesteps_min is not None:
-            self.timesteps_min = timesteps_min
-        elif self.samples is not None:
-            self.timesteps_min = self.samples.get_timesteps_min()
-
-    def set_timesteps_max(self, timesteps_max):
-        if timesteps_max is not None:
-            self.timesteps_max = timesteps_max
-        elif self.samples is not None:
-            self.timesteps_max = self.samples.get_timesteps_max()
-
-    def set_result_dict(self, result_dict):
-        self.result_dict = result_dict
+    def prepare(self, rawSamples, **kwargs):
+        super(HBVSASKStatistics, self).prepare(rawSamples=rawSamples, **kwargs)
 
     ###################################################################################################################
-    def prepare(self, rawSamples, **kwargs):
-        self.timesteps = kwargs.get('timesteps') if 'timesteps' in kwargs else None
-        self.solverTimes = kwargs.get('solverTimes') if 'solverTimes' in kwargs else None
-        self.work_package_indexes = kwargs.get('work_package_indexes') if 'work_package_indexes' in kwargs else None
-
-        try:
-            compute_gradients = strtobool(self.configurationObject["simulation_settings"]["compute_gradients"])
-        except KeyError:
-            compute_gradients = False
-
-        self.samples = HBVSASKSamples(
-            rawSamples,
-            configurationObject=self.configurationObject,
-            qoi_column=self.qoi_column,
-            time_column_name=self.time_column_name,
-            extract_only_qoi_columns=True
-        )
-
-        if self.samples.df_simulation_result is not None:
-            self.samples.df_simulation_result.sort_values(
-                by=["Index_run", self.time_column_name], ascending=[True, True], inplace=True, kind='quicksort',
-                na_position='last'
-            )
-
-        if self.save_samples:
-            self.samples.save_samples_to_file(self.workingDir)
-            self.samples.save_index_parameter_values(self.workingDir)
-            self.samples.save_index_parameter_gof_values(self.workingDir)
-            if compute_gradients:
-                self.active_scores_dict = self._compute_active_score(self.samples.dict_of_matrix_c_eigen_decomposition)
-                self.samples.save_dict_of_approx_matrix_c(self.workingDir)
-                self.samples.save_dict_of_matrix_c_eigen_decomposition(self.workingDir)
-
-        # Tead info about the time from propagated model runs, i.e., samples
-        self.timesteps = self.samples.get_simulation_timesteps()
-        self.timesteps_min = self.samples.get_timesteps_min()
-        self.timesteps_max = self.samples.get_timesteps_max()
-        self.pdTimesteps = [pd.Timestamp(timestep) for timestep in self.timesteps]
-        self.number_of_unique_index_runs = self.samples.get_number_of_runs()
-        self.numEvaluations = self.number_of_unique_index_runs
-
-        self.numbTimesteps = len(self.timesteps)
 
     def prepareForMcStatistics(self, simulationNodes, numEvaluations, regression=None, order=None,
                               poly_normed=None, poly_rule=None, *args, **kwargs):
-        self.numEvaluations = numEvaluations
-        # TODO Think about this, tricky for saltelli, makes sense for mc
-        # self.numEvaluations = self.number_of_unique_index_runs
-        if regression:
-            self.nodes = simulationNodes.distNodes
-            self.weights = None
-            if self.sampleFromStandardDist:
-                self.dist = simulationNodes.joinedStandardDists
-            else:
-                self.dist = simulationNodes.joinedDists
-            self.polynomial_expansion = cp.generate_expansion(order, self.dist, rule=poly_rule, normed=poly_normed)
+        super(HBVSASKStatistics, self).prepareForMcStatistics(simulationNodes, numEvaluations, regression, order,
+                                                              poly_normed, poly_rule, *args, **kwargs)
 
     def prepareForScStatistics(self, simulationNodes, order, poly_normed, poly_rule, *args, **kwargs):
-        self.nodes = simulationNodes.distNodes
-        if self.sampleFromStandardDist:
-            self.dist = simulationNodes.joinedStandardDists
-        else:
-            self.dist = simulationNodes.joinedDists
-        self.weights = simulationNodes.weights
-        self.polynomial_expansion = cp.generate_expansion(order, self.dist, rule=poly_rule, normed=poly_normed)
+        super(HBVSASKStatistics, self).prepareForScStatistics(simulationNodes, order, poly_normed, poly_rule,
+                                                              *args, **kwargs)
 
     def prepareForMcSaltelliStatistics(self, simulationNodes, numEvaluations=None, regression=None, order=None,
                                     poly_normed=None, poly_rule=None, *args, **kwargs):
-        self.prepareForMcStatistics(simulationNodes, numEvaluations, regression, order, poly_normed, poly_rule,
-                                   *args, **kwargs)
-
-    def calcStatisticsForMcParallel(self, chunksize=1, regression=False, *args, **kwargs):
-        if self.rank == 0:
-            grouped = self.samples.df_simulation_result.groupby([self.time_column_name,])
-            groups = grouped.groups
-
-            keyIter = list(groups.keys())
-            list_of_simulations_df = [
-                self.samples.df_simulation_result.loc[groups[key].values][self.qoi_column].values
-                for key in keyIter
-            ]
-
-            keyIter_chunk = list(more_itertools.chunked(keyIter, chunksize))
-            list_of_simulations_df_chunk = list(more_itertools.chunked(list_of_simulations_df, chunksize))
-
-            numEvaluations_chunk = [self.numEvaluations] * len(keyIter_chunk)
-
-            regressionChunks = [regression] * len(keyIter_chunk)
-            compute_Sobol_t_Chunks = [self._compute_Sobol_t] * len(keyIter_chunk)
-            compute_Sobol_m_Chunks = [self._compute_Sobol_m] * len(keyIter_chunk)
-            store_qoi_data_in_stat_dict_Chunks = [self.store_qoi_data_in_stat_dict] * len(keyIter_chunk)
-
-            if regression:
-                nodesChunks = [self.nodes] * len(keyIter_chunk)
-                weightsChunks = [self.weights] * len(keyIter_chunk)
-                distChunks = [self.dist] * len(keyIter_chunk)
-                dimChunks = [self.dim] * len(keyIter_chunk)
-                polynomial_expansionChunks = [self.polynomial_expansion] * len(keyIter_chunk)
-
-        with futures.MPICommExecutor(MPI.COMM_WORLD, root=0) as executor:
-            if executor is not None:  # master process
-                print(f"{self.rank}: computation of statistics started...")
-                solver_time_start = time.time()
-                if regression:
-                    chunk_results_it = executor.map(parallelStatistics._parallel_calc_stats_for_gPCE,
-                                                    keyIter_chunk,
-                                                    list_of_simulations_df_chunk,
-                                                    distChunks,
-                                                    polynomial_expansionChunks,
-                                                    nodesChunks,
-                                                    weightsChunks,
-                                                    regressionChunks,
-                                                    compute_Sobol_t_Chunks,
-                                                    compute_Sobol_m_Chunks,
-                                                    store_qoi_data_in_stat_dict_Chunks,
-                                                    chunksize=self.mpi_chunksize,
-                                                    unordered=self.unordered)
-                else:
-                    chunk_results_it = executor.map(parallelStatistics._parallel_calc_stats_for_MC,
-                                                    keyIter_chunk,
-                                                    list_of_simulations_df_chunk,
-                                                    numEvaluations_chunk,
-                                                    store_qoi_data_in_stat_dict_Chunks,
-                                                    chunksize=self.mpi_chunksize,
-                                                    unordered=self.unordered)
-                print(f"{self.rank}: waits for shutdown...")
-                sys.stdout.flush()
-                executor.shutdown(wait=True)
-                print(f"{self.rank}: shutted down...")
-                sys.stdout.flush()
-
-                solver_time_end = time.time()
-                solver_time = solver_time_end - solver_time_start
-                print(f"solver_time: {solver_time}")
-
-                chunk_results = list(chunk_results_it)
-                self.result_dict = dict()
-                for chunk_result in chunk_results:
-                    for result in chunk_result:
-                        self.result_dict[result[0]] = result[1]
-
-    def calcStatisticsForEnsembleParallel(self, chunksize=1, regression=False, *args, **kwargs):
-        self.calcStatisticsForMcParallel(chunksize=chunksize, regression=False, *args, **kwargs)
-
-    def calcStatisticsForScParallel(self, chunksize=1, regression=False, *args, **kwargs):
-        if self.rank == 0:
-            grouped = self.samples.df_simulation_result.groupby([self.time_column_name, ])
-            groups = grouped.groups
-
-            keyIter = list(groups.keys())
-            list_of_simulations_df = [
-                self.samples.df_simulation_result.loc[groups[key].values][self.qoi_column].values
-                for key in keyIter
-            ]
-
-            keyIter_chunk = list(more_itertools.chunked(keyIter, chunksize))
-            list_of_simulations_df_chunk = list(more_itertools.chunked(list_of_simulations_df, chunksize))
-
-            nodesChunks = [self.nodes] * len(keyIter_chunk)
-            distChunks = [self.dist] * len(keyIter_chunk)
-            weightsChunks = [self.weights] * len(keyIter_chunk)
-            polynomial_expansionChunks = [self.polynomial_expansion] * len(keyIter_chunk)
-
-            regressionChunks = [regression] * len(keyIter_chunk)
-            compute_Sobol_t_Chunks = [self._compute_Sobol_t] * len(keyIter_chunk)
-            compute_Sobol_m_Chunks = [self._compute_Sobol_m] * len(keyIter_chunk)
-            store_qoi_data_in_stat_dict_Chunks = [self.store_qoi_data_in_stat_dict] * len(keyIter_chunk)
-
-        with futures.MPICommExecutor(MPI.COMM_WORLD, root=0) as executor:
-            if executor is not None:  # master process
-                print(f"{self.rank}: computation of statistics started...")
-                solver_time_start = time.time()
-                chunk_results_it = executor.map(parallelStatistics._parallel_calc_stats_for_gPCE,
-                                                keyIter_chunk,
-                                                list_of_simulations_df_chunk,
-                                                distChunks,
-                                                polynomial_expansionChunks,
-                                                nodesChunks,
-                                                weightsChunks,
-                                                regressionChunks,
-                                                compute_Sobol_t_Chunks,
-                                                compute_Sobol_m_Chunks,
-                                                store_qoi_data_in_stat_dict_Chunks,
-                                                chunksize=self.mpi_chunksize,
-                                                unordered=self.unordered)
-                print(f"{self.rank}: waits for shutdown...")
-                sys.stdout.flush()
-                executor.shutdown(wait=True)
-                print(f"{self.rank}: shutted down...")
-                sys.stdout.flush()
-
-                solver_time_end = time.time()
-                solver_time = solver_time_end - solver_time_start
-                print(f"solver_time: {solver_time}")
-
-                chunk_results = list(chunk_results_it)
-                self.result_dict = dict()
-                for chunk_result in chunk_results:
-                    for result in chunk_result:
-                        self.result_dict[result[0]] = result[1]
-
-    def calcStatisticsForMcSaltelliParallel(self, chunksize=1, regression=False, *args, **kwargs):
-        if self.rank == 0:
-            grouped = self.samples.df_simulation_result.groupby([self.time_column_name, ])
-            groups = grouped.groups
-
-            keyIter = list(groups.keys())
-            list_of_simulations_df = [
-                self.samples.df_simulation_result.loc[groups[key].values][self.qoi_column].values
-                for key in keyIter
-            ]
-
-            keyIter_chunk = list(more_itertools.chunked(keyIter, chunksize))
-            list_of_simulations_df_chunk = list(more_itertools.chunked(list_of_simulations_df, chunksize))
-
-            numEvaluations_chunk = [self.numEvaluations] * len(keyIter_chunk)
-            dimChunks = [self.dim] * len(keyIter_chunk)
-
-            compute_Sobol_t_Chunks = [self._compute_Sobol_t] * len(keyIter_chunk)
-            compute_Sobol_m_Chunks = [self._compute_Sobol_m] * len(keyIter_chunk)
-            store_qoi_data_in_stat_dict_Chunks = [self.store_qoi_data_in_stat_dict] * len(keyIter_chunk)
-
-        with futures.MPICommExecutor(MPI.COMM_WORLD, root=0) as executor:
-            if executor is not None:  # master process
-                print(f"{self.rank}: computation of statistics started...")
-                solver_time_start = time.time()
-                chunk_results_it = executor.map(parallelStatistics._parallel_calc_stats_for_mc_saltelli,
-                                                keyIter_chunk,
-                                                list_of_simulations_df_chunk,
-                                                numEvaluations_chunk,
-                                                dimChunks,
-                                                compute_Sobol_t_Chunks,
-                                                compute_Sobol_m_Chunks,
-                                                store_qoi_data_in_stat_dict_Chunks,
-                                                chunksize=self.mpi_chunksize,
-                                                unordered=self.unordered)
-                print(f"{self.rank}: waits for shutdown...")
-                sys.stdout.flush()
-                executor.shutdown(wait=True)
-                print(f"{self.rank}: shutted down...")
-                sys.stdout.flush()
-
-                solver_time_end = time.time()
-                solver_time = solver_time_end - solver_time_start
-                print(f"solver_time: {solver_time}")
-
-                chunk_results = list(chunk_results_it)
-                self.result_dict = dict()
-                for chunk_result in chunk_results:
-                    for result in chunk_result:
-                        self.result_dict[result[0]] = result[1]
+        super(HBVSASKStatistics, self).prepareForMcSaltelliStatistics(simulationNodes, numEvaluations, regression, order,
+                                                                      poly_normed, poly_rule, *args, **kwargs)
 
     ###################################################################################################################
 
-    def _check_if_Sobol_t_computed(self, keyIter):
-        self._is_Sobol_t_computed = "Sobol_t" in self.result_dict[keyIter[0]] #hasattr(self.result_dict[keyIter[0], "Sobol_t")
+    def calcStatisticsForMcParallel(self, chunksize=1, regression=False, *args, **kwargs):
+        super(HBVSASKStatistics, self).calcStatisticsForMcParallel(chunksize, regression, *args, **kwargs)
 
-    def _check_if_Sobol_m_computed(self, keyIter):
-        self._is_Sobol_m_computed = "Sobol_m" in self.result_dict[keyIter[0]]
+    def calcStatisticsForEnsembleParallel(self, chunksize=1, regression=False, *args, **kwargs):
+        super(HBVSASKStatistics, self).calcStatisticsForEnsembleParallel(chunksize, regression, *args, **kwargs)
 
-    def _check_if_Sobol_m2_computed(self, keyIter):
-        self._is_Sobol_m2_computed = "Sobol_m2" in self.result_dict[keyIter[0]]
+    def calcStatisticsForScParallel(self, chunksize=1, regression=False, *args, **kwargs):
+        super(HBVSASKStatistics, self).calcStatisticsForScParallel(chunksize, regression, *args, **kwargs)
+
+    def calcStatisticsForMcSaltelliParallel(self, chunksize=1, regression=False, *args, **kwargs):
+        super(HBVSASKStatistics, self).calcStatisticsForMcSaltelliParallel(chunksize, regression, *args, **kwargs)
+
+    ###################################################################################################################
+
+    def param_grad_analysis(self):
+        super(HBVSASKStatistics, self).param_grad_analysis()
+
+    ###################################################################################################################
+
+    def _check_if_Sobol_t_computed(self, timestamp=None, qoi_column=None):
+        super(HBVSASKStatistics, self)._check_if_Sobol_t_computed(timestamp, qoi_column)
+
+    def _check_if_Sobol_m_computed(self, timestamp=None, qoi_column=None):
+        super(HBVSASKStatistics, self)._check_if_Sobol_m_computed(timestamp, qoi_column)
+
+    def _check_if_Sobol_m2_computed(self, timestamp=None, qoi_column=None):
+        super(HBVSASKStatistics, self)._check_if_Sobol_m2_computed(timestamp, qoi_column)
 
     ###################################################################################################################
 
     def saveToFile(self, fileName="statistics_dict", fileNameIdent="", directory="./",
                    fileNameIdentIsFullName=False, **kwargs):
-
-        fileName = "statistics_dictionary_qoi_" + self.qoi_column + ".pkl"
-        statFileName = os.path.abspath(os.path.join(str(self.workingDir), fileName))
-        with open(statFileName, 'wb') as handle:
-            pickle.dump(self.result_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
-        if self.active_scores_dict is not None:
-            fileName = "active_scores_dict.pkl"
-            statFileName = os.path.abspath(os.path.join(str(self.workingDir), fileName))
-            with open(statFileName, 'wb') as handle:
-                pickle.dump(self.active_scores_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        super(HBVSASKStatistics, self).saveToFile(fileName, fileNameIdent, directory,
+                   fileNameIdentIsFullName, **kwargs)
 
     ###################################################################################################################
-    def get_measured_data(self, timestepRange=None, time_column_name="TimeStamp",
-                          streamflow_column_name="streamflow", **kwargs):
-        streamflow_inp = kwargs.get("streamflow_inp", "streamflow.inp")
-        streamflow_inp = self.inputModelDir_basis / streamflow_inp
-        self.df_measured = hbv.read_streamflow(streamflow_inp,
-                                               time_column_name=time_column_name,
-                                               streamflow_column_name=streamflow_column_name)
-        # Parse input based on some timeframe
-        if time_column_name in self.df_measured.columns:
-            self.df_measured = self.df_measured.loc[
-                (self.df_measured[time_column_name] >= self.timesteps_min) & (self.df_measured[time_column_name] <= self.timesteps_max)]
-        else:
-            self.df_measured = self.df_measured[self.timesteps_min:self.timesteps_max]
-        self.mesaured_fetched = True
+    # TODO What about AET or other QoI/Model output, make this more general
+    # TODO Make below functions more general
 
-    def get_unaltered_run_data(self):
+    def get_measured_data(self, timestepRange=None, time_column_name="TimeStamp",
+                          qoi_column_name="streamflow", **kwargs):
+        super(HBVSASKStatistics, self).get_measured_data(
+            timestepRange, time_column_name, qoi_column_name, **kwargs)
+
+    def get_unaltered_run_data(self, timestepRange=None, time_column_name="TimeStamp", qoi_column_name="streamflow",
+                              **kwargs):
         self.df_unaltered = None
         self.unaltered_computed = False
 
-    def get_precipitation_temperature_input_data(self, time_column_name="TimeStamp",
-                          precipitation_column_name="precipitation", temperature_column_name="temperature", **kwargs):
+    def get_forcing_data(self, timestepRange=None, time_column_name="TimeStamp", forcing_column_names="precipitation",
+                          **kwargs):
+        self.forcing_df = self._get_precipitation_temperature_input_data(
+            timestepRange=timestepRange, time_column_name=time_column_name, **kwargs)
+        self.forcing_data_fetched = True
+
+    ##########################
+    # HBV Specific functions for fetching saved data
+    ##########################
+    def _get_measured_single_qoi(self, timestepRange=None, time_column_name="TimeStamp",
+        qoi_column_measured="measured", **kwargs):
+        if qoi_column_measured == "streamflow":
+            return self._get_measured_streamflow(
+                timestepRange=timestepRange, time_column_name=time_column_name,
+                streamflow_column_name=qoi_column_measured, **kwargs)
+        else:
+            raise NotImplementedError
+
+    def _get_measured_streamflow(self, timestepRange=None, time_column_name="TimeStamp",
+                                 streamflow_column_name="streamflow", **kwargs):
+        streamflow_inp = kwargs.get("streamflow_inp", "streamflow.inp")
+        streamflow_inp = self.inputModelDir_basis / streamflow_inp
+
+        if streamflow_column_name is None:
+            streamflow_column_name = self.streamflow_column_name
+        streamflow_df = hbv.read_streamflow(streamflow_inp,
+                                            time_column_name=time_column_name,
+                                            streamflow_column_name=streamflow_column_name)
+        if timestepRange is None:
+            timestepRange = (self.timesteps_min, self.timesteps_max)
+
+        # Parse input based on some timeframe
+        if time_column_name in streamflow_df.columns:
+            streamflow_df = streamflow_df.loc[
+                (streamflow_df[time_column_name] >= timestepRange[0]) & (
+                        streamflow_df[time_column_name] <= timestepRange[1])]
+        else:
+            streamflow_df = streamflow_df[timestepRange[0]:timestepRange[1]]
+        return streamflow_df
+
+    def _get_precipitation_temperature_input_data(self, timestepRange=None, time_column_name="TimeStamp", **kwargs):
         precipitation_temperature_inp = kwargs.get("precipitation_temperature_inp", "Precipitation_Temperature.inp")
+        precipitation_column_name = kwargs.get("precipitation_column_name", "precipitation")
+        temperature_column_name = kwargs.get("temperature_column_name", "temperature")
         precipitation_temperature_inp = self.inputModelDir_basis / precipitation_temperature_inp
 
-        self.precipitation_temperature_df = hbv.read_precipitation_temperature(
+        precipitation_temperature_df = hbv.read_precipitation_temperature(
             precipitation_temperature_inp, time_column_name=time_column_name,
             precipitation_column_name=precipitation_column_name, temperature_column_name=temperature_column_name
         )
 
-        # Parse input based on some timeframe
-        if time_column_name in self.precipitation_temperature_df.columns:
-            self.precipitation_temperature_df = self.precipitation_temperature_df.loc[
-                (self.precipitation_temperature_df[time_column_name] >= self.timesteps_min) & (self.precipitation_temperature_df[time_column_name] <= self.timesteps_max)]
-        else:
-            self.precipitation_temperature_df = self.precipitation_temperature_df[self.timesteps_min:self.timesteps_max]
+        if timestepRange is None:
+            timestepRange = (self.timesteps_min, self.timesteps_max)
 
-        self.forcing_data_fetched = True
+        # Parse input based on some timeframe
+        if time_column_name in precipitation_temperature_df.columns:
+            precipitation_temperature_df = precipitation_temperature_df.loc[
+                (precipitation_temperature_df[time_column_name] >= timestepRange[0]) \
+                & (precipitation_temperature_df[time_column_name] <= timestepRange[1])]
+        else:
+            precipitation_temperature_df = precipitation_temperature_df[timestepRange[0]:timestepRange[1]]
+        return precipitation_temperature_df
+
+    def input_and_measured_data_setup(self, timestepRange=None, time_column_name="TimeStamp",
+                                      precipitation_column_name="precipitation", temperature_column_name="temperature",
+                                      read_measured_streamflow=None, streamflow_column_name="streamflow", **kwargs):
+        # % ********  Forcing (Precipitation and Temperature)  *********
+        precipitation_temperature_df = self._get_precipitation_temperature_input_data(
+            timestepRange=timestepRange, time_column_name=time_column_name,
+            precipitation_column_name=precipitation_column_name,
+            temperature_column_name=temperature_column_name,
+            **kwargs)
+
+        # % ********  Observed Streamflow  *********
+        # if read_measured_streamflow is None:
+        #     read_measured_streamflow = self.read_measured_streamflow
+
+        if read_measured_streamflow:
+            streamflow_df = self._get_measured_streamflow(
+                timestepRange=timestepRange, time_column_name=time_column_name,
+                streamflow_column_name=streamflow_column_name, **kwargs)
+
+            time_series_measured_data_df = pd.merge(
+                streamflow_df, precipitation_temperature_df,  left_index=True, right_index=True
+            )
+        else:
+            time_series_measured_data_df = precipitation_temperature_df
+
+        return time_series_measured_data_df
 
     ###################################################################################################################
 
-    def plotResults(self, timestep=-1, display=False,
-                    fileName="", fileNameIdent="", directory="./",
-                    fileNameIdentIsFullName=False, safe=True, **kwargs):
+    def plotResults(self, timestep=-1, display=False, fileName="", fileNameIdent="", directory="./",
+                    fileNameIdentIsFullName=False, safe=True, dict_what_to_plot=None, **kwargs):
+
+        timestepRange = (min(self.pdTimesteps), max(self.pdTimesteps))
 
         plot_measured_timeseries = kwargs.get('plot_measured_timeseries', False)
-        plot_unalteres_timeseries = kwargs.get('plot_unalteres_timeseries', False)
+        plot_unaltered_timeseries = kwargs.get('plot_unaltered_timeseries', False)
         plot_forcing_timeseries = kwargs.get('plot_forcing_timeseries', False)
-        time_column_name = kwargs.get('time_column_name', "TimeStamp")
+        time_column_name = kwargs.get('time_column_name', self.time_column_name)
 
-        if plot_measured_timeseries:
-            self.get_measured_data(
-                time_column_name=time_column_name,
-                streamflow_column_name=kwargs.get('measured_df_column_to_draw', "streamflow")
-            )
-        if plot_unalteres_timeseries:
+        if plot_measured_timeseries and (not self.measured_fetched or self.df_measured is None or self.df_measured.empty):
+            self.get_measured_data(time_column_name=time_column_name,
+                                   qoi_column_name=self.list_original_model_output_columns)
+
+        if plot_unaltered_timeseries:
             self.get_unaltered_run_data()
-        if plot_forcing_timeseries:
-            self.get_precipitation_temperature_input_data(
-                time_column_name=time_column_name,
-                precipitation_column_name=kwargs.get('precipitation_df_column_to_draw', "precipitation"),
-                temperature_column_name=kwargs.get('temperature_df_column_to_draw', "temperature")
-            )
+
+        if plot_forcing_timeseries and (not self.forcing_data_fetched or self.forcing_df is None or self.forcing_df.empty):
+            precipitation_column_name = kwargs.get('precipitation_df_column_to_draw', "precipitation")
+            temperature_column_name = kwargs.get('temperature_df_column_to_draw', "temperature")
+            self.get_forcing_data(time_column_name=time_column_name,
+                                  precipitation_column_name=precipitation_column_name,
+                                  temperature_column_name=temperature_column_name)
 
         single_fileName = self.generateFileName(fileName=fileName, fileNameIdent=".html",
                                                 directory=directory, fileNameIdentIsFullName=fileNameIdentIsFullName)
-        fig = self._plotStatisticsDict_plotly(unalatered=self.unaltered_computed, measured=self.mesaured_fetched,
-                                              forcing=self.forcing_data_fetched,
-                                              recalculateTimesteps=False, filename=single_fileName, display=display, **kwargs)
+        fig = self._plotStatisticsDict_plotly(unalatered=self.unaltered_computed, measured=self.measured_fetched,
+                                              forcing=self.forcing_data_fetched, recalculateTimesteps=False,
+                                              filename=single_fileName, display=display,
+                                              dict_what_to_plot=dict_what_to_plot,**kwargs)
+
         if display:
             fig.show()
-        print(f"[HBV STAT INFO] plotResults function is done!")
+
+        print(f"[STAT INFO] plotResults function is done!")
 
     def _plotStatisticsDict_plotly(self, unalatered=False, measured=False, forcing=False, recalculateTimesteps=False,
-                                   window_title='HBVSASK Forward UQ & SA', filename="sim-plotly.html",
-                                   display=False, **kwargs):
+                                   window_title='Forward UQ & SA', filename="sim-plotly.html", display=False,
+                                   dict_what_to_plot=None, **kwargs):
         pdTimesteps = self.pdTimesteps
         keyIter = list(pdTimesteps)
-        self._check_if_Sobol_t_computed(keyIter)
-        self._check_if_Sobol_m_computed(keyIter)
 
-        starting_row = 1
-        n_rows, starting_row, sobol_t_row, sobol_m_row = self._compute_number_of_rows_for_plotting(starting_row)
-        fig = make_subplots(rows=n_rows, cols=1,
-                            print_grid=True, shared_xaxes=False,
-                            vertical_spacing=0.1)
-        #row_heights
+        if dict_what_to_plot is None:
+            dict_what_to_plot = {
+                "E_minus_std": False, "E_plus_std": False, "P10": False, "P90": False,
+                "StdDev": False, "Skew": False, "Kurt": False, "Sobol_m": False, "Sobol_m2": False, "Sobol_t": False
+            }
 
+        n_rows, starting_row = self._compute_number_of_rows_for_plotting(dict_what_to_plot, forcing)
+
+        fig = make_subplots(
+            rows=n_rows, cols=1, print_grid=True,
+            shared_xaxes=True, vertical_spacing=0.1
+        )
+
+        # HBV - Specific plotting of observed data, i.e., forcing data and measured streamflow
         if forcing and self.forcing_data_fetched:
+            reset_index_at_the_end = False
+            if self.forcing_df.index.name != self.time_column_name:
+                self.forcing_df.set_index(self.time_column_name, inplace=True)
+                reset_index_at_the_end = True
+
             # Precipitation
             column_to_draw = kwargs.get('precipitation_df_column_to_draw', 'precipitation')
-            timestamp_column = kwargs.get('precipitation_df_timestamp_column', 'TimeStamp')
-            N_max = self.precipitation_temperature_df[column_to_draw].max()
-            if timestamp_column == "index":
-                fig.add_trace(go.Bar(x=self.precipitation_temperature_df.index,
-                                     y=self.precipitation_temperature_df[column_to_draw],
-                                     name="Precipitation", marker_color='magenta'),
-                              row=1, col=1)
-            else:
-                fig.add_trace(go.Bar(x=self.precipitation_temperature_df[timestamp_column],
-                                     y=self.precipitation_temperature_df[column_to_draw],
-                                     name="Precipitation", marker_color='magenta'),
-                              row=1, col=1)
+            N_max = self.forcing_df[column_to_draw].max()
+            fig.add_trace(go.Bar(x=self.forcing_df.index,
+                                 y=self.forcing_df[column_to_draw],
+                                 name="Precipitation", marker_color='magenta'),
+                          row=1, col=1)
 
             # Temperature
             column_to_draw = kwargs.get('temperature_df_column_to_draw', 'temperature')
-            timestamp_column = kwargs.get('temperature_df_timestamp_column', 'TimeStamp')
-            if timestamp_column == "index":
-                fig.add_trace(go.Scatter(x=self.precipitation_temperature_df.index,
-                                         y=self.precipitation_temperature_df[column_to_draw],
-                                         name="Temperature", line_color='blue', mode = 'lines+markers'),
-                              row=2, col=1)
-            else:
-                fig.add_trace(go.Scatter(x=self.precipitation_temperature_df[timestamp_column],
-                                         y=self.precipitation_temperature_df[column_to_draw],
-                                         name="Temperature", line_color='blue', mode = 'lines+markers'),
-                              row=2, col=1)
+            fig.add_trace(go.Scatter(x=self.forcing_df.index,
+                                     y=self.forcing_df[column_to_draw],
+                                     name="Temperature", line_color='blue', mode='lines+markers'),
+                          row=2, col=1)
 
-        if unalatered and self.unaltered_computed:
-            column_to_draw = self.qoi_column if self.qoi_column in self.df_unaltered.columns \
-                else kwargs.get('unaltered_df_column_to_draw', 'Value')
-            timestamp_column = kwargs.get('unaltered_df_timestamp_column', 'TimeStamp')
-            # TODO change this logic
-            if timestamp_column == "index":
-                fig.add_trace(go.Scatter(x=self.df_unaltered.index, y=self.df_unaltered[column_to_draw],
-                                         name="Q (unaltered simulation)", line_color='deepskyblue', mode = 'lines'),
-                              row=starting_row, col=1)
-            else:
-                fig.add_trace(go.Scatter(x=self.df_unaltered[timestamp_column], y=self.df_unaltered[column_to_draw],
-                                         name="Q (unaltered simulation)", line_color='deepskyblue', mode = 'lines'),
-                              row=starting_row, col=1)
-        if measured and self.mesaured_fetched:
-            column_to_draw = self.qoi_column if self.qoi_column in self.df_measured.columns \
-                else kwargs.get('measured_df_column_to_draw', 'Value')
-            timestamp_column = kwargs.get('measured_df_timestamp_column', 'TimeStamp')
-            # TODO change this logic
-            if timestamp_column == "index":
-                fig.add_trace(go.Scatter(x=self.df_measured.index, y=self.df_measured[column_to_draw],
-                                         name="Q (measured)", line_color='red', mode = 'lines'),
-                              row=starting_row, col=1)
-            else:
-                fig.add_trace(go.Scatter(x=self.df_measured[timestamp_column], y=self.df_measured[column_to_draw],
-                                         name="Q (measured)",line_color='red', mode = 'lines'),
-                              row=starting_row, col=1)
+            if reset_index_at_the_end:
+                self.forcing_df.reset_index(inplace=True)
+                self.forcing_df.rename(columns={self.forcing_df.index.name: self.time_column_name}, inplace=True)
 
-        fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.result_dict[key]["E"] for key in keyIter], name='E[QoI]',
-                                 line_color='green', mode='lines'),
-                      row=starting_row, col=1)
-        fig.add_trace(go.Scatter(x=pdTimesteps,
-                                 y=[(self.result_dict[key]["E"] - self.result_dict[key]["StdDev"]) for key in keyIter],
-                                 name='mean - std. dev', line_color='darkviolet', mode='lines'),
-                      row=starting_row, col=1)
-        fig.add_trace(go.Scatter(x=pdTimesteps,
-                                 y=[(self.result_dict[key]["E"] + self.result_dict[key]["StdDev"]) for key in keyIter],
-                                 name='mean + std. dev', line_color='darkviolet', mode='lines', fill='tonexty'),
-                      row=starting_row, col=1)
-        fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.result_dict[key]["P10"] for key in keyIter],
-                                 name='10th percentile', line_color='yellow', mode='lines'),
-                      row=starting_row, col=1)
-        fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.result_dict[key]["P90"] for key in keyIter],
-                                 name='90th percentile', line_color='yellow', mode='lines', fill='tonexty'),
-                      row=starting_row, col=1)
+            # Streamflow - hard-coded for HBV
+            streamflow_df = self._get_measured_streamflow(time_column_name="TimeStamp",
+                                                          streamflow_column_name="streamflow")
+            column_to_draw = kwargs.get('streamflow_df_column_to_draw', 'streamflow')
+            reset_index_at_the_end = False
+            if streamflow_df.index.name != self.time_column_name:
+                streamflow_df.set_index(self.time_column_name, inplace=True)
+                reset_index_at_the_end = True
+            fig.add_trace(go.Scatter(x=streamflow_df.index,
+                                     y=streamflow_df[column_to_draw],
+                                     name="Obs Streamflow", line_color='red', mode='lines'),
+                          row=3, col=1)
+            if reset_index_at_the_end:
+                streamflow_df.reset_index(inplace=True)
+                streamflow_df.rename(columns={streamflow_df.index.name: self.time_column_name}, inplace=True)
 
-        fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.result_dict[key]["StdDev"] for key in keyIter],
-                                 name='std. dev', line_color='darkviolet', mode = 'lines'),
-                      row=starting_row+1, col=1)
+        dict_qoi_vs_plot_rows = defaultdict(dict, {single_qoi_column: {} for single_qoi_column in self.list_qoi_column})
 
-        if self._is_Sobol_m_computed:
-            for i in range(len(self.labels)):
-                name = self.labels[i] + "_S_m"
-                fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.result_dict[key]["Sobol_m"][i] for key in keyIter],
-                                         name=name, legendgroup=self.labels[i], line_color=colors.COLORS[i], mode = 'lines'),
-                              row=sobol_m_row, col=1)
-        if self._is_Sobol_t_computed:
-            for i in range(len(self.labels)):
-                name = self.labels[i] + "_S_t"
-                fig.add_trace(go.Scatter(x=pdTimesteps, y=[self.result_dict[key]["Sobol_t"][i] for key in keyIter],
-                                         name=name, legendgroup=self.labels[i], line_color=colors.COLORS[i], mode = 'lines'),
-                              row=sobol_t_row, col=1)
+        # One big Figure for each QoI; Note: self.list_qoi_column contain first original model output
+        for idx, single_qoi_column in enumerate(self.list_qoi_column):
+            if single_qoi_column in self.list_original_model_output_columns:
+                if measured and self.measured_fetched and self.df_measured is not None \
+                        and not self.df_measured.empty and self.list_read_measured_data[idx]:
+                    # column_to_draw = self.list_qoi_column_measured[idx]
+                    # timestamp_column = kwargs.get('measured_df_timestamp_column', 'TimeStamp')
+                    df_measured_subset = self.df_measured.loc[self.df_measured["qoi"] == single_qoi_column]
+                    if not df_measured_subset.empty:
+                        column_to_draw = "measured"
+                        timestamp_column = self.time_column_name
+                        fig.add_trace(
+                            go.Scatter(x=df_measured_subset[timestamp_column], y=df_measured_subset[column_to_draw],
+                                       name=f"{single_qoi_column} (measured)", line_color='red', mode='lines'),
+                            row=starting_row, col=1)
+
+            fig.add_trace(go.Scatter(x=pdTimesteps,
+                                     y=[self.result_dict[single_qoi_column][key]["E"] for key in keyIter],
+                                     name=f'E[{single_qoi_column}]',
+                                     line_color='green', mode='lines'),
+                          row=starting_row, col=1)
+            if dict_what_to_plot.get("E_minus_std", False):
+                fig.add_trace(go.Scatter(x=pdTimesteps,
+                                         y=[(self.result_dict[single_qoi_column][key]["E"] \
+                                             - self.result_dict[single_qoi_column][key]["StdDev"]) for key in keyIter],
+                                         name='mean - std. dev', line_color='darkviolet', mode='lines'),
+                              row=starting_row, col=1)
+            if dict_what_to_plot.get("E_plus_std", False):
+                fig.add_trace(go.Scatter(x=pdTimesteps,
+                                         y=[(self.result_dict[single_qoi_column][key]["E"] +\
+                                             self.result_dict[single_qoi_column][key]["StdDev"]) for key in keyIter],
+                                         name='mean + std. dev', line_color='darkviolet', mode='lines', fill='tonexty'),
+                              row=starting_row, col=1)
+            if "P10" in self.result_dict[single_qoi_column][keyIter[0]] and dict_what_to_plot.get("P10", False):
+                fig.add_trace(go.Scatter(x=pdTimesteps,
+                                         y=[self.result_dict[single_qoi_column][key]["P10"] for key in keyIter],
+                                         name='10th percentile', line_color='yellow', mode='lines'),
+                              row=starting_row, col=1)
+            if "P90" in self.result_dict[single_qoi_column][keyIter[0]] and dict_what_to_plot.get("P90", False):
+                fig.add_trace(go.Scatter(x=pdTimesteps,
+                                         y=[self.result_dict[single_qoi_column][key]["P90"] for key in keyIter],
+                                         name='90th percentile', line_color='yellow', mode='lines', fill='tonexty'),
+                              row=starting_row, col=1)
+            dict_qoi_vs_plot_rows[single_qoi_column]["qoi"] = starting_row
+            starting_row += 1
+
+            if "StdDev" in self.result_dict[single_qoi_column][keyIter[0]] and dict_what_to_plot.get("StdDev", False):
+                fig.add_trace(go.Scatter(x=pdTimesteps,
+                                         y=[self.result_dict[single_qoi_column][key]["StdDev"] for key in keyIter],
+                                         name='std. dev', line_color='darkviolet', mode='lines'),
+                              row=starting_row, col=1)
+                dict_qoi_vs_plot_rows[single_qoi_column]["StdDev"] = starting_row
+                starting_row += 1
+
+            if "Skew" in self.result_dict[single_qoi_column][keyIter[0]] and dict_what_to_plot.get("Skew", False):
+                fig.add_trace(go.Scatter(x=pdTimesteps,
+                                         y=[self.result_dict[single_qoi_column][key]["Skew"] for key in keyIter],
+                                         name='Skew', mode='lines', ),
+                              row=starting_row, col=1)
+                dict_qoi_vs_plot_rows[single_qoi_column]["Skew"] = starting_row
+                starting_row += 1
+
+            if "Kurt" in self.result_dict[single_qoi_column][keyIter[0]] and dict_what_to_plot.get("Kurt", False):
+                fig.add_trace(go.Scatter(x=pdTimesteps,
+                                         y=[self.result_dict[single_qoi_column][key]["Kurt"] for key in keyIter],
+                                         name='Kurt', mode='lines', ),
+                              row=starting_row, col=1)
+                dict_qoi_vs_plot_rows[single_qoi_column]["Kurt"] = starting_row
+                starting_row += 1
+
+        for single_qoi_column in self.list_qoi_column:
+            if "Sobol_m" in self.result_dict[single_qoi_column][keyIter[0]] and dict_what_to_plot.get("Sobol_m", False):
+                for i in range(len(self.labels)):
+                    name = self.labels[i] + "_" + single_qoi_column + "_S_m"
+                    fig.add_trace(go.Scatter(
+                        x=pdTimesteps,
+                        y=[self.result_dict[single_qoi_column][key]["Sobol_m"][i] for key in keyIter],
+                        name=name, legendgroup=self.labels[i], line_color=colors.COLORS[i], mode='lines'),
+                        row=starting_row, col=1)
+                dict_qoi_vs_plot_rows[single_qoi_column]["Sobol_m"] = starting_row
+                starting_row += 1
+
+        for single_qoi_column in self.list_qoi_column:
+            if "Sobol_m2" in self.result_dict[single_qoi_column][keyIter[0]] and dict_what_to_plot.get("Sobol_m2", False):
+                for i in range(len(self.labels)):
+                    name = self.labels[i] + "_" + single_qoi_column + "_S_m2"
+                    fig.add_trace(go.Scatter(
+                        x=pdTimesteps,
+                        y=[self.result_dict[single_qoi_column][key]["Sobol_m2"][i] for key in keyIter],
+                        name=name, legendgroup=self.labels[i], line_color=colors.COLORS[i], mode='lines'),
+                        row=starting_row, col=1)
+                dict_qoi_vs_plot_rows[single_qoi_column]["Sobol_m2"] = starting_row
+                starting_row += 1
+
+        for single_qoi_column in self.list_qoi_column:
+            if "Sobol_t" in self.result_dict[single_qoi_column][keyIter[0]] and dict_what_to_plot.get("Sobol_t", False):
+                for i in range(len(self.labels)):
+                    name = self.labels[i] + "_" + single_qoi_column + "_S_t"
+                    fig.add_trace(go.Scatter(
+                        x=pdTimesteps,
+                        y=[self.result_dict[single_qoi_column][key]["Sobol_t"][i] for key in keyIter],
+                        name=name, legendgroup=self.labels[i], line_color=colors.COLORS[i], mode='lines'),
+                        row=starting_row, col=1)
+                dict_qoi_vs_plot_rows[single_qoi_column]["Sobol_t"] = starting_row
+                starting_row += 1
 
         # fig.update_traces(mode='lines')
-        #fig.update_xaxes(title_text="Time")
         if forcing and self.forcing_data_fetched:
-            fig.update_yaxes(title_text="N [mm/h]", side='left', showgrid=True, row=1, col=1)
+            fig.update_yaxes(title_text="N [mm/h]", showgrid=True, row=1, col=1)
             fig.update_yaxes(autorange="reversed", row=1, col=1)
-            fig.update_yaxes(title_text="T [c]", side='left', showgrid=True, row=2, col=1)
-        fig.update_yaxes(title_text=self.qoi_column, side='left', showgrid=True, row=starting_row, col=1)
-        fig.update_yaxes(title_text="Std. Dev. [QoI]", side='left', showgrid=True, row=starting_row+1, col=1)
+            fig.update_yaxes(title_text="T [c]", showgrid=True, row=2, col=1)
 
-        if self._is_Sobol_m_computed:
-            fig.update_yaxes(title_text="Sobol_m", side='left', showgrid=True, range=[0, 1], row=sobol_m_row, col=1)
-        if self._is_Sobol_t_computed:
-            fig.update_yaxes(title_text="Sobol_t", side='left', showgrid=True, range=[0, 1], row=sobol_t_row, col=1)
+        for single_qoi_column in self.list_qoi_column:
+            fig.update_yaxes(title_text=single_qoi_column, showgrid=True,
+                             row=dict_qoi_vs_plot_rows[single_qoi_column]["qoi"], col=1)
+            if "StdDev" in self.result_dict[single_qoi_column][keyIter[0]] and dict_what_to_plot.get("StdDev", False):
+                fig.update_yaxes(title_text=f"StdDev {single_qoi_column}", showgrid=True, side='left',
+                                 row=dict_qoi_vs_plot_rows[single_qoi_column]["StdDev"], col=1)
+            if "Skew" in self.result_dict[single_qoi_column][keyIter[0]] and dict_what_to_plot.get("Skew", False):
+                fig.update_yaxes(title_text=f"Skew {single_qoi_column}", showgrid=True, side='left',
+                                 row=dict_qoi_vs_plot_rows[single_qoi_column]["Skew"], col=1)
+            if "Kurt" in self.result_dict[single_qoi_column][keyIter[0]] and dict_what_to_plot.get("Kurt", False):
+                fig.update_yaxes(title_text=f"Kurt {single_qoi_column}", showgrid=True, side='left',
+                                 row=dict_qoi_vs_plot_rows[single_qoi_column]["Kurt"], col=1)
+            if "Sobol_m" in self.result_dict[single_qoi_column][keyIter[0]] and dict_what_to_plot.get("Sobol_m", False):
+                fig.update_yaxes(title_text=f"{single_qoi_column}_m", showgrid=True, range=[0, 1],
+                                 row=dict_qoi_vs_plot_rows[single_qoi_column]["Sobol_m"], col=1)
+            if "Sobol_m2" in self.result_dict[single_qoi_column][keyIter[0]] and dict_what_to_plot.get("Sobol_m2", False):
+                fig.update_yaxes(title_text=f"{single_qoi_column}_m2", showgrid=True, range=[0, 1],
+                                 row=dict_qoi_vs_plot_rows[single_qoi_column]["Sobol_m2"], col=1)
+            if "Sobol_t" in self.result_dict[single_qoi_column][keyIter[0]] and dict_what_to_plot.get("Sobol_t", False):
+                fig.update_yaxes(title_text=f"{single_qoi_column}_t", showgrid=True, range=[0, 1],
+                                 row=dict_qoi_vs_plot_rows[single_qoi_column]["Sobol_t"], col=1)
 
-        fig.update_layout(width=1000)
+        width = len(self.list_qoi_column) * 1000
+        fig.update_layout(width=width)
         fig.update_layout(title_text=window_title)
         fig.update_layout(xaxis=dict(type="date"))
 
@@ -844,123 +478,367 @@ class HBVSASKStatistics(Statistics):
         plot(fig, filename=filename, auto_open=display)
         return fig
 
-    def _compute_number_of_rows_for_plotting(self, starting_row=1):
-        sobol_t_row = sobol_m_row = None
-        if self.forcing_data_fetched:
-            starting_row += 2
-        if self._is_Sobol_t_computed and self._is_Sobol_m_computed:
-            n_rows = 4
-            sobol_m_row = starting_row+2
-            sobol_t_row = starting_row+3
-        elif self._is_Sobol_t_computed:
-            n_rows = 3
-            sobol_t_row = starting_row+2
-        elif self._is_Sobol_m_computed:
-            n_rows = 3
-            sobol_m_row = starting_row+2
-        else:
-            n_rows = 2
-        if self.forcing_data_fetched:
-            n_rows += 2
-        return n_rows, starting_row, sobol_t_row, sobol_m_row
+    def _compute_number_of_rows_for_plotting(self, dict_what_to_plot=None, forcing=False,
+                                             list_qoi_column_to_plot=None, result_dict=None, **kwargs):
+        return super(HBVSASKStatistics, self)._compute_number_of_rows_for_plotting(
+            dict_what_to_plot, forcing, list_qoi_column_to_plot, result_dict, **kwargs)
     ###################################################################################################################
 
     def extract_mean_time_series(self):
-        if self.result_dict is None:
-            raise Exception('[HBV STAT INFO] extract_mean_time_series - self.result_dict is None. '
-                            'Calculate the statistics first!')
-        keyIter = list(self.pdTimesteps)
-        mean_time_series = [self.result_dict[key]["E"] for key in keyIter]
-        self.qoi_mean_df = pd.DataFrame(list(zip(mean_time_series, self.pdTimesteps)), columns=['Mean_QoI', 'TimeStamp'])
+        super(HBVSASKStatistics, self).extract_mean_time_series()
 
-    def create_df_from_statistics_data_single_station(self, station=None, uq_method="sc"):
-        keyIter = list(self.pdTimesteps)
-        mean_time_series = [self.result_dict[key]["E"] for key in keyIter]
-        std_time_series = [self.result_dict[key]["StdDev"] for key in keyIter]
-        p10_time_series = [self.result_dict[key]["P10"] for key in keyIter]
-        p90_time_series = [self.result_dict[key]["P90"] for key in keyIter]
-        list_of_columns = [self.pdTimesteps, mean_time_series, std_time_series,
-                           p10_time_series, p90_time_series]
-        list_of_columns_names = ['TimeStamp', "E", "Std", "P10", "P90"]
+    def create_df_from_statistics_data(self, uq_method="sc", compute_measured_normalized_data=False):
+        super(HBVSASKStatistics, self).create_df_from_statistics_data(
+    uq_method=uq_method, compute_measured_normalized_data=compute_measured_normalized_data)
 
-        self._check_if_Sobol_t_computed(keyIter)
-        self._check_if_Sobol_m_computed(keyIter)
-        if self._is_Sobol_m_computed:
-            for i in range(len(self.labels)):
-                sobol_m_time_series = [self.result_dict[key]["Sobol_m"][i] for key in keyIter]
-                list_of_columns.append(sobol_m_time_series)
-                temp = "sobol_m_" + self.labels[i]
-                list_of_columns_names.append(temp)
-        if self._is_Sobol_t_computed:
-            for i in range(len(self.labels)):
-                sobol_t_time_series = [self.result_dict[key]["Sobol_t"][i] for key in keyIter]
-                list_of_columns.append(sobol_t_time_series)
-                temp = "sobol_t_" + self.labels[i]
-                list_of_columns_names.append(temp)
-
-        df_statistics_station = pd.DataFrame(list(zip(*list_of_columns)), columns=list_of_columns_names)
-
-        if self.mesaured_fetched:
-            pass  # TODO
-
-        if self.unaltered_computed:
-            pass  # TODO
-
-        df_statistics_station["E_minus_std"] = df_statistics_station['E'] - df_statistics_station['Std']
-        df_statistics_station["E_plus_std"] = df_statistics_station['E'] + df_statistics_station['Std']
-        return df_statistics_station
+    def create_df_from_statistics_data_single_qoi(
+            self, qoi_column, uq_method="sc", compute_measured_normalized_data=False):
+        return super(HBVSASKStatistics, self).create_df_from_statistics_data_single_qoi(
+            qoi_column=qoi_column, uq_method=uq_method, compute_measured_normalized_data=compute_measured_normalized_data)
 
     ###################################################################################################################
-    # def _timespan_setup(self, **kwargs):
-    #     if self.run_full_timespan:
-    #         self.start_date, self.end_date = hbv._get_full_time_span(self.basis)
-    #     else:
-    #         try:
-    #             self.start_date = pd.Timestamp(
-    #                 year=self.configurationObject["time_settings"]["start_year"],
-    #                 month=self.configurationObject["time_settings"]["start_month"],
-    #                 day=self.configurationObject["time_settings"]["start_day"],
-    #                 hour=self.configurationObject["time_settings"]["start_hour"]
-    #             )
-    #             self.end_date = pd.Timestamp(
-    #                 year=self.configurationObject["time_settings"]["end_year"],
-    #                 month=self.configurationObject["time_settings"]["end_month"],
-    #                 day=self.configurationObject["time_settings"]["end_day"],
-    #                 hour=self.configurationObject["time_settings"]["end_hour"]
-    #             )
-    #         except KeyError:
-    #             self.start_date, self.end_date = hbv._get_full_time_span(self.basis)
-    #
-    #     if "spin_up_length" in kwargs:
-    #         self.spin_up_length = kwargs["spin_up_length"]
-    #     else:
-    #         try:
-    #             self.spin_up_length = self.configurationObject["time_settings"]["spin_up_length"]
-    #         except KeyError:
-    #             self.spin_up_length = 0  # 365*3
-    #
-    #     if "simulation_length" in kwargs:
-    #         self.simulation_length = kwargs["simulation_length"]
-    #     else:
-    #         try:
-    #             self.simulation_length = self.configurationObject["time_settings"]["simulation_length"]
-    #         except KeyError:
-    #             self.simulation_length = (self.end_date - self.start_date).days - self.spin_up_length
-    #             if self.simulation_length <= 0:
-    #                 self.simulation_length = 365
-    #
-    #     self.start_date_predictions = pd.to_datetime(self.start_date) + pd.DateOffset(days=self.spin_up_length)
-    #     self.end_date = pd.to_datetime(self.start_date_predictions) + pd.DateOffset(days=self.simulation_length)
-    #     self.full_data_range = pd.date_range(start=self.start_date, end=self.end_date, freq="1D")
-    #     self.simulation_range = pd.date_range(start=self.start_date_predictions, end=self.end_date, freq="1D")
-    #
-    #     self.start_date = pd.Timestamp(self.start_date)
-    #     self.end_date = pd.Timestamp(self.end_date)
-    #     self.start_date_predictions = pd.Timestamp(self.start_date_predictions)
-    #
-    #     # print(f"start_date-{self.start_date}; spin_up_length-{self.spin_up_length};
-    #     # start_date_predictions-{self.start_date_predictions}")
-    #     # print(
-    #     #     f"start_date_predictions-{self.start_date_predictions}; simulation_length-{self.simulation_length}; end_date-{self.end_date}")
-    #     # print(len(self.simulation_range), (self.end_date - self.start_date_predictions).days)
-    #     # assert len(self.time_series_data_df[self.start_date:self.end_date]) == len(self.full_data_range)
+    def prepare_for_plotting(self, timestep=-1, display=False,
+                    fileName="", fileNameIdent="", directory="./",
+                    fileNameIdentIsFullName=False, safe=True, **kwargs):
+        timestepRange = (min(self.pdTimesteps), max(self.pdTimesteps))
+
+        plot_measured_timeseries = kwargs.get('plot_measured_timeseries', False)
+        plot_unaltered_timeseries = kwargs.get('plot_unaltered_timeseries', False)
+        plot_forcing_timeseries = kwargs.get('plot_forcing_timeseries', False)
+        time_column_name = kwargs.get('time_column_name', self.time_column_name)
+
+        if plot_measured_timeseries and (not self.measured_fetched or self.df_measured is None or self.df_measured.empty):
+            self.get_measured_data(time_column_name=time_column_name,
+                                   qoi_column_name=self.list_original_model_output_columns)
+
+        if plot_unaltered_timeseries:
+            self.get_unaltered_run_data()
+
+        if plot_forcing_timeseries and (not self.forcing_data_fetched or self.forcing_df is None or self.forcing_df.empty):
+            precipitation_column_name = kwargs.get('precipitation_df_column_to_draw', "precipitation")
+            temperature_column_name = kwargs.get('temperature_df_column_to_draw', "temperature")
+            self.get_forcing_data(time_column_name=time_column_name,
+                                  precipitation_column_name=precipitation_column_name,
+                                  temperature_column_name=temperature_column_name)
+
+    def plotResults_single_qoi(self, single_qoi_column, dict_time_vs_qoi_stat=None, timestep=-1, display=False, fileName="",
+                               fileNameIdent="", directory="./", fileNameIdentIsFullName=False, safe=True,
+                               dict_what_to_plot=None, **kwargs):
+
+        # TODO - This might be a memory problem, why not just self.result_dict[single_qoi_column]!
+        if dict_time_vs_qoi_stat is None:
+            dict_time_vs_qoi_stat = self.result_dict[single_qoi_column]
+
+        if fileName == "":
+            fileName = single_qoi_column
+
+        single_fileName = self.generateFileName(fileName=fileName, fileNameIdent=".html",
+                                                directory=directory, fileNameIdentIsFullName=fileNameIdentIsFullName)
+
+        fig = self._plotStatisticsDict_plotly_single_qoi(single_qoi_column=single_qoi_column,
+                                                         dict_time_vs_qoi_stat=dict_time_vs_qoi_stat,
+                                                         unalatered=self.unaltered_computed,
+                                                         measured=self.measured_fetched,
+                                                         forcing=self.forcing_data_fetched, recalculateTimesteps=False,
+                                                         filename=single_fileName, display=display,
+                                                         dict_what_to_plot=dict_what_to_plot, **kwargs)
+        if display:
+            fig.show()
+        print(f"[STAT INFO] plotResults for QoI-{single_qoi_column} function is done!")
+
+    def _plotStatisticsDict_plotly_single_qoi(self, single_qoi_column, dict_time_vs_qoi_stat=None, unalatered=False,
+                                              measured=False, forcing=False, recalculateTimesteps=False,
+                                              window_title='Forward UQ & SA', filename="sim-plotly.html", display=False,
+                                              dict_what_to_plot=None, **kwargs):
+
+        pdTimesteps = self.pdTimesteps
+        keyIter = list(pdTimesteps)
+
+        window_title = window_title + f": QoI - {single_qoi_column}"
+
+        if dict_time_vs_qoi_stat is None:
+            dict_time_vs_qoi_stat = self.result_dict[single_qoi_column]
+
+        if dict_what_to_plot is None:
+            if self.dict_what_to_plot is not None:
+                dict_what_to_plot = self.dict_what_to_plot
+            else:
+                dict_what_to_plot = {
+                    "E_minus_std": False, "E_plus_std": False, "P10": False, "P90": False,
+                    "StdDev": False, "Skew": False, "Kurt": False, "Sobol_m": False, "Sobol_m2": False, "Sobol_t": False
+                }
+
+        # self._check_if_Sobol_t_computed(keyIter[0], qoi_column=single_qoi_column)
+        # self._check_if_Sobol_m_computed(keyIter[0], qoi_column=single_qoi_column)
+
+        n_rows, starting_row = self._compute_number_of_rows_for_plotting(
+            dict_what_to_plot, forcing, list_qoi_column_to_plot=[single_qoi_column,], result_dict=dict_time_vs_qoi_stat)
+
+        fig = make_subplots(rows=n_rows, cols=1,
+                            print_grid=True,
+                            shared_xaxes=True,
+                            vertical_spacing=0.1)
+
+        # HBV - Specific plotting of observed data, i.e., forcing data and measured streamflow
+        if forcing and self.forcing_data_fetched:
+            reset_index_at_the_end = False
+            if self.forcing_df.index.name != self.time_column_name:
+                self.forcing_df.set_index(self.time_column_name, inplace=True)
+                reset_index_at_the_end = True
+
+            # Precipitation
+            column_to_draw = kwargs.get('precipitation_df_column_to_draw', 'precipitation')
+            N_max = self.forcing_df[column_to_draw].max()
+            fig.add_trace(go.Bar(x=self.forcing_df.index,
+                                 y=self.forcing_df[column_to_draw],
+                                 name="Precipitation", marker_color='magenta'),
+                          row=1, col=1)
+
+            # Temperature
+            column_to_draw = kwargs.get('temperature_df_column_to_draw', 'temperature')
+            fig.add_trace(go.Scatter(x=self.forcing_df.index,
+                                     y=self.forcing_df[column_to_draw],
+                                     name="Temperature", line_color='blue', mode='lines+markers'),
+                          row=2, col=1)
+
+            if reset_index_at_the_end:
+                self.forcing_df.reset_index(inplace=True)
+                self.forcing_df.rename(columns={self.forcing_df.index.name: self.time_column_name}, inplace=True)
+
+            # Streamflow - hard-coded for HBV
+            streamflow_df = self._get_measured_streamflow(time_column_name="TimeStamp",
+                                                          streamflow_column_name="streamflow")
+            column_to_draw = kwargs.get('streamflow_df_column_to_draw', 'streamflow')
+            reset_index_at_the_end = False
+            if streamflow_df.index.name != self.time_column_name:
+                streamflow_df.set_index(self.time_column_name, inplace=True)
+                reset_index_at_the_end = True
+            fig.add_trace(go.Scatter(x=streamflow_df.index,
+                                     y=streamflow_df[column_to_draw],
+                                     name="Obs Streamflow", line_color='red', mode='lines'),
+                          row=3, col=1)
+            if reset_index_at_the_end:
+                streamflow_df.reset_index(inplace=True)
+                streamflow_df.rename(columns={streamflow_df.index.name: self.time_column_name}, inplace=True)
+
+        dict_plot_rows = dict()
+
+        if single_qoi_column in self.list_original_model_output_columns:
+            if measured and self.measured_fetched and self.df_measured is not None and not self.df_measured.empty:
+                # column_to_draw = self.list_qoi_column_measured[idx]
+                # timestamp_column = kwargs.get('measured_df_timestamp_column', 'TimeStamp')
+                df_measured_subset = self.df_measured.loc[self.df_measured["qoi"] == single_qoi_column]
+                if not df_measured_subset.empty:
+                    column_to_draw = "measured"
+                    timestamp_column = self.time_column_name
+                    fig.add_trace(
+                        go.Scatter(x=df_measured_subset[timestamp_column], y=df_measured_subset[column_to_draw],
+                                   name=f"{single_qoi_column} (measured)", line_color='red', mode='lines'),
+                        row=starting_row, col=1)
+
+        fig.add_trace(go.Scatter(x=pdTimesteps,
+                                 y=[dict_time_vs_qoi_stat[key]["E"] for key in keyIter],
+                                 name=f'E[{single_qoi_column}]',
+                                 line_color='green', mode='lines'),
+                      row=starting_row, col=1)
+
+        if dict_what_to_plot.get("E_minus_std", False):
+            fig.add_trace(go.Scatter(x=pdTimesteps,
+                                     y=[(dict_time_vs_qoi_stat[key]["E"] \
+                                         - dict_time_vs_qoi_stat[key]["StdDev"]) for key in keyIter],
+                                     name='mean - std. dev', line_color='darkviolet', mode='lines'),
+                          row=starting_row, col=1)
+        if dict_what_to_plot.get("E_plus_std", False):
+            fig.add_trace(go.Scatter(x=pdTimesteps,
+                                     y=[(dict_time_vs_qoi_stat[key]["E"] + \
+                                         dict_time_vs_qoi_stat[key]["StdDev"]) for key in keyIter],
+                                     name='mean + std. dev', line_color='darkviolet', mode='lines', fill='tonexty'),
+                          row=starting_row, col=1)
+        if "P10" in dict_time_vs_qoi_stat[keyIter[0]] and dict_what_to_plot.get("P10", False):
+            fig.add_trace(go.Scatter(x=pdTimesteps,
+                                     y=[dict_time_vs_qoi_stat[key]["P10"] for key in keyIter],
+                                     name='10th percentile', line_color='yellow', mode='lines'),
+                          row=starting_row, col=1)
+        if "P90" in dict_time_vs_qoi_stat[keyIter[0]] and dict_what_to_plot.get("P90", False):
+            fig.add_trace(go.Scatter(x=pdTimesteps,
+                                     y=[dict_time_vs_qoi_stat[key]["P90"] for key in keyIter],
+                                     name='90th percentile', line_color='yellow', mode='lines', fill='tonexty'),
+                          row=starting_row, col=1)
+        dict_plot_rows["qoi"] = starting_row
+        starting_row += 1
+
+        # fig.add_trace(go.Scatter(x=pdTimesteps,
+        #                          y=[dict_time_vs_qoi_stat[key]["StdDev"] for key in keyIter],
+        #                          name='std. dev', line_color='darkviolet', mode='lines'),
+        #               row=starting_row, col=1)
+        # dict_plot_rows["StdDev"] = starting_row
+        # starting_row += 1
+
+        if "StdDev" in dict_time_vs_qoi_stat[keyIter[0]] and dict_what_to_plot.get("StdDev", False):
+            fig.add_trace(go.Scatter(x=pdTimesteps,
+                                     y=[dict_time_vs_qoi_stat[key]["StdDev"] for key in keyIter],
+                                     name='std. dev', line_color='darkviolet', mode='lines'),
+                          row=starting_row, col=1)
+            dict_plot_rows["StdDev"] = starting_row
+            starting_row += 1
+
+        if "Skew" in dict_time_vs_qoi_stat[keyIter[0]] and dict_what_to_plot.get("Skew", False):
+            fig.add_trace(go.Scatter(x=pdTimesteps,
+                                     y=[dict_time_vs_qoi_stat[key]["Skew"] for key in keyIter],
+                                     name='Skew', mode='lines', ),
+                          row=starting_row, col=1)
+            dict_plot_rows["Skew"] = starting_row
+            starting_row += 1
+
+        if "Kurt" in dict_time_vs_qoi_stat[keyIter[0]] and dict_what_to_plot.get("Kurt", False):
+            fig.add_trace(go.Scatter(x=pdTimesteps,
+                                     y=[dict_time_vs_qoi_stat[key]["Kurt"] for key in keyIter],
+                                     name='Kurt', mode='lines', ),
+                          row=starting_row, col=1)
+            dict_plot_rows["Kurt"] = starting_row
+            starting_row += 1
+
+        if "Sobol_m" in dict_time_vs_qoi_stat[keyIter[0]] and dict_what_to_plot.get("Sobol_m", False):
+            for i in range(len(self.labels)):
+                name = self.labels[i] + "_" + single_qoi_column + "_S_m"
+                fig.add_trace(go.Scatter(
+                    x=pdTimesteps,
+                    y=[dict_time_vs_qoi_stat[key]["Sobol_m"][i] for key in keyIter],
+                    name=name, legendgroup=self.labels[i], line_color=colors.COLORS[i], mode='lines'),
+                    row=starting_row, col=1)
+            dict_plot_rows["Sobol_m"] = starting_row
+            starting_row += 1
+
+        if "Sobol_m2" in dict_time_vs_qoi_stat[keyIter[0]] and dict_what_to_plot.get("Sobol_m2", False):
+            for i in range(len(self.labels)):
+                name = self.labels[i] + "_" + single_qoi_column + "_S_m"
+                fig.add_trace(go.Scatter(
+                    x=pdTimesteps,
+                    y=[dict_time_vs_qoi_stat[key]["Sobol_m2"][i] for key in keyIter],
+                    name=name, legendgroup=self.labels[i], line_color=colors.COLORS[i], mode='lines'),
+                    row=starting_row, col=1)
+            dict_plot_rows["Sobol_m2"] = starting_row
+            starting_row += 1
+
+        if "Sobol_t" in dict_time_vs_qoi_stat[keyIter[0]] and dict_what_to_plot.get("Sobol_t", False):
+            for i in range(len(self.labels)):
+                name = self.labels[i] + "_" + single_qoi_column + "_S_t"
+                fig.add_trace(go.Scatter(
+                    x=pdTimesteps,
+                    y=[dict_time_vs_qoi_stat[key]["Sobol_t"][i] for key in keyIter],
+                    name=name, legendgroup=self.labels[i], line_color=colors.COLORS[i], mode='lines'),
+                    row=starting_row, col=1)
+            dict_plot_rows["Sobol_t"] = starting_row
+            starting_row += 1
+
+        # fig.update_traces(mode='lines')
+        if forcing and self.forcing_data_fetched:
+            fig.update_yaxes(title_text="N [mm/h]", showgrid=True, row=1, col=1)
+            fig.update_yaxes(autorange="reversed", row=1, col=1)
+            fig.update_yaxes(title_text="T [c]", showgrid=True, row=2, col=1)
+            fig.update_yaxes(title_text="Q [cms]", showgrid=True, row=3, col=1)
+
+        fig.update_yaxes(title_text=single_qoi_column, showgrid=True, side='left',
+                         row=dict_plot_rows["qoi"], col=1)
+        # fig.update_yaxes(title_text=f"Std. Dev. [{single_qoi_column}]", side='left', showgrid=True,
+        #                  row=starting_row+1, col=1)
+        if "StdDev" in dict_time_vs_qoi_stat[keyIter[0]] and dict_what_to_plot.get("StdDev", False):
+            fig.update_yaxes(title_text=f"StdDev", showgrid=True,
+                             row=dict_plot_rows["StdDev"], col=1)
+        if "Skew" in dict_time_vs_qoi_stat[keyIter[0]] and dict_what_to_plot.get("Skew", False):
+            fig.update_yaxes(title_text=f"Skew", showgrid=True,
+                             row=dict_plot_rows["Skew"], col=1)
+        if "Kurt" in dict_time_vs_qoi_stat[keyIter[0]] and dict_what_to_plot.get("Kurt", False):
+            fig.update_yaxes(title_text=f"Kurt", showgrid=True,
+                             row=dict_plot_rows["Kurt"], col=1)
+        if "Sobol_m" in dict_time_vs_qoi_stat[keyIter[0]] and dict_what_to_plot.get("Sobol_m", False):
+            fig.update_yaxes(title_text=f"F. SI", showgrid=True, range=[0, 1],
+                             row=dict_plot_rows["Sobol_m"], col=1)
+        if "Sobol_m2" in dict_time_vs_qoi_stat[keyIter[0]] and dict_what_to_plot.get("Sobol_m2", False):
+            fig.update_yaxes(title_text=f"S. SI", showgrid=True, range=[0, 1],
+                             row=dict_plot_rows["Sobol_m2"], col=1)
+        if "Sobol_t" in dict_time_vs_qoi_stat[keyIter[0]] and dict_what_to_plot.get("Sobol_t", False):
+            fig.update_yaxes(title_text=f"T. SI", showgrid=True, range=[0, 1],
+                             row=dict_plot_rows["Sobol_t"], col=1)
+
+        fig.update_layout(width=1000)
+        fig.update_layout(title_text=window_title)
+        fig.update_layout(xaxis=dict(type="date"))
+
+        print(f"[HVB STAT INFO] _plotStatisticsDict_plotly function for Qoi-{single_qoi_column} is almost over, just to save the plot!")
+
+        # filename = pathlib.Path(filename)
+        plot(fig, filename=filename, auto_open=display)
+        return fig
+
+    def plot_forcing_mean_predicted_and_observed_all_qoi(self, directory="./", fileName="simulation_big_plot.html"):
+        measured_columns_names_set = set()
+        for single_qoi in self.list_qoi_column:
+            measured_columns_names_set.add(self.dict_corresponding_original_qoi_column[single_qoi])
+
+        total_number_of_rows = 2 + len(self.list_qoi_column) + len(measured_columns_names_set)
+        fig = make_subplots(
+            rows=total_number_of_rows, cols=1, shared_xaxes=True
+            #     subplot_titles=tuple(self.list_qoi_column)
+        )
+        n_row = 3
+
+        fig.add_trace(
+            go.Bar(
+                x=self.forcing_df.index, y=self.forcing_df['precipitation'],
+                text=self.forcing_df['precipitation'],
+                name="Precipitation"
+            ),
+            row=1, col=1
+        )
+
+        fig.add_trace(
+            go.Scatter(
+                x=self.forcing_df.index, y=self.forcing_df['temperature'],
+                text=self.forcing_df['temperature'],
+                name="Temperature", mode='lines+markers'
+            ),
+            row=2, col=1
+        )
+
+        if self.df_statistics is None or self.df_statistics.empty:
+            raise Exception(f"You are trying to call a plotting utiltiy function whereas "
+                            f"self.df_statistics object is still not computed - make sure to first call"
+                            f"self.create_df_from_statistics_data")
+
+        measured_columns_names_set = set()
+        for single_qoi in self.list_qoi_column:
+            df_statistics_single_qoi = self.df_statistics.loc[
+                self.df_statistics['qoi'] == single_qoi]
+            corresponding_measured_column = self.dict_corresponding_original_qoi_column[single_qoi]
+            if corresponding_measured_column not in measured_columns_names_set:
+                measured_columns_names_set.add(corresponding_measured_column)
+                fig.add_trace(
+                    go.Scatter(
+                        x=df_statistics_single_qoi['TimeStamp'],
+                        y=df_statistics_single_qoi['measured'],
+                        name=f"Observed {corresponding_measured_column}", mode='lines'
+                    ),
+                    row=n_row, col=1
+                )
+                n_row += 1
+
+            fig.add_trace(
+                go.Scatter(
+                    x=df_statistics_single_qoi['TimeStamp'],
+                    y=df_statistics_single_qoi['E'],
+                    text=df_statistics_single_qoi['E'],
+                    name=f"Mean predicted {single_qoi}", mode='lines'),
+                row=n_row, col=1
+            )
+            n_row += 1
+
+        fig.update_yaxes(autorange="reversed", row=1, col=1)
+        fig.update_layout(height=600, width=800, title_text="Detailed plot of most important time-series")
+        fig.update_layout(xaxis=dict(type="date"))
+        if not str(directory).endswith("/"):
+            directory = str(directory) + "/"
+        fileName = directory + fileName
+        plot(fig, filename=fileName)
+        return fig
+

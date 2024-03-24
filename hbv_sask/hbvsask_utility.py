@@ -18,8 +18,9 @@ from common import utility
 #####################################
 
 epsilon = sys.float_info.epsilon
-DEFAULT_PAR_VALUES_DICT = {'TT': 0.0, 'C0': 0.5, 'ETF': 0.2, 'LP': 0.5, 'FC': 250,
-                           'beta': 2.0, 'FRAC': 0.3, 'K1': 0.5, 'alpha': 2.0, 'K2': 0.05,
+DEFAULT_PAR_VALUES_DICT = {'TT': 0.0, 'C0': 0.5, 'ETF': 0.2, 'FC': 250,
+                           'beta': 2.0, 'FRAC': 0.3, 'K2': 0.05,  'LP': 0.5,
+                           'K1': 0.5, 'alpha': 2.0, 
                            'UBAS': 1, 'PM': 1, "M": 1.0, "VAR_M": 1e-4}
 
 DEFAULT_PAR_VALUES_DICT_EXTEND = {'TT': 0.0, 'C0': 0.5, 'ETF': 0.2, 'LP': 0.5, 'FC': 250,
@@ -231,6 +232,138 @@ def _plot_streamflow_and_precipitation(input_data_df, simulated_data_df=None, in
     ))
     return fig
 
+def extend_hbv_plot_with_observed_and_forcing_data_and_update_layout(
+    fig, list_of_dates_of_interest, hbv_model, num_model_runs, time_column_name, observed_streamflow_column="streamflow", plot_forcing_data=False, **kwargs):
+    """
+    :param fig:
+    :param list_of_dates_of_interest:
+    :param hbv_model: assumed to be a model instance of the HBV model (i.e., HBVSASKModel class)
+    :param num_model_runs:
+    :param plot_forcing_data:
+    :param kwargs:
+    :return: fig
+    """
+    reset_index_at_the_end = False
+    if hbv_model.time_series_measured_data_df.index.name != time_column_name:
+        hbv_model.time_series_measured_data_df.set_index(time_column_name, inplace=True)
+        reset_index_at_the_end = True
+
+    temp = hbv_model.time_series_measured_data_df[hbv_model.time_series_measured_data_df.index.isin(list_of_dates_of_interest)]  # Sample forcing data for plotting only the list_of_dates_of_interest
+    fig.add_trace(go.Scatter(x=temp.index,
+                             y=temp[observed_streamflow_column],
+                             name="Observed Data"
+                             ))
+
+    if plot_forcing_data:
+        N_max = temp['precipitation'].max()
+        fig.add_trace(
+            go.Bar(x=temp.index,
+                    y=temp['precipitation'], 
+                    name='Precipitation', yaxis="y2", marker_color='magenta'
+                ),
+        )
+
+    if reset_index_at_the_end:
+        hbv_model.time_series_measured_data_df.reset_index(inplace=True)
+        hbv_model.time_series_measured_data_df.rename(columns={hbv_model.time_series_measured_data_df.index.name: TIME_COLUMN_NAME}, inplace=True)
+
+    # Set x-axis title
+    fig.update_xaxes(title_text="Date", autorange=True, range=[hbv_model.start_date_predictions, hbv_model.end_date], type="date")
+
+    # Update y-axis
+    fig.update_yaxes(title_text="Q [cm/s]", side="left", domain=[0, 0.7], mirror=True, tickfont={"color": "#d62728"},
+                    tickmode="auto", ticks="inside", titlefont={"color": "#d62728"}, range=[0, 100])
+
+    fig.update_layout(
+        # legend=dict(yanchor="bottom", y=0.01, xanchor="right", x=0.99),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        title=f'Predicted vs. Observed Streamflow with {num_model_runs} particles',
+        showlegend=True,
+        template="plotly_white",
+    )
+    
+    if plot_forcing_data:
+        fig.update_layout(
+            yaxis2=dict(
+            anchor="x",
+            domain=[0.7, 1],
+            mirror=True,
+            range=[N_max, 0],
+            side="right",
+            tickfont={"color": '#1f77b4'},
+            nticks=3,
+            tickmode="auto",
+            ticks="inside",
+            titlefont={"color": '#1f77b4'},
+            title="N [mm/h]",
+            type="linear",
+            )
+        )
+    return fig
+
+
+def extend_hbv_plot_with_forcing_and_update_layout(
+    fig, list_of_dates_of_interest, hbv_model, num_model_runs, time_column_name, plot_forcing_data=False, **kwargs):
+    """
+    :param fig:
+    :param list_of_dates_of_interest:
+    :param hbv_model: assumed to be a model instance of the HBV model (i.e., HBVSASKModel class)
+    :param num_model_runs:
+    :param plot_forcing_data:
+    :param kwargs:
+    :return: fig
+    """
+    if plot_forcing_data:
+        reset_index_at_the_end = False
+        if hbv_model.time_series_measured_data_df.index.name != time_column_name:
+            hbv_model.time_series_measured_data_df.set_index(time_column_name, inplace=True)
+            reset_index_at_the_end = True
+        
+        temp = hbv_model.time_series_measured_data_df[hbv_model.time_series_measured_data_df.index.isin(list_of_dates_of_interest)]  # Sample forcing data for plotting only the list_of_dates_of_interest
+        N_max = temp['precipitation'].max()
+        fig.add_trace(
+            go.Bar(x=temp.index,
+                    y=temp['precipitation'], 
+                    name='Precipitation', yaxis="y2", marker_color='magenta'
+                ),
+        )
+        if reset_index_at_the_end:
+            hbv_model.time_series_measured_data_df.reset_index(inplace=True)
+            hbv_model.time_series_measured_data_df.rename(columns={hbv_model.time_series_measured_data_df.index.name: TIME_COLUMN_NAME}, inplace=True)
+
+    # Set x-axis title
+    fig.update_xaxes(title_text="Date", autorange=True, range=[hbv_model.start_date_predictions, hbv_model.end_date], type="date")
+
+    # Update y-axis
+    fig.update_yaxes(title_text="Q [cm/s]", side="left", domain=[0, 0.7], mirror=True, tickfont={"color": "#d62728"},
+                    tickmode="auto", ticks="inside", titlefont={"color": "#d62728"}, range=[0, 100])
+
+    fig.update_layout(
+        # legend=dict(yanchor="bottom", y=0.01, xanchor="right", x=0.99),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        title=f'Predicted vs. Observed Streamflow with {num_model_runs} particles',
+        showlegend=True,
+        template="plotly_white",
+    )
+    
+    if plot_forcing_data:
+        fig.update_layout(
+            yaxis2=dict(
+            anchor="x",
+            domain=[0.7, 1],
+            mirror=True,
+            range=[N_max, 0],
+            side="right",
+            tickfont={"color": '#1f77b4'},
+            nticks=3,
+            tickmode="auto",
+            ticks="inside",
+            titlefont={"color": '#1f77b4'},
+            title="N [mm/h]",
+            type="linear",
+            )
+        )
+    return fig
 #####################################
 # Now comes the set of functiones copied from https://github.com/vars-tool/vars-tool/blob/master/tutorials/hbv.py
 # Original authors: Saman Razavi, Hoshin Gupta, Kasra Keshavarz, and Cordell Blanchard
@@ -592,10 +725,10 @@ def soil_storage_routing_module(ponding, SMS, S1, S2, AET, FC, beta, FRAC, K1, a
     """
     The function should return SMS_new, S1_new, S2_new, Q1, Q2
     *****  ponding: at time t*****
-    *****  SMS: Soil Moisture Storage at time t- model state variable *****
+    *****  SMS: Soil Moisture Storage at time t - model state variable *****
     *****  S1: at time t*****
     *****  S2: at time t*****
-    *****  AET: Actual EvapoTranspiration at time t- model *****
+    *****  AET: Actual EvapoTranspiration at time t *****
     *****  FC: Field Capacity - model parameter ---------
     *****  beta: Shape Parameter/Exponent - model parameter ---------
         This controls the relationship between soil infiltration and soil water release.
@@ -638,10 +771,10 @@ def soil_storage_routing_module(ponding, SMS, S1, S2, AET, FC, beta, FRAC, K1, a
 
 def evapotranspiration_module(SMS, T, monthly_average_T, monthly_average_PE, ETF, LP):
     """
-    The function should return AET - Actual EvapoTranspiration at time t- model,
+    The function should return AET - Actual EvapoTranspiration at time t,
     PET - Potential EvapoTranspiration at time t
-    *****  SMS: Soil Moisture Storage at time t- model state variable *****
-    *****  T: Temperature at time t- model forcing *****
+    *****  SMS: Soil Moisture Storage at time t - model state variable *****
+    *****  T: Temperature at time t - model forcing *****
     *****  monthly_average_T: *****
     *****  monthly_average_PE: *****
     *****  ETF - This is the temperature anomaly correction of potential evapotranspiration - model parameters *****
@@ -756,6 +889,9 @@ def HBV_SASK(forcing, long_term, par_values_dict, initial_condition_df, printing
     to run the model, and parameters 11 and 12, if not given,
     will be set at their default values.
     :param corrupt_forcing_data:
+    :param initial_condition_df should be (subset of) a pd.DataFrame that just contains 
+    one row with the initial conditions for the current time t, 
+    for which the forcing data is available and the predictions will be produced
     """
     if par_values_dict is None:
         par_values_dict = {
@@ -792,14 +928,13 @@ def HBV_SASK(forcing, long_term, par_values_dict, initial_condition_df, printing
     state = defaultdict(dict)
 
     precipitation_array = forcing[precipitation_column_name].to_numpy()
+    # Optional - corrupting the precipitation, e.g., Ajami et. al. 2007
     if corrupt_forcing_data:
         M = float(par_values_dict.get("M", DEFAULT_PAR_VALUES_DICT["M"]))
         VAR_M = float(par_values_dict.get("VAR_M", DEFAULT_PAR_VALUES_DICT["VAR_M"]))
         period_length = len(precipitation_array)
         r = np.random.normal(loc=M, scale=np.sqrt(VAR_M), size=period_length)
         precipitation_array = np.multiply(r, precipitation_array)
-
-    # TODO - Think about adding option for corrupting the precipitation, e.g., Ajami et. al. 2007
     P = PM * precipitation_array
     T = forcing[temperature_column_name].to_numpy()
 
@@ -835,6 +970,7 @@ def HBV_SASK(forcing, long_term, par_values_dict, initial_condition_df, printing
     S2[0] = initial_S2
 
     for t in range(period_length):
+        # iteratively over time steps computing the state for the next time step and the current model output
         month = time_series[t].month  # the current month number - for Jan=1, ..., Dec=12
         single_monthly_average_PE = long_term.loc[month][long_term_precipitation_column_name]
         single_monthly_average_T = long_term.loc[month][long_term_temperature_column_name]
