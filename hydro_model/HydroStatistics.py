@@ -36,11 +36,28 @@ from common import uqPostprocessing
 class Samples(object):
     def __init__(self, rawSamples, qoi_columns="Value", time_column_name="TimeStamp", **kwargs):
         """
+        Samples class is a class which is used to collect and process the (raw) results of the model runs.
+        Therefore it is highly dependent on the way the model results are returned and processed in the Model class.
+        It expects that the results are returned either as:
+        - a tuple where:
+          the first element is a DataFrame containing the results 
+          and the second element is a dictionary containing the parameters used in the model run and corresponding unique index model runs 
+        - or a dictionary containing the following (key, value) pairs:
+          "result_time_series": a DataFrame containing the results
+          "parameters_dict": a dictionary containing the parameters used in the model run and corresponding unique index model runs, 
+          "gof_df": a DataFrame containing the goodness of fit values over different model runs, 
+          "grad_matrix": a dictionary containing the gradient matrix for each QoI and each parameter, 
+          "state_df": a DataFrame containing the state variables over different model runs
 
         :param rawSamples:
         :param qoi_columns: should be a list or a string containing column names from the result DF,
-        :param time_column_name:
+        :param time_column_name: default is "TimeStamp"
         :param kwargs:
+            "original_model_output_column" - default is "Value" 
+            "qoi_is_a_single_number" - default is False
+            "grad_columns" - default is []
+            "collect_and_save_state_data" - default is False
+            "extract_only_qoi_columns" - default is False
         """
         self.time_column_name = time_column_name
         original_model_output_column = kwargs.get('original_model_output_column', "Value")
@@ -156,7 +173,7 @@ class Samples(object):
             self.dict_of_approx_matrix_c = None
             self.dict_of_matrix_c_eigen_decomposition = None
 
-    def save_samples_to_file(self, file_path='./'):
+    def save_all_simulations_to_file(self, file_path='./'):
         file_path = str(file_path)
         if self.df_simulation_result is not None:
             self.df_simulation_result.to_pickle(
@@ -256,22 +273,21 @@ class HydroStatistics(Statistics):
             self.unordered = kwargs.get('unordered', False)
 
         # if set to True, different arguments of the Samples class will be saved, e.g., df_simulation_result
-        self.save_samples = kwargs.get('save_samples', False)
+        self.save_all_simulations = kwargs.get('save_all_simulations', False)
         self.collect_and_save_state_data = kwargs.get('collect_and_save_state_data', False)
 
         self.compute_stat_on_delta_qoi = kwargs.get('compute_stat_on_delta_qoi', False)
 
-        # TODO no need for these variables to be private...
-        self._compute_Sobol_t = kwargs.get('compute_Sobol_t', False)
-        self._compute_Sobol_m = kwargs.get('compute_Sobol_m', False)
-        self._compute_Sobol_m2 = kwargs.get('compute_Sobol_m2', False)
+        self.compute_Sobol_t = kwargs.get('compute_Sobol_t', False)
+        self.compute_Sobol_m = kwargs.get('compute_Sobol_m', False)
+        self.compute_Sobol_m2 = kwargs.get('compute_Sobol_m2', False)
 
         self.instantly_save_results_for_each_time_step = kwargs.get(
             'instantly_save_results_for_each_time_step', False)
 
         self.compute_sobol_total_indices_with_samples = kwargs.get(
             'compute_sobol_total_indices_with_samples', False)
-        if self.uq_method == "mc" and self._compute_Sobol_t:
+        if self.uq_method == "mc" and self.compute_Sobol_t:
             self.compute_sobol_total_indices_with_samples = True
         self.nodes_file = kwargs.get(
             'nodes_file', "nodes.simnodes.zip")
@@ -518,7 +534,7 @@ class HydroStatistics(Statistics):
 
     ###################################################################################################################
 
-    # TODO Write version of the function which read already self.samples.df_simulation_result
+    # TODO Write version of the function which reads already self.samples.df_simulation_result
     # from some file and continues...
     def _get_list_of_columns_to_filter_from_results(self):
         list_of_columns_to_filter_from_results = self.list_qoi_column + list(
@@ -549,6 +565,7 @@ class HydroStatistics(Statistics):
                                grad_columns=self.list_grad_columns,
                                collect_and_save_state_data=self.collect_and_save_state_data,
                                )
+        # TODO add an option to read self.samples from self.df_simulation_result DataFrame
 
         if self.samples is not None:
             if self.samples.df_simulation_result is not None:
@@ -568,8 +585,8 @@ class HydroStatistics(Statistics):
             if self.compute_gradients and self.gradient_analysis:
                 self.param_grad_analysis()
 
-            if self.save_samples:
-                self.samples.save_samples_to_file(self.workingDir)
+            if self.save_all_simulations:
+                self.samples.save_all_simulations_to_file(self.workingDir)
             if self.collect_and_save_state_data:
                 self.samples.save_states_to_file(self.workingDir)
             # These other files should take much less memory, therefore, always save tham
@@ -920,14 +937,14 @@ class HydroStatistics(Statistics):
                 #  I would not have to propagate those if _parallel_calc_stats_for_gPCE would be a class method
                 regressionChunks = [regression] * len(keyIter_chunk)
                 dimChunks = [self.dim] * len(keyIter_chunk)
-                compute_Sobol_t_Chunks = [self._compute_Sobol_t] * len(keyIter_chunk)
-                compute_Sobol_m_Chunks = [self._compute_Sobol_m] * len(keyIter_chunk)
+                compute_Sobol_t_Chunks = [self.compute_Sobol_t] * len(keyIter_chunk)
+                compute_Sobol_m_Chunks = [self.compute_Sobol_m] * len(keyIter_chunk)
                 store_qoi_data_in_stat_dict_Chunks = [self.store_qoi_data_in_stat_dict] * len(keyIter_chunk)
 
                 compute_sobol_total_indices_with_samples_chunks = [self.compute_sobol_total_indices_with_samples] * len(
                     keyIter_chunk)
                 if self.compute_sobol_total_indices_with_samples and \
-                        self._compute_Sobol_t and self.uqef_simulationNodes is not None:
+                        self.compute_Sobol_t and self.uqef_simulationNodes is not None:
                     samples_chunks = [self.uqef_simulationNodes.parameters.T[:self.numEvaluations]] * len(keyIter_chunk)
                     samples = self.uqef_simulationNodes.parameters.T[:self.numEvaluations]
                 else:
@@ -974,7 +991,7 @@ class HydroStatistics(Statistics):
                         #     generator_of_simulations_df,
                         #     self.numEvaluations,
                         #     self.dim,
-                        #     self._compute_Sobol_t,
+                        #     self.compute_Sobol_t,
                         #     self.store_qoi_data_in_stat_dict,
                         #     self.compute_sobol_total_indices_with_samples,
                         #     samples,
@@ -1025,14 +1042,14 @@ class HydroStatistics(Statistics):
                 numEvaluations_chunk = [self.numEvaluations] * len(keyIter_chunk)
                 dimChunks = [self.dim] * len(keyIter_chunk)
 
-                compute_Sobol_t_Chunks = [self._compute_Sobol_t] * len(keyIter_chunk)
-                compute_Sobol_m_Chunks = [self._compute_Sobol_m] * len(keyIter_chunk)
+                compute_Sobol_t_Chunks = [self.compute_Sobol_t] * len(keyIter_chunk)
+                compute_Sobol_m_Chunks = [self.compute_Sobol_m] * len(keyIter_chunk)
                 store_qoi_data_in_stat_dict_Chunks = [self.store_qoi_data_in_stat_dict] * len(keyIter_chunk)
 
                 compute_sobol_total_indices_with_samples_chunks = [self.compute_sobol_total_indices_with_samples] * len(
                     keyIter_chunk)
                 if self.compute_sobol_total_indices_with_samples and \
-                        self._compute_Sobol_t and self.uqef_simulationNodes is not None:
+                        self.compute_Sobol_t and self.uqef_simulationNodes is not None:
                     samples_chunks = [self.uqef_simulationNodes.parameters.T[:self.numEvaluations]] * len(keyIter_chunk)
                 else:
                     samples_chunks = [None] * len(keyIter_chunk)
@@ -1109,8 +1126,8 @@ class HydroStatistics(Statistics):
                 polynomial_expansionChunks = [self.polynomial_expansion] * len(keyIter_chunk)
 
                 regressionChunks = [regression] * len(keyIter_chunk)
-                compute_Sobol_t_Chunks = [self._compute_Sobol_t] * len(keyIter_chunk)
-                compute_Sobol_m_Chunks = [self._compute_Sobol_m] * len(keyIter_chunk)
+                compute_Sobol_t_Chunks = [self.compute_Sobol_t] * len(keyIter_chunk)
+                compute_Sobol_m_Chunks = [self.compute_Sobol_m] * len(keyIter_chunk)
                 store_qoi_data_in_stat_dict_Chunks = [self.store_qoi_data_in_stat_dict] * len(keyIter_chunk)
                 store_gpce_surrogate_in_stat_dict_Chunks = [self.store_gpce_surrogate_in_stat_dict] * len(keyIter_chunk)
                 save_gpce_surrogate_Chunks = [self.save_gpce_surrogate] * len(keyIter_chunk)
@@ -1145,8 +1162,8 @@ class HydroStatistics(Statistics):
                     #     self.nodes,
                     #     self.weights,
                     #     regression,
-                    #     self._compute_Sobol_t,
-                    #     self._compute_Sobol_m,
+                    #     self.compute_Sobol_t,
+                    #     self.compute_Sobol_m,
                     #     self.store_qoi_data_in_stat_dict,
                     #     self.store_gpce_surrogate_in_stat_dict,
                     #     self.save_gpce_surrogate,
@@ -1214,7 +1231,7 @@ class HydroStatistics(Statistics):
                     if isinstance(self.result_dict[single_qoi_column][key]["P10"], list) and len(self.result_dict[single_qoi_column][key]["P10"]) == 1:
                         self.result_dict[single_qoi_column][key]["P10"] = self.result_dict[single_qoi_column][key]["P10"][0]
                         self.result_dict[single_qoi_column][key]["P90"] = self.result_dict[single_qoi_column][key]["P90"][0]
-                    if self._compute_Sobol_t and self.compute_sobol_total_indices_with_samples \
+                    if self.compute_Sobol_t and self.compute_sobol_total_indices_with_samples \
                             and self.uqef_simulationNodes is not None:
                             self.result_dict[key]["Sobol_t"] = \
                                 saltelliSobolIndicesHelpingFunctions.compute_total_sobol_indices_with_n_samples(
@@ -1280,16 +1297,16 @@ class HydroStatistics(Statistics):
                     self.result_dict[single_qoi_column][key]["P90"][0]
 
                 if self.compute_sobol_total_indices_with_samples and self.uqef_simulationNodes is not None:
-                    if self._compute_Sobol_t:
+                    if self.compute_Sobol_t:
                         self.result_dict[key]["Sobol_t"] = \
                             saltelliSobolIndicesHelpingFunctions.compute_total_sobol_indices_with_n_samples(
                                 samples=self.uqef_simulationNodes.parameters.T[:self.numEvaluations],
                                 Y=qoi_values_saltelli[:self.numEvaluations, :], D=self.dim, N=self.numEvaluations)
                 else:
-                    if self._compute_Sobol_t:
+                    if self.compute_Sobol_t:
                         self.result_dict[key]["Sobol_t"] = saltelliSobolIndicesHelpingFunctions._Sens_t_sample_4(
                             qoi_values_saltelli, self.dim, self.numEvaluations)
-                    if self._compute_Sobol_m:
+                    if self.compute_Sobol_m:
                         self.result_dict[key]["Sobol_m"] = saltelliSobolIndicesHelpingFunctions._Sens_m_sample_4(
                             qoi_values_saltelli, self.dim, self.numEvaluations)
 
@@ -1376,11 +1393,11 @@ class HydroStatistics(Statistics):
             self.result_dict[single_qoi_column][key]["P10"]= self.result_dict[single_qoi_column][key]["P10"][0]
             self.result_dict[single_qoi_column][key]["P90"] = self.result_dict[single_qoi_column][key]["P90"][0]
 
-        if self._compute_Sobol_t:
+        if self.compute_Sobol_t:
             self.result_dict[single_qoi_column][key]["Sobol_t"] = cp.Sens_t(qoi_gPCE, dist)
-        if self._compute_Sobol_m:
+        if self.compute_Sobol_m:
             self.result_dict[single_qoi_column][key]["Sobol_m"] = cp.Sens_m(qoi_gPCE, dist)
-        if self._compute_Sobol_m2:
+        if self.compute_Sobol_m2:
             self.result_dict[single_qoi_column][key]["Sobol_m2"] = cp.Sens_m2(qoi_gPCE, dist)
 
     ###################################################################################################################

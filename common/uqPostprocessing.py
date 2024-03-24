@@ -33,25 +33,23 @@ from collections import defaultdict
 
 from hydro_model import HydroStatistics
 
+# TODO make this script more general and independent of model class
 from larsim import LarsimStatistics
-
 from linearDampedOscillator import LinearDampedOscillatorStatistics
-
 from ishigami import IshigamiStatistics
-
 from productFunction import ProductFunctionStatistics
-
-from hbv_sask import HBVSASKStatisticsMultipleQoI as HBVSASKStatistics
+from hbv_sask import HBVSASKStatistics as HBVSASKStatistics
 
 def create_statistics_object(configuration_object, uqsim_args_dict, workingDir, model="hbvsask"):
     """
-
+    Note: hardcoded for a couple of currently supported models
     :param configuration_object:
     :param uqsim_args_dict:
     :param workingDir:
     :param model: "larsim" | "hbvsask"
     :return:
     """
+    # TODO make this function more general or move it somewhere else
     if model == "larsim":
         statisticsObject = LarsimStatistics.LarsimStatistics(configuration_object, workingDir=workingDir,
                                                                    parallel_statistics=uqsim_args_dict[
@@ -65,25 +63,27 @@ def create_statistics_object(configuration_object, uqsim_args_dict, workingDir, 
         statisticsObject = HBVSASKStatistics.HBVSASKStatistics(
             configurationObject=configuration_object,
             workingDir=workingDir,
+            inputModelDir=uqsim_args_dict["inputModelDir"],
             sampleFromStandardDist=uqsim_args_dict["sampleFromStandardDist"],
             parallel_statistics=uqsim_args_dict["parallel_statistics"],
             mpi_chunksize=uqsim_args_dict["mpi_chunksize"],
             uq_method=uqsim_args_dict["uq_method"],
             compute_Sobol_t=uqsim_args_dict["compute_Sobol_t"],
             compute_Sobol_m=uqsim_args_dict["compute_Sobol_m"],
-            inputModelDir=uqsim_args_dict["inputModelDir"]
+            compute_Sobol_m2=uqsim_args_dict["compute_Sobol_m2"]
         )
     else:
         statisticsObject = HydroStatistics.HydroStatistics(
             configurationObject=configuration_object,
             workingDir=workingDir,
+            inputModelDir=uqsim_args_dict["inputModelDir"],
             sampleFromStandardDist=uqsim_args_dict["sampleFromStandardDist"],
             parallel_statistics=uqsim_args_dict["parallel_statistics"],
             mpi_chunksize=uqsim_args_dict["mpi_chunksize"],
             uq_method=uqsim_args_dict["uq_method"],
             compute_Sobol_t=uqsim_args_dict["compute_Sobol_t"],
             compute_Sobol_m=uqsim_args_dict["compute_Sobol_m"],
-            inputModelDir=uqsim_args_dict["inputModelDir"]
+            compute_Sobol_m2=uqsim_args_dict["compute_Sobol_m2"]
         )
 
     return statisticsObject
@@ -169,7 +169,7 @@ def read_all_saved_statistics_dict(workingDir, list_qoi_column, single_timestamp
 def compute_gof_over_different_time_series(df_statistics, objective_function="MAE", qoi_column="Q",
                                            measuredDF_column_names="measured"):
     """
-    This function will run only for a single station
+    This function will run only for a single qoi
     """
     if not isinstance(qoi_column, list):
         qoi_column = [qoi_column, ]
@@ -494,12 +494,13 @@ def gof_values_GaussianKDE(df_index_parameter_gof, gof_list=None, plot=True, plo
         plt.show()
 
     return result_dic_of_distributions
+
 ###################################################################################################################
 # Set of functions for plotting - these function may go to utility as well?
 ###################################################################################################################
 
 
-def plot_heatmap_si_single_qoi(self, qoi_column, si_df, si_type="Sobol_t", uq_method="sc"):
+def plot_heatmap_si_single_qoi(qoi_column, si_df, si_type="Sobol_t", uq_method="sc"):
     si_columns = [x for x in si_df.columns.tolist() if x != 'measured' and x != 'measured_norm']
     fig = px.imshow(si_df[si_columns].T, labels=dict(y='Parameters', x='Dates'))
     return fig
