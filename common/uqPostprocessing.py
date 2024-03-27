@@ -500,9 +500,26 @@ def gof_values_GaussianKDE(df_index_parameter_gof, gof_list=None, plot=True, plo
 ###################################################################################################################
 
 
-def plot_heatmap_si_single_qoi(qoi_column, si_df, si_type="Sobol_t", uq_method="sc"):
-    si_columns = [x for x in si_df.columns.tolist() if x != 'measured' and x != 'measured_norm']
-    fig = px.imshow(si_df[si_columns].T, labels=dict(y='Parameters', x='Dates'))
+def plot_heatmap_si_single_qoi(qoi_column, si_df, si_type="Sobol_t", uq_method="sc", time_column_name="TimeStamp"):
+    reset_index_at_the_end = False
+    if si_df.index.name != time_column_name:
+        si_df.set_index(time_column_name, inplace=True)
+        reset_index_at_the_end = True
+
+    si_columns_to_plot = [x for x in si_df.columns.tolist() if x != 'measured' and x != 'measured_norm' and x != 'qoi']
+    # fig = px.imshow(si_df[si_columns_to_plot].T, labels=dict(y='Parameters', x='Dates'))
+
+    if 'qoi' in si_df.columns.tolist():
+        fig = px.imshow(si_df.loc[si_df['qoi'] == qoi_column][si_columns_to_plot].T,
+                        labels=dict(y='Parameters', x='Dates'))
+    else:
+        fig = px.imshow(si_df[si_columns_to_plot].T,
+                        labels=dict(y='Parameters', x='Dates'))
+
+    if reset_index_at_the_end:
+        si_df.reset_index(inplace=True)
+        si_df.rename(columns={si_df.index.name: time_column_name}, inplace=True)
+
     return fig
 
 
@@ -650,7 +667,11 @@ def plotting_function_single_qoi(
         go.Bar(
             x=df['TimeStamp'], y=df['precipitation'],
             text=df['precipitation'],
-            name="Precipitation"
+            name="Precipitation",
+            # marker_color='red'
+            # mode="lines",
+            #         line=dict(
+            #             color='LightSkyBlue')
         ),
         row=1, col=1
     )
@@ -660,7 +681,8 @@ def plotting_function_single_qoi(
         go.Scatter(
             x=df['TimeStamp'], y=df['temperature'],
             text=df['temperature'],
-            name="Temperature", mode='lines+markers'
+            name="Temperature", mode='lines+markers',
+            # marker_color='blue'
         ),
         row=2, col=1
     )
@@ -668,7 +690,8 @@ def plotting_function_single_qoi(
     fig.add_trace(
         go.Scatter(
             x=df['TimeStamp'], y=df['measured'],
-            name="Observed Streamflow", mode='lines'
+            name="Observed Streamflow", mode='lines',
+            # line=dict(color='green'),
         ),
         row=3, col=1
     )

@@ -1864,7 +1864,7 @@ def running_model_in_parallel_and_generating_df(
     model_runs = np.empty((parameters.shape[1], len(t)))
     list_of_single_df = []
     def process_particles_concurrently(particles_to_process):
-        with (multiprocessing.Pool(processes=num_processes) as pool):
+        with multiprocessing.Pool(processes=num_processes) as pool:
             for index_run, y_t_model, parameter_value in \
                     pool.starmap(run_model_single_parameter_node_routine, \
                                     [(model, particle[0], particle[1]) \
@@ -2169,6 +2169,7 @@ def computing_gpce_statistics(
     time_column_name: str=TIME_COLUMN_NAME,
     single_qoi_column: str=QOI_COLUMN_NAME, 
     regression:bool=False, store_gpce_surrogate_in_stat_dict:bool=True, save_gpce_surrogate=False,
+    compute_only_gpce:bool=False,
     compute_Sobol_t:bool=True, compute_Sobol_m:bool=False,compute_Sobol_m2:bool=False
 ) -> Dict[Any, Dict[str, Any]]:
     """
@@ -2185,6 +2186,8 @@ def computing_gpce_statistics(
         regression (bool, optional): Whether to use regression for gPCE. Defaults to False.
         store_gpce_surrogate_in_stat_dict (bool, optional): Whether to store the gPCE surrogate in the result dictionary. Defaults to True.
         save_gpce_surrogate (bool, optional): Whether to save the gPCE surrogate to a file. Defaults to False.
+        compute_only_gpce (bool, optional): Whether to compute only gPCE. It is relevant because computing all the stat takes a lot of time
+        Defaults to False.
         compute_Sobol_t (bool, optional): Whether to compute Sobol' indices (total effects). Defaults to True.
         compute_Sobol_m (bool, optional): Whether to compute Sobol' indices (main effects). Defaults to False.
         compute_Sobol_m2 (bool, optional): Whether to compute Sobol' indices (total-order main effects). Defaults to False.
@@ -2204,12 +2207,14 @@ def computing_gpce_statistics(
         _, result_dict[key] = computing_gpce_statistics_single_date(
             key, val_indices, df_simulation_result, polynomial_expansion, nodes, weights, dist,
             single_qoi_column, regression, store_gpce_surrogate_in_stat_dict, save_gpce_surrogate,
+            compute_only_gpce,
             compute_Sobol_t, compute_Sobol_m, compute_Sobol_m2)
     return result_dict
         
 def computing_gpce_statistics_single_date(
     time_stamp, val_indices, df_simulation_result, polynomial_expansion, nodes, weights, dist, single_qoi_column: str=QOI_COLUMN_NAME, 
     regression:bool=False, store_gpce_surrogate_in_stat_dict:bool=True, save_gpce_surrogate=False,
+    compute_only_gpce:bool=False,
     compute_Sobol_t:bool=True, compute_Sobol_m:bool=False, compute_Sobol_m2:bool=False):
     """
     Parameters:
@@ -2226,6 +2231,8 @@ def computing_gpce_statistics_single_date(
     - regression (bool, optional): Whether to use regression for gPCE. Defaults to False.
     - store_gpce_surrogate_in_stat_dict (bool, optional): Whether to store the gPCE surrogate in the result dictionary. Defaults to True.
     - save_gpce_surrogate (bool, optional): Whether to save the gPCE surrogate to a file. Defaults to False.
+    - compute_only_gpce (bool, optional): Whether to compute only gPCE. It is relevant because computing all the stat takes a lot of time
+       Defaults to False.
     - compute_Sobol_t (bool, optional): Whether to compute Sobol' indices (total effects). Defaults to True.
     - compute_Sobol_m (bool, optional): Whether to compute Sobol' indices (main effects). Defaults to False.
     - compute_Sobol_m2 (bool, optional): Whether to compute Sobol' indices (total-order main effects). Defaults to False.
@@ -2263,29 +2270,30 @@ def computing_gpce_statistics_single_date(
         # TODO create a unique file with time_stamp and save it in a working directory
         pass
 
-    mean = result_dict["E"] = float(cp.E(qoi_gPCE, dist))  # TODO I can as well compute the mean from the samples
-    result_dict["E_quad"] = np.dot(qoi_values, weights)
-    df_simulation_result.loc[val_indices, single_qoi_column_centered] = df_simulation_result.loc[val_indices, single_qoi_column] - mean
+    if not compute_only_gpce:
+        mean = result_dict["E"] = float(cp.E(qoi_gPCE, dist))  # TODO I can as well compute the mean from the samples
+        result_dict["E_quad"] = np.dot(qoi_values, weights)
+        df_simulation_result.loc[val_indices, single_qoi_column_centered] = df_simulation_result.loc[val_indices, single_qoi_column] - mean
 
-    result_dict["Var"] = float(cp.Var(qoi_gPCE, dist))
-    result_dict["StdDev"] = float(cp.Std(qoi_gPCE, dist))
+        result_dict["Var"] = float(cp.Var(qoi_gPCE, dist))
+        result_dict["StdDev"] = float(cp.Std(qoi_gPCE, dist))
 
-    result_dict["Skew"] = cp.Skew(qoi_gPCE, dist).round(4)
-    result_dict["Kurt"] = cp.Kurt(qoi_gPCE, dist)
-    result_dict["qoi_dist"] = cp.QoI_Dist(qoi_gPCE, dist)
+        result_dict["Skew"] = cp.Skew(qoi_gPCE, dist).round(4)
+        result_dict["Kurt"] = cp.Kurt(qoi_gPCE, dist)
+        result_dict["qoi_dist"] = cp.QoI_Dist(qoi_gPCE, dist)
 
-    result_dict["P10"] = float(cp.Perc(qoi_gPCE, 10, dist, numPercSamples))
-    result_dict["P90"] = float(cp.Perc(qoi_gPCE, 90, dist, numPercSamples))
-    if isinstance(result_dict["P10"], list) and len(result_dict["P10"]) == 1:
-        result_dict["P10"] = result_dict["P10"][0]
-        result_dict["P90"] = result_dict["P90"][0]
+        result_dict["P10"] = float(cp.Perc(qoi_gPCE, 10, dist, numPercSamples))
+        result_dict["P90"] = float(cp.Perc(qoi_gPCE, 90, dist, numPercSamples))
+        if isinstance(result_dict["P10"], list) and len(result_dict["P10"]) == 1:
+            result_dict["P10"] = result_dict["P10"][0]
+            result_dict["P90"] = result_dict["P90"][0]
 
-    if compute_Sobol_t:
-        result_dict["Sobol_t"] = cp.Sens_t(qoi_gPCE, dist)
-    if compute_Sobol_m:
-        result_dict["Sobol_m"] = cp.Sens_m(qoi_gPCE, dist)
-    if compute_Sobol_m2:
-        result_dict["Sobol_m2"] = cp.Sens_m2(qoi_gPCE, dist)
+        if compute_Sobol_t:
+            result_dict["Sobol_t"] = cp.Sens_t(qoi_gPCE, dist)
+        if compute_Sobol_m:
+            result_dict["Sobol_m"] = cp.Sens_m(qoi_gPCE, dist)
+        if compute_Sobol_m2:
+            result_dict["Sobol_m2"] = cp.Sens_m2(qoi_gPCE, dist)
     return time_stamp, result_dict
 
 
@@ -2296,6 +2304,7 @@ def computing_gpce_statistics_parallel_in_time(
     time_column_name: str=TIME_COLUMN_NAME,
     single_qoi_column: str=QOI_COLUMN_NAME, 
     regression:bool=False, store_gpce_surrogate_in_stat_dict:bool=True, save_gpce_surrogate=False,
+    compute_only_gpce:bool=False,
     compute_Sobol_t:bool=True, compute_Sobol_m:bool=False, compute_Sobol_m2:bool=False
 ) -> Dict[Any, Dict[str, Any]]:
     """
@@ -2313,6 +2322,8 @@ def computing_gpce_statistics_parallel_in_time(
         regression (bool, optional): Whether to perform regression. Defaults to False.
         store_gpce_surrogate_in_stat_dict (bool, optional): Whether to store the GPCE surrogate in the statistics dictionary. Defaults to True.
         save_gpce_surrogate (bool, optional): Whether to save the GPCE surrogate. Defaults to False.
+        compute_only_gpce (bool, optional): Whether to compute only gPCE. It is relevant because computing all the stat takes a lot of time
+        Defaults to False.
         compute_Sobol_t (bool, optional): Whether to compute Sobol indices for total effects. Defaults to True.
         compute_Sobol_m (bool, optional): Whether to compute Sobol indices for main effects. Defaults to False.
         compute_Sobol_m2 (bool, optional): Whether to compute Sobol indices for second-order interactions. Defaults to False.
@@ -2326,7 +2337,7 @@ def computing_gpce_statistics_parallel_in_time(
                                        [(key, val_indices, df_simulation_result, 
                                        polynomial_expansion, nodes, weights, dist,
                                        single_qoi_column, 
-                                       regression, store_gpce_surrogate_in_stat_dict, save_gpce_surrogate, 
+                                       regression, store_gpce_surrogate_in_stat_dict, save_gpce_surrogate, compute_only_gpce,
                                        compute_Sobol_t, compute_Sobol_m, compute_Sobol_m2) for key, val_indices in groups.items()]):
                 yield date, result_dict_single_date
     
@@ -2398,7 +2409,7 @@ def add_centered_qoi_column_to_df_simulation_result(df_simulation_result, algori
         df_simulation_result.loc[val_indices, single_qoi_column_centered] = df_simulation_result.loc[val_indices, single_qoi_column] - mean
 
 
-def center_outputs(N, N_quad, df_simulation_result, weights, single_qoi_column, index_column_name=INDEX_COLUMN_NAME, algorithm: str= "samples", time_column_name: str=TIME_COLUMN_NAME):
+def center_outputs(N, N_quad, df_simulation_result, weights, single_qoi_column, index_column_name: str==INDEX_COLUMN_NAME, algorithm: str= "samples", time_column_name: str=TIME_COLUMN_NAME):
     centered_outputs = np.empty((N, N_quad))
 
     single_qoi_column_centered = single_qoi_column + "_centered"
@@ -2429,14 +2440,14 @@ def compute_covariance_matrix_in_time(N_quad, centered_outputs, weights, algorit
     return covariance_matrix
 
 
-def plot_covariance_matrix(covariance_matrix, directory_for_saving_plots):
+def plot_covariance_matrix(covariance_matrix, directory_for_saving_plots, filname="covariance_matrix.png"):
     plt.figure()
     plt.imshow(covariance_matrix, cmap='hot', interpolation='nearest')
     # Add a color bar to the side
     plt.colorbar()
     # Add title and labels if needed
     plt.title('Covariance Matrix')
-    fileName = os.path.abspath(os.path.join(str(directory_for_saving_plots), "covariance_matrix.png"))
+    fileName = os.path.abspath(os.path.join(str(directory_for_saving_plots), filname))
     plt.savefig(fileName)
 
 

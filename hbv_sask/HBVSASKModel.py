@@ -1012,7 +1012,7 @@ class HBVSASKModel(object):
                     previous_timestamp = utility.compute_previous_timestamp(timestamp, self.resolution)
                     flux_df.at[timestamp, new_column_name] = (
                             flux_df.at[previous_timestamp, single_qoi_column_measured] -
-                            flux_df.at[timestamp, single_qoi_column]
+                            0.8*flux_df.at[timestamp, single_qoi_column]
                     )
             else:
                 flux_df[new_column_name] = flux_df[single_qoi_column].diff()

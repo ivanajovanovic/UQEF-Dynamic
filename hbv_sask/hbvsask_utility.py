@@ -251,7 +251,8 @@ def extend_hbv_plot_with_observed_and_forcing_data_and_update_layout(
     temp = hbv_model.time_series_measured_data_df[hbv_model.time_series_measured_data_df.index.isin(list_of_dates_of_interest)]  # Sample forcing data for plotting only the list_of_dates_of_interest
     fig.add_trace(go.Scatter(x=temp.index,
                              y=temp[observed_streamflow_column],
-                             name="Observed Data"
+                             name="Observed Data",
+                             line_color='rgba(60, 179, 113, 1)'
                              ))
 
     if plot_forcing_data:
@@ -883,7 +884,7 @@ def triangle_routing(Q, UBAS):
 def HBV_SASK(forcing, long_term, par_values_dict, initial_condition_df, printing=False, time_column_name="TimeStamp",
              precipitation_column_name="precipitation", temperature_column_name="temperature",
              long_term_precipitation_column_name="monthly_average_PE",
-             long_term_temperature_column_name="monthly_average_T", corrupt_forcing_data=False):
+             long_term_temperature_column_name="monthly_average_T", corrupt_forcing_data=False, input_error_model="multiplicative"):
     """
     HBV-SASK has 12 parameters: The first 10 ones are necessary
     to run the model, and parameters 11 and 12, if not given,
@@ -892,6 +893,7 @@ def HBV_SASK(forcing, long_term, par_values_dict, initial_condition_df, printing
     :param initial_condition_df should be (subset of) a pd.DataFrame that just contains 
     one row with the initial conditions for the current time t, 
     for which the forcing data is available and the predictions will be produced
+    : input_error_model: "multiplicative" or "additive"
     """
     if par_values_dict is None:
         par_values_dict = {
@@ -930,11 +932,17 @@ def HBV_SASK(forcing, long_term, par_values_dict, initial_condition_df, printing
     precipitation_array = forcing[precipitation_column_name].to_numpy()
     # Optional - corrupting the precipitation, e.g., Ajami et. al. 2007
     if corrupt_forcing_data:
-        M = float(par_values_dict.get("M", DEFAULT_PAR_VALUES_DICT["M"]))
-        VAR_M = float(par_values_dict.get("VAR_M", DEFAULT_PAR_VALUES_DICT["VAR_M"]))
         period_length = len(precipitation_array)
-        r = np.random.normal(loc=M, scale=np.sqrt(VAR_M), size=period_length)
-        precipitation_array = np.multiply(r, precipitation_array)
+        if input_error_model == "additive":
+            pertubation = np.random.normal(loc=0, scale=0.3*precipitation_array, size=period_length)
+            precipitation_array = precipitation_array + pertubation
+        elif input_error_model == "multiplicative":
+            M = float(par_values_dict.get("M", DEFAULT_PAR_VALUES_DICT["M"]))
+            VAR_M = float(par_values_dict.get("VAR_M", DEFAULT_PAR_VALUES_DICT["VAR_M"]))
+            r = np.random.normal(loc=M, scale=np.sqrt(VAR_M), size=period_length)
+            precipitation_array = np.multiply(r, precipitation_array)
+        else:
+            raise NotImplementedError(f"HBV-SASK Model: Sorry when corrucpting input data, input_error_model should be either additive or multiplicative; {input_error_model} is not supported")
     P = PM * precipitation_array
     T = forcing[temperature_column_name].to_numpy()
 

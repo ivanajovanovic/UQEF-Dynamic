@@ -301,7 +301,7 @@ class HBVSASKStatistics(HydroStatistics.HydroStatistics):
             N_max = self.forcing_df[column_to_draw].max()
             fig.add_trace(go.Bar(x=self.forcing_df.index,
                                  y=self.forcing_df[column_to_draw],
-                                 name="Precipitation", marker_color='magenta'),
+                                 name="Precipitation", marker_color='blue'),
                           row=1, col=1)
 
             # Temperature
@@ -591,7 +591,7 @@ class HBVSASKStatistics(HydroStatistics.HydroStatistics):
             N_max = self.forcing_df[column_to_draw].max()
             fig.add_trace(go.Bar(x=self.forcing_df.index,
                                  y=self.forcing_df[column_to_draw],
-                                 name="Precipitation", marker_color='magenta'),
+                                 name="Precipitation", marker_color='blue'),
                           row=1, col=1)
 
             # Temperature
@@ -636,19 +636,20 @@ class HBVSASKStatistics(HydroStatistics.HydroStatistics):
                                    name=f"{single_qoi_column} (measured)", line_color='red', mode='lines'),
                         row=starting_row, col=1)
 
-        fig.add_trace(go.Scatter(x=pdTimesteps,
-                                 y=[dict_time_vs_qoi_stat[key]["E"] for key in keyIter],
-                                 name=f'E[{single_qoi_column}]',
-                                 line_color='green', mode='lines'),
-                      row=starting_row, col=1)
+        if "E" in dict_time_vs_qoi_stat[keyIter[0]]:
+            fig.add_trace(go.Scatter(x=pdTimesteps,
+                                    y=[dict_time_vs_qoi_stat[key]["E"] for key in keyIter],
+                                    name=f'E[{single_qoi_column}]',
+                                    line_color='green', mode='lines'),
+                        row=starting_row, col=1)
 
-        if dict_what_to_plot.get("E_minus_std", False):
+        if dict_what_to_plot.get("E_minus_std", False) and "StdDev" in dict_time_vs_qoi_stat[keyIter[0]] and "E" in dict_time_vs_qoi_stat[keyIter[0]]:
             fig.add_trace(go.Scatter(x=pdTimesteps,
                                      y=[(dict_time_vs_qoi_stat[key]["E"] \
                                          - dict_time_vs_qoi_stat[key]["StdDev"]) for key in keyIter],
                                      name='mean - std. dev', line_color='darkviolet', mode='lines'),
                           row=starting_row, col=1)
-        if dict_what_to_plot.get("E_plus_std", False):
+        if dict_what_to_plot.get("E_plus_std", False) and "StdDev" in dict_time_vs_qoi_stat[keyIter[0]] and "E" in dict_time_vs_qoi_stat[keyIter[0]]:
             fig.add_trace(go.Scatter(x=pdTimesteps,
                                      y=[(dict_time_vs_qoi_stat[key]["E"] + \
                                          dict_time_vs_qoi_stat[key]["StdDev"]) for key in keyIter],
