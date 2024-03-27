@@ -66,7 +66,7 @@ UQ_ALGORITHM = "pce"  # "mc" or "kl" or "pce"
 
 READ_FROM_FILE_SG_QUADRATURE = True
 PARALLEL_COMPUTING = True
-COMPUTE_GENERALIZED_SOBOL_INDICES = True
+COMPUTE_GENERALIZED_SOBOL_INDICES = False #True
 REEVALUATE_SURROGET_MODEL = True
 
 # =========================================================
@@ -96,6 +96,7 @@ def compute_covariance_matrix_in_time(N_quad, centered_outputs, weights, algorit
     for c in range(N_quad):
         for s in range(N_quad):
             if algorithm == "samples" or algorithm == "mc":
+                N = centered_outputs.shape[0]  # len(centered_outputs[:, c])
                 covariance_matrix[s, c] = 1/(N-1) * \
                 np.dot(centered_outputs[:, c], centered_outputs[:, s])
             elif algorithm == "quadrature" or algorithm == "pce" or algorithm == "sc" or algorithm == "kl":
@@ -196,6 +197,7 @@ def pce_of_kl_expansion(N_kl, polynomial_expansion, nodes, weights, f_kl_eval_at
     for i in range(N_kl):
         # TODO Change this data structure, make it that the keys are time-stampes to resamble result_dict_statistics
         f_kl_surrogate_dict[i] = {}
+        # print(f"DEBUGGING - f_kl_eval_at_params[{i},:].shape - {f_kl_eval_at_params[i,:].shape}")
         f_kl_gPCE, f_kl_coeff = cp.fit_quadrature(polynomial_expansion, nodes, weights, f_kl_eval_at_params[i,:], retall=True)
         f_kl_surrogate_dict[i]["gPCE"] = f_kl_gPCE
         f_kl_surrogate_dict[i]["coeff"] = f_kl_coeff
@@ -226,8 +228,7 @@ def computing_generazlied_sobol_total_indices_from_kl_expan(
     for idx in range(len(alphas[0])):
         dict_of_num[idx] = []
 
-    variance_over_time_array = []
-
+    # variance_over_time_array = []
     # for time_stamp in result_dict_statistics.keys():  
     #     coefficients = np.asfarray(result_dict_statistics[time_stamp]['coeff'])
     #     variance = np.sum(coefficients[index] ** 2, axis=0)
@@ -238,20 +239,20 @@ def computing_generazlied_sobol_total_indices_from_kl_expan(
     for i in range(f_kl_surrogate_coefficients.shape[0]):
         coefficients = np.asfarray(f_kl_surrogate_coefficients[i,:])
         variance = np.sum(coefficients[index] ** 2, axis=0)
-        variance_over_time_array.append(variance)
+        # variance_over_time_array.append(variance)
         for idx in range(len(alphas[0])):
             index_local = np.array([alpha[idx] > 0 for alpha in alphas])  # Compute the total Sobol indices
             dict_of_num[idx].append(np.sum(coefficients[index_local] ** 2, axis=0))
 
-    variance_over_time_array = np.asfarray(variance_over_time_array)
+    # variance_over_time_array = np.asfarray(variance_over_time_array)
     if total_variance is None:
-        denum = np.dot(variance_over_time_array, weights)
+        # denum = np.dot(variance_over_time_array, weights)
+        raise ValueError("Total variance must be provided")
     else:
         denum = total_variance
         
     for idx in range(len(alphas[0])):
         param_name = param_names[idx]
-        # num = np.dot(np.asfarray(dict_of_num[idx]), weights)
         num = np.sum(np.asfarray(dict_of_num[idx]), axis=0)
         s_tot_generalized = num/denum
         print(f"Generalized Total Sobol Index computed based on the PCE of KL expansion for {param_name} is {s_tot_generalized}")
@@ -467,12 +468,13 @@ def main_routine():
     # TODO - change these paths accordingly
     if MODEL == 'hbvsask':
         hbv_model_data_path = pathlib.Path("/work/ga45met/Hydro_Models/HBV-SASK-data")
-        configurationObject = pathlib.Path('/work/ga45met/Hydro_Models/HBV-SASK-py-tool/configurations/configuration_hbv_3D.json')
-        # configurationObject = pathlib.Path('/work/ga45met/Hydro_Models/HBV-SASK-py-tool/configurations/configuration_hbv_6D.json')
+        # configurationObject = pathlib.Path('/work/ga45met/Hydro_Models/HBV-SASK-py-tool/configurations/configuration_hbv_3D.json')
+        configurationObject = pathlib.Path('/work/ga45met/Hydro_Models/HBV-SASK-py-tool/configurations/configuration_hbv_6D.json')
+        # configurationObject = pathlib.Path('/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic/configurations/configuration_hbv_10D.json')
         inputModelDir = hbv_model_data_path
         basis = "Oldman_Basin"  # 'Banff_Basin'
-        workingDir = hbv_model_data_path / basis / "model_runs" / "kl_and_pce_time_dependent_processes_pipeline_4d_pce_tt_beta_etf_fc_sgql6"
-        # workingDir = hbv_model_data_path / basis / "model_runs" / "kl_and_pce_time_dependent_processes_pipeline_4d_kl_tt_beta_etf_fc"
+        workingDir = hbv_model_data_path / basis / "model_runs" / "kl_and_pce_time_dependent_processes_pipeline_7d_pce_p3_sgql7_checking_pce_speed" #7d_kl40_p3_sgql7"  _mc_10d_10000
+        # workingDir = hbv_model_data_path / basis / "model_runs" / "kl_and_pce_time_dependent_processes_pipeline_4d_kl_tt_beta_etf_fc" 
 
         # creating HBVSASK model object
         writing_results_to_a_file = False
@@ -599,7 +601,7 @@ def main_routine():
 
     if UQ_ALGORITHM == "mc":
         # this is actually the number of different samples in the parameter space
-        ne = number_of_particles = numSamples = numEvaluations = N = 2000 #10**3 #150
+        ne = number_of_particles = numSamples = numEvaluations = N = 10**4 #10**3 #150
         rule = 'random'  # rule can as well be: 'sobol' | 'random' | "latin_hypercube" | "halton"
         print(f"Number of Particles: {ne}")
 
@@ -612,7 +614,7 @@ def main_routine():
 
     elif UQ_ALGORITHM == "kl" or UQ_ALGORITHM == "pce":
         if READ_FROM_FILE_SG_QUADRATURE == True:
-            sgq_level = 6  # 6, 10
+            sgq_level = 7  # 6, 10
             # path_to_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/sparse_grid_nodes_weights") 
             path_to_file = pathlib.Path("/work/ga45met/mnt/linux_cluster_2/sparse_grid_nodes_weights")  # TODO Change this path accordingly
             parameters_file = path_to_file / f"KPU_d{dim}_l{sgq_level}.asc"
@@ -723,7 +725,7 @@ def main_routine():
 
     elif UQ_ALGORITHM == "kl" or UQ_ALGORITHM == "pce":
         import scipy.special
-        order = p = 3 # 3
+        order = p = 3 #3 # 3
         c_number = scipy.special.binom(dim+order, dim)
         print(f"Max order of polynomial: {order}")
         print(f"Total number of expansion coefficients in {dim}D space: {int(c_number)}")
@@ -740,6 +742,7 @@ def main_routine():
 
         if UQ_ALGORITHM == "pce":
             regression = False
+            compute_only_gpce = False
             compute_Sobol_t=True
             compute_Sobol_m=True
             compute_Sobol_m2=False
@@ -748,12 +751,14 @@ def main_routine():
                     num_processes, df_simulation_result, polynomial_expansion, 
                     nodes, weights, joint_dist_standard, single_qoi_column=QOI_COLUMN_NAME,
                     regression=regression, store_gpce_surrogate_in_stat_dict=True, save_gpce_surrogate=False,
+                    compute_only_gpce=compute_only_gpce,
                     compute_Sobol_t=compute_Sobol_t, compute_Sobol_m=compute_Sobol_m, compute_Sobol_m2=compute_Sobol_m2)
             else:
                 result_dict_statistics = utility.computing_gpce_statistics(
                     df_simulation_result, polynomial_expansion, 
                     nodes, weights, joint_dist_standard, single_qoi_column=QOI_COLUMN_NAME,
                     regression=regression, store_gpce_surrogate_in_stat_dict=True, save_gpce_surrogate=False,
+                    compute_only_gpce=compute_only_gpce,
                     compute_Sobol_t=compute_Sobol_t, compute_Sobol_m=compute_Sobol_m, compute_Sobol_m2=compute_Sobol_m2
                     )
         # elif UQ_ALGORITHM == "kl":
@@ -795,9 +800,9 @@ def main_routine():
             df_unpacked.columns = [f'Sobol_m_{param_names[i]}' for i in range(df_unpacked.shape[1])]
             df_stat = df_stat.drop('Sobol_m', axis=1).join(df_unpacked)
 
-        if 'E_plus_std' not in df_stat.columns:
+        if 'E' in df_stat.columns and 'StdDev' in df_stat.columns and 'E_plus_std' not in df_stat.columns:
             df_stat['E_plus_std'] = df_stat['E'] + df_stat['StdDev']
-        if 'E_minus_std' not in df_stat.columns:
+        if 'E' in df_stat.columns and 'StdDev' in df_stat.columns and 'E_minus_std' not in df_stat.columns:
             df_stat['E_minus_std'] = df_stat['E'] - df_stat['StdDev']
         # df_stat['E_minus_std'] = df_stat['E_minus_std'].apply(lambda x: max(0, x))
 
@@ -847,9 +852,12 @@ def main_routine():
             ]
             for trace in lines:
                 fig.add_trace(trace)
-        fig.add_trace(go.Scatter(x=df_stat.index, y=df_stat["E_minus_std"], line_color='rgb(188, 189, 34)', opacity=0.1, showlegend=False))
-        fig.add_trace(go.Scatter(x=df_stat.index, y=df_stat["E_plus_std"], line_color='rgb(188, 189, 34)', fillcolor='rgb(188, 189, 34)', fill='tonexty', opacity=0.1, showlegend=False))
-        fig.add_trace(go.Scatter(x=df_stat.index, y=df_stat["E"], name='Mean Prediction'))
+        if 'E_minus_std' in df_stat.columns:
+            fig.add_trace(go.Scatter(x=df_stat.index, y=df_stat["E_minus_std"], line_color='rgba(188, 189, 34, 0.1)', opacity=0.1, showlegend=False))
+        if 'E_plus_std' in df_stat.columns:
+            fig.add_trace(go.Scatter(x=df_stat.index, y=df_stat["E_plus_std"], line_color='rgba(188, 189, 34, 0.1)', fillcolor='rgb(188, 189, 34)', fill='tonexty', opacity=0.1, showlegend=False))
+        if 'E' in df_stat.columns:
+            fig.add_trace(go.Scatter(x=df_stat.index, y=df_stat["E"], line_color='rgba(255, 0, 0, 1)', name='Mean Prediction'))
         fig.update_traces(mode='lines')
         # fig.update_layout(
         #     title=f"Simulation Results - {UQ_ALGORITHM} - {MODEL}",
@@ -959,7 +967,9 @@ def main_routine():
         Var_kl_approx = np.sum(eigenvalues)
         N_kl =  60 # [2, 4, 6, 8, 10]
         weights_time = np.asfarray(weights_time)
+        print(f"DEBUGGING - N {N}")
         f_kl_eval_at_params = setup_kl_expansion_matrix(eigenvalues, N_kl, N, N_quad, weights_time, centered_outputs, eigenvectors)
+        print(f"DEBUGGING - f_kl_eval_at_params.shape {f_kl_eval_at_params.shape}")
 
         # 3.5 PCE of the KL Expansion
         f_kl_surrogate_dict, f_kl_surrogate_coefficients = pce_of_kl_expansion(N_kl, polynomial_expansion, nodes, weights, f_kl_eval_at_params)
@@ -1035,10 +1045,13 @@ def main_routine():
         ]
         for trace in lines:
             fig.add_trace(trace)
-        fig.add_trace(go.Scatter(x=df_stat.index, y=df_stat["E"], showlegend=True, name="Mean"))
+        if 'E' in df_stat.columns:
+            fig.add_trace(go.Scatter(x=df_stat.index, y=df_stat["E"], line_color='rgba(255,0,0,1)', showlegend=True, name="Mean"))
         if UQ_ALGORITHM == "pce":
-            fig.add_trace(go.Scatter(x=df_stat.index, y=df_stat["E_minus_std"], line_color='rgba(255,255,255,0)', showlegend=False))
-            fig.add_trace(go.Scatter(x=df_stat.index, y=df_stat["E_plus_std"], line_color='rgba(255,255,255,0)', fillcolor='rgba(0,176,246,0.2)', fill='tonexty', showlegend=False))
+            if 'E_minus_std' in df_stat.columns:
+                fig.add_trace(go.Scatter(x=df_stat.index, y=df_stat["E_minus_std"], line_color='rgba(255,255,255,0)', showlegend=False))
+            if 'E_plus_std' in df_stat.columns:
+                fig.add_trace(go.Scatter(x=df_stat.index, y=df_stat["E_plus_std"], line_color='rgba(255,255,255,0)', fillcolor='rgba(0,176,246,0.2)', fill='tonexty', showlegend=False))
         fig.update_traces(mode='lines')
         # fig.update_layout(
         #     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
