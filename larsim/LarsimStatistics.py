@@ -465,7 +465,7 @@ class LarsimStatistics(Statistics):
             if executor is not None:  # master process
                 solver_time_start = time.time()
                 if regression:
-                    chunk_results_it = executor.map(parallelStatistics._parallel_calc_stats_for_gPCE,
+                    chunk_results_it = executor.map(parallelStatistics.parallel_calc_stats_for_gPCE,
                                                     keyIter_chunk,
                                                     list_of_simulations_df_chunk,
                                                     distChunks,
@@ -479,7 +479,7 @@ class LarsimStatistics(Statistics):
                                                     chunksize=self.mpi_chunksize,
                                                     unordered=self.unordered)
                 else:
-                    chunk_results_it = executor.map(parallelStatistics._parallel_calc_stats_for_MC,
+                    chunk_results_it = executor.map(parallelStatistics.parallel_calc_stats_for_MC,
                                                     keyIter_chunk,
                                                     list_of_simulations_df_chunk,
                                                     numEvaluations_chunk,
@@ -534,7 +534,7 @@ class LarsimStatistics(Statistics):
         with futures.MPICommExecutor(MPI.COMM_WORLD, root=0) as executor:
             if executor is not None:  # master process
                 solver_time_start = time.time()
-                chunk_results_it = executor.map(parallelStatistics._parallel_calc_stats_for_gPCE,
+                chunk_results_it = executor.map(parallelStatistics.parallel_calc_stats_for_gPCE,
                                                 keyIter_chunk,
                                                 list_of_simulations_df_chunk,
                                                 distChunks,
@@ -589,7 +589,7 @@ class LarsimStatistics(Statistics):
         with futures.MPICommExecutor(MPI.COMM_WORLD, root=0) as executor:
             if executor is not None:  # master process
                 solver_time_start = time.time()
-                chunk_results_it = executor.map(parallelStatistics._parallel_calc_stats_for_mc_saltelli,
+                chunk_results_it = executor.map(parallelStatistics.parallel_calc_stats_for_mc_saltelli,
                                                 keyIter_chunk,
                                                 list_of_simulations_df_chunk,
                                                 numEvaluations_chunk,
