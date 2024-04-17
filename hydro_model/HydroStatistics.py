@@ -876,7 +876,7 @@ class HydroStatistics(Statistics):
             self._save_statistics_dictionary_single_qoi_single_timestamp(single_qoi_column, timestamp, result_dict)
         else:
             self.result_dict[single_qoi_column][timestamp] = result_dict
-        # TODO - think if this should be done here or in the _parallel_calc_stats_for_gPCE...
+        # TODO - think if this should be done here or in the parallel_calc_stats_for_gPCE...
         if self.save_gpce_surrogate and "gPCE" in result_dict:
             self._save_gpce_surrogate_model(gpce=result_dict["gPCE"], qoi=single_qoi_column, timestamp=timestamp)
             if "gpce_coeff" in result_dict:
@@ -960,7 +960,7 @@ class HydroStatistics(Statistics):
                     polynomial_expansionChunks = [self.polynomial_expansion] * len(keyIter_chunk)
 
                 # TODO Probably all processes already have these data -
-                #  I would not have to propagate those if _parallel_calc_stats_for_gPCE would be a class method
+                #  I would not have to propagate those if parallel_calc_stats_for_gPCE would be a class method
                 regressionChunks = [regression] * len(keyIter_chunk)
                 dimChunks = [self.dim] * len(keyIter_chunk)
                 compute_Sobol_t_Chunks = [self.compute_Sobol_t] * len(keyIter_chunk)
@@ -986,7 +986,7 @@ class HydroStatistics(Statistics):
                     solver_time_start = time.time()
                     if regression:
                         chunk_results_it = executor.map(
-                            parallelStatistics._parallel_calc_stats_for_gPCE,
+                            parallelStatistics.parallel_calc_stats_for_gPCE,
                             keyIter_chunk,
                             list_of_simulations_df_chunk,
                             distChunks,
@@ -1005,7 +1005,7 @@ class HydroStatistics(Statistics):
                         )
                     else:
                         chunk_results_it = executor.map(
-                            parallelStatistics._parallel_calc_stats_for_MC,
+                            parallelStatistics.parallel_calc_stats_for_MC,
                             keyIter_chunk,
                             list_of_simulations_df_chunk, #generator_of_simulations_df
                             numEvaluations_chunk,
@@ -1018,7 +1018,7 @@ class HydroStatistics(Statistics):
                             unordered=self.unordered
                         )
                         # chunk_results_it = executor.map(
-                        #     parallelStatistics._parallel_calc_stats_for_MC,
+                        #     parallelStatistics.parallel_calc_stats_for_MC,
                         #     keyIter,
                         #     generator_of_simulations_df,
                         #     self.numEvaluations,
@@ -1094,7 +1094,7 @@ class HydroStatistics(Statistics):
                     solver_time_start = time.time()
                     # TODO in case is compute_sobol_total_indices_with_samples True propagate UQEF.Samples.parameters
                     chunk_results_it = executor.map(
-                        parallelStatistics._parallel_calc_stats_for_mc_saltelli,
+                        parallelStatistics.parallel_calc_stats_for_mc_saltelli,
                         keyIter_chunk,
                         list_of_simulations_df_chunk,
                         numEvaluations_chunk,
@@ -1174,7 +1174,7 @@ class HydroStatistics(Statistics):
                     print(f"{self.rank}: computation of statistics for qoi {single_qoi_column} started...")
                     solver_time_start = time.time()
                     chunk_results_it = executor.map(
-                        parallelStatistics._parallel_calc_stats_for_gPCE,
+                        parallelStatistics.parallel_calc_stats_for_gPCE,
                         keyIter_chunk,
                         list_of_simulations_df_chunk, #generator_of_simulations_df,
                         distChunks,
@@ -1192,7 +1192,7 @@ class HydroStatistics(Statistics):
                         unordered=self.unordered
                     )
                     # chunk_results_it = executor.map(
-                    #     parallelStatistics._parallel_calc_stats_for_gPCE,
+                    #     parallelStatistics.parallel_calc_stats_for_gPCE,
                     #     keyIter_chunk,
                     #     generator_of_simulations_df,
                     #     self.dist,
@@ -1882,15 +1882,34 @@ class HydroStatistics(Statistics):
 
         keyIter = list(self.pdTimesteps)
 
-        mean_time_series = [self.result_dict[qoi_column][key]["E"] for key in keyIter]
-        std_time_series = [self.result_dict[qoi_column][key]["StdDev"] for key in keyIter]
-        p10_time_series = [self.result_dict[qoi_column][key]["P10"] for key in keyIter]
-        p90_time_series = [self.result_dict[qoi_column][key]["P90"] for key in keyIter]
+        list_of_columns = [self.pdTimesteps, ]
+        list_of_columns_names = [self.time_column_name, ]
+        # list_of_columns = [self.pdTimesteps, mean_time_series, std_time_series,
+        #                    p10_time_series, p90_time_series]
+        # list_of_columns_names = [self.time_column_name, "E", "StdDev", "P10", "P90"]
 
-        list_of_columns = [self.pdTimesteps, mean_time_series, std_time_series,
-                           p10_time_series, p90_time_series]
-        list_of_columns_names = [self.time_column_name, "E", "StdDev", "P10", "P90"]
-
+        if "E" in self.result_dict[qoi_column][keyIter[0]]:
+            mean_time_series = [self.result_dict[qoi_column][key]["E"] for key in keyIter]
+            list_of_columns.append(mean_time_series)
+            list_of_columns_names.append("E")
+        if "gpce_coeff" in self.result_dict[qoi_column][keyIter[0]]:
+            list_of_columns.append([self.result_dict[qoi_column][key]["gpce_coeff"] for key in keyIter])
+            list_of_columns_names.append("gpce_coeff")
+        if "gPCE" in self.result_dict[qoi_column][keyIter[0]]:
+            list_of_columns.append([self.result_dict[qoi_column][key]["gPCE"] for key in keyIter])
+            list_of_columns_names.append("gPCE")
+        if "StdDev" in self.result_dict[qoi_column][keyIter[0]]:
+            std_time_series = [self.result_dict[qoi_column][key]["StdDev"] for key in keyIter]
+            list_of_columns.append(std_time_series)
+            list_of_columns_names.append("StdDev")
+        if "P10" in self.result_dict[qoi_column][keyIter[0]]:
+            p10_time_series = [self.result_dict[qoi_column][key]["P10"] for key in keyIter]
+            list_of_columns.append(p10_time_series)
+            list_of_columns_names.append("P10")
+        if "P90" in self.result_dict[qoi_column][keyIter[0]]:
+            p90_time_series = [self.result_dict[qoi_column][key]["P90"] for key in keyIter]
+            list_of_columns.append(p90_time_series)
+            list_of_columns_names.append("P90")
         if "Skew" in self.result_dict[qoi_column][keyIter[0]]:
             list_of_columns.append([self.result_dict[qoi_column][key]["Skew"] for key in keyIter])
             list_of_columns_names.append("Skew")
@@ -1926,10 +1945,14 @@ class HydroStatistics(Statistics):
                 temp = "Sobol_t_" + self.labels[i]
                 list_of_columns_names.append(temp)
 
+        if not list_of_columns:
+            return None
+
         df_statistics_single_qoi = pd.DataFrame(list(zip(*list_of_columns)), columns=list_of_columns_names)
 
-        df_statistics_single_qoi["E_minus_std"] = df_statistics_single_qoi['E'] - df_statistics_single_qoi['StdDev']
-        df_statistics_single_qoi["E_plus_std"] = df_statistics_single_qoi['E'] + df_statistics_single_qoi['StdDev']
+        if 'E' in df_statistics_single_qoi.columns and 'StdDev' in df_statistics_single_qoi.columns:
+            df_statistics_single_qoi["E_minus_std"] = df_statistics_single_qoi['E'] - df_statistics_single_qoi['StdDev']
+            df_statistics_single_qoi["E_plus_std"] = df_statistics_single_qoi['E'] + df_statistics_single_qoi['StdDev']
 
         if self.measured_fetched and self.df_measured is not None:
             if qoi_column in list(self.df_measured["qoi"].unique()):
