@@ -122,11 +122,11 @@ export OMP_NUM_THREADS=$threads
 # start simulation
 echo "---- start HBV sim: \`date\`"
 
-    mpiexec -n \$SLURM_NTASKS python $baseSourcePath/uq_simulation_uqsim.py \
+    mpiexec -n \$SLURM_NTASKS python $baseSourcePath/uqef_dynamic/scientific_pipelines/uq_simulation_uqsim.py \
                             --outputResultDir $resultsPath \
                             --inputModelDir $modelMasterPath \
                             --sourceDir $baseSourcePath \
-                            --config_file $baseSourcePath/configurations/configuration_hbv_5D.json \
+                            --config_file $baseSourcePath/data/configurations/configuration_hbv_5D.json \
                             --model "$model" \
                             --uncertain "$uncertain" \
                             --opt_strategy "$strategy" --opt_algorithm "$algorithm" \
@@ -171,7 +171,7 @@ sc_poly_rule="three_terms_recurrence"
 sc_quadrature_rule="G" # "clenshaw_curtis" "genz_keister_24" "p"
 mpi_method="MpiPoolSolver"
 parameters_file="/dss/dsshome1/lxc0C/ga45met2/Repositories/sparse_grid_nodes_weights/KPU_d5_l7.asc"
-parameters_setup_file="/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/configurations/KPU_HBV_d5.json"
+parameters_setup_file="/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/KPU_HBV_d5.json"
 
 # start_uq_sim "DWP" "DYNAMIC" "FCFS" saltelli 0 0 50 "$model" "$opt_add" "MpiPoolSolver" "$nodes" "$max_time" "$uc" "$sampling_rule"
 # start_uq_sim "DWP" "DYNAMIC" "FCFS" "$uq_method" 20 10 50 "$model" "$opt_add" "MpiPoolSolver" "$nodes" "$max_time" "$uc" "$sampling_rule"

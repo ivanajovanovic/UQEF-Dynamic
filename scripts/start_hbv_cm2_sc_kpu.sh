@@ -125,11 +125,11 @@ export OMP_NUM_THREADS=$threads
 # start simulation
 echo "---- start HBV sim: \`date\`"
 
-    mpiexec -n \$SLURM_NTASKS python $baseSourcePath/uq_simulation_uqsim.py \
+    mpiexec -n \$SLURM_NTASKS python $baseSourcePath/uqef_dynamic/scientific_pipelines/uq_simulation_uqsim.py \
                             --outputResultDir $resultsPath \
                             --inputModelDir $modelMasterPath \
                             --sourceDir $baseSourcePath \
-                            --config_file $baseSourcePath/configurations/configuration_hbv_6D_banff.json \
+                            --config_file $baseSourcePath/data/configurations/configuration_hbv_6D_banff.json \
                             --model "$model" \
                             --uncertain "$uncertain" \
                             --opt_strategy "$strategy" --opt_algorithm "$algorithm" \
@@ -174,6 +174,6 @@ sc_poly_rule="three_terms_recurrence"
 sc_quadrature_rule="p" # "clenshaw_curtis" "genz_keister_24" "p"
 mpi_method="MpiPoolSolver"
 parameters_file="/dss/dsshome1/lxc0C/ga45met2/Repositories/sparse_grid_nodes_weights/KPU_d6_l6.asc"
-parameters_setup_file="/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/configurations/KPU_HBV_d6_II.json"
+parameters_setup_file="/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/KPU_HBV_d6_II.json"
 
 start_uq_sim "DWP" "DYNAMIC" "FCFS" "$uq_method" $q_order $p_order $mc_numevaluations "$model" "$opt_add" "$mpi_method" "$nodes" "$tasks_per_node" "$mid_time" "$uc" "$sampling_rule" "$sc_poly_rule" "$sc_quadrature_rule" "$parameters_file" "$parameters_setup_file"
