@@ -91,7 +91,7 @@
       "name": "FC",
       "distribution": "Uniform",
       "lower": 50.0,
-      "upper": 1000.0,
+      "upper": 500.0,
       "default": 250,
       "values_list":[100.0, 250.0]
     },
@@ -107,7 +107,7 @@
       "name": "K2",
       "distribution": "Uniform",
       "lower": 0.0,
-      "upper": 0.1,
+      "upper": 0.05,
       "default": 0.025,
       "values_list":[0.025, 0.06]
     },

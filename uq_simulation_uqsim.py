@@ -57,17 +57,17 @@ if local_debugging:
     uqsim.args.chunksize = 1
 
     uqsim.args.uq_method = "sc"  # "sc" | "saltelli" | "mc" | "ensemble"
-    uqsim.args.mc_numevaluations = 100
+    uqsim.args.mc_numevaluations = 1000
     uqsim.args.sampling_rule = "latin_hypercube"  # "random" | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
-    uqsim.args.sc_q_order = 10  # 7 #10 3
+    uqsim.args.sc_q_order = 7  # 7 #10 3
     uqsim.args.sc_p_order = 3  # 4, 5, 6, 8
     uqsim.args.sc_quadrature_rule = "g"  # "p" "genz_keister_24" "leja" "clenshaw_curtis"
 
-    uqsim.args.read_nodes_from_file = False
-    l = 6  # 10
+    uqsim.args.read_nodes_from_file = True
+    l = 7  # 10
     path_to_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/sparse_grid_nodes_weights")
-    uqsim.args.parameters_file = path_to_file / f"KPU_d6_l{l}.asc" # f"KPU_d3_l{l}.asc"
-    uqsim.args.parameters_setup_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/configurations/KPU_HBV_d6.json")
+    uqsim.args.parameters_file = path_to_file / f"KPU_d7_l{l}.asc" # f"KPU_d3_l{l}.asc"
+    uqsim.args.parameters_setup_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/configurations/KPU_HBV_d7.json")
     # uqsim.args.parameters_setup_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/configurations_Larsim/KPU_Larsim_d5.json")
 
     uqsim.args.sc_poly_rule = "three_terms_recurrence"  # "gram_schmidt" | "three_terms_recurrence" | "cholesky"
@@ -84,9 +84,10 @@ if local_debugging:
     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_ensemble_2013_all_tgb'))
     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_lai_may_cc_q_6_p_4_stat_trial'))
     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs", 'mc_with_sobol_computation_delta_q')) #sliding_window or continuous
-    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs", 'beta_2007_sc_sliding_window_rmse')) #sliding_window or continuous
+    # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs", 'beta_2007_sc_sliding_window_rmse')) #sliding_window or continuous
     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs", 'ensemble_q6_p3_6d_2006_banff')) #sliding_window or continuous
-    # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs", 'mc_12d_2006_short'))
+    # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs", 'mc_10d_short_banff'))
+    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs", 'pce_surrogate_7d_short_oldman'))
     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_sc_kpu_l_6_d_5_p_3_2013'))
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
 
@@ -96,7 +97,8 @@ if local_debugging:
     # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/configurations/configuration_hbv_10D_MC_banff.json'
     # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/configurations/configuration_hbv_12D_MC.json'
     # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/configurations_Larsim/configurations_larsim_high_flow.json'
-    uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/configurations/configuration_hbv_6D.json'
+    # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/configurations/configuration_hbv_10D_MC_banff.json'
+    uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/configurations/configuration_hbv_7D.json'
 
     uqsim.args.sampleFromStandardDist = True  # False
 
@@ -107,7 +109,7 @@ if local_debugging:
     uqsim.args.disable_calc_statistics = False
     uqsim.args.parallel_statistics = True  # False
 
-    uqsim.args.instantly_save_results_for_each_time_step = False #False
+    uqsim.args.instantly_save_results_for_each_time_step = True #False
     uqsim.args.uqsim_store_to_file = False
 
     uqsim.args.compute_Sobol_t = True  # True False
@@ -118,7 +120,7 @@ if local_debugging:
     uqsim.args.save_all_simulations = True  # True for sc
     uqsim.args.store_qoi_data_in_stat_dict = False  # if set to True, the qoi_values entry is stored in the stat_dict 
     uqsim.args.store_gpce_surrogate_in_stat_dict = True
-    uqsim.args.collect_and_save_state_data = False 
+    uqsim.args.collect_and_save_state_data = True # False 
 
     uqsim.setup_configuration_object()
 
@@ -131,7 +133,9 @@ utility.DEFAULT_DICT_WHAT_TO_PLOT = {
 compute_sobol_total_indices_with_samples = True  # This is only relevant in the mc-saltelli's approach
 if uqsim.args.uq_method == "mc" and uqsim.args.compute_Sobol_t:
     compute_sobol_total_indices_with_samples = True
-save_gpce_surrogate = False
+
+save_gpce_surrogate = True
+compute_other_stat_besides_pce_surrogate = True 
 
 #####################################
 # additional path settings:
@@ -231,6 +235,7 @@ uqsim.statistics.update({"hbvsask"         : (lambda: HBVSASKStatistics.HBVSASKS
     dict_what_to_plot=utility.DEFAULT_DICT_WHAT_TO_PLOT,
     compute_sobol_total_indices_with_samples=compute_sobol_total_indices_with_samples,
     save_gpce_surrogate=save_gpce_surrogate,
+    compute_other_stat_besides_pce_surrogate=compute_other_stat_besides_pce_surrogate,
 ))})
 
 #####################################
@@ -280,6 +285,8 @@ if uqsim.is_master():
 start_time_computing_statistics = time.time()
 uqsim.prepare_statistics()
 uqsim.calc_statistics()
+# if uqsim.is_master():
+#     uqsim.statistic.compute_covariance_matrix_in_time()
 end_time_computing_statistics = time.time()
 time_computing_statistics = end_time_computing_statistics - start_time_computing_statistics
 

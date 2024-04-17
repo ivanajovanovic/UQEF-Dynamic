@@ -7,15 +7,15 @@
       "start_hour": 0,
       "start_minute": 0,
 
-      "end_day": 10,
-      "end_month": 10,
+      "end_day": 1,
+      "end_month": 11,
       "end_year": 2007,
       "end_hour": 0,
       "end_minute": 0,
 
       "run_full_timespan":"False",
       "spin_up_length":1095,
-      "simulation_length": 2,
+      "simulation_length": 365,
       "resolution": "daily",
 
       "cut_runs": "False",
@@ -33,7 +33,7 @@
   "simulation_settings": {
     "qoi":"Q_cms",
     "qoi_column":"Q_cms",
-    "autoregressive_model_first_order":"False",
+    "autoregressive_model_first_order":"True",
     "transform_model_output":"None",
     "read_measured_data": "True",
     "qoi_column_measured":"streamflow",
@@ -64,7 +64,7 @@
       "name": "C0",
       "distribution": "Uniform",
       "lower": 0.0,
-      "upper": 5.0,
+      "upper": 10.0,
       "default": 0.5
     },
     {
@@ -78,7 +78,7 @@
       "name": "FC",
       "distribution": "Uniform",
       "lower": 50.0,
-      "upper": 1000.0,
+      "upper": 500.0,
       "default": 250
     },
     {
