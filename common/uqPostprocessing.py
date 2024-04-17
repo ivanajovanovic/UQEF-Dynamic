@@ -137,15 +137,20 @@ def extracting_statistics_df_for_single_qoi(statisticsObject, qoi="Q_cms"):
     pass
 
 
+def get_all_timesteps_from_saved_files(workingDir, first_part_of_the_file = "statistics"):
+    all_files = os.listdir(workingDir)
+    list_TimeStamp = set() # []
+    for filename in all_files:
+        parts = filename.split('_')
+        if parts[0] == first_part_of_the_file and parts[-1].endswith(".pkl"):
+            single_timestep = parts[-1].split('.')[0]
+            list_TimeStamp.add(single_timestep)  # pd.Timestamp(single_timestep)
+    return list_TimeStamp
+
+    
 def read_all_saved_statistics_dict(workingDir, list_qoi_column, single_timestamp_single_file=False):
     if single_timestamp_single_file:
-        all_files = os.listdir(workingDir)
-        list_TimeStamp = set() # []
-        for filename in all_files:
-            parts = filename.split('_')
-            if parts[0] == "statistics" and parts[-1].endswith(".pkl"):
-                single_timestep = parts[-1].split('.')[0]
-                list_TimeStamp.add(single_timestep)  # pd.Timestamp(single_timestep)
+        list_TimeStamp = get_all_timesteps_from_saved_files(workingDir, first_part_of_the_file = "statistics")
     statistics_dictionary = defaultdict(dict)
     for single_qoi in list_qoi_column:
         if single_timestamp_single_file:
@@ -153,17 +158,46 @@ def read_all_saved_statistics_dict(workingDir, list_qoi_column, single_timestamp
             for single_timestep in list_TimeStamp:
                 statistics_dictionary_file_temp = workingDir / f"statistics_dictionary_{single_qoi}_{single_timestep}.pkl"
                 assert statistics_dictionary_file_temp.is_file(), \
-                    f"The file for qoi-{single_qoi} and time-stamp-{single_timestep} does not exist"
+                    f"The statistics file for qoi-{single_qoi} and time-stamp-{single_timestep} does not exist"
                 with open(statistics_dictionary_file_temp, 'rb') as f:
                     statistics_dictionary_temp = pickle.load(f)
                 statistics_dictionary[single_qoi][pd.Timestamp(single_timestep)] = statistics_dictionary_temp
         else:
             statistics_dictionary_file_temp = workingDir / f"statistics_dictionary_qoi_{single_qoi}.pkl"
-            assert statistics_dictionary_file_temp.is_file()
+            assert statistics_dictionary_file_temp.is_file(), \
+                                f"The statistics file for qoi-{single_qoi} does not exist"
             with open(statistics_dictionary_file_temp, 'rb') as f:
                 statistics_dictionary_temp = pickle.load(f)
             statistics_dictionary[single_qoi] = statistics_dictionary_temp
     return statistics_dictionary
+
+
+def read_all_saved_gpce_surrogate_models(workingDir, list_qoi_column, single_timestamp_single_file=False):
+    list_TimeStamp = get_all_timesteps_from_saved_files(workingDir, first_part_of_the_file = "gpce")
+    gpce_surrogate_dictionary = defaultdict(dict)
+    for single_qoi in list_qoi_column:
+        gpce_surrogate_dictionary[single_qoi] = dict()
+        for single_timestep in list_TimeStamp:
+            gpce_surrogate_file_temp = workingDir / f"gpce_surrogate_{single_qoi}_{single_timestep}.pkl"
+            assert gpce_surrogate_file_temp.is_file(), \
+            f"The gpce surrogate file for qoi-{single_qoi} and time-stamp-{single_timestep} does not exist"
+            with open(gpce_surrogate_file_temp, 'rb') as f:
+                gpce_surrogate_temp = pickle.load(f)
+            gpce_surrogate_dictionary[single_qoi][pd.Timestamp(single_timestep)] = gpce_surrogate_temp
+    return gpce_surrogate_dictionary
+
+
+def read_all_saved_gpce_coeffs(workingDir, list_qoi_column, single_timestamp_single_file=False):
+    list_TimeStamp = get_all_timesteps_from_saved_files(workingDir, first_part_of_the_file = "gpce")
+    gpce_coeff_dictionary = defaultdict(dict)
+    for single_qoi in list_qoi_column:
+        gpce_coeff_dictionary[single_qoi] = dict()
+        for single_timestep in list_TimeStamp:
+            gpce_coeffs_file_temp = workingDir / f"gpce_coeffs_{single_qoi}_{single_timestep}.npy"
+            assert gpce_coeffs_file_temp.is_file(), \
+            f"The gpce coefficients file for qoi-{single_qoi} and time-stamp-{single_timestep} does not exist"
+            gpce_coeff_dictionary[single_qoi][pd.Timestamp(single_timestep)] = np.load(gpce_coeffs_file_temp)
+    return gpce_coeff_dictionary
 
 
 def compute_gof_over_different_time_series(df_statistics, objective_function="MAE", qoi_column="Q",
