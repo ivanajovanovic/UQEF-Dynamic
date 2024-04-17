@@ -13,8 +13,6 @@ import numpy as np
 import sys
 import time
 
-from common import utility
-
 #####################################
 
 epsilon = sys.float_info.epsilon

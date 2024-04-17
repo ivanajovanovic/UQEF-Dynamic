@@ -1,42 +1,28 @@
 from collections import defaultdict
 import pathlib
 import pandas as pd
-import pickle
 import numpy as np
-import sys
 import os
-import math
-from tabulate import tabulate
 import time
-
-import scipy
-from scipy.linalg import sqrtm
 
 from typing import List, Optional, Dict, Any, Union, Tuple
 
 # plotting
 import matplotlib.pyplot as plt
-import matplotlib.cm as cm
 import plotly.graph_objects as go
 import plotly.express as px
-from plotly.subplots import make_subplots
-# import seaborn as sns
 import plotly.offline as pyo
 
 # for parallel computing
 import multiprocessing
-# import concurrent.futures
-import psutil
 
 import chaospy as cp
-# import uqef
 
-# sys.path.insert(1, '/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic')
-from common import utility
+from uqef_dynamic.utils import utility
 
 # HBV-SASK Model related stuff
-from hbv_sask import HBVSASKModel as hbvmodel
-from hbv_sask import hbvsask_utility as hbv_utility
+from uqef_dynamic.models.hbv_sask import HBVSASKModel as hbvmodel
+from uqef_dynamic.models.hbv_sask import hbvsask_utility as hbv_utility
 
 # definition of some 'static' variables
 PLOT_ALL_THE_RUNS = True  # set this to False when there are a lot of samples
@@ -207,7 +193,7 @@ def pce_of_kl_expansion(N_kl, polynomial_expansion, nodes, weights, f_kl_eval_at
     return f_kl_surrogate_dict, f_kl_surrogate_coefficients
 
 
-def computing_generazlied_sobol_total_indices_from_kl_expan(
+def computing_generalized_sobol_total_indices_from_kl_expan(
     f_kl_surrogate_coefficients: np.ndarray,
     polynomial_expansion: cp.polynomial,
     weights: np.ndarray,
@@ -261,7 +247,7 @@ def computing_generazlied_sobol_total_indices_from_kl_expan(
             file.write(f'{param_name}: {s_tot_generalized}\n')
 
 
-def computing_generazlied_sobol_total_indices_from_poly_expan(
+def computing_generalized_sobol_total_indices_from_poly_expan(
     result_dict_statistics: Dict[Any, Dict[str, Any]],
     polynomial_expansion: cp.polynomial,
     weights: np.ndarray,
@@ -936,7 +922,7 @@ def main_routine():
 
         else:
             # TODO Important aspect here is if polynomial_expansion is normalized or not
-            computing_generazlied_sobol_total_indices_from_poly_expan(
+            computing_generalized_sobol_total_indices_from_poly_expan(
                 result_dict_statistics, polynomial_expansion, weights_time, param_names, fileName)
 
     # =========================================================
@@ -978,7 +964,7 @@ def main_routine():
         if COMPUTE_GENERALIZED_SOBOL_INDICES:
             fileName = "generalized_sobol_t_kl_and_pce.txt"
             fileName = directory_for_saving_plots + fileName
-            computing_generazlied_sobol_total_indices_from_kl_expan(
+            computing_generalized_sobol_total_indices_from_kl_expan(
                 f_kl_surrogate_coefficients, polynomial_expansion, weights_time, param_names, fileName, total_variance=Var_kl_approx)
     
     end_time_model_simulations = time.time()

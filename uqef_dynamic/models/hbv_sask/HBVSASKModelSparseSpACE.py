@@ -15,9 +15,7 @@ from sparseSpACE.Function import *
 # from sparseSpACE.StandardCombi import *
 # from sparseSpACE.Integrator import *
 
-# import hbvsask_utility as hbv
-from hbv_sask import HBVSASKModel as hbvsaskmodel
-# import HBVSASKModel as hbvsaskmodel
+from uqef_dynamic.models.hbv_sask import HBVSASKModel as hbvsaskmodel
 
 class HBVSASKFunction(Function):
     def __init__(self, configurationObject, inputModelDir, workingDir, dim=None,

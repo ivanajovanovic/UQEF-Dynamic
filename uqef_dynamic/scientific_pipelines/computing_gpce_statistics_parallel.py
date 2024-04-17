@@ -33,9 +33,9 @@ linux_cluster_run = True
 # else:
 #     sys.path.insert(0, '/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic')
 
-from .common import parallelStatistics
-from .common import utility
-from .common import uqPostprocessing
+from uqef_dynamic.utils import parallelStatistics
+from uqef_dynamic.utils import utility
+from uqef_dynamic.utils import uqPostprocessing
 
 #####################################
 ### MPI infos:

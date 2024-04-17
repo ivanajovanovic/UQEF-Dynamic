@@ -1,12 +1,10 @@
 # read the assumed prior distribution over parameters
 import chaospy as cp
 from collections import defaultdict
-import inspect
-import matplotlib.pyplot as plt
 import pandas as pd
 import time
 
-from common import utility
+from uqef_dynamic.utils import utility
 
 
 def fetch_and_evaluate_gpce_model_produced_by_uqef_statistics_class(
@@ -60,7 +58,7 @@ def creted_df_from_gpce_model_evaluations(gPCE_model_evaluated):
 
 
 if __name__ == '__main__':
-    # Trying out some simlpe thinkgs
+    # Trying out some simple things
     # plt.hist(samples_1d, bins=50, density=True, alpha=0.5)
     # t = np.linspace(-3, 3, 400)
     # distribution = cp.GaussianKDE(samples_1d, h_mat=0.05**2)

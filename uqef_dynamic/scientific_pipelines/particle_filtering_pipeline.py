@@ -1,4 +1,3 @@
-import inspect
 import pathlib
 import pandas as pd
 import sys
@@ -9,27 +8,21 @@ import numpy as np
 # importing modules/libs for plotting
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
-import plotly.express as px
 import plotly.offline as pyo
 import matplotlib.pyplot as plt
-# pd.options.plotting.backend = "plotly"
 
 # for parallel computing
 import multiprocessing
-# import concurrent.futures
-import psutil
-# for message passing
-# from mpi4py import MPI
 
 import chaospy as cp
 
 # TODO - change these paths accordingly
 # sys.path.insert(1, '/work/ga45met/Hydro_Models/HBV-SASK-py-tool')
 sys.path.insert(1, '/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic')
-from common import utility
-from common import transport_map
-from hbv_sask import hbvsask_utility as hbv
-from hbv_sask import HBVSASKModel as hbvmodel
+from uqef_dynamic.utils import utility
+from uqef_dynamic.utils import transport_map
+from uqef_dynamic.models.hbv_sask import hbvsask_utility as hbv
+from uqef_dynamic.models.hbv_sask import HBVSASKModel as hbvmodel
 
 TIME_COLUMN_NAME = 'TimeStamp'
 INDEX_COLUMN_NAME = "Index_run"

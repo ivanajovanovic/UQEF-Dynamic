@@ -9,7 +9,7 @@ import os
 from uqef.stat import Statistics
 
 import paths
-from common import saltelliSobolIndicesHelpingFunctions
+from uqef_dynamic.utils import saltelliSobolIndicesHelpingFunctions
 
 class Samples(object):
     """

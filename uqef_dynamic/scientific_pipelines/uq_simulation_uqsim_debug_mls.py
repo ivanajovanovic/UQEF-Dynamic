@@ -11,17 +11,17 @@ from distutils.util import strtobool
 
 import uqef
 
-from larsim import LarsimModelUQ
-from larsim import LarsimStatistics
+from uqef_dynamic.models.larsim import LarsimModelUQ
+from uqef_dynamic.models.larsim import LarsimStatistics
 
-from linearDampedOscillator import LinearDampedOscillatorModel
-from linearDampedOscillator import LinearDampedOscillatorStatistics
+from uqef_dynamic.models.linearDampedOscillator import LinearDampedOscillatorModel
+from uqef_dynamic.models.linearDampedOscillator import LinearDampedOscillatorStatistics
 
-from ishigami import IshigamiModel
-from ishigami import IshigamiStatistics
+from uqef_dynamic.models.ishigami import IshigamiModel
+from uqef_dynamic.models.ishigami import IshigamiStatistics
 
-from productFunction import ProductFunctionModel
-from productFunction import ProductFunctionStatistics
+from uqef_dynamic.models.productFunction import ProductFunctionModel
+from uqef_dynamic.models.productFunction import ProductFunctionStatistics
 
 from LarsimUtilityFunctions import larsimModel, larsimPaths
 

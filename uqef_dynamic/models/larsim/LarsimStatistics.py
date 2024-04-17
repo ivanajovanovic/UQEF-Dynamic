@@ -29,9 +29,9 @@ import LarsimUtilityFunctions.larsimPaths as paths
 from LarsimUtilityFunctions.larsimModel import LarsimConfigurations
 
 #from UQEFPP.common import saltelliSobolIndicesHelpingFunctions
-from common import saltelliSobolIndicesHelpingFunctions
-from common import parallelStatistics
-from common import colors
+from uqef_dynamic.utils import saltelliSobolIndicesHelpingFunctions
+from uqef_dynamic.utils import parallelStatistics
+from uqef_dynamic.utils import colors
 
 # from numba import jit, prange
 

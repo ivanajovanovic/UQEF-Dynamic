@@ -20,12 +20,11 @@ import time
 
 from uqef.stat import Statistics
 
-from common import saltelliSobolIndicesHelpingFunctions
-from common import parallelStatistics
-from common import colors
-
-from common import utility
-from common import uqPostprocessing
+from uqef_dynamic.utils import saltelliSobolIndicesHelpingFunctions
+from uqef_dynamic.utils import parallelStatistics
+from uqef_dynamic.utils import uqPostprocessing
+from uqef_dynamic.utils import utility
+from uqef_dynamic.utils import colors
 
 # DEFAULT_DICT_WHAT_TO_PLOT = {
 #     "E_minus_std": False, "E_plus_std": False, "P10": False, "P90": False,
@@ -238,7 +237,7 @@ class Samples(object):
             return None
 
 
-class HydroStatistics(Statistics):
+class TimeDependentStatistics(Statistics):
     def __init__(self, configurationObject, workingDir=None, *args, **kwargs):
         Statistics.__init__(self)
 
@@ -591,7 +590,7 @@ class HydroStatistics(Statistics):
                 )
 
             if self.compute_gradients and self.compute_active_subspaces:
-                self.active_scores_dict = HydroStatistics._compute_active_score(self.samples.dict_of_matrix_c_eigen_decomposition)
+                self.active_scores_dict = TimeDependentStatistics._compute_active_score(self.samples.dict_of_matrix_c_eigen_decomposition)
 
             if self.compute_gradients and self.gradient_analysis:
                 self.param_grad_analysis()
@@ -728,7 +727,7 @@ class HydroStatistics(Statistics):
                 self.list_grad_columns = [self.list_grad_columns, ]
             for single_grad_columns in self.list_grad_columns:
                 result_dict_time_aggregated, result_df_over_time = \
-                    HydroStatistics._single_qoi_single_param_grad_analysis(
+                    TimeDependentStatistics._single_qoi_single_param_grad_analysis(
                         self.samples.df_simulation_result, single_grad_columns, self.time_column_name)
                 list_of_single_dict_grad_analysis_time_aggregated.append(result_dict_time_aggregated)
                 list_of_single_df_grad_analysis_over_time.append(result_df_over_time)
@@ -1497,11 +1496,11 @@ class HydroStatistics(Statistics):
                         with open(fullFileName, 'wb') as handle:
                             pickle.dump(self.result_dict[single_qoi_column], handle, protocol=pickle.HIGHEST_PROTOCOL)
                     else:
-                        print(f"HydroStatistics.saveToFile() - Entry {single_qoi_column} does not exist anymore in "
-                              f"HydroStatistics.result_dict, therefore will not be saved")
+                        print(f"TimeDependentStatistics.saveToFile() - Entry {single_qoi_column} does not exist anymore in "
+                              f"TimeDependentStatistics.result_dict, therefore will not be saved")
                 except KeyError as e:
-                    print(f"HydroStatistics.saveToFile() - Entry {single_qoi_column} does not exist anymore in "
-                          f"HydroStatistics.result_dict, therefore will not be saved")
+                    print(f"TimeDependentStatistics.saveToFile() - Entry {single_qoi_column} does not exist anymore in "
+                          f"TimeDependentStatistics.result_dict, therefore will not be saved")
 
         if self.active_scores_dict is not None:
             fileName = "active_scores_dict.pkl"

@@ -44,15 +44,14 @@ if linux_cluster_run:
 else:
     sys.path.insert(0, '/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic')
 
-from common import utility
-from common import uqPostprocessing
+from uqef_dynamic.utils import utility
+from uqef_dynamic.utils import uqPostprocessing
 
-from larsim import LarsimModelUQ
-from larsim import LarsimStatistics
+from uqef_dynamic.models.larsim import LarsimModelUQ
+from uqef_dynamic.models.larsim import LarsimStatistics
 
-from hbv_sask import HBVSASKModelUQ
-from hbv_sask import HBVSASKStatisticsMultipleQoI as HBVSASKStatistics
-
+from uqef_dynamic.models.hbv_sask import HBVSASKModelUQ
+from uqef_dynamic.models.hbv_sask import HBVSASKStatistics
 #####################################
 ### MPI infos:
 #####################################

@@ -27,11 +27,11 @@ from LarsimUtilityFunctions import larsimDataPostProcessing
 from LarsimUtilityFunctions import larsimIO
 from LarsimUtilityFunctions import larsimPaths as paths
 
-from common import saltelliSobolIndicesHelpingFunctions
-from common import utility
+from uqef_dynamic.utils import saltelliSobolIndicesHelpingFunctions
+from uqef_dynamic.utils import utility
 
 # from larsim import LarsimModel
-from larsim import LarsimStatistics
+from uqef_dynamic.models.larsim import LarsimStatistics
 ###################################################################################################################
 # Reading saved data
 ###################################################################################################################

@@ -31,7 +31,7 @@ from tabulate import tabulate
 # for parallel computing
 import multiprocessing
 
-from . import saltelliSobolIndicesHelpingFunctions
+from uqef_dynamic.utils import saltelliSobolIndicesHelpingFunctions
 
 DEFAULT_DICT_WHAT_TO_PLOT = {
     "E_minus_std": False, "E_plus_std": False, "P10": False, "P90": False,
@@ -2537,7 +2537,7 @@ def pce_of_kl_expansion(N_kl, polynomial_expansion, nodes, weights, f_kl_eval_at
 # =================================================================================================
 
 
-def computing_generazlied_sobol_total_indices_from_kl_expan(
+def computing_generalized_sobol_total_indices_from_kl_expan(
     f_kl_surrogate_coefficients: np.ndarray,
     polynomial_expansion: cp.polynomial,
     weights: np.ndarray,
@@ -2592,7 +2592,7 @@ def computing_generazlied_sobol_total_indices_from_kl_expan(
             file.write(f'{param_name}: {s_tot_generalized}\n')
 
 
-def computing_generazlied_sobol_total_indices_from_poly_expan(
+def computing_generalized_sobol_total_indices_from_poly_expan(
     result_dict_statistics: Dict[Any, Dict[str, Any]],
     polynomial_expansion: cp.polynomial,
     weights: np.ndarray,

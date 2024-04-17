@@ -26,9 +26,6 @@ from LarsimUtilityFunctions import larsimModel
 import chaospy as cp
 import uqef
 
-# from . import LarsimModel
-
-
 class LarsimFunction(Function):
     def __init__(self, configurationObject, param_names=None, qoi="Q", gof="NSE"):
         super().__init__()

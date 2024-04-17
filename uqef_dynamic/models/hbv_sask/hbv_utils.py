@@ -4,7 +4,7 @@ import dateutil.parser
 import numpy as np
 import pandas as pd
 
-from common import utility
+from uqef_dynamic.utils import utility
 
 precipitation_column_name="precipitation"
 temperature_column_name="temperature"

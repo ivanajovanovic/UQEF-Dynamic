@@ -213,11 +213,11 @@ def _Sens_t_sample(Y, D, N, code=4, do_printing=False):
     for j in range(D):
         if code == 1:
             # TODO Note - this version sometimes gives negative values
-            numerator = denominator - np.mean((fAB[j]-B)**2, axis=0)/2  # denominator - np.mean((fAB[j].T-fB)**2, -1)/2
+            numerator = denominator - np.mean((fAB[j]-fB)**2, axis=0)/2  # denominator - np.mean((fAB[j].T-fB)**2, -1)/2
         elif code == 2:
             numerator = denominator - (np.mean(fA*fAB[j], axis=0) - mean**2)  # (np.mean(fA*fAB[j].T, -1) - mean**2)
         elif code == 3:
-            numerator = np.mean(fA*(A-fAB[j]),  axis=0)  # np.mean(fA*(A-fAB[j].T), -1)
+            numerator = np.mean(fA*(fA-fAB[j]),  axis=0)  # np.mean(fA*(fA-fAB[j].T), -1)
         elif code == 4:
             numerator = np.mean((fA-fAB[j])**2, axis=0)/2  # np.mean((fA-fAB[j].T)**2, -1)
         else:

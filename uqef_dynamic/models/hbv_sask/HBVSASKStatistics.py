@@ -10,14 +10,12 @@ from plotly.subplots import make_subplots
 #
 # from common import saltelliSobolIndicesHelpingFunctions
 # from common import parallelStatistics
-from common import colors
-#
-from common import utility
-from hydro_model import HydroStatistics
-from hbv_sask import hbvsask_utility as hbv
+from uqef_dynamic.utils import colors
+from uqef_dynamic.models.time_dependent_baseclass.time_dependent_statistics import TimeDependentStatistics
+from uqef_dynamic.models.hbv_sask import hbvsask_utility as hbv
 
 
-class HBVSASKStatistics(HydroStatistics.HydroStatistics):
+class HBVSASKStatistics(TimeDependentStatistics):
 
     def __init__(self, configurationObject, workingDir=None, *args, **kwargs):
         super(HBVSASKStatistics, self).__init__(configurationObject, workingDir, *args, **kwargs)

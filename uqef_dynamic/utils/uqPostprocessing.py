@@ -1,10 +1,10 @@
 """
 Set of utility functions for postprocessing data for UQ runs of different models.
-Many of these functions exist as well as part of HydroStatistics methods
+Many of these functions exist as well as part of TimeDependentStatistics methods
 
 @author: Ivana Jovanovic Buha
 """
-import chaospy as cp
+from collections import defaultdict
 import os
 import numpy as np
 import pandas as pd
@@ -14,31 +14,27 @@ import pickle
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 import plotly.express as px
-# from plotly.offline import plot
 import plotly.offline as pyo
-# Set notebook mode to work in offline
 
-# pyo.init_notebook_mode()
 import matplotlib.pyplot as plt
 pd.options.plotting.backend = "plotly"
 
-# sys.path.insert(0, os.getcwd())
 import sys
 sys.path.insert(0, '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic')
 
-from common import colors
-#
-from common import utility
-from collections import defaultdict
+import chaospy as cp
 
-from hydro_model import HydroStatistics
+from uqef_dynamic.utils import colors
+from uqef_dynamic.utils import utility
 
 # TODO make this script more general and independent of model class
-from larsim import LarsimStatistics
-from linearDampedOscillator import LinearDampedOscillatorStatistics
-from ishigami import IshigamiStatistics
-from productFunction import ProductFunctionStatistics
-from hbv_sask import HBVSASKStatistics as HBVSASKStatistics
+from uqef_dynamic.models.time_dependent_baseclass.time_dependent_statistics import TimeDependentStatistics
+
+from uqef_dynamic.models.larsim import LarsimStatistics
+from uqef_dynamic.models.linearDampedOscillator import LinearDampedOscillatorStatistics
+from uqef_dynamic.models.ishigami import IshigamiStatistics
+from uqef_dynamic.models.productFunction import ProductFunctionStatistics
+from uqef_dynamic.models.hbv_sask import HBVSASKStatistics
 
 def create_statistics_object(configuration_object, uqsim_args_dict, workingDir, model="hbvsask"):
     """
@@ -73,7 +69,7 @@ def create_statistics_object(configuration_object, uqsim_args_dict, workingDir, 
             compute_Sobol_m2=uqsim_args_dict["compute_Sobol_m2"]
         )
     else:
-        statisticsObject = HydroStatistics.HydroStatistics(
+        statisticsObject = TimeDependentStatistics(
             configurationObject=configuration_object,
             workingDir=workingDir,
             inputModelDir=uqsim_args_dict["inputModelDir"],
@@ -351,7 +347,7 @@ def describe_sensitivity_indices_single_qoi_under_some_condition(
             result_describe = df_subset.describe(include=np.number)
             print(f"{result_describe}")
         else:
-            raise Exception(f"Error in HydroStatistics.describe_sensitivity_indices_single_qoi_under_some_condition "
+            raise Exception(f"Error in TimeDependentStatistics.describe_sensitivity_indices_single_qoi_under_some_condition "
                             f"method - condition_sign should be one of the following strings: equal"
                             f"/greater than/greater than or equal/less than/less than or equal")
 

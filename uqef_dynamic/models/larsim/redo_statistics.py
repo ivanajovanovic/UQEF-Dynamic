@@ -25,15 +25,14 @@ from LarsimUtilityFunctions import larsimInputOutputUtilities
 from LarsimUtilityFunctions import larsimPaths as paths
 
 import sys
-# sys.path.insert(1, '/work/ga45met/mnt/linux_cluster_2/UQEFPP')
-sys.path.insert(1, '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEFPP')
+sys.path.insert(1, '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic')
 
-from common import saltelliSobolIndicesHelpingFunctions
-from common import utility
+from uqef_dynamic.utils import saltelliSobolIndicesHelpingFunctions
+from uqef_dynamic.utils import utility
 
 # from larsim import LarsimModel
-from larsim import LarsimStatistics
-from larsim import LarsimUQPostprocessing
+from uqef_dynamic.models.larsim import LarsimStatistics
+from uqef_dynamic.models.larsim import LarsimUQPostprocessing
 
 ###################################################################################################################
 # Reading saved data

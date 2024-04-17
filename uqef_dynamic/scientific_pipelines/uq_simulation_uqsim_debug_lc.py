@@ -25,23 +25,22 @@ pd.options.mode.chained_assignment = None
 # sys.path.insert(0, os.getcwd())
 sys.path.insert(0, '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic')
 
-from larsim import LarsimModelUQ
-from larsim import LarsimStatistics
-
-from linearDampedOscillator import LinearDampedOscillatorModel
-from linearDampedOscillator import LinearDampedOscillatorStatistics
-
-from ishigami import IshigamiModel
-from ishigami import IshigamiStatistics
-
-from productFunction import ProductFunctionModel
-from productFunction import ProductFunctionStatistics
-
 from LarsimUtilityFunctions import larsimModel
 from LarsimUtilityFunctions import larsimConfig
+from uqef_dynamic.models.larsim import LarsimModelUQ
+from uqef_dynamic.models.larsim import LarsimStatistics
 
-from hbv_sask import HBVSASKModelUQ
-from hbv_sask import HBVSASKStatistics
+from uqef_dynamic.models.linearDampedOscillator import LinearDampedOscillatorModel
+from uqef_dynamic.models.linearDampedOscillator import LinearDampedOscillatorStatistics
+
+from uqef_dynamic.models.ishigami import IshigamiModel
+from uqef_dynamic.models.ishigami import IshigamiStatistics
+
+from uqef_dynamic.models.productFunction import ProductFunctionModel
+from uqef_dynamic.models.productFunction import ProductFunctionStatistics
+
+from uqef_dynamic.models.hbv_sask import HBVSASKModelUQ
+from uqef_dynamic.models.hbv_sask import HBVSASKStatistics
 
 # instantiate UQsim
 uqsim = uqef.UQsim()

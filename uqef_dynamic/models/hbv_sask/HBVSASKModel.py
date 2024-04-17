@@ -15,8 +15,8 @@ from plotly.subplots import make_subplots
 from plotly.offline import plot
 
 # Local application imports
-from common import utility
-from hbv_sask import hbvsask_utility as hbv
+from uqef_dynamic.utils import utility
+from uqef_dynamic.models.hbv_sask import hbvsask_utility as hbv
 
 class HBVSASKModelConfigurations:
     """

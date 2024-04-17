@@ -3,15 +3,13 @@ import datetime
 import dill
 from distutils.util import strtobool
 import json
-import os.path as osp
-import pathlib
 import pandas as pd
 import time
 
-from common import utility
+from uqef_dynamic.utils import utility
 
 
-class HydroModelConfig(object):
+class TimeDependentModelConfig(object):
     def __init__(self, configurationObject, deep_copy=False, *args, **kwargs):
         if configurationObject is None:
             self.configurationObject = dict()
@@ -134,12 +132,12 @@ class HydroModelConfig(object):
         return values
 
 
-class HydroModel(object):
+class TimeDependentModel(object):
     def __init__(self, configurationObject, inputModelDir, workingDir=None, *args, **kwargs):
-        if isinstance(configurationObject, HydroModelConfig):
+        if isinstance(configurationObject, TimeDependentModelConfig):
             self.hydroModelConfig = configurationObject
         else:
-            self.hydroModelConfig = HydroModelConfig(configurationObject, deep_copy=False, *args, **kwargs)
+            self.hydroModelConfig = TimeDependentModelConfig(configurationObject, deep_copy=False, *args, **kwargs)
         self.configurationObject = self.hydroModelConfig.configurationObject  # TODO - remove this eventually
         #####################################
         self.uq_method = kwargs.get('uq_method', None)
