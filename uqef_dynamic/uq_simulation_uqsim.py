@@ -98,7 +98,7 @@ if local_debugging:
     # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/configurations/configuration_hbv_12D_MC.json'
     # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/configurations_Larsim/configurations_larsim_high_flow.json'
     # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/configurations/configuration_hbv_10D_MC_banff.json'
-    uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/configurations/configuration_hbv_7D.json'
+    uqsim.args.config_file = '/UQEF-Dynamic/data/configurations/configuration_hbv_7D.json'
 
     uqsim.args.sampleFromStandardDist = True  # False
 

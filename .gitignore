@@ -6,7 +6,7 @@ model_runs/
 saves/
 __pycache__/
 .idea/
-figures/
+saves/figures/
 sg_anaysis/
 log*
 

@@ -80,7 +80,7 @@ if local_debugging:
     uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs",
                                                               'gpce_d10_l5_p2_short')) #gpce_d5_l7_p3_summer_2007_multti_qoi
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
-    uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/configurations/configuration_hbv_10D.json'
+    uqsim.args.config_file = '/UQEF-Dynamic/data/configurations/configuration_hbv_10D.json'
 
     uqsim.args.sampleFromStandardDist = True  # False
 

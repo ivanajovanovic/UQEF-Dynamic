@@ -88,7 +88,7 @@ if local_debugging:
     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "ishigami_runs", "new_runs", 'ishigami_run_sc_sg_kpu_p8_q10'))
     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs", 'sc_kpu_l_7_d_6_p_4_2006'))
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
-    uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/configurations_Larsim/configurations_larsim_high_flow_small.json'
+    uqsim.args.config_file = '/UQEF-Dynamic/data/configurations_Larsim/configurations_larsim_high_flow_small.json'
 
     uqsim.args.sampleFromStandardDist = True  # True
 

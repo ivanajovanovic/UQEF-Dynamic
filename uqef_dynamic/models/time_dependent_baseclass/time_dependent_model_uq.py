@@ -1,5 +1,5 @@
 from uqef.model import Model
-from hydro_model import HydroModel
+from time_dependent_model import HydroModel
 
 class HydroModelUQ(HydroModel.HydroModel, Model):
     def __init__(self, configurationObject, inputModelDir, workingDir=None, *args, **kwargs):
