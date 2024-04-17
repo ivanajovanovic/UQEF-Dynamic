@@ -4,11 +4,12 @@ import numpy as np
 import pandas as pd
 import pickle
 import scipy
+import time
 
 # from saltelliSobolIndicesHelpingFunctions import *
 from . import saltelliSobolIndicesHelpingFunctions
 
-def _parallel_calc_stats_for_MC(
+def parallel_calc_stats_for_MC(
         keyIter_chunk, qoi_values_chunk, numEvaluations, dim, compute_Sobol_t=False, store_qoi_data_in_stat_dict=False,
         compute_sobol_total_indices_with_samples=False, samples=None):
     results = []
@@ -38,8 +39,9 @@ def _parallel_calc_stats_for_MC(
 
         # local_result_dict["E"] = np.sum(qoi_values, axis=0, dtype=np.float64) / numEvaluations
         local_result_dict["E"] = np.mean(qoi_values, 0)
-        local_result_dict["Var"] = np.sum((qoi_values - local_result_dict["E"]) ** 2, axis=0,
-                                          dtype=np.float64) / (numEvaluations - 1)
+        local_result_dict["Var"] = np.var(qoi_values, ddof=1)
+        # local_result_dict["Var"] = np.sum((qoi_values - local_result_dict["E"]) ** 2, axis=0,
+        #                                   dtype=np.float64) / (numEvaluations - 1)
         # local_result_dict["StdDev"] = np.sqrt(local_result_dict["Var"], dtype=np.float64)
         local_result_dict["StdDev"] = np.std(qoi_values, 0, ddof=1)
         local_result_dict["Skew"] = scipy.stats.skew(qoi_values, axis=0, bias=True)
@@ -67,15 +69,15 @@ def _parallel_calc_stats_for_MC(
     return results
 
 
-def _parallel_calc_stats_for_SC(keyIter_chunk, qoi_values_chunk, dist, polynomial_expansion, nodes,
+def parallel_calc_stats_for_SC(keyIter_chunk, qoi_values_chunk, dist, polynomial_expansion, nodes,
                                 compute_Sobol_t=False, compute_Sobol_m=False, store_qoi_data_in_stat_dict=False):
     pass
 
 
-def _parallel_calc_stats_for_gPCE(keyIter_chunk, qoi_values_chunk, dist, polynomial_expansion, nodes, weights=None,
+def parallel_calc_stats_for_gPCE(keyIter_chunk, qoi_values_chunk, dist, polynomial_expansion, nodes, weights=None,
                                   regression=False, compute_Sobol_t=False, compute_Sobol_m=False,
                                   store_qoi_data_in_stat_dict=False, store_gpce_surrogate_in_stat_dict=False,
-                                  save_gpce_surrogate=False):
+                                  save_gpce_surrogate=False, compute_other_stat_besides_pce_surrogate=True):
     results = []
     for ip in range(0, len(keyIter_chunk)):  # for each piece of work
         key = keyIter_chunk[ip]
@@ -84,14 +86,13 @@ def _parallel_calc_stats_for_gPCE(keyIter_chunk, qoi_values_chunk, dist, polynom
         if store_qoi_data_in_stat_dict:
             local_result_dict["qoi_values"] = qoi_values
         if regression:
-            qoi_gPCE = cp.fit_regression(polynomial_expansion, nodes, qoi_values)
+            qoi_gPCE, goi_coeff = cp.fit_regression(polynomial_expansion, nodes, qoi_values, retall=True)
         else:
-            qoi_gPCE = cp.fit_quadrature(polynomial_expansion, nodes, weights, qoi_values)
-
-        numPercSamples = 10 ** 5
+            qoi_gPCE, goi_coeff = cp.fit_quadrature(polynomial_expansion, nodes, weights, qoi_values, retall=True)
 
         if store_gpce_surrogate_in_stat_dict:
             local_result_dict["gPCE"] = qoi_gPCE
+        local_result_dict['gpce_coeff'] = goi_coeff
 
         if save_gpce_surrogate:
             # TODO create a unique file with key and save it in a working directory
@@ -103,31 +104,88 @@ def _parallel_calc_stats_for_gPCE(keyIter_chunk, qoi_values_chunk, dist, polynom
             #     pickle.dump(qoi_gPCE, handle, protocol=pickle.HIGHEST_PROTOCOL)
             pass
 
-        local_result_dict["E"] = float(cp.E(qoi_gPCE, dist))
-        local_result_dict["Var"] = float(cp.Var(qoi_gPCE, dist))
-        local_result_dict["StdDev"] = float(cp.Std(qoi_gPCE, dist))
-
-        local_result_dict["Skew"] = cp.Skew(qoi_gPCE, dist).round(4)
-        local_result_dict["Kurt"] = cp.Kurt(qoi_gPCE, dist)
-        local_result_dict["qoi_dist"] = cp.QoI_Dist(qoi_gPCE, dist)
-
-        local_result_dict["P10"] = float(cp.Perc(qoi_gPCE, 10, dist, numPercSamples))
-        local_result_dict["P90"] = float(cp.Perc(qoi_gPCE, 90, dist, numPercSamples))
-        if isinstance(local_result_dict["P10"], list) and len(local_result_dict["P10"]) == 1:
-            local_result_dict["P10"] = local_result_dict["P10"][0]
-            local_result_dict["P90"] = local_result_dict["P90"][0]
-
-        if compute_Sobol_t:
-            local_result_dict["Sobol_t"] = cp.Sens_t(qoi_gPCE, dist)
-        if compute_Sobol_m:
-            local_result_dict["Sobol_m"] = cp.Sens_m(qoi_gPCE, dist)
-            #local_result_dict["Sobol_m2"] = cp.Sens_m2(qoi_gPCE, dist) # second order sensitivity indices
+        calculate_stats_gpce(
+            local_result_dict, qoi_gPCE, dist, compute_other_stat_besides_pce_surrogate,
+            compute_Sobol_t, compute_Sobol_m)
 
         results.append([key, local_result_dict])
     return results
 
 
-def _parallel_calc_stats_for_mc_saltelli(
+def calculate_stats_gpce(
+    local_result_dict, qoi_gPCE, dist, compute_other_stat_besides_pce_surrogate=True,
+    compute_Sobol_t=False, compute_Sobol_m=False, compute_Sobol_m2=False):
+    start = time.time()
+    time_info_dict = {}
+
+    local_result_dict["E"] = float(cp.E(qoi_gPCE, dist))
+    end = time.time()
+    time_info_dict["duration_E"] = end - start
+
+    if compute_other_stat_besides_pce_surrogate:
+        # local_result_dict["E"] = float(cp.E(qoi_gPCE, dist))
+        start = time.time()
+        local_result_dict["Var"] = float(cp.Var(qoi_gPCE, dist))
+        end = time.time()
+        time_info_dict["duration_Var"] = end - start
+
+        start = time.time()
+        local_result_dict["StdDev"] = float(cp.Std(qoi_gPCE, dist))
+        end = time.time()
+        time_info_dict["duration_StdDev"] = end - start
+
+        start = time.time()
+        local_result_dict["Skew"] = cp.Skew(qoi_gPCE, dist).round(4)
+        end = time.time()
+        time_info_dict["duration_Skew"] = end - start
+
+        start = time.time()
+        local_result_dict["Kurt"] = cp.Kurt(qoi_gPCE, dist)
+        end = time.time()
+        time_info_dict["duration_Kurt"] = end - start
+
+        start = time.time()
+        local_result_dict["qoi_dist"] = cp.QoI_Dist(qoi_gPCE, dist)
+        end = time.time()
+        time_info_dict["duration_qoi_dist"] = end - start
+
+        numPercSamples = 10 ** 5
+
+        start = time.time()
+        local_result_dict["P10"] = float(cp.Perc(qoi_gPCE, 10, dist, numPercSamples))
+        end = time.time()
+        time_info_dict["duration_P10"] = end - start
+
+        start = time.time()
+        local_result_dict["P90"] = float(cp.Perc(qoi_gPCE, 90, dist, numPercSamples))
+        end = time.time()
+        time_info_dict["duration_P90"] = end - start
+
+        if isinstance(local_result_dict["P10"], list) and len(local_result_dict["P10"]) == 1:
+            local_result_dict["P10"] = local_result_dict["P10"][0]
+            local_result_dict["P90"] = local_result_dict["P90"][0]
+
+        if compute_Sobol_t:
+            start = time.time()
+            local_result_dict["Sobol_t"] = cp.Sens_t(qoi_gPCE, dist)
+            end = time.time()
+            time_info_dict["duration_Sobol_t"] = end - start
+        if compute_Sobol_m:
+            start = time.time()
+            local_result_dict["Sobol_m"] = cp.Sens_m(qoi_gPCE, dist)
+            end = time.time()
+            time_info_dict["duration_Sobol_m"] = end - start
+        if compute_Sobol_m2:
+            start = time.time()
+            local_result_dict["Sobol_m2"] = cp.Sens_m2(qoi_gPCE, dist) # second order sensitivity indices
+            end = time.time()
+            time_info_dict["duration_Sobol_m2"] = end - start
+
+    print(f"DEBUGGING - time_info_dict - {time_info_dict}")
+
+
+
+def parallel_calc_stats_for_mc_saltelli(
         keyIter_chunk, qoi_values_chunk, numEvaluations, dim, compute_Sobol_t=False,
         compute_Sobol_m=False, store_qoi_data_in_stat_dict=False, compute_sobol_total_indices_with_samples=False,
         samples=None):

@@ -15,7 +15,7 @@
 
       "run_full_timespan":"False",
       "spin_up_length":1095,
-      "simulation_length": 365,
+      "simulation_length": 395,
       "resolution": "daily",
 
       "cut_runs": "False",
@@ -33,15 +33,15 @@
   "simulation_settings": {
     "qoi":"Q_cms",
     "qoi_column":"Q_cms",
-    "autoregressive_model_first_order":"True",
+    "autoregressive_model_first_order":"False",
     "transform_model_output":"None",
     "read_measured_data": "True",
     "qoi_column_measured":"streamflow",
-    "objective_function_qoi":["RMSE", "LogNSE", "KGE"],
+    "objective_function_qoi":"RMSE",
     "calculate_GoF":"True",
     "objective_function":["MAE", "MSE", "RMSE", "NRMSE", "NSE", "LogNSE", "KGE"],
     "mode":"continuous",
-    "interval": 10,
+    "interval": 5,
     "min_periods": 5,
     "method": "avrg",
     "center": "left",
@@ -61,13 +61,6 @@
       "default": 0.0
     },
     {
-      "name": "C0",
-      "distribution": "Uniform",
-      "lower": 0.0,
-      "upper": 10.0,
-      "default": 0.5
-    },
-    {
       "name": "ETF",
       "distribution": "Uniform",
       "lower": 0.0,
@@ -78,14 +71,14 @@
       "name": "FC",
       "distribution": "Uniform",
       "lower": 50.0,
-      "upper": 500.0,
+      "upper": 1000.0,
       "default": 250
     },
     {
       "name": "beta",
       "distribution": "Uniform",
-      "lower": 0.4,
-      "upper": 5.0,
+      "lower": 1.0,
+      "upper": 4.0,
       "default": 2.0
     },
     {
@@ -93,7 +86,7 @@
       "distribution": "Uniform",
       "lower": 0.01,
       "upper": 0.9,
-      "default": 0.1
+      "default": 0.3
     },
     {
       "name": "K2",
@@ -105,11 +98,25 @@
   ],
   "unused_parameters": [
     {
+      "name": "C0",
+      "distribution": "Uniform",
+      "lower": 0.0,
+      "upper": 5.0,
+      "default": 0.5
+    },
+    {
       "name": "LP",
       "distribution": "Uniform",
       "lower": 0.0,
       "upper": 1.0,
       "default": 0.5
+    },
+    {
+      "name": "beta",
+      "distribution": "Uniform",
+      "lower": 1.0,
+      "upper": 3.0,
+      "default": 2.0
     },
     {
       "name": "K1",

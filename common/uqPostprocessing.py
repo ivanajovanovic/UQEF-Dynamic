@@ -33,25 +33,23 @@ from collections import defaultdict
 
 from hydro_model import HydroStatistics
 
+# TODO make this script more general and independent of model class
 from larsim import LarsimStatistics
-
 from linearDampedOscillator import LinearDampedOscillatorStatistics
-
 from ishigami import IshigamiStatistics
-
 from productFunction import ProductFunctionStatistics
-
-from hbv_sask import HBVSASKStatisticsMultipleQoI as HBVSASKStatistics
+from hbv_sask import HBVSASKStatistics as HBVSASKStatistics
 
 def create_statistics_object(configuration_object, uqsim_args_dict, workingDir, model="hbvsask"):
     """
-
+    Note: hardcoded for a couple of currently supported models
     :param configuration_object:
     :param uqsim_args_dict:
     :param workingDir:
     :param model: "larsim" | "hbvsask"
     :return:
     """
+    # TODO make this function more general or move it somewhere else
     if model == "larsim":
         statisticsObject = LarsimStatistics.LarsimStatistics(configuration_object, workingDir=workingDir,
                                                                    parallel_statistics=uqsim_args_dict[
@@ -65,25 +63,27 @@ def create_statistics_object(configuration_object, uqsim_args_dict, workingDir, 
         statisticsObject = HBVSASKStatistics.HBVSASKStatistics(
             configurationObject=configuration_object,
             workingDir=workingDir,
+            inputModelDir=uqsim_args_dict["inputModelDir"],
             sampleFromStandardDist=uqsim_args_dict["sampleFromStandardDist"],
             parallel_statistics=uqsim_args_dict["parallel_statistics"],
             mpi_chunksize=uqsim_args_dict["mpi_chunksize"],
             uq_method=uqsim_args_dict["uq_method"],
             compute_Sobol_t=uqsim_args_dict["compute_Sobol_t"],
             compute_Sobol_m=uqsim_args_dict["compute_Sobol_m"],
-            inputModelDir=uqsim_args_dict["inputModelDir"]
+            compute_Sobol_m2=uqsim_args_dict["compute_Sobol_m2"]
         )
     else:
         statisticsObject = HydroStatistics.HydroStatistics(
             configurationObject=configuration_object,
             workingDir=workingDir,
+            inputModelDir=uqsim_args_dict["inputModelDir"],
             sampleFromStandardDist=uqsim_args_dict["sampleFromStandardDist"],
             parallel_statistics=uqsim_args_dict["parallel_statistics"],
             mpi_chunksize=uqsim_args_dict["mpi_chunksize"],
             uq_method=uqsim_args_dict["uq_method"],
             compute_Sobol_t=uqsim_args_dict["compute_Sobol_t"],
             compute_Sobol_m=uqsim_args_dict["compute_Sobol_m"],
-            inputModelDir=uqsim_args_dict["inputModelDir"]
+            compute_Sobol_m2=uqsim_args_dict["compute_Sobol_m2"]
         )
 
     return statisticsObject
@@ -137,15 +137,20 @@ def extracting_statistics_df_for_single_qoi(statisticsObject, qoi="Q_cms"):
     pass
 
 
+def get_all_timesteps_from_saved_files(workingDir, first_part_of_the_file = "statistics"):
+    all_files = os.listdir(workingDir)
+    list_TimeStamp = set() # []
+    for filename in all_files:
+        parts = filename.split('_')
+        if parts[0] == first_part_of_the_file and parts[-1].endswith(".pkl"):
+            single_timestep = parts[-1].split('.')[0]
+            list_TimeStamp.add(single_timestep)  # pd.Timestamp(single_timestep)
+    return list_TimeStamp
+
+    
 def read_all_saved_statistics_dict(workingDir, list_qoi_column, single_timestamp_single_file=False):
     if single_timestamp_single_file:
-        all_files = os.listdir(workingDir)
-        list_TimeStamp = set() # []
-        for filename in all_files:
-            parts = filename.split('_')
-            if parts[0] == "statistics" and parts[-1].endswith(".pkl"):
-                single_timestep = parts[-1].split('.')[0]
-                list_TimeStamp.add(single_timestep)  # pd.Timestamp(single_timestep)
+        list_TimeStamp = get_all_timesteps_from_saved_files(workingDir, first_part_of_the_file = "statistics")
     statistics_dictionary = defaultdict(dict)
     for single_qoi in list_qoi_column:
         if single_timestamp_single_file:
@@ -153,23 +158,52 @@ def read_all_saved_statistics_dict(workingDir, list_qoi_column, single_timestamp
             for single_timestep in list_TimeStamp:
                 statistics_dictionary_file_temp = workingDir / f"statistics_dictionary_{single_qoi}_{single_timestep}.pkl"
                 assert statistics_dictionary_file_temp.is_file(), \
-                    f"The file for qoi-{single_qoi} and time-stamp-{single_timestep} does not exist"
+                    f"The statistics file for qoi-{single_qoi} and time-stamp-{single_timestep} does not exist"
                 with open(statistics_dictionary_file_temp, 'rb') as f:
                     statistics_dictionary_temp = pickle.load(f)
                 statistics_dictionary[single_qoi][pd.Timestamp(single_timestep)] = statistics_dictionary_temp
         else:
             statistics_dictionary_file_temp = workingDir / f"statistics_dictionary_qoi_{single_qoi}.pkl"
-            assert statistics_dictionary_file_temp.is_file()
+            assert statistics_dictionary_file_temp.is_file(), \
+                                f"The statistics file for qoi-{single_qoi} does not exist"
             with open(statistics_dictionary_file_temp, 'rb') as f:
                 statistics_dictionary_temp = pickle.load(f)
             statistics_dictionary[single_qoi] = statistics_dictionary_temp
     return statistics_dictionary
 
 
+def read_all_saved_gpce_surrogate_models(workingDir, list_qoi_column, single_timestamp_single_file=False):
+    list_TimeStamp = get_all_timesteps_from_saved_files(workingDir, first_part_of_the_file = "gpce")
+    gpce_surrogate_dictionary = defaultdict(dict)
+    for single_qoi in list_qoi_column:
+        gpce_surrogate_dictionary[single_qoi] = dict()
+        for single_timestep in list_TimeStamp:
+            gpce_surrogate_file_temp = workingDir / f"gpce_surrogate_{single_qoi}_{single_timestep}.pkl"
+            assert gpce_surrogate_file_temp.is_file(), \
+            f"The gpce surrogate file for qoi-{single_qoi} and time-stamp-{single_timestep} does not exist"
+            with open(gpce_surrogate_file_temp, 'rb') as f:
+                gpce_surrogate_temp = pickle.load(f)
+            gpce_surrogate_dictionary[single_qoi][pd.Timestamp(single_timestep)] = gpce_surrogate_temp
+    return gpce_surrogate_dictionary
+
+
+def read_all_saved_gpce_coeffs(workingDir, list_qoi_column, single_timestamp_single_file=False):
+    list_TimeStamp = get_all_timesteps_from_saved_files(workingDir, first_part_of_the_file = "gpce")
+    gpce_coeff_dictionary = defaultdict(dict)
+    for single_qoi in list_qoi_column:
+        gpce_coeff_dictionary[single_qoi] = dict()
+        for single_timestep in list_TimeStamp:
+            gpce_coeffs_file_temp = workingDir / f"gpce_coeffs_{single_qoi}_{single_timestep}.npy"
+            assert gpce_coeffs_file_temp.is_file(), \
+            f"The gpce coefficients file for qoi-{single_qoi} and time-stamp-{single_timestep} does not exist"
+            gpce_coeff_dictionary[single_qoi][pd.Timestamp(single_timestep)] = np.load(gpce_coeffs_file_temp)
+    return gpce_coeff_dictionary
+
+
 def compute_gof_over_different_time_series(df_statistics, objective_function="MAE", qoi_column="Q",
                                            measuredDF_column_names="measured"):
     """
-    This function will run only for a single station
+    This function will run only for a single qoi
     """
     if not isinstance(qoi_column, list):
         qoi_column = [qoi_column, ]
@@ -494,14 +528,32 @@ def gof_values_GaussianKDE(df_index_parameter_gof, gof_list=None, plot=True, plo
         plt.show()
 
     return result_dic_of_distributions
+
 ###################################################################################################################
 # Set of functions for plotting - these function may go to utility as well?
 ###################################################################################################################
 
 
-def plot_heatmap_si_single_qoi(self, qoi_column, si_df, si_type="Sobol_t", uq_method="sc"):
-    si_columns = [x for x in si_df.columns.tolist() if x != 'measured' and x != 'measured_norm']
-    fig = px.imshow(si_df[si_columns].T, labels=dict(y='Parameters', x='Dates'))
+def plot_heatmap_si_single_qoi(qoi_column, si_df, si_type="Sobol_t", uq_method="sc", time_column_name="TimeStamp"):
+    reset_index_at_the_end = False
+    if si_df.index.name != time_column_name:
+        si_df.set_index(time_column_name, inplace=True)
+        reset_index_at_the_end = True
+
+    si_columns_to_plot = [x for x in si_df.columns.tolist() if x != 'measured' and x != 'measured_norm' and x != 'qoi']
+    # fig = px.imshow(si_df[si_columns_to_plot].T, labels=dict(y='Parameters', x='Dates'))
+
+    if 'qoi' in si_df.columns.tolist():
+        fig = px.imshow(si_df.loc[si_df['qoi'] == qoi_column][si_columns_to_plot].T,
+                        labels=dict(y='Parameters', x='Dates'))
+    else:
+        fig = px.imshow(si_df[si_columns_to_plot].T,
+                        labels=dict(y='Parameters', x='Dates'))
+
+    if reset_index_at_the_end:
+        si_df.reset_index(inplace=True)
+        si_df.rename(columns={si_df.index.name: time_column_name}, inplace=True)
+
     return fig
 
 
@@ -649,7 +701,11 @@ def plotting_function_single_qoi(
         go.Bar(
             x=df['TimeStamp'], y=df['precipitation'],
             text=df['precipitation'],
-            name="Precipitation"
+            name="Precipitation",
+            # marker_color='red'
+            # mode="lines",
+            #         line=dict(
+            #             color='LightSkyBlue')
         ),
         row=1, col=1
     )
@@ -659,7 +715,8 @@ def plotting_function_single_qoi(
         go.Scatter(
             x=df['TimeStamp'], y=df['temperature'],
             text=df['temperature'],
-            name="Temperature", mode='lines+markers'
+            name="Temperature", mode='lines+markers',
+            # marker_color='blue'
         ),
         row=2, col=1
     )
@@ -667,7 +724,8 @@ def plotting_function_single_qoi(
     fig.add_trace(
         go.Scatter(
             x=df['TimeStamp'], y=df['measured'],
-            name="Observed Streamflow", mode='lines'
+            name="Observed Streamflow", mode='lines',
+            # line=dict(color='green'),
         ),
         row=3, col=1
     )

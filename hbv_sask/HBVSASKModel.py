@@ -237,36 +237,45 @@ class HBVSASKModel(object):
                                            read_measured_streamflow=self.read_measured_streamflow,
                                            streamflow_column_name=self.streamflow_column_name)
 
+    #####################################
+    # time setups
+    ##################################### 
     def _timespan_setup(self, **kwargs):
+        self.get_start_end_dates()
+        self.get_resolution(kwargs)
+        self.get_spin_up_length(kwargs)
+        self.get_simulation_length(kwargs)
+        self.set_date_ranges()
+        
+    def get_start_end_dates(self):
+        # TODO think about refactoring this, to get start_date and end_date as input arguments as well
+        # note: run_full_timespan has a power over start and end dates
         if self.run_full_timespan:
             self.start_date, self.end_date = hbv._get_full_time_span(self.basis)
         else:
             try:
-                self.start_date = pd.Timestamp(
-                    year=self.configurationObject["time_settings"]["start_year"],
-                    month=self.configurationObject["time_settings"]["start_month"],
-                    day=self.configurationObject["time_settings"]["start_day"],
-                    hour=self.configurationObject["time_settings"].get("start_hour", 0)
-                )
-                self.end_date = pd.Timestamp(
-                    year=self.configurationObject["time_settings"]["end_year"],
-                    month=self.configurationObject["time_settings"]["end_month"],
-                    day=self.configurationObject["time_settings"]["end_day"],
-                    hour=self.configurationObject["time_settings"].get("end_hour", 0)
-                )
+                self.start_date = self.get_timestamp_from_configuration_dict("start")
+                self.end_date = self.get_timestamp_from_configuration_dict("end")
             except KeyError:
                 self.start_date, self.end_date = hbv._get_full_time_span(self.basis)
 
+    def get_timestamp_from_configuration_dict(self, time_type):
+        return pd.Timestamp(
+            year=self.configurationObject["time_settings"][f"{time_type}_year"],
+            month=self.configurationObject["time_settings"][f"{time_type}_month"],
+            day=self.configurationObject["time_settings"][f"{time_type}_day"],
+            hour=self.configurationObject["time_settings"].get(f"{time_type}_hour", 0)
+        )
+
+    def get_resolution(self, kwargs):
         if "resolution" in kwargs:
             self.resolution = kwargs["resolution"]
         else:
-            try:
-                self.resolution = self.configurationObject["time_settings"].get("resolution", "daily")
-            except KeyError:
-                self.resolution = "daily"
-        if self.resolution != "daily" and self.resolution != "hourly" and self.resolution != "minute":
+            self.resolution = self.configurationObject["time_settings"].get("resolution", "daily")
+        if self.resolution not in ["daily", "hourly", "minute"]:
             raise Exception(f"Error in Statistics class - resolution is not daily, hourly or minute")
 
+    def get_spin_up_length(self, kwargs):
         if "spin_up_length" in kwargs:
             self.spin_up_length = kwargs["spin_up_length"]
         elif "warm_up_length" in kwargs:
@@ -282,6 +291,7 @@ class HBVSASKModel(object):
             except KeyError:
                 self.spin_up_length = 0  # 365*3
 
+    def get_simulation_length(self, kwargs):
         # note: one has to omit simulation_length both from kwargs and configurationObject
         # if you want that run_full_timespan has an effect
         if "simulation_length" in kwargs:
@@ -293,7 +303,10 @@ class HBVSASKModel(object):
                 self.simulation_length = (self.end_date - self.start_date).days - self.spin_up_length
                 if self.simulation_length <= 0:
                     self.simulation_length = 365
-
+    
+    def set_date_ranges(self):
+        # note: self.simulation_length actually has power over previously set end_date
+        # note: for now, the resolutin is set to daily
         self.start_date_predictions = pd.to_datetime(self.start_date) + pd.DateOffset(days=self.spin_up_length)
         self.end_date = pd.to_datetime(self.start_date_predictions) + pd.DateOffset(days=self.simulation_length)
         self.full_data_range = pd.date_range(start=self.start_date, end=self.end_date, freq="1D")
@@ -302,17 +315,50 @@ class HBVSASKModel(object):
         self.start_date = pd.Timestamp(self.start_date)
         self.end_date = pd.Timestamp(self.end_date)
         self.start_date_predictions = pd.Timestamp(self.start_date_predictions)
+    
+    def set_run_full_timespan(self, run_full_timespan: bool):
+        self.run_full_timespan = run_full_timespan
+         
+    def set_start_date(self, start_date: pd.Timestamp):
+        self.start_date = start_date
 
-        # print(f"DEBUGGING - self.start_date {self.start_date}")
-        # print(f"DEBUGGING - self.start_date_predictions {self.start_date_predictions}")
-        # print(f"DEBUGGING - self.end_date {self.end_date}")
-        # print(f"start_date-{self.start_date}; spin_up_length-{self.spin_up_length};
-        # start_date_predictions-{self.start_date_predictions}")
-        # print(
-        #     f"start_date_predictions-{self.start_date_predictions}; simulation_length-{self.simulation_length}; end_date-{self.end_date}")
-        # print(len(self.simulation_range), (self.end_date - self.start_date_predictions).days)
-        # assert len(self.time_series_measured_data_df[self.start_date:self.end_date]) == len(self.full_data_range)
+    def set_end_date(self, end_date: pd.Timestamp):
+        self.end_date = end_date
 
+    def set_resolution(self, resolution: str):
+        self.resolution = resolution
+        if self.resolution not in ["daily", "hourly", "minute"]:
+            raise Exception(f"Error in Statistics class - resolution is not daily, hourly or minute")
+
+    def set_spin_up_length(self, spin_up_length: int):
+        self.spin_up_length = spin_up_length
+        if self.spin_up_length < 0 or self.spin_up_length > 365*3 or self.spin_up_length is None:
+            self.spin_up_length = 0
+
+    def set_simulation_length(self, simulation_length: int):
+        self.simulation_length = simulation_length
+        if self.simulation_length <= 0:
+                    self.simulation_length = 365
+
+    def set_start_date_predictions(self, start_date_predictions: pd.Timestamp):
+        self.start_date_predictions = start_date_predictions
+      
+    def set_timespan_setup_from_start_end_and_spin_up_length(self, start_date, end_date, spin_up_length):
+        run_full_timespan = False
+        start_date = pd.to_datetime(start_date)
+        end_date = pd.to_datetime(end_date)
+        # dict_with_dates_setup = {"start_date": start_date, "end_date": end_date, "spin_up_length":spin_up_length}
+        self.set_run_full_timespan(run_full_timespan)
+        self.set_start_date(start_date)
+        self.set_end_date(end_date)
+        self.set_spin_up_length(spin_up_length)
+        simulation_length = (self.end_date - self.start_date).days - self.spin_up_length
+        if simulation_length <= 0:
+            simulation_length = 365
+        self.set_simulation_length(simulation_length)
+        self.set_date_ranges()
+    
+    #####################################
     def _input_and_measured_data_setup(self, time_column_name="TimeStamp", precipitation_column_name="precipitation",
                                        temperature_column_name="temperature",
                                        long_term_precipitation_column_name="monthly_average_PE",
@@ -409,6 +455,28 @@ class HBVSASKModel(object):
         plot(fig, filename=str(plot_filename), auto_open=False)
         return fig
 
+    def redo_input_and_measured_data_setup(self):
+        """
+        Redo input and measured data setup, e.g., after the time settings have been changed.
+        """
+        self._input_and_measured_data_setup(
+            time_column_name=self.time_column_name,
+            precipitation_column_name=self.precipitation_column_name,
+            temperature_column_name=self.temperature_column_name,
+            long_term_precipitation_column_name=self.long_term_precipitation_column_name,
+            long_term_temperature_column_name=self.long_term_temperature_column_name,
+            read_measured_streamflow=self.read_measured_streamflow,
+            streamflow_column_name=self.streamflow_column_name
+            )
+
+        if self.plotting:
+            figure = self._plot_input_data(time_column_name=self.time_column_name,
+                                           precipitation_column_name=self.precipitation_column_name,
+                                           temperature_column_name=self.temperature_column_name,
+                                           read_measured_streamflow=self.read_measured_streamflow,
+                                           streamflow_column_name=self.streamflow_column_name)
+
+    #####################################
     def prepare(self, *args, **kwargs):
         pass
 
@@ -453,7 +521,11 @@ class HBVSASKModel(object):
             :*args: Variable length argument list.
             :**kwargs (dict, optional): Additional keyword arguments.
             Can include:
-                - take_direct_value (bool): If True, the function will take the direct value of the parameter. Default is False.
+                - take_direct_value (bool): 
+                    If True, the function will take the direct value of the parameter 
+                    (e.g., it is expeced that parameters[unique_run_index] is a dict with keys being paramter name and values being parameter values). 
+                    If take_direct_value is False then parameters[unique_run_index] should be a list of parameter values corresponding to the order of the parameters in the configuration file
+                    Default is False.
                 - createNewFolder (bool): If True, the function will create a new folder for the results. Default is False.
                 - deleteFolderAfterwards (bool): If True, the function will delete the folder after the results are retrieved. Default is True.
                 - writing_results_to_a_file (bool): If True, the function will write the results to a file. Default is self.writing_results_to_a_file.
@@ -490,16 +562,17 @@ class HBVSASKModel(object):
         plotting = kwargs.get("plotting", self.plotting)
         corrupt_forcing_data = kwargs.get("corrupt_forcing_data", self.corrupt_forcing_data)
 
+        # TODO Think if merge_output_with_measured_data should always be True
         merge_output_with_measured_data = kwargs.get("merge_output_with_measured_data", False)
         # TODO - add an extra opion when autoregressive_model_first_order is set to True to choose between measred data and previous model output
-        if any(self.list_calculate_GoF) or self.autoregressive_model_first_order:
+        if any(self.list_calculate_GoF) or self.autoregressive_model_first_order or self.qoi == "GoF":
             merge_output_with_measured_data = True
         # if any(self.list_calculate_GoF):
         #     merge_output_with_measured_data = True
         # if not any(self.list_read_measured_data):
         #     merge_output_with_measured_data = False
 
-         # HBV Specific input data
+        # HBV Specific input data
         forcing = kwargs.get("forcing", self.time_series_measured_data_df)
         long_term = kwargs.get("long_term", self.precipitation_temperature_monthly_df)
         initial_condition_df = kwargs.get("initial_condition_df", self.initial_condition_df)
@@ -688,7 +761,7 @@ class HBVSASKModel(object):
                     if self.list_calculate_GoF[idx] and self.list_read_measured_data[idx]:
                         index_parameter_gof_dict_single_qoi = self._calculate_GoF(
                             measuredDF=flux_df, #self.time_series_measured_data_df,
-                            predictedDF=flux_df,
+                            simulatedDF=flux_df,
                             gof_list=self.objective_function,
                             measuredDF_time_column_name=self.time_column_name,
                             simulatedDF_time_column_name=self.time_column_name,
@@ -714,8 +787,8 @@ class HBVSASKModel(object):
                     for idx, single_qoi_column in enumerate(self.list_qoi_column):
                         if self.list_read_measured_data[idx]:
                             index_parameter_gof_dict_single_qoi = self._calculate_GoF(
-                                measuredDF=self.time_series_measured_data_df,
-                                predictedDF=flux_df,
+                                measuredDF=self.time_series_measured_data_df,  # flux_df
+                                simulatedDF=flux_df,
                                 gof_list=self.objective_function_qoi,
                                 measuredDF_time_column_name=self.time_column_name,
                                 simulatedDF_time_column_name=self.time_column_name,
@@ -753,6 +826,8 @@ class HBVSASKModel(object):
                                     self._calculate_GoF_on_data_subset, raw=False,
                                     args=(flux_df, single_qoi_column, idx, single_objective_function_name_qoi)
                                 )
+                                # print(f"DEBUGGING - new_column_name {new_column_name}")
+                                # print(f"DEBUGGING - flux_df[new_column_name] {flux_df[new_column_name]}")
                 else:
                     for idx, single_qoi_column in enumerate(self.list_qoi_column):
                         ser, new_column_name = self._compute_rolling_function_over_qoi(flux_df, single_qoi_column,
@@ -937,7 +1012,7 @@ class HBVSASKModel(object):
                     previous_timestamp = utility.compute_previous_timestamp(timestamp, self.resolution)
                     flux_df.at[timestamp, new_column_name] = (
                             flux_df.at[previous_timestamp, single_qoi_column_measured] -
-                            flux_df.at[timestamp, single_qoi_column]
+                            0.8*flux_df.at[timestamp, single_qoi_column]
                     )
             else:
                 flux_df[new_column_name] = flux_df[single_qoi_column].diff()
@@ -947,14 +1022,14 @@ class HBVSASKModel(object):
 
     def _calculate_GoF_on_data_subset(self, ser, df, qoi_column, qoi_column_idx, objective_function_name_qoi):
         # df_subset = df.iloc[ser.index]
-        df_subset = df.loc[ser.index]
+        df_subset = df.loc[ser.index].copy()
         gof_dict = self._calculate_GoF(
-            measuredDF=self.time_series_measured_data_df,
-            predictedDF=df_subset,
+            measuredDF=self.time_series_measured_data_df.copy(), # df_subset,  # self.time_series_measured_data_df.copy(),  
+            simulatedDF=df_subset,
             gof_list=objective_function_name_qoi,
             measuredDF_time_column_name=self.time_column_name,
-            simulatedDF_time_column_name=self.time_column_name,
             measuredDF_column_name=self.list_qoi_column_measured[qoi_column_idx],
+            simulatedDF_time_column_name=self.time_column_name,
             simulatedDF_column_name=qoi_column,
             parameters_dict=None,
             return_dict=True
@@ -996,12 +1071,12 @@ class HBVSASKModel(object):
 
         return result, new_column_name
 
-    def _calculate_GoF(self, measuredDF, predictedDF,
+    def _calculate_GoF(self, measuredDF, simulatedDF,
                        gof_list=None, measuredDF_time_column_name=None, measuredDF_column_name=None,
                        simulatedDF_time_column_name=None, simulatedDF_column_name=None,
                        parameters_dict=None, return_dict=False):
         """
-        Assumption - that predictedDF stores as well measured data
+        Assumption - that simulatedDF stores as well measured data
         """
         if gof_list is None:
             gof_list = self.objective_function
@@ -1016,7 +1091,7 @@ class HBVSASKModel(object):
 
         gof_dict = utility.calculateGoodnessofFit_simple(
             measuredDF=measuredDF,
-            predictedDF=predictedDF,
+            simulatedDF=simulatedDF,
             gof_list=gof_list,
             measuredDF_time_column_name=measuredDF_time_column_name,
             measuredDF_column_name=measuredDF_column_name,
@@ -1188,7 +1263,7 @@ class HBVSASKModel(object):
                             if self.CD:
                                 dict_single_qoi_minus_h = self._calculate_GoF(
                                     measuredDF=self.time_series_measured_data_df,
-                                    predictedDF=flux_minus_h_df,
+                                    simulatedDF=flux_minus_h_df,
                                     gof_list=self.objective_function_qoi,
                                     measuredDF_time_column_name=self.time_column_name,
                                     simulatedDF_time_column_name=self.time_column_name,
@@ -1200,7 +1275,7 @@ class HBVSASKModel(object):
 
                             dict_single_qoi_plus_h = self._calculate_GoF(
                                 measuredDF=self.time_series_measured_data_df,
-                                predictedDF=flux_plus_h_df,
+                                simulatedDF=flux_plus_h_df,
                                 gof_list=self.objective_function_qoi,
                                 measuredDF_time_column_name=self.time_column_name,
                                 simulatedDF_time_column_name=self.time_column_name,
@@ -1236,7 +1311,7 @@ class HBVSASKModel(object):
                                 #     df_subset = df.iloc[ser.index]
                                 #     gof_dict = self._calculate_GoF(
                                 #         measuredDF=self.time_series_measured_data_df,
-                                #         predictedDF=df_subset,
+                                #         simulatedDF=df_subset,
                                 #         gof_list=single_objective_function_name_qoi,
                                 #         measuredDF_time_column_name=self.time_column_name,
                                 #         simulatedDF_time_column_name=self.time_column_name,

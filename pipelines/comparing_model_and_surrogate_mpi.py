@@ -125,7 +125,7 @@ if __name__ == '__main__':
         df_all_simulations_file, df_all_index_parameter_gof_file, df_all_index_parameter_file, \
         df_time_varying_grad_analysis_file, df_time_aggregated_grad_analysis_file, \
         statistics_dictionary_file, dict_of_approx_matrix_c_file, dict_of_matrix_c_eigen_decomposition_file = \
-            update_output_file_paths_based_on_workingDir(workingDir)
+            utility.update_output_file_paths_based_on_workingDir(workingDir)
 
         # Reading Saved - modified Files
         with open(configuration_object_file, 'rb') as f:
@@ -264,19 +264,19 @@ if __name__ == '__main__':
 
         # List of dates to process (assuming statisticsObject.pdTimesteps is a list)
         statistics_result_dict = statisticsObject.result_dict
-        statistics_pdtomesteps = statisticsObject.pdTimesteps
+        statistics_pdTimesteps = statisticsObject.pdTimesteps
     else:
         single_qoi = None
         nodes = None
-        statistics_pdtomesteps = None
+        statistics_pdTimesteps = None
         statistics_result_dict = None
 
     single_qoi = comm.bcast(single_qoi, root=0)
     nodes = comm.bcast(nodes, root=0)
-    statistics_pdtomesteps = comm.bcast(statistics_pdtomesteps, root=0)
+    statistics_pdTimesteps = comm.bcast(statistics_pdTimesteps, root=0)
     statistics_result_dict = comm.bcast(statistics_result_dict, root=0)
     # List of dates to process (assuming statisticsObject.pdTimesteps is a list)
-    dates_to_process = statistics_pdtomesteps
+    dates_to_process = statistics_pdTimesteps
 
     if rank == 0:
         start = time.time()

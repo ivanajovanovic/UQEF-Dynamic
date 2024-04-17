@@ -34,7 +34,7 @@ from productFunction import ProductFunctionModel
 from productFunction import ProductFunctionStatistics
 
 from hbv_sask import HBVSASKModelUQ
-from hbv_sask import HBVSASKStatisticsMultipleQoI as HBVSASKStatistics
+from hbv_sask import HBVSASKStatistics as HBVSASKStatistics
 
 DEFAULT_DICT_WHAT_TO_PLOT = {
     "E_minus_std": False, "E_plus_std": False, "P10": False, "P90": False,

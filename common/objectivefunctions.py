@@ -13,9 +13,13 @@ import sys
 def _prepare_data_to_calculate_likelihood(DF, column_name='Value') -> np.ndarray:
     #TODO-Ivana check when DF only contains TimeStampas as index column and Value column
     if isinstance(DF, pd.core.frame.DataFrame):
-        return DF[column_name].values
+        if column_name in DF.columns:
+            return DF[column_name].to_numpy()  # .values
+        else:
+            raise Exception(f'You want to calculate likelihood using data from the following type {type(DF)}, \
+                            and extracting the column - {column_name} that does not exist')
     elif isinstance(DF, pd.core.series.Series):
-        return DF.values
+        return DF.to_numpy()  # values
     elif isinstance(DF, np.ndarray):
         return DF
     else:
@@ -46,11 +50,11 @@ def MSE(measuredDF, simulatedDF, measuredDF_column_name='Value', simulatedDF_col
 
 
 def RMSE(measuredDF, simulatedDF, measuredDF_column_name='Value', simulatedDF_column_name='Value', **kwargs):
-    measuredDF = _prepare_data_to_calculate_likelihood(DF=measuredDF, column_name=measuredDF_column_name)
-    simulatedDF = _prepare_data_to_calculate_likelihood(DF=simulatedDF, column_name=simulatedDF_column_name)
+    measured_values = _prepare_data_to_calculate_likelihood(DF=measuredDF, column_name=measuredDF_column_name)
+    simulated_values = _prepare_data_to_calculate_likelihood(DF=simulatedDF, column_name=simulatedDF_column_name)
 
-    if measuredDF.size == simulatedDF.size:
-        squared_error = np.square(np.subtract(measuredDF, simulatedDF))
+    if measured_values.size == simulated_values.size:
+        squared_error = np.square(np.subtract(measured_values, simulated_values))
         return np.sqrt(np.nanmean(squared_error))
     else:
         return np.nan
