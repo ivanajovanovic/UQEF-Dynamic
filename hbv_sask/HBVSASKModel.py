@@ -1308,7 +1308,7 @@ class HBVSASKModel(object):
                         new_column_name = "d_" + single_qoi_column + "_d_" + single_param_name
                         flux_df[new_column_name] = grad
 
-                        grad = grad.dropna()
+                        grad = grad.dropna()  # TODO flux_df.dropna() or grad!?????
                         dict_of_grad_estimation_vector[single_qoi_column].append(grad.values.tolist())
 
                     elif self.mode == "sliding_window":
@@ -1334,7 +1334,7 @@ class HBVSASKModel(object):
                                             "_d_" + single_param_name
                         flux_df[new_column_name] = grad
 
-                        grad = grad.dropna()
+                        grad = grad.dropna()  # TODO flux_df.dropna() or grad!?????
                         dict_of_grad_estimation_vector[single_qoi_column].append(grad.values.tolist())
 
                     elif self.mode == "resampling":
