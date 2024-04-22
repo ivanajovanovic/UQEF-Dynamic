@@ -1,3 +1,16 @@
+"""
+This code/data and model are from 
+@Article{egusphere-2023-2865,
+AUTHOR = {Mingo, D. N. and Nijzink, R. and Ley, C. and Hale, J. S.},
+TITLE = {Selecting a conceptual hydrological model using Bayes' factors computed with Replica Exchange Hamiltonian Monte Carlo and Thermodynamic Integration},
+JOURNAL = {EGUsphere},
+VOLUME = {2024},
+YEAR = {2024},
+PAGES = {1--45},
+URL = {https://egusphere.copernicus.org/preprints/2024/egusphere-2023-2865/},
+DOI = {10.5194/egusphere-2023-2865}
+}
+"""
 from functools import partial
 
 import dateutil.parser

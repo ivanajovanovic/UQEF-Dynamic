@@ -28,8 +28,8 @@ from LarsimUtilityFunctions import larsimConfig
 import LarsimUtilityFunctions.larsimPaths as paths
 from LarsimUtilityFunctions.larsimModel import LarsimConfigurations
 
-#from UQEFPP.common import saltelliSobolIndicesHelpingFunctions
-from uqef_dynamic.utils import saltelliSobolIndicesHelpingFunctions
+#from UQEFPP.common import sensIndicesSamplingBasedHelpers
+from uqef_dynamic.utils import sensIndicesSamplingBasedHelpers
 from uqef_dynamic.utils import parallelStatistics
 from uqef_dynamic.utils import colors
 
@@ -854,14 +854,16 @@ class LarsimStatistics(Statistics):
                 self.result_dict[key]["P10"] = self.result_dict[key]["P10"][0]
                 self.result_dict[key]["P90"] = self.result_dict[key]["P90"][0]
 
-            if self._compute_Sobol_t:
-                self.result_dict[key]["Sobol_t"] = saltelliSobolIndicesHelpingFunctions._Sens_t_sample_4(
-                    qoi_values_saltelli, self.dim, numEvaluations)
-            if self._compute_Sobol_m:
-                self.result_dict[key]["Sobol_m"] = saltelliSobolIndicesHelpingFunctions._Sens_m_sample_4(
-                    qoi_values_saltelli, self.dim, numEvaluations)
-                # self.result_dict[key]["Sobol_m"] = saltelliSobolIndicesHelpingFunctions._Sens_m_sample_3
-                # (qoi_values_saltelli, self.dim, numEvaluations)
+            if self._compute_Sobol_t or self._compute_Sobol_m:
+                s_i, s_t = sensIndicesSamplingBasedHelpers.compute_first_and_total_order_sens_indices_based_on_samples_pick_freeze(
+                    qoi_values_saltelli, self.dim, numEvaluations, compute_first=self._compute_Sobol_m, 
+                    compute_total=self._compute_Sobol_t, code_first=3, code_total=4,
+                    do_printing=False
+                    )
+                if self._compute_Sobol_t:
+                    self.result_dict[key]["Sobol_t"] = s_t
+                if self._compute_Sobol_m:
+                    self.result_dict[key]["Sobol_m"] = s_i
 
         print(f"[LARSIM STAT INFO] calcStatisticsForMcSaltelli function is done!")
 

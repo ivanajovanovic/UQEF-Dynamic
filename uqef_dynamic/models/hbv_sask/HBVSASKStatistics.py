@@ -6,16 +6,12 @@ from plotly.offline import iplot, plot
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-# from uqef.stat import Statistics
-#
-# from common import saltelliSobolIndicesHelpingFunctions
-# from common import parallelStatistics
 from uqef_dynamic.utils import colors
-from uqef_dynamic.models.time_dependent_baseclass.time_dependent_statistics import TimeDependentStatistics
+from uqef_dynamic.models.time_dependent_baseclass import time_dependent_statistics
 from uqef_dynamic.models.hbv_sask import hbvsask_utility as hbv
 
 
-class HBVSASKStatistics(TimeDependentStatistics):
+class HBVSASKStatistics(time_dependent_statistics.TimeDependentStatistics):
 
     def __init__(self, configurationObject, workingDir=None, *args, **kwargs):
         super(HBVSASKStatistics, self).__init__(configurationObject, workingDir, *args, **kwargs)

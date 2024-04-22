@@ -20,7 +20,7 @@ import time
 
 from uqef.stat import Statistics
 
-from uqef_dynamic.utils import saltelliSobolIndicesHelpingFunctions
+from uqef_dynamic.utils import sensIndicesSamplingBasedHelpers
 from uqef_dynamic.utils import parallelStatistics
 from uqef_dynamic.utils import uqPostprocessing
 from uqef_dynamic.utils import utility
@@ -1276,7 +1276,7 @@ class TimeDependentStatistics(Statistics):
                     if self.compute_Sobol_t and self.compute_sobol_total_indices_with_samples \
                             and self.uqef_simulationNodes is not None:
                             self.result_dict[key]["Sobol_t"] = \
-                                saltelliSobolIndicesHelpingFunctions.compute_total_sobol_indices_with_n_samples(
+                                sensIndicesSamplingBasedHelpers.compute_sens_indices_based_on_samples_rank_based(
                                     samples=self.uqef_simulationNodes.parameters.T[:self.numEvaluations],
                                     Y=qoi_values[:self.numEvaluations, np.newaxis], D=self.dim, N=self.numEvaluations)
                 if self.instantly_save_results_for_each_time_step:
@@ -1341,16 +1341,20 @@ class TimeDependentStatistics(Statistics):
                 if self.compute_sobol_total_indices_with_samples and self.uqef_simulationNodes is not None:
                     if self.compute_Sobol_t:
                         self.result_dict[key]["Sobol_t"] = \
-                            saltelliSobolIndicesHelpingFunctions.compute_total_sobol_indices_with_n_samples(
+                            sensIndicesSamplingBasedHelpers.compute_sens_indices_based_on_samples_rank_based(
                                 samples=self.uqef_simulationNodes.parameters.T[:self.numEvaluations],
                                 Y=qoi_values_saltelli[:self.numEvaluations, :], D=self.dim, N=self.numEvaluations)
                 else:
-                    if self.compute_Sobol_t:
-                        self.result_dict[key]["Sobol_t"] = saltelliSobolIndicesHelpingFunctions._Sens_t_sample_4(
-                            qoi_values_saltelli, self.dim, self.numEvaluations)
-                    if self.compute_Sobol_m:
-                        self.result_dict[key]["Sobol_m"] = saltelliSobolIndicesHelpingFunctions._Sens_m_sample_4(
-                            qoi_values_saltelli, self.dim, self.numEvaluations)
+                    if self.compute_Sobol_t or self.compute_Sobol_m:
+                        s_i, s_t = sensIndicesSamplingBasedHelpers.compute_first_and_total_order_sens_indices_based_on_samples_pick_freeze(
+                            qoi_values_saltelli, self.dim, self.numEvaluations, compute_first=self.compute_Sobol_m, 
+                            compute_total=self.compute_Sobol_t, code_first=3, code_total=4,
+                            do_printing=False
+                            )
+                        if self.compute_Sobol_t:
+                            self.result_dict[key]["Sobol_t"] = s_t
+                        if self.compute_Sobol_m:
+                            self.result_dict[key]["Sobol_m"] = s_i
 
                 if self.instantly_save_results_for_each_time_step:
                     self._save_statistics_dictionary_single_qoi_single_timestamp(

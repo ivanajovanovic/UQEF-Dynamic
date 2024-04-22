@@ -1,6 +1,6 @@
 """
 Set of utility functions for postprocessing data for UQ runs of different models.
-Many of these functions exist as well as part of TimeDependentStatistics methods
+Many of these functions exist as well as part of time_dependent_statistics.TimeDependentStatistics methods
 
 @author: Ivana Jovanovic Buha
 """
@@ -28,8 +28,7 @@ from uqef_dynamic.utils import colors
 from uqef_dynamic.utils import utility
 
 # TODO make this script more general and independent of model class
-from uqef_dynamic.models.time_dependent_baseclass.time_dependent_statistics import TimeDependentStatistics
-
+from uqef_dynamic.models.time_dependent_baseclass import time_dependent_statistics
 from uqef_dynamic.models.larsim import LarsimStatistics
 from uqef_dynamic.models.linearDampedOscillator import LinearDampedOscillatorStatistics
 from uqef_dynamic.models.ishigami import IshigamiStatistics
@@ -69,7 +68,7 @@ def create_statistics_object(configuration_object, uqsim_args_dict, workingDir, 
             compute_Sobol_m2=uqsim_args_dict["compute_Sobol_m2"]
         )
     else:
-        statisticsObject = TimeDependentStatistics(
+        statisticsObject = time_dependent_statistics.TimeDependentStatistics(
             configurationObject=configuration_object,
             workingDir=workingDir,
             inputModelDir=uqsim_args_dict["inputModelDir"],
@@ -347,7 +346,7 @@ def describe_sensitivity_indices_single_qoi_under_some_condition(
             result_describe = df_subset.describe(include=np.number)
             print(f"{result_describe}")
         else:
-            raise Exception(f"Error in TimeDependentStatistics.describe_sensitivity_indices_single_qoi_under_some_condition "
+            raise Exception(f"Error in time_dependent_statistics.TimeDependentStatistics.describe_sensitivity_indices_single_qoi_under_some_condition "
                             f"method - condition_sign should be one of the following strings: equal"
                             f"/greater than/greater than or equal/less than/less than or equal")
 

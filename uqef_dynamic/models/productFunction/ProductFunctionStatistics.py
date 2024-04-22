@@ -6,7 +6,7 @@ import os
 
 from uqef.stat import Statistics
 
-import paths
+from uqef_dynamic import paths
 
 class Samples(object):
     """

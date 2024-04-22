@@ -27,7 +27,7 @@ from LarsimUtilityFunctions import larsimDataPostProcessing
 from LarsimUtilityFunctions import larsimIO
 from LarsimUtilityFunctions import larsimPaths as paths
 
-from uqef_dynamic.utils import saltelliSobolIndicesHelpingFunctions
+from uqef_dynamic.utils import sensIndicesSamplingBasedHelpers
 from uqef_dynamic.utils import utility
 
 # from larsim import LarsimModel
@@ -687,10 +687,12 @@ def _calcStatisticsForSaltelli(df_all_simulations, simulationNodes, numEvaluatio
         result_dict[key]["P10"] = np.percentile(discharge_values[:(2*numEvaluations)], 10, axis=0)
         result_dict[key]["P90"] = np.percentile(discharge_values[:(2*numEvaluations)], 90, axis=0)
 
-        result_dict[key]["Sobol_m"] = saltelliSobolIndicesHelpingFunctions._Sens_m_sample_4(discharge_values_saltelli, dim, numEvaluations)
-        #result_dict[key]["Sobol_m"] = saltelliSobolIndicesHelpingFunctions._Sens_m_sample_3(discharge_values_saltelli, dim, numEvaluations)
-        result_dict[key]["Sobol_t"] = saltelliSobolIndicesHelpingFunctions._Sens_t_sample_4(discharge_values_saltelli, dim, numEvaluations)
-
+        result_dict[key]["Sobol_m"], result_dict[key]["Sobol_t"] = sensIndicesSamplingBasedHelpers.compute_first_and_total_order_sens_indices_based_on_samples_pick_freeze(
+                            discharge_values_saltelli, dim, numEvaluations, compute_first=True, 
+                            compute_total=True, code_first=3, code_total=4,
+                            do_printing=False
+                            )
+        
         if isinstance(result_dict[key]["P10"], (list)) and len(result_dict[key]["P10"]) == 1:
             result_dict[key]["P10"]=result_dict[key]["P10"][0]
             result_dict[key]["P90"]=result_dict[key]["P90"][0]

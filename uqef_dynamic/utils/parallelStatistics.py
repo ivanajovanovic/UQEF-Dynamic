@@ -3,8 +3,8 @@ import numpy as np
 import scipy
 import time
 
-# from saltelliSobolIndicesHelpingFunctions import *
-from uqef_dynamic.utils import saltelliSobolIndicesHelpingFunctions
+# from sensIndicesSamplingBasedHelpers import *
+from uqef_dynamic.utils import sensIndicesSamplingBasedHelpers
 
 def parallel_calc_stats_for_MC(
         keyIter_chunk, qoi_values_chunk, numEvaluations, dim, compute_Sobol_t=False, store_qoi_data_in_stat_dict=False,
@@ -59,7 +59,7 @@ def parallel_calc_stats_for_MC(
         #         pickle.dump(local_result_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
         if compute_Sobol_t and compute_sobol_total_indices_with_samples and samples is not None:
-            local_result_dict["Sobol_t"] = saltelliSobolIndicesHelpingFunctions.compute_total_sobol_indices_with_n_samples(
+            local_result_dict["Sobol_t"] = sensIndicesSamplingBasedHelpers.compute_sens_indices_based_on_samples_rank_based(
                 samples=samples, Y=qoi_values[:numEvaluations, np.newaxis], D=dim, N=numEvaluations)
 
         results.append([timestamp, local_result_dict])
@@ -235,15 +235,19 @@ def parallel_calc_stats_for_mc_saltelli(
                 # print(f"DEBUGGING - standard_qoi_values.shape - {standard_qoi_values.shape}")
                 # print(f"DEBUGGING - qoi_values_saltelli.shape - {qoi_values_saltelli.shape}")
                 # print(f"DEBUGGING - samples.shape - {samples.shape}")
-                local_result_dict["Sobol_t"] = saltelliSobolIndicesHelpingFunctions.compute_total_sobol_indices_with_n_samples(
+                local_result_dict["Sobol_t"] = sensIndicesSamplingBasedHelpers.compute_sens_indices_based_on_samples_rank_based(
                     samples=samples, Y=qoi_values_saltelli[:numEvaluations,:], D=dim, N=numEvaluations)
         else:
-            if compute_Sobol_t:
-                local_result_dict["Sobol_t"] = saltelliSobolIndicesHelpingFunctions._Sens_t_sample(
-                    qoi_values_saltelli, dim, numEvaluations, code=4)
-            if compute_Sobol_m:
-                local_result_dict["Sobol_m"] = saltelliSobolIndicesHelpingFunctions._Sens_m_sample(
-                    qoi_values_saltelli, dim, numEvaluations, code=4)
+            if compute_Sobol_t or compute_Sobol_m:
+                s_i, s_t = sensIndicesSamplingBasedHelpers.compute_first_and_total_order_sens_indices_based_on_samples_pick_freeze(
+                    qoi_values_saltelli, dim, numEvaluations, compute_first=compute_Sobol_m, 
+                    compute_total=compute_Sobol_t, code_first=3, code_total=4,
+                    do_printing=False
+                    )
+                if compute_Sobol_t:
+                    local_result_dict["Sobol_t"] = s_t
+                if compute_Sobol_m:
+                    local_result_dict["Sobol_m"] = s_i
 
         results.append([key, local_result_dict])
     return results
