@@ -222,12 +222,19 @@ def _plot_streamflow_and_precipitation(input_data_df, simulated_data_df=None, in
             type="linear",
         )
     )
-    fig.update_layout(legend=dict(
-        yanchor="bottom",
-        y=0.01,
-        xanchor="right",
-        x=1.21
-    ))
+    # fig.update_layout(legend=dict(
+    #     yanchor="bottom",
+    #     y=0.01,
+    #     xanchor="right",
+    #     x=1.21
+    # ))
+    fig.update_layout(
+            # legend=dict(yanchor="bottom", y=0.01, xanchor="right", x=0.99),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            title=f'HBV-SASK Model: Predicted vs. Observed Streamflow',
+            showlegend=True,
+            # template="plotly_white",
+        )
     return fig
 
 def extend_hbv_plot_with_observed_and_forcing_data_and_update_layout(

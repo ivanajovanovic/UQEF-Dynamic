@@ -1,5 +1,5 @@
 """
-Usage of the UQEF with a (mainly) Hydrological models.
+Usage of the UQEF and UQEF-Dynamic with Hydrology models, more generally, models that produce time-dependent output.
 @author: Florian Kuenzner and Ivana Jovanovic
 """
 import os
@@ -86,7 +86,7 @@ if local_debugging:
     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs", 'beta_2007_sc_sliding_window_rmse')) #sliding_window or continuous
     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs", 'ensemble_q6_p3_6d_2006_banff')) #sliding_window or continuous
     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs", 'mc_10d_short_banff'))
-    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs", 'pce_surrogate_7d_short_oldman_II'))
+    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs", 'pce_surrogate_7d_short_oldman_III'))
     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_sc_kpu_l_6_d_5_p_3_2013'))
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
 

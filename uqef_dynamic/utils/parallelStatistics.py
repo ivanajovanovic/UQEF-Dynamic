@@ -5,6 +5,8 @@ import time
 
 # from sensIndicesSamplingBasedHelpers import *
 from uqef_dynamic.utils import sensIndicesSamplingBasedHelpers
+from uqef_dynamic.utils import utility
+
 
 def parallel_calc_stats_for_MC(
         keyIter_chunk, qoi_values_chunk, numEvaluations, dim, compute_Sobol_t=False, store_qoi_data_in_stat_dict=False,
@@ -91,14 +93,12 @@ def parallel_calc_stats_for_gPCE(keyIter_chunk, qoi_values_chunk, dist, polynomi
             local_result_dict["gPCE"] = qoi_gPCE
         local_result_dict['gpce_coeff'] = goi_coeff
 
-        if save_gpce_surrogate:
-            # TODO create a unique file with key and save it in a working directory
-            # TODO add workingDir single_qoi_column
-            # timestamp = pd.Timestamp(key).strftime('%Y-%m-%d %X')
-            # fileName = f"gpce_surrogate_{single_qoi_column}_{key}.pkl"
-            # fullFileName = os.path.abspath(os.path.join(str(workingDir), fileName))
-            # with open(fullFileName, 'wb') as handle:
-            #     pickle.dump(qoi_gPCE, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        if save_gpce_surrogate and "gPCE" in local_result_dict:
+            # # TODO - propagate workingDir and single_qoi_column
+            # utility.save_gpce_surrogate_model(workingDir=workingDir, gpce=qoi_gPCE, qoi=single_qoi_column, timestamp=key)
+            # if "gpce_coeff" in local_result_dict:
+            #     utility.save_gpce_coeffs(
+            #         workingDir=workingDir, coeff=local_result_dict['gpce_coeff'], qoi=single_qoi_column, timestamp=key)
             pass
 
         calculate_stats_gpce(
@@ -181,7 +181,6 @@ def calculate_stats_gpce(
     print(f"DEBUGGING - time_info_dict - {time_info_dict}")
 
 
-
 def parallel_calc_stats_for_mc_saltelli(
         keyIter_chunk, qoi_values_chunk, numEvaluations, dim, compute_Sobol_t=False,
         compute_Sobol_m=False, store_qoi_data_in_stat_dict=False, compute_sobol_total_indices_with_samples=False,
@@ -205,13 +204,10 @@ def parallel_calc_stats_for_mc_saltelli(
         local_result_dict = dict()
 
         qoi_values_saltelli = qoi_values[:, np.newaxis]
-        # standard_qoi_values = qoi_values_saltelli[:numEvaluations, :]
         standard_qoi_values = qoi_values[:numEvaluations]
-        # extended_standard_qoi_values = qoi_values_saltelli[:(2 * numEvaluations), :]
 
         if store_qoi_data_in_stat_dict:
             local_result_dict["qoi_values"] = qoi_values
-            # local_result_dict["qoi_values"] = standard_qoi_values
 
         local_result_dict["E"] = np.mean(standard_qoi_values, 0)
         local_result_dict["Var"] = np.sum((standard_qoi_values - local_result_dict["E"]) ** 2,

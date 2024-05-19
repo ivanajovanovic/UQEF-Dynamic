@@ -1,5 +1,15 @@
 """
-Set of utility functions for preparing and/or postprocessing data for UQ runs of different models
+Set of utility functions for preparing and/or postprocessing data for UQ & SA runs of different models
+This module contains functions for:
+- transforming parameters
+- plotting
+- set of utility functions for calculating different GoF/Objective/Likelihood functions/metrices
+- set of utility functions for working with configuration files and configuration objects 
+(e.g., reading, extract data and manipulate configuration file/object)
+- time configurations
+- paths related functions
+- utility functions for processing/manipulating pandas.DataFrame (i.e., main data structure)
+- utility for SG analysis
 
 @author: Ivana Jovanovic Buha
 """
@@ -31,7 +41,7 @@ from tabulate import tabulate
 # for parallel computing
 import multiprocessing
 
-from uqef_dynamic.utils import saltelliSobolIndicesHelpingFunctions
+from uqef_dynamic.utils import sensIndicesSamplingBasedHelpers
 
 DEFAULT_DICT_WHAT_TO_PLOT = {
     "E_minus_std": False, "E_plus_std": False, "P10": False, "P90": False,
@@ -1408,6 +1418,7 @@ def parameters_configuration(parameters, configurationObject: Union[dict, List],
     """
     return configuring_parameter_values(parameters, configurationObject, default_par_info_dict, take_direct_value=take_direct_value)
 
+
 def configuring_parameter_values(parameters, configurationObject: Union[dict, List], default_par_info_dict, take_direct_value: bool = False) -> dict:
     """
     Note: If not take_direct_value and parameters!= None, parameters_dict will contain
@@ -1523,6 +1534,7 @@ def configuring_parameter_values(parameters, configurationObject: Union[dict, Li
 #                 "name": single_param['name'], "param_h": param_h}
 #
 #     return parameters_dict, info_dict_on_perturbed_param
+
 
 def update_parameter_dict_for_gradient_computation(parameters, configurationObject, take_direct_value=False,
                                                    perturb_single_param_around_nominal=False,
@@ -1777,6 +1789,22 @@ def scatter_3d_params_static(df_index_parameter_gof, param1, param2, param3):
     axs.set_zlabel(param3)
     plt.show()
 
+# ===================================================================================================================
+# Functions for saving the GPCE surrogate model
+# ===================================================================================================================
+
+def save_gpce_surrogate_model(workingDir, gpce, qoi, timestamp):
+    # timestamp = pd.Timestamp(timestamp).strftime('%Y-%m-%d %X')
+    fileName = f"gpce_surrogate_{qoi}_{timestamp}.pkl"
+    fullFileName = os.path.abspath(os.path.join(str(workingDir), fileName))
+    with open(fullFileName, 'wb') as handle:
+        pickle.dump(gpce, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    
+def save_gpce_coeffs(workingDir, coeff, qoi, timestamp):
+    fileName = f"gpce_coeffs_{qoi}_{timestamp}.npy"
+    fullFileName = os.path.abspath(os.path.join(str(workingDir), fileName))
+    np.save(fullFileName, coeff)
+
 
 ###################################################################################################################
 # Running the model
@@ -1929,6 +1957,7 @@ def generate_polynomial_expansion(joint_dist, order: int, rule: str = 'three_ter
         order, joint_dist, rule=rule, normed=poly_normed, retall=True)
     return polynomial_expansion, norms
 
+# =======================================
 
 def compute_gPCE_over_time_(model, t: Union[np.array, np.ndarray, List[Union[int, float]]], expansion_order: int, joint_dist, 
                             parameters: np.ndarray, nodes: np.ndarray, regression: bool = False, weights_quad: np.ndarray = None, poly_rule: str = 'three_terms_recurrence', poly_normed: bool = True):
@@ -2118,7 +2147,7 @@ def computing_mc_statistics_single_date(
 
     if compute_Sobol_t and samples is not None:
         dim = samples.shape[1]
-        result_dict["Sobol_t"] = saltelliSobolIndicesHelpingFunctions.compute_total_sobol_indices_with_n_samples(
+        result_dict["Sobol_t"] = sensIndicesSamplingBasedHelpers.compute_sens_indices_based_on_samples_rank_based(
                 samples=samples, Y=qoi_values[:numEvaluations, np.newaxis], D=dim, N=numEvaluations)
 
     return time_stamp, result_dict
@@ -2211,6 +2240,7 @@ def computing_gpce_statistics(
             compute_Sobol_t, compute_Sobol_m, compute_Sobol_m2)
     return result_dict
         
+
 def computing_gpce_statistics_single_date(
     time_stamp, val_indices, df_simulation_result, polynomial_expansion, nodes, weights, dist, single_qoi_column: str=QOI_COLUMN_NAME, 
     regression:bool=False, store_gpce_surrogate_in_stat_dict:bool=True, save_gpce_surrogate=False,

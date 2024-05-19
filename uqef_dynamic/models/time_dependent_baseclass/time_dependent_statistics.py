@@ -877,9 +877,9 @@ class TimeDependentStatistics(Statistics):
             self.result_dict[single_qoi_column][timestamp] = result_dict
         # TODO - think if this should be done here or in the parallel_calc_stats_for_gPCE...
         if self.save_gpce_surrogate and "gPCE" in result_dict:
-            self._save_gpce_surrogate_model(gpce=result_dict["gPCE"], qoi=single_qoi_column, timestamp=timestamp)
+            utility.save_gpce_surrogate_model(workingDir=self.workingDir, gpce=result_dict["gPCE"], qoi=single_qoi_column, timestamp=timestamp)
             if "gpce_coeff" in result_dict:
-                self._save_gpce_coeffs(coeff=result_dict["gpce_coeff"], qoi=single_qoi_column, timestamp=timestamp)
+                utility.save_gpce_coeffs(workingDir=self.workingDir, coeff=result_dict["gpce_coeff"], qoi=single_qoi_column, timestamp=timestamp)
 
     def _save_plot_and_clear_result_dict_single_qoi(self, single_qoi_column):
         if self.instantly_save_results_for_each_time_step:
@@ -1421,10 +1421,11 @@ class TimeDependentStatistics(Statistics):
 
         if self.store_gpce_surrogate_in_stat_dict:
             self.result_dict[single_qoi_column][key]["gPCE"] = qoi_gPCE
-        if self.save_gpce_surrogate and "gPCE":
-            self._save_gpce_surrogate_model(gpce=qoi_gPCE, qoi=single_qoi_column, timestamp=key)
+        if self.save_gpce_surrogate and "gPCE" in self.result_dict[single_qoi_column][key]:
+            utility.save_gpce_surrogate_model(workingDir=self.workingDir, gpce=qoi_gPCE, qoi=single_qoi_column, timestamp=key)
             if "gpce_coeff" in self.result_dict[single_qoi_column][key]:
-                self._save_gpce_coeffs(
+                utility.save_gpce_coeffs(
+                    workingDir=self.workingDir,
                     coeff=self.result_dict[single_qoi_column]["gpce_coeff"], qoi=single_qoi_column, timestamp=key)
 
         if compute_other_stat_besides_pce_surrogate:
@@ -1522,18 +1523,6 @@ class TimeDependentStatistics(Statistics):
             fileName = "df_time_aggregated_grad_analysis.pkl"
             fullFileName = os.path.abspath(os.path.join(str(self.workingDir), fileName))
             self.df_time_aggregated_grad_analysis.to_pickle(fullFileName, compression="gzip")
-
-    def _save_gpce_surrogate_model(self, gpce, qoi, timestamp):
-        # timestamp = pd.Timestamp(timestamp).strftime('%Y-%m-%d %X')
-        fileName = f"gpce_surrogate_{qoi}_{timestamp}.pkl"
-        fullFileName = os.path.abspath(os.path.join(str(self.workingDir), fileName))
-        with open(fullFileName, 'wb') as handle:
-            pickle.dump(gpce, handle, protocol=pickle.HIGHEST_PROTOCOL)
-        
-    def _save_gpce_coeffs(self, coeff, qoi, timestamp):
-        fileName = f"gpce_coeffs_{qoi}_{timestamp}.npy"
-        fullFileName = os.path.abspath(os.path.join(str(self.workingDir), fileName))
-        np.save(fullFileName, coeff)
     
     # =================================================================================================
 

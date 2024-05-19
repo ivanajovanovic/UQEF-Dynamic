@@ -656,7 +656,7 @@ def main_routine():
     model_runs = np.empty((parameters.shape[1], len(t)))
     list_of_single_df = []
     def process_particles_concurrently(particles_to_process):
-        with (multiprocessing.Pool(processes=num_processes) as pool):
+        with multiprocessing.Pool(processes=num_processes) as pool:
             for index_run, y_t_model, parameter_value in \
                     pool.starmap(run_model_single_parameter_node, \
                                     [(model, particle[0], particle[1]) \

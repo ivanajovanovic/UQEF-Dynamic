@@ -1,6 +1,8 @@
 """
 Set of utility functions for postprocessing data for UQ runs of different models.
-Many of these functions exist as well as part of time_dependent_statistics.TimeDependentStatistics methods
+Many of these functions exist as well as part of time_dependent_statistics.TimeDependentStatistics or in utilty module
+but here we are trying to provide a more general set of functions that can be used for postprocessing data from different UQ and SA runs
+
 
 @author: Ivana Jovanovic Buha
 """
@@ -26,62 +28,6 @@ import chaospy as cp
 
 from uqef_dynamic.utils import colors
 from uqef_dynamic.utils import utility
-
-# TODO make this script more general and independent of model class
-from uqef_dynamic.models.time_dependent_baseclass import time_dependent_statistics
-from uqef_dynamic.models.larsim import LarsimStatistics
-from uqef_dynamic.models.linearDampedOscillator import LinearDampedOscillatorStatistics
-from uqef_dynamic.models.ishigami import IshigamiStatistics
-from uqef_dynamic.models.productFunction import ProductFunctionStatistics
-from uqef_dynamic.models.hbv_sask import HBVSASKStatistics
-
-def create_statistics_object(configuration_object, uqsim_args_dict, workingDir, model="hbvsask"):
-    """
-    Note: hardcoded for a couple of currently supported models
-    :param configuration_object:
-    :param uqsim_args_dict:
-    :param workingDir:
-    :param model: "larsim" | "hbvsask"
-    :return:
-    """
-    # TODO make this function more general or move it somewhere else
-    if model == "larsim":
-        statisticsObject = LarsimStatistics.LarsimStatistics(configuration_object, workingDir=workingDir,
-                                                                   parallel_statistics=uqsim_args_dict[
-                                                                       "parallel_statistics"],
-                                                                   mpi_chunksize=uqsim_args_dict["mpi_chunksize"],
-                                                                   unordered=False,
-                                                                   uq_method=uqsim_args_dict["uq_method"],
-                                                                   compute_Sobol_t=uqsim_args_dict["compute_Sobol_t"],
-                                                                   compute_Sobol_m=uqsim_args_dict["compute_Sobol_m"])
-    elif model == "hbvsask":
-        statisticsObject = HBVSASKStatistics.HBVSASKStatistics(
-            configurationObject=configuration_object,
-            workingDir=workingDir,
-            inputModelDir=uqsim_args_dict["inputModelDir"],
-            sampleFromStandardDist=uqsim_args_dict["sampleFromStandardDist"],
-            parallel_statistics=uqsim_args_dict["parallel_statistics"],
-            mpi_chunksize=uqsim_args_dict["mpi_chunksize"],
-            uq_method=uqsim_args_dict["uq_method"],
-            compute_Sobol_t=uqsim_args_dict["compute_Sobol_t"],
-            compute_Sobol_m=uqsim_args_dict["compute_Sobol_m"],
-            compute_Sobol_m2=uqsim_args_dict["compute_Sobol_m2"]
-        )
-    else:
-        statisticsObject = time_dependent_statistics.TimeDependentStatistics(
-            configurationObject=configuration_object,
-            workingDir=workingDir,
-            inputModelDir=uqsim_args_dict["inputModelDir"],
-            sampleFromStandardDist=uqsim_args_dict["sampleFromStandardDist"],
-            parallel_statistics=uqsim_args_dict["parallel_statistics"],
-            mpi_chunksize=uqsim_args_dict["mpi_chunksize"],
-            uq_method=uqsim_args_dict["uq_method"],
-            compute_Sobol_t=uqsim_args_dict["compute_Sobol_t"],
-            compute_Sobol_m=uqsim_args_dict["compute_Sobol_m"],
-            compute_Sobol_m2=uqsim_args_dict["compute_Sobol_m2"]
-        )
-
-    return statisticsObject
 
 
 def extend_statistics_object(statisticsObject, statistics_dictionary, df_simulation_result=None,
@@ -167,6 +113,48 @@ def read_all_saved_statistics_dict(workingDir, list_qoi_column, single_timestamp
     return statistics_dictionary
 
 
+def save_gpce_surrogate_model(workingDir, gpce, qoi, timestamp):
+    # timestamp = pd.Timestamp(timestamp).strftime('%Y-%m-%d %X')
+    fileName = f"gpce_surrogate_{qoi}_{timestamp}.pkl"
+    fullFileName = os.path.abspath(os.path.join(str(workingDir), fileName))
+    with open(fullFileName, 'wb') as handle:
+        pickle.dump(gpce, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    
+
+def save_all_gpce_surrogate_model(workingDir, gpce_surrogate_dictionary, list_qoi_column=None, timestamps=None):
+    if list_qoi_column is None:
+        list_qoi_column = list(gpce_surrogate_dictionary.keys())
+    if timestamps is None:
+        timestamps = gpce_surrogate_dictionary[list_qoi_column[0]].keys()
+    if not isinstance(list_qoi_column, list):
+        list_qoi_column = [list_qoi_column, ]
+    if not isinstance(timestamps, list):
+        timestamps = [timestamps, ]
+    for single_qoi in list_qoi_column:
+        for single_timestep in timestamps:
+            save_gpce_surrogate_model(workingDir, gpce_surrogate_dictionary[single_qoi][single_timestep], single_qoi, single_timestep)
+
+
+def save_gpce_coeffs(workingDir, coeff, qoi, timestamp):
+    fileName = f"gpce_coeffs_{qoi}_{timestamp}.npy"
+    fullFileName = os.path.abspath(os.path.join(str(workingDir), fileName))
+    np.save(fullFileName, coeff)
+
+
+def save_all_gpce_coeffs(workingDir, gpce_coeff_dictionary, list_qoi_column=None, timestamps=None):
+    if list_qoi_column is None:
+        list_qoi_column = list(gpce_coeff_dictionary.keys())
+    if timestamps is None:
+        timestamps = gpce_coeff_dictionary[list_qoi_column[0]].keys()
+    if not isinstance(list_qoi_column, list):
+        list_qoi_column = [list_qoi_column, ]
+    if not isinstance(timestamps, list):
+        timestamps = [timestamps, ]
+    for single_qoi in list_qoi_column:
+        for single_timestep in timestamps:
+            save_gpce_coeffs(workingDir, gpce_coeff_dictionary[single_qoi][single_timestep], single_qoi, single_timestep)
+
+
 def read_all_saved_gpce_surrogate_models(workingDir, list_qoi_column, single_timestamp_single_file=False):
     list_TimeStamp = get_all_timesteps_from_saved_files(workingDir, first_part_of_the_file = "gpce")
     gpce_surrogate_dictionary = defaultdict(dict)
@@ -194,6 +182,9 @@ def read_all_saved_gpce_coeffs(workingDir, list_qoi_column, single_timestamp_sin
             gpce_coeff_dictionary[single_qoi][pd.Timestamp(single_timestep)] = np.load(gpce_coeffs_file_temp)
     return gpce_coeff_dictionary
 
+# ==============================================================================================================
+# Functions for computing goodness-of-fit functions for different statistics time-signals produced by UQ and SA simulations
+# ==============================================================================================================
 
 def compute_gof_over_different_time_series(df_statistics, objective_function="MAE", qoi_column="Q",
                                            measuredDF_column_names="measured"):
@@ -346,7 +337,7 @@ def describe_sensitivity_indices_single_qoi_under_some_condition(
             result_describe = df_subset.describe(include=np.number)
             print(f"{result_describe}")
         else:
-            raise Exception(f"Error in time_dependent_statistics.TimeDependentStatistics.describe_sensitivity_indices_single_qoi_under_some_condition "
+            raise Exception(f"Error in describe_sensitivity_indices_single_qoi_under_some_condition "
                             f"method - condition_sign should be one of the following strings: equal"
                             f"/greater than/greater than or equal/less than/less than or equal")
 
