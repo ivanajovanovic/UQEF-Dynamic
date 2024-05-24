@@ -46,7 +46,7 @@ uqsim = uqef.UQsim()
 # change args locally for testing and debugging
 #####################################
 
-local_debugging = True
+local_debugging = False
 if local_debugging:
     save_solver_results = False
 
@@ -55,18 +55,18 @@ if local_debugging:
     uqsim.args.uncertain = "all"
     uqsim.args.chunksize = 1
 
-    uqsim.args.uq_method = "sc"  # "sc" | "saltelli" | "mc" | "ensemble"
+    uqsim.args.uq_method = "mc"  # "sc" | "saltelli" | "mc" | "ensemble"
     uqsim.args.mc_numevaluations = 1000
     uqsim.args.sampling_rule = "latin_hypercube"  # "random" | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
     uqsim.args.sc_q_order = 7  # 7 #10 3
     uqsim.args.sc_p_order = 3  # 4, 5, 6, 8
     uqsim.args.sc_quadrature_rule = "g"  # "p" "genz_keister_24" "leja" "clenshaw_curtis"
 
-    uqsim.args.read_nodes_from_file = True
+    uqsim.args.read_nodes_from_file = False
     l = 7  # 10
     path_to_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/sparse_grid_nodes_weights")
-    uqsim.args.parameters_file = path_to_file / f"KPU_d7_l{l}.asc" # f"KPU_d3_l{l}.asc"
-    uqsim.args.parameters_setup_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/KPU_HBV_d7.json")
+    uqsim.args.parameters_file = path_to_file / f"KPU_d3_l{l}.asc" # f"KPU_d7_l{l}.asc"
+    uqsim.args.parameters_setup_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/KPU_HBV_d3.json")
     # uqsim.args.parameters_setup_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/configurations_Larsim/KPU_Larsim_d5.json")
 
     uqsim.args.sc_poly_rule = "three_terms_recurrence"  # "gram_schmidt" | "three_terms_recurrence" | "cholesky"
@@ -86,7 +86,7 @@ if local_debugging:
     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs", 'beta_2007_sc_sliding_window_rmse')) #sliding_window or continuous
     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs", 'ensemble_q6_p3_6d_2006_banff')) #sliding_window or continuous
     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs", 'mc_10d_short_banff'))
-    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs", 'pce_surrogate_7d_short_oldman_III'))
+    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs", 'mc_q_10d_oldman'))
     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_sc_kpu_l_6_d_5_p_3_2013'))
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
 
@@ -97,7 +97,8 @@ if local_debugging:
     # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/configurations/configuration_hbv_12D_MC.json'
     # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/configurations_Larsim/configurations_larsim_high_flow.json'
     # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/configurations/configuration_hbv_10D_MC_banff.json'
-    uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/configuration_hbv_7D.json'
+    # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/configuration_hbv_7D.json'
+    uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/configuration_hbv_10D_MC.json'
 
     uqsim.args.sampleFromStandardDist = True  # False
 
@@ -108,7 +109,7 @@ if local_debugging:
     uqsim.args.disable_calc_statistics = False
     uqsim.args.parallel_statistics = True  # False
 
-    uqsim.args.instantly_save_results_for_each_time_step = True #False
+    uqsim.args.instantly_save_results_for_each_time_step = False #False
     uqsim.args.uqsim_store_to_file = False
 
     uqsim.args.compute_Sobol_t = True  # True False
@@ -116,10 +117,10 @@ if local_debugging:
 
     uqsim.args.num_cores = 1
 
-    uqsim.args.save_all_simulations = True  # True for sc
+    uqsim.args.save_all_simulations = False  # True for sc
     uqsim.args.store_qoi_data_in_stat_dict = False  # if set to True, the qoi_values entry is stored in the stat_dict 
     uqsim.args.store_gpce_surrogate_in_stat_dict = True
-    uqsim.args.collect_and_save_state_data = True # False 
+    uqsim.args.collect_and_save_state_data = False # False 
 
     uqsim.setup_configuration_object()
 
@@ -133,8 +134,8 @@ compute_sobol_total_indices_with_samples = True  # This is only relevant in the 
 if uqsim.args.uq_method == "mc" and uqsim.args.compute_Sobol_t:
     compute_sobol_total_indices_with_samples = True
 
-save_gpce_surrogate = True
-compute_other_stat_besides_pce_surrogate = False 
+save_gpce_surrogate = True  # if True a gpce surrogate for each QoI for each time step is saved in a separate file
+compute_other_stat_besides_pce_surrogate = True  # This is relevant only when uq_method == "sc" 
 
 #####################################
 # additional path settings:

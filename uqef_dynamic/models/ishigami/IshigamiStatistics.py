@@ -9,7 +9,7 @@ import os
 from uqef.stat import Statistics
 
 from uqef_dynamic import paths
-from uqef_dynamic.utils import saltelliSobolIndicesHelpingFunctions
+from uqef_dynamic.utils import sensIndicesSamplingBasedHelpers
 
 class Samples(object):
     """
@@ -198,13 +198,16 @@ class IshigamiStatistics(Statistics):
         dim = len(simulationNodes.nodeNames)
         # dim = len(simulationNodes.distNodes[0])
 
-        if self._compute_Sobol_m:
-            self.Sobol_m_qoi = saltelliSobolIndicesHelpingFunctions._Sens_m_sample(
-                qoi_values_saltelli, dim, numEvaluations, code=4)
-
-        if self._compute_Sobol_t:
-            self.Sobol_t_qoi = saltelliSobolIndicesHelpingFunctions._Sens_t_sample(
-                qoi_values_saltelli, dim, numEvaluations, code=4)
+        if self._compute_Sobol_m or self._compute_Sobol_t:
+            s_i, s_t = sensIndicesSamplingBasedHelpers.compute_first_and_total_order_sens_indices_based_on_samples_pick_freeze(
+                qoi_values_saltelli, dim, self.numEvaluations, compute_first=self._compute_Sobol_m, 
+                compute_total=self._compute_Sobol_m, code_first=3, code_total=4,
+                do_printing=False
+                )
+            if self._compute_Sobol_m:
+                self.Sobol_m_qoi = s_i
+            if self._compute_Sobol_t:
+                self.Sobol_t_qoi = s_t 
 
         print("self.Sobol_m_qoi.shape")
         print(self.Sobol_m_qoi.shape)

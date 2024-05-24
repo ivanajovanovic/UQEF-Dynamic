@@ -101,6 +101,7 @@ class UQOutputPaths(object):
 
     def update_specifi_model_run_output_file_paths(self, model_runs_folder, i):
         """
+        Note: THis is specific for Larsim model!
         These files are outputed in case when
         run_and_save_simulations and always_save_original_model_runs options are set to True
         model_runs_folder = workingDir / "model_runs"
@@ -650,17 +651,39 @@ def get_full_path_of_file(file: pathlib.PosixPath):
 def get_home_directory():
     return pathlib.Path.home()
 
+def get_dict_with_output_file_paths_based_on_workingDir(workingDir):
+    args_file, configuration_object_file, nodes_file, parameters_file, time_info_file, \
+        df_all_index_parameter_file, df_all_index_parameter_gof_file, df_all_simulations_file, \
+            df_state_results_file, df_time_varying_grad_analysis_file, df_time_aggregated_grad_analysis_file, \
+                statistics_dictionary_file, dict_of_approx_matrix_c_file, dict_of_matrix_c_eigen_decomposition_file = \
+                    update_output_file_paths_based_on_workingDir(workingDir)
+    return {
+        "args_file": args_file, "configuration_object_file": configuration_object_file, "nodes_file": nodes_file,
+        "parameters_file": parameters_file, "time_info_file": time_info_file,
+        "df_all_index_parameter_file": df_all_index_parameter_file,
+        "df_all_index_parameter_gof_file": df_all_index_parameter_gof_file,
+        "df_all_simulations_file": df_all_simulations_file,
+        "df_state_results_file": df_state_results_file,
+        "df_time_varying_grad_analysis_file": df_time_varying_grad_analysis_file,
+        "df_time_aggregated_grad_analysis_file": df_time_aggregated_grad_analysis_file,
+        "statistics_dictionary_file": statistics_dictionary_file,
+        "dict_of_approx_matrix_c_file": dict_of_approx_matrix_c_file,
+        "dict_of_matrix_c_eigen_decomposition_file": dict_of_matrix_c_eigen_decomposition_file
+    }
 
 def update_output_file_paths_based_on_workingDir(workingDir):
-    nodes_file = workingDir / "nodes.simnodes.zip"
-    parameters_file = workingDir / "parameters.pkl"
     args_file = workingDir / 'uqsim_args.pkl'
     configuration_object_file = workingDir / "configurationObject"
+    nodes_file = workingDir / "nodes.simnodes.zip"
+    parameters_file = workingDir / "parameters.pkl"
+    time_info_file = workingDir / "time_info.txt"
 
     # Files produced by Samples class
-    df_all_simulations_file = workingDir / "df_all_simulations.pkl"
-    df_all_index_parameter_gof_file = workingDir / "df_all_index_parameter_gof_values.pkl"
     df_all_index_parameter_file = workingDir / "df_all_index_parameter_values.pkl"
+    # optional set of files
+    df_all_index_parameter_gof_file = workingDir / "df_all_index_parameter_gof_values.pkl"
+    df_all_simulations_file = workingDir / "df_all_simulations.pkl"
+    df_state_results_file = workingDir / "df_state_results.pkl"
     df_time_varying_grad_analysis_file = workingDir / "df_time_varying_grad_analysis.pkl"
     df_time_aggregated_grad_analysis_file = workingDir / "df_time_aggregated_grad_analysis.pkl"
 
@@ -671,10 +694,12 @@ def update_output_file_paths_based_on_workingDir(workingDir):
     dict_of_approx_matrix_c_file = workingDir / "dict_of_approx_matrix_c.pkl"
     dict_of_matrix_c_eigen_decomposition_file = workingDir / "dict_of_matrix_c_eigen_decomposition.pkl"
 
-    return nodes_file, parameters_file, args_file, configuration_object_file, \
-           df_all_simulations_file, df_all_index_parameter_gof_file, df_all_index_parameter_file, \
-           df_time_varying_grad_analysis_file, df_time_aggregated_grad_analysis_file, \
-           statistics_dictionary_file, dict_of_approx_matrix_c_file, dict_of_matrix_c_eigen_decomposition_file
+    return args_file, configuration_object_file, nodes_file, parameters_file, time_info_file, \
+        df_all_index_parameter_file, df_all_index_parameter_gof_file, df_all_simulations_file, \
+            df_state_results_file, df_time_varying_grad_analysis_file, df_time_aggregated_grad_analysis_file, \
+                statistics_dictionary_file, dict_of_approx_matrix_c_file, dict_of_matrix_c_eigen_decomposition_file
+
+
 
 ###################################################################################################################
 # Functions for working with configuration files and configuration objects
@@ -721,7 +746,7 @@ def parse_datetime_configuration(time_settings_config):
                                hour=end_hour, minute=end_minute)
     return [start_dt, end_dt]
 
-def compute_previous_timestamp(timestamp, resolution):
+def compute_previous_timestamp(timestamp, resolution, delta=1):
     if resolution == "daily":
         # pd.DateOffset(days=1)
         previous_timestamp = pd.to_datetime(timestamp) - pd.Timedelta(days=1)
@@ -729,6 +754,8 @@ def compute_previous_timestamp(timestamp, resolution):
         previous_timestamp = pd.to_datetime(timestamp) - pd.Timedelta(h=1)
     elif resolution == "minute":
         previous_timestamp = pd.to_datetime(timestamp) - pd.Timedelta(m=1)
+    else:
+        previous_timestamp = timestamp - delta
     return previous_timestamp
 
 ###################################################################################################################
@@ -1559,6 +1586,12 @@ def update_parameter_dict_for_gradient_computation(parameters, configurationObje
 # Reading saved data - produced by UQEF related run/simulation
 ###################################################################################################################
 
+def load_uqsim_args_dict(file):
+    with open(file, 'rb') as f:
+        uqsim_args = pickle.load(f)
+    uqsim_args_dict = vars(uqsim_args)
+    return uqsim_args_dict
+
 
 def read_and_print_uqsim_args_file(file):
     with open(file, 'rb') as f:
@@ -1568,6 +1601,12 @@ def read_and_print_uqsim_args_file(file):
     for key, value in uqsim_args_temp_dict.items():
         print(f"{key}: {value}")
     return uqsim_args
+
+
+def load_configuration_object(file):
+    with open(file, 'rb') as f:
+        configurationObject = dill.load(f)
+    return configurationObject
 
 
 def _get_df_simulation_from_file(working_folder, df_all_simulations_name="df_all_simulations.pkl"):
@@ -2481,6 +2520,12 @@ def plot_covariance_matrix(covariance_matrix, directory_for_saving_plots, filnam
     plt.savefig(fileName)
 
 
+def save_covariance_matrix(covariance_matrix, directory_for_saving, qoi):
+    fileName = f"covariance_matrix_{qoi}.npy"
+    fullFileName = os.path.abspath(os.path.join(str(directory_for_saving), fileName))
+    np.save(fullFileName, covariance_matrix)
+
+
 def solve_eigenvalue_problem(covariance_matrix, weights):
     # from scipy.linalg import eig
     # from scipy.linalg import eigh
@@ -2686,4 +2731,19 @@ def computing_generalized_sobol_total_indices_from_poly_expan(
             # Write each variable to the file followed by a newline character
             file.write(f'{param_name}: {s_tot_generalized}\n')
 
+# =================================================================================================
+# Different set of utility functions
+# =================================================================================================
+def is_nested_dict_empty(nested_dict):
+    if not isinstance(nested_dict, dict):
+        return False
+    if not nested_dict:
+        return True
+    return all(is_nested_dict_empty(val) for val in nested_dict.values())
 
+def is_nested_dict_empty_or_none(nested_dict):
+    if not isinstance(nested_dict, dict):
+        return nested_dict is None
+    if not nested_dict:
+        return True
+    return all(is_nested_dict_empty_or_none(val) for val in nested_dict.values())

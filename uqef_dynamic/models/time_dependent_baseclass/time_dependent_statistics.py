@@ -1047,7 +1047,10 @@ class TimeDependentStatistics(Statistics):
                             if self.instantly_save_results_for_each_time_step:
                                 del result[1]
                     # TODO This is here only temporarly
-                    covariance_matrix_loc = self.compute_covariance_matrix_in_time_single_qoi(single_qoi_column)
+                    if not self.instantly_save_results_for_each_time_step:
+                        covariance_matrix_loc = self.compute_covariance_matrix_in_time_single_qoi(single_qoi_column)
+                        print(f"covariance_matrix_loc is computed: {covariance_matrix_loc}")
+                        print(f"covariance_matrix_loc is computed: {type(covariance_matrix_loc)}")
                     self._save_plot_and_clear_result_dict_single_qoi(single_qoi_column)
                     del chunk_results_it
                     del chunk_results
@@ -1537,7 +1540,7 @@ class TimeDependentStatistics(Statistics):
         keyIter = list(self.groups.keys())  # list of all the dates
         # adding cantered data of the QoI
         single_qoi_column_centered = single_qoi_column + "_centered"
-        for key in keyIter:  # for a single date
+        for key in keyIter:  # for a single time stamp
             if self.result_dict and self.result_dict is not None:
                 mean = self.result_dict[single_qoi_column][key]['E']
                 self.samples.df_simulation_result.loc[self.groups[key].values, single_qoi_column_centered] = \
@@ -1577,7 +1580,8 @@ class TimeDependentStatistics(Statistics):
                         raise ValueError("Weights must be provided for quadrature-based algorithms")
                     covariance_matrix[s, c] = np.dot(self.weights, centered_output[:, c]*centered_output[:,s])
                 else:
-                    raise ValueError(f"Unknown algorithm - {algorithm}")
+                    raise ValueError(f"Unknown algorithm - {self.uq_method}")
+        utility.save_covariance_matrix(covariance_matrix, self.workingDir, single_qoi_column)
         utility.plot_covariance_matrix(covariance_matrix, self.workingDir, filname=f"covariance_matrix_{single_qoi_column}.png")
         return covariance_matrix
 
@@ -2083,9 +2087,10 @@ class TimeDependentStatistics(Statistics):
                 raise
         return fig
 
-    ###################################################################################################################
+    # =================================================================================================
     # Set of functions which require some measured/observed data
-    ###################################################################################################################
+    # =================================================================================================
+
 
     def compare_mean_time_series_and_measured(self):
         # TODO Finish this

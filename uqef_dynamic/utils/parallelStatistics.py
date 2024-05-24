@@ -7,7 +7,6 @@ import time
 from uqef_dynamic.utils import sensIndicesSamplingBasedHelpers
 from uqef_dynamic.utils import utility
 
-
 def parallel_calc_stats_for_MC(
         keyIter_chunk, qoi_values_chunk, numEvaluations, dim, compute_Sobol_t=False, store_qoi_data_in_stat_dict=False,
         compute_sobol_total_indices_with_samples=False, samples=None):
@@ -109,6 +108,7 @@ def parallel_calc_stats_for_gPCE(keyIter_chunk, qoi_values_chunk, dist, polynomi
     return results
 
 
+# TODO Remove eventually time_info_dict computation and printing
 def calculate_stats_gpce(
     local_result_dict, qoi_gPCE, dist, compute_other_stat_besides_pce_surrogate=True,
     compute_Sobol_t=False, compute_Sobol_m=False, compute_Sobol_m2=False):

@@ -89,7 +89,7 @@ def get_all_timesteps_from_saved_files(workingDir, first_part_of_the_file = "sta
     return list_TimeStamp
 
     
-def read_all_saved_statistics_dict(workingDir, list_qoi_column, single_timestamp_single_file=False):
+def read_all_saved_statistics_dict(workingDir, list_qoi_column, single_timestamp_single_file=False, throw_error=True):
     if single_timestamp_single_file:
         list_TimeStamp = get_all_timesteps_from_saved_files(workingDir, first_part_of_the_file = "statistics")
     statistics_dictionary = defaultdict(dict)
@@ -98,18 +98,35 @@ def read_all_saved_statistics_dict(workingDir, list_qoi_column, single_timestamp
             statistics_dictionary[single_qoi] = dict()
             for single_timestep in list_TimeStamp:
                 statistics_dictionary_file_temp = workingDir / f"statistics_dictionary_{single_qoi}_{single_timestep}.pkl"
-                assert statistics_dictionary_file_temp.is_file(), \
-                    f"The statistics file for qoi-{single_qoi} and time-stamp-{single_timestep} does not exist"
+                if not statistics_dictionary_file_temp.is_file():
+                    if throw_error:
+                        raise FileNotFoundError(f"The statistics file for qoi-{single_qoi} and time-stamp-{single_timestep} does not exist")
+                    else:
+                        statistics_dictionary[single_qoi][pd.Timestamp(single_timestep)] = None
+                        continue
+                # assert statistics_dictionary_file_temp.is_file(), \
+                #     f"The statistics file for qoi-{single_qoi} and time-stamp-{single_timestep} does not exist"
                 with open(statistics_dictionary_file_temp, 'rb') as f:
                     statistics_dictionary_temp = pickle.load(f)
                 statistics_dictionary[single_qoi][pd.Timestamp(single_timestep)] = statistics_dictionary_temp
         else:
             statistics_dictionary_file_temp = workingDir / f"statistics_dictionary_qoi_{single_qoi}.pkl"
-            assert statistics_dictionary_file_temp.is_file(), \
-                                f"The statistics file for qoi-{single_qoi} does not exist"
+            if not statistics_dictionary_file_temp.is_file():
+                if throw_error:
+                    raise FileNotFoundError(f"The statistics file for qoi-{single_qoi} does not exist")
+                else:
+                    statistics_dictionary[single_qoi] = None
+                    continue
+            # assert statistics_dictionary_file_temp.is_file(), \
+            #                     f"The statistics file for qoi-{single_qoi} does not exist"
             with open(statistics_dictionary_file_temp, 'rb') as f:
                 statistics_dictionary_temp = pickle.load(f)
             statistics_dictionary[single_qoi] = statistics_dictionary_temp
+    if utility.is_nested_dict_empty_or_none(statistics_dictionary):
+        if throw_error:
+            raise FileNotFoundError(f"No statistics files found in the working directory")
+        else:
+            return None
     return statistics_dictionary
 
 
@@ -155,33 +172,78 @@ def save_all_gpce_coeffs(workingDir, gpce_coeff_dictionary, list_qoi_column=None
             save_gpce_coeffs(workingDir, gpce_coeff_dictionary[single_qoi][single_timestep], single_qoi, single_timestep)
 
 
-def read_all_saved_gpce_surrogate_models(workingDir, list_qoi_column, single_timestamp_single_file=False):
+def read_all_saved_gpce_surrogate_models(workingDir, list_qoi_column, single_timestamp_single_file=False, throw_error=True):
     list_TimeStamp = get_all_timesteps_from_saved_files(workingDir, first_part_of_the_file = "gpce")
-    gpce_surrogate_dictionary = defaultdict(dict)
+    gpce_surrogate_dictionary = dict()  # defaultdict(dict)
     for single_qoi in list_qoi_column:
         gpce_surrogate_dictionary[single_qoi] = dict()
         for single_timestep in list_TimeStamp:
             gpce_surrogate_file_temp = workingDir / f"gpce_surrogate_{single_qoi}_{single_timestep}.pkl"
-            assert gpce_surrogate_file_temp.is_file(), \
-            f"The gpce surrogate file for qoi-{single_qoi} and time-stamp-{single_timestep} does not exist"
+            if not gpce_surrogate_file_temp.is_file():
+                if throw_error:
+                    raise FileNotFoundError(f"The gpce surrogate file for qoi-{single_qoi} and time-stamp-{single_timestep} does not exist")
+                else:
+                    gpce_surrogate_dictionary[single_qoi][pd.Timestamp(single_timestep)] = None
+                    continue
+            # assert gpce_surrogate_file_temp.is_file(), \
+            # f"The gpce surrogate file for qoi-{single_qoi} and time-stamp-{single_timestep} does not exist"
             with open(gpce_surrogate_file_temp, 'rb') as f:
                 gpce_surrogate_temp = pickle.load(f)
             gpce_surrogate_dictionary[single_qoi][pd.Timestamp(single_timestep)] = gpce_surrogate_temp
+    if utility.is_nested_dict_empty_or_none(gpce_surrogate_dictionary):
+        if throw_error:
+            raise FileNotFoundError(f"No gpce surrogate files found in the working directory")
+        else:
+            return None
     return gpce_surrogate_dictionary
 
 
-def read_all_saved_gpce_coeffs(workingDir, list_qoi_column, single_timestamp_single_file=False):
+def read_single_gpce_surrogate_models(workingDir, single_qoi, single_timestep, throw_error=True):
+    gpce_surrogate_file_temp = workingDir / f"gpce_surrogate_{single_qoi}_{single_timestep}.pkl"
+    if gpce_surrogate_file_temp.is_file():
+        with open(gpce_surrogate_file_temp, 'rb') as f:
+                gpce_surrogate_temp = pickle.load(f)
+        return gpce_surrogate_temp
+    else:
+        if throw_error:
+            raise FileNotFoundError(f"The gpce surrogate file for qoi-{single_qoi} and time-stamp-{single_timestep} does not exist")
+        else:
+            return None
+
+
+def read_all_saved_gpce_coeffs(workingDir, list_qoi_column, single_timestamp_single_file=False, throw_error=True):
     list_TimeStamp = get_all_timesteps_from_saved_files(workingDir, first_part_of_the_file = "gpce")
-    gpce_coeff_dictionary = defaultdict(dict)
+    gpce_coeff_dictionary = dict()  # defaultdict(dict)
     for single_qoi in list_qoi_column:
         gpce_coeff_dictionary[single_qoi] = dict()
         for single_timestep in list_TimeStamp:
             gpce_coeffs_file_temp = workingDir / f"gpce_coeffs_{single_qoi}_{single_timestep}.npy"
-            assert gpce_coeffs_file_temp.is_file(), \
-            f"The gpce coefficients file for qoi-{single_qoi} and time-stamp-{single_timestep} does not exist"
+            if not gpce_coeffs_file_temp.is_file():
+                if throw_error:
+                    raise FileNotFoundError(f"The gpce coefficients file for qoi-{single_qoi} and time-stamp-{single_timestep} does not exist")
+                else:
+                    gpce_coeff_dictionary[single_qoi][pd.Timestamp(single_timestep)] = None
+                    continue
+            # assert gpce_coeffs_file_temp.is_file(), \
+            # f"The gpce coefficients file for qoi-{single_qoi} and time-stamp-{single_timestep} does not exist"
             gpce_coeff_dictionary[single_qoi][pd.Timestamp(single_timestep)] = np.load(gpce_coeffs_file_temp)
+    if utility.is_nested_dict_empty_or_none(gpce_coeff_dictionary):
+        if throw_error:
+            raise FileNotFoundError(f"No gpce coefficinets files found in the working directory")
+        else:
+            return None
     return gpce_coeff_dictionary
 
+
+def read_single_gpce_coeffs(workingDir, single_qoi, single_timestep, throw_error=True):
+    gpce_coeffs_file_temp = workingDir / f"gpce_coeffs_{single_qoi}_{single_timestep}.npy"
+    if gpce_coeffs_file_temp.is_file():
+        return np.load(gpce_coeffs_file_temp)
+    else:
+        if throw_error:
+            raise FileNotFoundError(f"The gpce coefficients file for qoi-{single_qoi} and time-stamp-{single_timestep} does not exist")
+        else:
+            return None
 # ==============================================================================================================
 # Functions for computing goodness-of-fit functions for different statistics time-signals produced by UQ and SA simulations
 # ==============================================================================================================

@@ -55,10 +55,10 @@ start_uq_sim(){
     # define paths
     basePath=$HOME/Repositories #'pwd'
     baseSourcePath=$basePath/UQEF-Dynamic
-    baseExecutionPath=$basePath/UQEF-Dynamic-on-cluster
+    baseExecutionPath=$basePath/UQEF-Dynamic
     baseResultsPath=$SCRATCH/hbvsask_runs
     modelMasterPath=$WORK/HBV-SASK-data
-    executionPath=$baseExecutionPath/hbv_uq_cm2.$counter
+    # executionPath=$baseExecutionPath/hbv_uq_cm2.$counter
     resultsPath=$baseResultsPath/hbv_uq_cm2.$counter
 
     if [ "$sched_strut" = "SWPT" -o "$sched_strut" = "SWPT_OPT" ] ; then
@@ -129,7 +129,7 @@ echo "---- start HBV sim: \`date\`"
                             --outputResultDir $resultsPath \
                             --inputModelDir $modelMasterPath \
                             --sourceDir $baseSourcePath \
-                            --config_file $baseSourcePath/data/configurations/configuration_hbv_10D_MC_banff.json \
+                            --config_file $baseSourcePath/data/configurations/configuration_hbv_10D_MC.json \
                             --model "$model" \
                             --uncertain "$uncertain" \
                             --opt_strategy "$strategy" --opt_algorithm "$algorithm" \
@@ -150,24 +150,24 @@ echo "---- start HBV sim: \`date\`"
 
 echo "---- end HBV sim: \`date\`"
 
-" > $baseSourcePath/hbv_uq_cm2_mc_100000_lhc_q_2006_2007_banff.cmd
+" > $baseSourcePath/hbv_uq_cm2_mc_1000000_lhc_q_2006_oldman.cmd
 
     #execute batch file
-    sbatch $baseSourcePath/hbv_uq_cm2_mc_100000_lhc_q_2006_2007_banff.cmd
+    sbatch $baseSourcePath/hbv_uq_cm2_mc_1000000_lhc_q_2006_oldman.cmd
 
 }
 
 model="hbvsask"
-opt_add="--parallel_statistics --sampleFromStandardDist --compute_Sobol_t --save_all_simulations"  # --instantly_save_results_for_each_time_step
+opt_add="--parallel_statistics --sampleFromStandardDist --compute_Sobol_t"  # --instantly_save_results_for_each_time_step
 nodes=4
 tasks_per_node=22
 low_time="2:30:00"
-mid_time="2:00:00"
+mid_time="4:00:00"
 max_time="72:00:00"
 uq_method="mc"
 q_order=5
 p_order=4
-mc_numevaluations=100000
+mc_numevaluations=500000
 uc="all"
 sampling_rule="latin_hypercube"
 sc_poly_rule="three_terms_recurrence"

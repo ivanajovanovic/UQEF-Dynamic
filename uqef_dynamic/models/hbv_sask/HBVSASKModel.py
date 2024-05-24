@@ -84,13 +84,19 @@ class HBVSASKModelConfigurations:
         if key in kwargs:
             return kwargs[key]
         else:
-            return strtobool(self.configurationObject[section].get(key, default))
+            try:
+                return strtobool(self.configurationObject[section].get(key, default))
+            except KeyError:
+                return default
     
     def get_value_from_kwargs_or_config_dict(self, key: str, section: str, kwargs: dict, default: Optional[Any] = None):
         if key in kwargs:
             return kwargs[key]
         else:
-            return self.configurationObject[section].get(key, default)
+            try:
+                return self.configurationObject[section].get(key, default)
+            except KeyError:
+                return default
         
 
 class HBVSASKModel(object):
@@ -140,25 +146,38 @@ class HBVSASKModel(object):
         if "run_full_timespan" in kwargs:
             self.run_full_timespan = kwargs['run_full_timespan']
         else:
-            self.run_full_timespan = strtobool(self.configurationObject["time_settings"].get(
-                "run_full_timespan", 'False'))
+            if "time_settings" in self.configurationObject:
+                self.run_full_timespan = strtobool(self.configurationObject["time_settings"].get(
+                    "run_full_timespan", 'False'))
+            else:
+                self.run_full_timespan = False
 
         if "writing_results_to_a_file" in kwargs:
             self.writing_results_to_a_file = kwargs['writing_results_to_a_file']
         else:
-            self.writing_results_to_a_file = strtobool(self.configurationObject["model_settings"].get(
-                "writing_results_to_a_file", "True"))
+            if "model_settings" in self.configurationObject:
+                self.writing_results_to_a_file = strtobool(self.configurationObject["model_settings"].get(
+                    "writing_results_to_a_file", "True"))
+            else:
+                self.writing_results_to_a_file = True
 
         if "plotting" in kwargs:
             self.plotting = kwargs['plotting']
         else:
-            self.plotting = strtobool(self.configurationObject["model_settings"].get("plotting", "True"))
+            if "model_settings" in self.configurationObject:
+                self.plotting = strtobool(self.configurationObject["model_settings"].get(
+                    "plotting", "True"))
+            else:
+                self.plotting = True    
 
         if "corrupt_forcing_data" in kwargs:
             self.corrupt_forcing_data = kwargs['corrupt_forcing_data']
         else:
-            self.corrupt_forcing_data = strtobool(self.configurationObject["model_settings"].get(
-                "corrupt_forcing_data", "False"))
+            if "model_settings" in self.configurationObject:
+                self.corrupt_forcing_data = strtobool(self.configurationObject["model_settings"].get(
+                    "corrupt_forcing_data", "False"))
+            else:
+                self.corrupt_forcing_data = False
 
         #####################################
         # these set of control variables are for UQEF & UQEF-Dynamic framework...
@@ -271,7 +290,10 @@ class HBVSASKModel(object):
         if "resolution" in kwargs:
             self.resolution = kwargs["resolution"]
         else:
-            self.resolution = self.configurationObject["time_settings"].get("resolution", "daily")
+            if "time_settings" in self.configurationObject:
+                self.resolution = self.configurationObject["time_settings"].get("resolution", "daily")
+            else:
+                self.resolution = "daily"
         if self.resolution not in ["daily", "hourly", "minute"]:
             raise Exception(f"Error in Statistics class - resolution is not daily, hourly or minute")
 
@@ -416,8 +438,14 @@ class HBVSASKModel(object):
             # self.time_series_measured_data_df = self.time_series_measured_data_df.loc[self.simulation_range]
 
     def _plot_input_data(self, time_column_name="TimeStamp", precipitation_column_name="precipitation",
-                         temperature_column_name="temperature", read_measured_streamflow=True,
-                         streamflow_column_name="streamflow"):
+                         temperature_column_name="temperature", read_measured_streamflow=None,
+                         streamflow_column_name="streamflow", **kwargs):
+        
+        if "plot_whole_simulation_period" in kwargs:
+            plot_whole_simulation_period = kwargs["plot_whole_simulation_period"]
+        else:
+            plot_whole_simulation_period = True
+    
         if self.time_series_measured_data_df is None:
             return
 
@@ -430,27 +458,40 @@ class HBVSASKModel(object):
             n_rows = 2
         fig = make_subplots(rows=n_rows, cols=1)
 
-        if time_column_name in self.time_series_measured_data_df.columns:
-            fig.add_trace(
-                go.Scatter(x=self.time_series_measured_data_df[time_column_name], y=self.time_series_measured_data_df[precipitation_column_name],
-                           name="P"), row=1, col=1)
-            fig.add_trace(
-                go.Scatter(x=self.time_series_measured_data_df[time_column_name], y=self.time_series_measured_data_df[temperature_column_name],
-                           name="T"), row=2, col=1)
-            if read_measured_streamflow:
-                fig.add_trace(
-                    go.Scatter(x=self.time_series_measured_data_df[time_column_name], y=self.time_series_measured_data_df[streamflow_column_name], name="Q_cms"), row=3, col=1)
-        else:
-            fig.add_trace(
-                go.Scatter(x=self.time_series_measured_data_df.index, y=self.time_series_measured_data_df[precipitation_column_name],
-                           name="P"), row=1, col=1)
-            fig.add_trace(
-                go.Scatter(x=self.time_series_measured_data_df.index, y=self.time_series_measured_data_df[temperature_column_name],
-                           name="T"), row=2, col=1)
-            if read_measured_streamflow:
-                fig.add_trace(
-                    go.Scatter(x=self.time_series_measured_data_df.index, y=self.time_series_measured_data_df[streamflow_column_name], name="Q_cms"), row=3, col=1)
+        time_series_measured_data_df = self.time_series_measured_data_df
 
+        if time_column_name is None:
+            time_column_name = self.time_column_name
+
+        if time_column_name in time_series_measured_data_df.columns:
+            if not plot_whole_simulation_period:
+                time_series_measured_data_df = self.time_series_measured_data_df.loc[\
+                    self.time_series_measured_data_df[time_column_name].isin(\
+                    pd.date_range(start=self.start_date_predictions,end=self.end_date))]
+            fig.add_trace(
+                go.Scatter(x=time_series_measured_data_df[time_column_name], y=time_series_measured_data_df[precipitation_column_name],
+                           name="P"), row=1, col=1)
+            fig.add_trace(
+                go.Scatter(x=time_series_measured_data_df[time_column_name], y=time_series_measured_data_df[temperature_column_name],
+                           name="T"), row=2, col=1)
+            if read_measured_streamflow and streamflow_column_name in time_series_measured_data_df.columns:
+                fig.add_trace(
+                    go.Scatter(x=time_series_measured_data_df[time_column_name], y=time_series_measured_data_df[streamflow_column_name], name="Q_cms (Measured)"), row=3, col=1)
+        else:
+            if not plot_whole_simulation_period:
+                time_series_measured_data_df = self.time_series_measured_data_df.loc[self.start_date_predictions:self.end_date,:]
+            fig.add_trace(
+                go.Scatter(x=time_series_measured_data_df.index, y=time_series_measured_data_df[precipitation_column_name],
+                           name="P"), row=1, col=1)
+            fig.add_trace(
+                go.Scatter(x=time_series_measured_data_df.index, y=time_series_measured_data_df[temperature_column_name],
+                           name="T"), row=2, col=1)
+            if read_measured_streamflow and streamflow_column_name in time_series_measured_data_df.columns:
+                fig.add_trace(
+                    go.Scatter(x=time_series_measured_data_df.index, y=time_series_measured_data_df[streamflow_column_name], name="Q_cms (Measured)"), row=3, col=1)
+
+        if "title" in kwargs:
+            fig.update_layout(title=kwargs["title"])
         plot_filename = self.workingDir / f"forcing_data.html"
         plot(fig, filename=str(plot_filename), auto_open=False)
         return fig

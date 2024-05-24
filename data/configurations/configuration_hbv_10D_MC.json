@@ -2,27 +2,27 @@
     "time_settings":
     {
       "start_day": 1,
-      "start_month": 9,
+      "start_month": 10,
       "start_year": 2002,
       "start_hour": 0,
       "start_minute": 0,
 
-      "end_day": 10,
-      "end_month": 11,
+      "end_day": 1,
+      "end_month": 10,
       "end_year": 2006,
       "end_hour": 0,
       "end_minute": 0,
 
       "run_full_timespan":"False",
-      "spin_up_length":1125,
-      "simulation_length": 395,
+      "spin_up_length":1096,
+      "simulation_length": 365,
       "resolution": "daily",
 
       "cut_runs": "False",
       "timestep": 5
     },
   "model_settings": {
-    "basis": "Banff_Basin",
+    "basis": "Oldman_Basin",
     "plotting": "False",
     "writing_results_to_a_file": "False",
     "corrupt_forcing_data": "False"
@@ -31,7 +31,7 @@
     "hbv_model_path": "Hydro_Models/HBV-SASK-data"
   },
   "simulation_settings": {
-    "qoi":"GoF",
+    "qoi":"Q_cms",
     "qoi_column":"Q_cms",
     "autoregressive_model_first_order":"False",
     "transform_model_output":"None",
@@ -40,7 +40,7 @@
     "objective_function_qoi":"RMSE",
     "calculate_GoF":"True",
     "objective_function":["MAE", "MSE", "RMSE", "NRMSE", "NSE", "LogNSE", "KGE"],
-    "mode":"sliding_window",
+    "mode":"continuous",
     "interval": 30,
     "min_periods": 5,
     "method": "avrg",
@@ -64,7 +64,7 @@
       "name": "C0",
       "distribution": "Uniform",
       "lower": 0.0,
-      "upper": 5.0,
+      "upper": 10.0,
       "default": 0.5
     },
     {

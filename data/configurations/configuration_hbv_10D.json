@@ -72,6 +72,20 @@
       "lower": 0.0,
       "upper": 1.0,
       "default": 0.5
+    },    
+    {
+      "name": "FC",
+      "distribution": "Uniform",
+      "lower": 50.0,
+      "upper": 1000.0,
+      "default": 100
+    },
+    {
+      "name": "beta",
+      "distribution": "Uniform",
+      "lower": 1.0,
+      "upper": 4.0,
+      "default": 2.0
     },
     {
       "name": "FRAC",
@@ -93,20 +107,6 @@
       "lower": 0.0,
       "upper": 1.0,
       "default": 0.5
-    },
-    {
-      "name": "FC",
-      "distribution": "Uniform",
-      "lower": 50.0,
-      "upper": 1000.0,
-      "default": 100
-    },
-    {
-      "name": "beta",
-      "distribution": "Uniform",
-      "lower": 1.0,
-      "upper": 4.0,
-      "default": 2.0
     },
     {
       "name": "K1",

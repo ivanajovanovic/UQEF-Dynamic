@@ -1,5 +1,5 @@
 """
-Usage of the UQEF with a (mainly) Hydrological models.
+Usage of the UQEF and UQEF-Dynamic with Hydrology models, more generally, models that produce time-dependent output.
 @author: Florian Kuenzner and Ivana Jovanovic
 """
 import os
@@ -8,6 +8,7 @@ import sys
 import pickle
 import dill
 from distutils.util import strtobool
+import time
 
 import uqef
 
@@ -21,25 +22,10 @@ pd.options.mode.chained_assignment = None
 # sys.path.insert(0, os.getcwd())
 sys.path.insert(0, '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic')
 
-from uqef_dynamic.models.larsim import LarsimModelUQ
-from uqef_dynamic.models.larsim import LarsimStatistics
-
-from uqef_dynamic.models.linearDampedOscillator import LinearDampedOscillatorModel
-from uqef_dynamic.models.linearDampedOscillator import LinearDampedOscillatorStatistics
-
-from uqef_dynamic.models.ishigami import IshigamiModel
-from uqef_dynamic.models.ishigami import IshigamiStatistics
-
-from uqef_dynamic.models.productFunction import ProductFunctionModel
-from uqef_dynamic.models.productFunction import ProductFunctionStatistics
+from uqef_dynamic.utils import utility
 
 from uqef_dynamic.models.hbv_sask import HBVSASKModelUQ
 from uqef_dynamic.models.hbv_sask import HBVSASKStatistics
-
-DEFAULT_DICT_WHAT_TO_PLOT = {
-    "E_minus_std": False, "E_plus_std": False, "P10": False, "P90": False,
-    "StdDev": False, "Skew": False, "Kurt": False, "Sobol_m": True, "Sobol_m2": False, "Sobol_t": True
-}
 
 # instantiate UQsim
 uqsim = uqef.UQsim()
@@ -52,52 +38,72 @@ local_debugging = True
 if local_debugging:
     save_solver_results = False
 
-    uqsim.args.model = "hbvsask"  # "larsim" "hbvsask"
+    uqsim.args.model = "hbvsask" 
 
     uqsim.args.uncertain = "all"
     uqsim.args.chunksize = 1
 
-    uqsim.args.uq_method = "sc"  # "sc" | "saltelli" | "mc" | "ensemble"
+    uqsim.args.uq_method = "mc"  # "sc" | "saltelli" | "mc" | "ensemble"
     uqsim.args.mc_numevaluations = 1000
-    uqsim.args.sampling_rule = "random"  # "random" | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
-    uqsim.args.sc_q_order = 5  # 7 #10 3
-    uqsim.args.sc_p_order = 2  # 4, 5, 6, 8
-    uqsim.args.sc_quadrature_rule = "clenshaw_curtis"  # "p" "genz_keister_24" "leja"
-
-    uqsim.args.read_nodes_from_file = True  # True
-    l = 5  # 10
-    path_to_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/sparse_grid_nodes_weights")
-    uqsim.args.parameters_file = path_to_file / f"KPU_d10_l{l}.asc" # f"KPU_d3_l{l}.asc"
-    uqsim.args.parameters_setup_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/configurations/KPU_HBV_d10.json")
-
-    uqsim.args.sc_poly_rule = "three_terms_recurrence"  # "gram_schmidt" | "three_terms_recurrence" | "cholesky"
-    uqsim.args.sc_poly_normed = False  # True
-    uqsim.args.sc_sparse_quadrature = True  # False
-    uqsim.args.regression = False
-
+    uqsim.args.sampling_rule = "latin_hypercube"  # "random" | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
+    uqsim.args.sc_q_order = 7  # 7 #10 3
+    uqsim.args.sc_p_order = 3  # 4, 5, 6, 8
+    uqsim.args.sc_quadrature_rule = "g"  # "p" "genz_keister_24" "leja" "clenshaw_curtis"
+ 
+    # paths, if necessary change them
     uqsim.args.inputModelDir = pathlib.Path("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/HBV-SASK-data")
     uqsim.args.sourceDir = pathlib.Path("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/HBV-SASK-data")
-    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs",
-                                                              'gpce_d10_l5_p2_short')) #gpce_d5_l7_p3_summer_2007_multti_qoi
+    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs", 'mc_q_10d_oldman'))
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
-    uqsim.args.config_file = '/UQEF-Dynamic/data/configurations/configuration_hbv_10D.json'
+    uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/configuration_hbv_10D_MC.json'
+
+    uqsim.args.read_nodes_from_file = False
+    l = 7  # 10
+    path_to_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/sparse_grid_nodes_weights")  # this a path to the file where the nodes and weights are stored
+    uqsim.args.parameters_file = path_to_file / f"KPU_d3_l{l}.asc" # f"KPU_d7_l{l}.asc"
+    uqsim.args.parameters_setup_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/KPU_HBV_d3.json")
+
+    uqsim.args.sc_poly_rule = "three_terms_recurrence"  # "gram_schmidt" | "three_terms_recurrence" | "cholesky"
+    uqsim.args.sc_poly_normed = True  # True
+    uqsim.args.sc_sparse_quadrature = False  # False
+    uqsim.args.regression = False
 
     uqsim.args.sampleFromStandardDist = True  # False
 
     uqsim.args.mpi = True
     uqsim.args.mpi_method = "MpiPoolSolver"  # "LinearSolver"
 
-    uqsim.args.instantly_save_results_for_each_time_step = True
+    uqsim.args.disable_statistics = False
+    uqsim.args.disable_calc_statistics = False
+    uqsim.args.parallel_statistics = True  # False
+
+    uqsim.args.instantly_save_results_for_each_time_step = False #False
     uqsim.args.uqsim_store_to_file = False
 
-    uqsim.args.disable_statistics = False
-    uqsim.args.parallel_statistics = True
-    uqsim.args.compute_Sobol_t = True
-    uqsim.args.compute_Sobol_m = True
+    uqsim.args.compute_Sobol_t = True  # True False
+    uqsim.args.compute_Sobol_m = False  # True False
 
     uqsim.args.num_cores = 1
 
+    uqsim.args.save_all_simulations = False  # True for sc
+    uqsim.args.store_qoi_data_in_stat_dict = False  # if set to True, the qoi_values entry is stored in the stat_dict 
+    uqsim.args.store_gpce_surrogate_in_stat_dict = True
+    uqsim.args.collect_and_save_state_data = False # False 
+
     uqsim.setup_configuration_object()
+
+
+# TODO - add these variables to uqef.args
+utility.DEFAULT_DICT_WHAT_TO_PLOT = {
+    "E_minus_std": False, "E_plus_std": False, "P10": True, "P90": True,
+    "StdDev": True, "Skew": False, "Kurt": False, "Sobol_m": False, "Sobol_m2": False, "Sobol_t": True
+}
+compute_sobol_total_indices_with_samples = True  # This is only relevant in the mc-saltelli's approach
+if uqsim.args.uq_method == "mc" and uqsim.args.compute_Sobol_t:
+    compute_sobol_total_indices_with_samples = True
+
+save_gpce_surrogate = True  # if True a gpce surrogate for each QoI for each time step is saved in a separate file
+compute_other_stat_besides_pce_surrogate = True  # This is relevant only when uq_method == "sc" 
 
 #####################################
 # additional path settings:
@@ -129,17 +135,6 @@ if uqsim.is_master() and not uqsim.is_restored():
 # register model
 #####################################
 
-uqsim.models.update({"larsim"         : (lambda: LarsimModelUQ.LarsimModelUQ(
-    configurationObject=uqsim.configuration_object,
-    inputModelDir=uqsim.args.inputModelDir,
-    workingDir=uqsim.args.workingDir,
-    sourceDir=uqsim.args.sourceDir,
-    disable_statistics=uqsim.args.disable_statistics,
-    uq_method=uqsim.args.uq_method))})
-uqsim.models.update({"oscillator"     : (lambda: LinearDampedOscillatorModel.LinearDampedOscillatorModel(uqsim.configuration_object))})
-uqsim.models.update({"ishigami"       : (lambda: IshigamiModel.IshigamiModel(
-    configurationObject=uqsim.configuration_object))})
-uqsim.models.update({"productFunction": (lambda: ProductFunctionModel.ProductFunctionModel(uqsim.configuration_object))})
 uqsim.models.update({"hbvsask"         : (lambda: HBVSASKModelUQ.HBVSASKModelUQ(
     configurationObject=uqsim.configuration_object,
     inputModelDir=uqsim.args.inputModelDir,
@@ -152,47 +147,27 @@ uqsim.models.update({"hbvsask"         : (lambda: HBVSASKModelUQ.HBVSASKModelUQ(
 # register statistics
 #####################################
 
-uqsim.statistics.update({"larsim"         : (lambda: LarsimStatistics.LarsimStatistics(
-    configurationObject=uqsim.configuration_object,
-    workingDir=uqsim.args.workingDir,
-    sampleFromStandardDist=uqsim.args.sampleFromStandardDist,
-    store_qoi_data_in_stat_dict=False,
-    store_gpce_surrogate=True,
-    save_gpce_surrogate=False,
-    parallel_statistics=uqsim.args.parallel_statistics,
-    mpi_chunksize=uqsim.args.mpi_chunksize,
-    unordered=False,
-    uq_method=uqsim.args.uq_method,
-    compute_Sobol_t=uqsim.args.compute_Sobol_t,
-    compute_Sobol_m=uqsim.args.compute_Sobol_m
-))})
-uqsim.statistics.update({"oscillator"     : (lambda: LinearDampedOscillatorStatistics.LinearDampedOscillatorStatistics())})
-uqsim.statistics.update({"ishigami"       : (lambda: IshigamiStatistics.IshigamiStatistics(
-    configurationObject=uqsim.configuration_object,
-    workingDir=uqsim.args.workingDir,
-    sampleFromStandardDist=uqsim.args.sampleFromStandardDist,
-    uq_method=uqsim.args.uq_method,
-    compute_Sobol_t=uqsim.args.compute_Sobol_t,
-    compute_Sobol_m=uqsim.args.compute_Sobol_m
-))})
-uqsim.statistics.update({"productFunction": (lambda: ProductFunctionStatistics.ProductFunctionStatistics(uqsim.configuration_object))})
-uqsim.statistics.update({"hbvsask"        : (lambda: HBVSASKStatistics.HBVSASKStatistics(
+uqsim.statistics.update({"hbvsask"         : (lambda: HBVSASKStatistics.HBVSASKStatistics(
     configurationObject=uqsim.configuration_object,  # uqsim.args.config_file,
     workingDir=uqsim.args.outputResultDir,  # .args.workingDir,
+    inputModelDir=uqsim.args.inputModelDir,
     sampleFromStandardDist=uqsim.args.sampleFromStandardDist,
-    store_qoi_data_in_stat_dict=False,
-    store_gpce_surrogate=True,
-    save_gpce_surrogate=False,
     parallel_statistics=uqsim.args.parallel_statistics,
     mpi_chunksize=uqsim.args.mpi_chunksize,
     unordered=False,
     uq_method=uqsim.args.uq_method,
     compute_Sobol_t=uqsim.args.compute_Sobol_t,
     compute_Sobol_m=uqsim.args.compute_Sobol_m,
-    save_samples=True,
-    inputModelDir=uqsim.args.inputModelDir,
+    compute_Sobol_m2=uqsim.args.compute_Sobol_m2,
+    save_all_simulations=uqsim.args.save_all_simulations,
+    collect_and_save_state_data=uqsim.args.collect_and_save_state_data,
+    store_qoi_data_in_stat_dict=uqsim.args.store_qoi_data_in_stat_dict,
+    store_gpce_surrogate_in_stat_dict=uqsim.args.store_gpce_surrogate_in_stat_dict,
     instantly_save_results_for_each_time_step=uqsim.args.instantly_save_results_for_each_time_step,
-    dict_what_to_plot=DEFAULT_DICT_WHAT_TO_PLOT
+    dict_what_to_plot=utility.DEFAULT_DICT_WHAT_TO_PLOT,
+    compute_sobol_total_indices_with_samples=compute_sobol_total_indices_with_samples,
+    save_gpce_surrogate=save_gpce_surrogate,
+    compute_other_stat_besides_pce_surrogate=compute_other_stat_besides_pce_surrogate,
 ))})
 
 #####################################
@@ -202,8 +177,10 @@ uqsim.statistics.update({"hbvsask"        : (lambda: HBVSASKStatistics.HBVSASKSt
 uqsim.setup()
 
 # save simulation nodes
-simulationNodes_save_file = "nodes"
-uqsim.save_simulationNodes(fileName=simulationNodes_save_file)
+if uqsim.is_master():
+    simulationNodes_save_file = "nodes"
+    uqsim.save_simulationNodes(fileName=simulationNodes_save_file)
+    number_full_model_evaluations = len(uqsim.simulationNodes.nodes.T)
 
 # save the dictionary with the arguments - once before the simulation
 if uqsim.is_master():
@@ -220,26 +197,10 @@ if uqsim.is_master():
 #####################################
 # start the simulation
 #####################################
-
+start_time_model_simulations = time.time()
 uqsim.simulate()
-
-#####################################
-# check-up (for Larsim model)
-#####################################
-
-if uqsim.is_master():
-    # This shows a way how to recompute samples from uqsim.solver.results
-    # TODO This will be a lot of duplicated savings in case
-    #  always_save_original_model_runs=True and run_and_save_simulations=True
-    if uqsim.args.model == "larsim" and uqsim.args.disable_statistics:
-        processed_sample_results = LarsimStatistics.LarsimSamples(uqsim.solver.results,
-                                                                  configurationObject=uqsim.configuration_object)
-        processed_sample_results.save_samples_to_file(uqsim.args.outputResultDir)
-        processed_sample_results.save_index_parameter_values(uqsim.args.outputResultDir)
-        processed_sample_results.save_index_parameter_gof_values(uqsim.args.outputResultDir)
-        if strtobool(uqsim.configuration_object["model_run_settings"]["compute_gradients"]):
-            processed_sample_results.save_dict_of_approx_matrix_c(uqsim.args.outputResultDir)
-            processed_sample_results.save_dict_of_matrix_c_eigen_decomposition(uqsim.args.outputResultDir)
+end_time_model_simulations = time.time()
+time_model_simulations = end_time_model_simulations - start_time_model_simulations
 
 #####################################
 # re-save uqsim.configurationObject
@@ -253,37 +214,24 @@ if uqsim.is_master():
 #####################################
 # statistics
 #####################################
-
+start_time_computing_statistics = time.time()
+uqsim.prepare_statistics()
 uqsim.calc_statistics()
+# if uqsim.is_master():
+#     uqsim.statistic.compute_covariance_matrix_in_time()
+end_time_computing_statistics = time.time()
+time_computing_statistics = end_time_computing_statistics - start_time_computing_statistics
+
 uqsim.save_statistics()
 
-if uqsim.args.model == "larsim":
-    uqsim.plot_statistics(
-        display=False,
-        plot_measured_timeseries=strtobool(uqsim.configuration_object["model_settings"]["get_measured_discharge"]),
-        plot_unaltered_timeseries=strtobool(uqsim.configuration_object["model_settings"]["run_unaltered_sim"])
-    )
-elif uqsim.args.model == "hbvsask":
-    pass
-    # TODO This only for now - change the logic
-    # uqsim.plot_statistics(display=False,
-    #                       plot_measured_timeseries=True,
-    #                       plot_forcing_timeseries=True,
-    #                       time_column_name = "TimeStamp",
-    #                       measured_df_column_to_draw="streamflow",
-    #                       measured_df_timestamp_column="index",
-    #                       streamflow_df_column_to_draw="streamflow",
-    #                       streamflow_df_timestamp_column="index",
-    #                       precipitation_df_column_to_draw="precipitation",
-    #                       precipitation_df_timestamp_column="index",
-    #                       temperature_df_column_to_draw="temperature",
-    #                       temperature_df_timestamp_column="index",
-    #                       )
-else:
-    uqsim.plot_statistics(display=False)
-
-# uqsim.args.uqsim_file = os.path.abspath(os.path.join(uqsim.args.outputResultDir, "uqsim.saved"))
-# #uqsim.store_to_file()
+# save the dictionary with the arguments - once before the simulation
+if uqsim.is_master():
+    time_infoFileName = os.path.abspath(os.path.join(uqsim.args.outputResultDir, f"time_info.txt"))
+    with open(time_infoFileName, 'w') as fp:
+        fp.write(f'number_full_model_runs: {number_full_model_evaluations}\n')
+        fp.write(f'time_model_simulations: {time_model_simulations}\n')
+        # fp.write(f'time_producing_gpce: {time_producing_gpce}\n')
+        fp.write(f'time_computing_statistics: {time_computing_statistics}')
 
 #####################################
 # tear down
