@@ -1,15 +1,15 @@
 {
     "time_settings":
     {
-      "start_day": 1,
+      "start_day": 2,
       "start_month": 10,
-      "start_year": 2002,
+      "start_year": 2003,
       "start_hour": 0,
       "start_minute": 0,
 
       "end_day": 1,
       "end_month": 10,
-      "end_year": 2006,
+      "end_year": 2007,
       "end_hour": 0,
       "end_minute": 0,
 
@@ -22,6 +22,7 @@
       "timestep": 5
     },
   "model_settings": {
+    "model_name": "HBV",
     "basis": "Oldman_Basin",
     "plotting": "False",
     "writing_results_to_a_file": "False",
@@ -53,76 +54,76 @@
     "save_gradient_related_runs": "True"
   },
   "parameters": [
-    {
-      "name": "TT",
-      "distribution": "Uniform",
-      "lower": -4.0,
-      "upper": 4.0,
-      "default": 0.0
-    },
-    {
-      "name": "C0",
-      "distribution": "Uniform",
-      "lower": 0.0,
-      "upper": 10.0,
-      "default": 0.5
-    },
-    {
-      "name": "ETF",
-      "distribution": "Uniform",
-      "lower": 0.0,
-      "upper": 1.0,
-      "default": 0.2
-    },
-    {
-      "name": "FC",
-      "distribution": "Uniform",
-      "lower": 50.0,
-      "upper": 500.0,
-      "default": 250
-    },
-    {
-      "name": "beta",
-      "distribution": "Uniform",
-      "lower": 1.0,
-      "upper": 3.0,
-      "default": 2.0
-    },
-    {
-      "name": "FRAC",
-      "distribution": "Uniform",
-      "lower": 0.1,
-      "upper": 0.9,
-      "default": 0.1
-    },
-    {
-      "name": "K2",
-      "distribution": "Uniform",
-      "lower": 0.0,
-      "upper": 0.05,
-      "default": 0.025
-    },
-    {
-      "name": "LP",
-      "distribution": "Uniform",
-      "lower": 0.0,
-      "upper": 1.0,
-      "default": 0.5
-    },
-    {
-      "name": "K1",
-      "distribution": "Uniform",
-      "lower": 0.05,
-      "upper": 1.0,
-      "default": 0.5
-    },
-    {
-      "name": "alpha",
-      "distribution": "Uniform",
-      "lower": 1.0,
-      "upper": 3.0,
-      "default": 2.0
-    }
+      {
+        "name": "TT",
+        "distribution": "Uniform",
+        "lower": -4.0,
+        "upper": 4.0,
+        "default": 0.0
+      },
+      {
+        "name": "C0",
+        "distribution": "Uniform",
+        "lower": 0.0,
+        "upper": 10.0,
+        "default": 0.5
+      },
+      {
+        "name": "ETF",
+        "distribution": "Uniform",
+        "lower": 0.0,
+        "upper": 1.0,
+        "default": 0.2
+      },
+      {
+        "name": "FC",
+        "distribution": "Uniform",
+        "lower": 50.0,
+        "upper": 500.0,
+        "default": 250
+      },
+      {
+        "name": "beta",
+        "distribution": "Uniform",
+        "lower": 1.0,
+        "upper": 3.0,
+        "default": 2.0
+      },
+      {
+        "name": "FRAC",
+        "distribution": "Uniform",
+        "lower": 0.1,
+        "upper": 0.9,
+        "default": 0.1
+      },
+      {
+        "name": "K2",
+        "distribution": "Uniform",
+        "lower": 0.0,
+        "upper": 0.05,
+        "default": 0.025
+      },
+      {
+        "name": "LP",
+        "distribution": "Uniform",
+        "lower": 0.0,
+        "upper": 1.0,
+        "default": 0.5
+      },
+      {
+        "name": "K1",
+        "distribution": "Uniform",
+        "lower": 0.05,
+        "upper": 1.0,
+        "default": 0.5
+      },
+      {
+        "name": "alpha",
+        "distribution": "Uniform",
+        "lower": 1.0,
+        "upper": 3.0,
+        "default": 2.0
+      }
   ],
   "unused_parameters": [
     {
