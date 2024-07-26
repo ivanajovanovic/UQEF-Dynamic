@@ -1,42 +1,3 @@
-# 
-
-## Introduction
-
-This repository contains supporting code for the paper...
-
-
-<!-- This code is licensed under the GNU Lesser General Public License version 3 or
-later, see `COPYING` and `COPYING.LESSER`. -->
-
-All the simulations studies were executed on the Linux Cluster HPC systems. The
-launch scripts are specific to that cluster and are included in the
-`scripts/` subdirectory for reference. It would be necessary to modify
-these job launch scripts to run these studies on another cluster. Also, one might have to change accordingly the paths specified in some scripts under `uqef_dynamic/scientific_pipelines/` subdirectory.
-
-## Dependencies
-
-The primary dependencies are UQEF and Chaospy tools/libraires. Secondary dependencies for pre and post-processing include various data analysis, plotting and statistical libraries. 
-
-The code is compatible with Python 3.11 and the dependencies are specified in the
-`requirements/requirements_py311.txt` file:
-
-    conda create -n uqef_env --file requirements_py311.txt
-    conda install -n uqef_env -c conda-forge nb_conda_kernels
-    conda install -n uqef_env -c conda-forge pyproj
-    conda activate uqef_env
-
-    $(which pip) install chaospy
-
-    cd UQEF/
-    git checkout parallel_statistics
-    $(which python) setup_new.py install
-    cd ../
-
-The file `requirements/requirements_py311-not-fixed.txt` contains the same dependencies without
-fixed version requirements.
-
-We refer the user to the followig script to help him/her set-up the conda environment `scripts/set_up_new_conda_env.sh`
-
 ## UQEF and UQEF-Dynamic explanation of the input arguments
 
 ### UQsim load/restore
@@ -169,16 +130,21 @@ Contains the parameters for the simulation. Each parameter has a name, distribut
 Contains the parameters that are not used in the simulation. Each unused parameter has a name, distribution, lower and upper bounds, and a default value.
 
 ## The (possible) output
-uqsim_args.pkl
-configurationObject
-nodes.simnodes.zip
-time_info.txt
-df_all_index_parameter_values.pkl
-df_state_results.pkl
+- `uqsim_args.pkl`
+- `configurationObject`
+- `nodes.simnodes.zip`
+- `time_info.txt`
+- `df_all_index_parameter_values.pkl`
+- `df_state_results.pkl`
 [optional]
-df_all_index_parameter_gof_values.pkl
-df_all_simulations.pkl
+- `df_all_index_parameter_gof_values.pkl`
+- `df_all_simulations.pkl`
 [one file for each QoI and each timestamp]
-statistics_dictionary_{qoi}_{timestamp}.pkl
-gpce_surrogate_{qoi}_{timestamp}.pkl
-gpce_coeffs_{qoi}_{timestamp}.npy
+- `statistics_dictionary_{qoi}_{timestamp}.pkl`
+- `statistics_dictionary_{qoi}_{timestamp}.pkl`
+- `gpce_coeffs_{qoi}_{timestamp}.npy`
+
+
+
+
+
