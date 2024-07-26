@@ -46,6 +46,8 @@ HBV_PARAMS_LIST = ['TT', 'C0', 'ETF', 'LP', 'FC',
                    'beta', 'FRAC', 'K1', 'alpha', 'K2',
                    'UBAS', 'PM']
 
+TIME_COLUMN_NAME="TimeStamp"
+
 
 def _plot_time_series(df, column_to_plot):
     fig = go.Figure()
@@ -147,7 +149,7 @@ def _plot_output_data_and_precipitation(input_data_df, simulated_data_df=None, i
     return fig
 
 
-def _plot_streamflow_and_precipitation(input_data_df, simulated_data_df=None, input_data_time_column=None,
+def plot_streamflow_and_precipitation(input_data_df, simulated_data_df=None, input_data_time_column=None,
                                        simulated_time_column=None, observed_streamflow_column="streamflow",
                                        simulated_streamflow_column="Q_cms", precipitation_columns="precipitation",
                                        additional_columns=None):
@@ -369,6 +371,110 @@ def extend_hbv_plot_with_forcing_and_update_layout(
             type="linear",
             )
         )
+    return fig
+
+
+def plot_input_output_state(modelObject, result_df, state_df):
+    parsed_input_data_df = modelObject.time_series_measured_data_df.loc[
+        result_df.index.min():result_df.index.max()]
+
+    fig = make_subplots(
+        rows=6, cols=1,
+        subplot_titles=("Temperature", "Precipitation", "Streamflow", "EvapoTranspiration", "Snow Storage", "Soil+Reservoirs")
+    )
+
+    fig.add_trace(
+        go.Scatter(
+            x=parsed_input_data_df.index, y=parsed_input_data_df['temperature'],
+            text=parsed_input_data_df['temperature'], 
+            name="Temperature"
+        ), 
+        row=1, col=1
+    )
+
+    fig.add_trace(
+        go.Scatter(
+            x=parsed_input_data_df.index, y=parsed_input_data_df['precipitation'],
+            text=parsed_input_data_df['precipitation'], 
+            name="Precipitation"
+        ), 
+        row=2, col=1
+    )
+
+    fig.add_trace(
+        go.Scatter(
+            x=parsed_input_data_df.index, y=parsed_input_data_df['streamflow'],
+            name="Observed Streamflow"
+        ),
+        row=3, col=1
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=result_df.index, y=result_df['Q_cms'],
+            text=result_df['Q_cms'], 
+            name="Predicted Streamflow"
+        ), 
+        row=3, col=1
+    )
+
+    fig.add_trace(
+        go.Scatter(
+            x=result_df.index, y=result_df['AET'],
+            text=result_df['AET'], 
+            name="AET"
+        ), 
+        row=4, col=1
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=result_df.index, y=result_df['PET'],
+            text=result_df['PET'], 
+            name="PET"
+        ), 
+        row=4, col=1
+    )
+
+    fig.add_trace(
+        go.Scatter(
+            x=state_df.index, y=state_df['SWE'],
+            text=state_df['SWE'], 
+            name="Snow Storage"
+        ), 
+        row=5, col=1
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=state_df.index, y=state_df['SMS'],
+            text=state_df['SMS'], 
+            name="Soil Storage"
+        ), 
+        row=6, col=1
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=state_df.index, y=state_df['S1'],
+            text=state_df['S1'], 
+            name="Fast Reservoir"
+        ), 
+        row=6, col=1
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=state_df.index, y=state_df['S2'],
+            text=state_df['S2'], 
+            name="Slow Reservoir"
+        ), 
+        row=6, col=1
+    )
+    fig.update_layout(height=1000, width=800, title_text="Detailed plot of most important time-series")
+
+    # fig.update_layout(
+    #     # legend=dict(yanchor="bottom", y=0.01, xanchor="right", x=0.99),
+    #     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    #     showlegend=True,
+    #     # template="plotly_white",
+    # )
+
     return fig
 #####################################
 # Now comes the set of functiones copied from https://github.com/vars-tool/vars-tool/blob/master/tutorials/hbv.py
@@ -1210,7 +1316,7 @@ def run_the_model(hbv_model_path, config_file, par_values_dict, run_full_timespa
         state_df.to_pickle(file_path, compression="gzip")
 
     if plotting:
-        fig = _plot_streamflow_and_precipitation(input_data_df=time_series_data_df, simulated_data_df=flux_df,
+        fig = plot_streamflow_and_precipitation(input_data_df=time_series_data_df, simulated_data_df=flux_df,
                                                  input_data_time_column=time_column_name,
                                                  simulated_time_column=time_column_name,
                                                  observed_streamflow_column=streamflow_column_name,

@@ -98,7 +98,7 @@ class HBVSASKModelConfigurations:
             except KeyError:
                 return default
         
-
+        
 class HBVSASKModel(object):
     def __init__(self, configurationObject: Union[dict, str, Path], inputModelDir: Union[str, Path], workingDir: Optional[Union[str, Path]] = None, *args, **kwargs):
         """
@@ -121,12 +121,12 @@ class HBVSASKModel(object):
         
         self.configurations = HBVSASKModelConfigurations(self.configurationObject, **kwargs)
 
+        self.inputModelDir = Path(inputModelDir)
+
         if "basis" in kwargs:
             self.basis = kwargs['basis']
         else:
             self.basis = self.configurationObject["model_settings"].get("basis", 'Oldman_Basin')
-
-        self.inputModelDir = Path(inputModelDir)
         self.inputModelDir_basis = self.inputModelDir / self.basis
 
         if workingDir is None:
@@ -250,7 +250,7 @@ class HBVSASKModel(object):
                                             streamflow_column_name=self.streamflow_column_name)
 
         if self.plotting:
-            figure = self._plot_input_data(time_column_name=self.time_column_name,
+            figure = self.plot_input_data(time_column_name=self.time_column_name,
                                            precipitation_column_name=self.precipitation_column_name,
                                            temperature_column_name=self.temperature_column_name,
                                            read_measured_streamflow=self.read_measured_streamflow,
@@ -437,7 +437,7 @@ class HBVSASKModel(object):
             # print(f"DEBUGGING - self.time_series_measured_data_df.index-{self.time_series_measured_data_df.index}\n")
             # self.time_series_measured_data_df = self.time_series_measured_data_df.loc[self.simulation_range]
 
-    def _plot_input_data(self, time_column_name="TimeStamp", precipitation_column_name="precipitation",
+    def plot_input_data(self, time_column_name="TimeStamp", precipitation_column_name="precipitation",
                          temperature_column_name="temperature", read_measured_streamflow=None,
                          streamflow_column_name="streamflow", **kwargs):
         
@@ -460,6 +460,8 @@ class HBVSASKModel(object):
 
         time_series_measured_data_df = self.time_series_measured_data_df
 
+        condition_for_plotting_streamflow = read_measured_streamflow and streamflow_column_name in time_series_measured_data_df.columns
+
         if time_column_name is None:
             time_column_name = self.time_column_name
 
@@ -470,11 +472,11 @@ class HBVSASKModel(object):
                     pd.date_range(start=self.start_date_predictions,end=self.end_date))]
             fig.add_trace(
                 go.Scatter(x=time_series_measured_data_df[time_column_name], y=time_series_measured_data_df[precipitation_column_name],
-                           name="P"), row=1, col=1)
+                           name="Precipitation"), row=1, col=1)
             fig.add_trace(
                 go.Scatter(x=time_series_measured_data_df[time_column_name], y=time_series_measured_data_df[temperature_column_name],
-                           name="T"), row=2, col=1)
-            if read_measured_streamflow and streamflow_column_name in time_series_measured_data_df.columns:
+                           name="Temperature"), row=2, col=1)
+            if condition_for_plotting_streamflow:
                 fig.add_trace(
                     go.Scatter(x=time_series_measured_data_df[time_column_name], y=time_series_measured_data_df[streamflow_column_name], name="Q_cms (Measured)"), row=3, col=1)
         else:
@@ -482,14 +484,20 @@ class HBVSASKModel(object):
                 time_series_measured_data_df = self.time_series_measured_data_df.loc[self.start_date_predictions:self.end_date,:]
             fig.add_trace(
                 go.Scatter(x=time_series_measured_data_df.index, y=time_series_measured_data_df[precipitation_column_name],
-                           name="P"), row=1, col=1)
+                           name="Precipitation"), row=1, col=1)
             fig.add_trace(
                 go.Scatter(x=time_series_measured_data_df.index, y=time_series_measured_data_df[temperature_column_name],
-                           name="T"), row=2, col=1)
-            if read_measured_streamflow and streamflow_column_name in time_series_measured_data_df.columns:
+                           name="Temperature"), row=2, col=1)
+            if condition_for_plotting_streamflow:
                 fig.add_trace(
                     go.Scatter(x=time_series_measured_data_df.index, y=time_series_measured_data_df[streamflow_column_name], name="Q_cms (Measured)"), row=3, col=1)
 
+        fig.update_layout(
+            # legend=dict(yanchor="bottom", y=0.01, xanchor="right", x=0.99),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            showlegend=True,
+            # template="plotly_white",
+        )
         if "title" in kwargs:
             fig.update_layout(title=kwargs["title"])
         plot_filename = self.workingDir / f"forcing_data.html"
@@ -511,7 +519,7 @@ class HBVSASKModel(object):
             )
 
         if self.plotting:
-            figure = self._plot_input_data(time_column_name=self.time_column_name,
+            figure = self.plot_input_data(time_column_name=self.time_column_name,
                                            precipitation_column_name=self.precipitation_column_name,
                                            temperature_column_name=self.temperature_column_name,
                                            read_measured_streamflow=self.read_measured_streamflow,
@@ -788,6 +796,8 @@ class HBVSASKModel(object):
 
             index_run_and_parameters_dict = {**id_dict, **parameters_dict}
 
+            ######################################################################################################
+
             index_parameter_gof_DF = None
             # Note - it does not make sense to have both qoi=GoF and calculate_GoF=True at the same time
             # condition_for_computing_index_parameter_gof_DF = \
@@ -907,6 +917,9 @@ class HBVSASKModel(object):
             simulation_range = self._dropna_from_df_and_update_simulation_range(flux_df, update_simulation_range=True)
             # flux_df = flux_df.loc[simulation_range]
             flux_df = flux_df[flux_df.index.isin(simulation_range)]
+
+            if flux_df is None and raise_exception_on_model_break:
+                raise Exception(f"Model broke for unique_run_index {unique_run_index}")
 
             result_dict = {"run_time": runtime,
                            "result_time_series": flux_df,
