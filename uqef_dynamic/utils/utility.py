@@ -34,6 +34,7 @@ import pickle
 from plotly.subplots import make_subplots
 import plotly.express as px
 import plotly.graph_objects as go
+import plotly.offline as pyo
 import seaborn as sns
 import scipy
 from tabulate import tabulate
@@ -714,36 +715,45 @@ def parse_datetime_configuration(time_settings_config):
     """
     Reads configuration dictionary and determines the start end end date of the simulation
     """
-    if time_settings_config is None:
+    if time_settings_config is None or not time_settings_config:
         time_settings_config = dict()
-
-    if isinstance(time_settings_config, dict):
-        if "time_settings" in time_settings_config:
-            data = time_settings_config["time_settings"]
-        else:
-            data = time_settings_config
-        start_year = data.get("start_year", None)
-        start_month = data.get("start_month", None)
-        start_day = data.get("start_day", None)
-        start_hour = data.get("start_hour", None)
-        start_minute = data.get("start_minute", None)
-        end_year = data.get("end_year", None)
-        end_month = data.get("end_month", None)
-        end_day = data.get("end_day", None)
-        end_hour = data.get("end_hour", None)
-        end_minute = data.get("end_minute", None)
-    elif isinstance(time_settings_config, list) or isinstance(time_settings_config, tuple):
-        start_year, start_month, start_day, start_hour, start_minute, \
-        end_year, end_month, end_day, end_hour, end_minute = time_settings_config
+        start_dt = None
+        end_dt = None
     else:
-        raise Exception(f"[Error] in parse_datetime_configuration: time_settings_config should be "
-                        f"dict, list or tuple storing start_year, start_month, etc.")
+        if isinstance(time_settings_config, dict):
+            if "time_settings" in time_settings_config:
+                datas = time_settings_config["time_settings"]
+            else:
+                datas = time_settings_config
+            start_year = datas.get("start_year", None)
+            start_month = datas.get("start_month", None)
+            start_day = datas.get("start_day", None)
+            start_hour = datas.get("start_hour", None)
+            start_minute = datas.get("start_minute", None)
+            end_year = datas.get("end_year", None)
+            end_month = datas.get("end_month", None)
+            end_day = datas.get("end_day", None)
+            end_hour = datas.get("end_hour", None)
+            end_minute = datas.get("end_minute", None)
+        elif isinstance(time_settings_config, list) or isinstance(time_settings_config, tuple):
+            start_year, start_month, start_day, start_hour, start_minute, \
+            end_year, end_month, end_day, end_hour, end_minute = time_settings_config
+        else:
+            raise Exception(f"[Error] in parse_datetime_configuration: time_settings_config should be "
+                            f"dict, list or tuple storing start_year, start_month, etc.")
 
-    start_dt = datetime.datetime(year=start_year, month=start_month, day=start_day,
-                                 hour=start_hour, minute=start_minute)
+        if all(var is not None for var in [start_year, start_month, start_day, start_hour, start_minute]):
+            start_dt = datetime.datetime(year=start_year, month=start_month, day=start_day,
+                                        hour=start_hour, minute=start_minute)
+        else:
+            start_dt = None
 
-    end_dt = datetime.datetime(year=end_year, month=end_month, day=end_day,
-                               hour=end_hour, minute=end_minute)
+        if all(var is not None for var in [end_year, end_month, end_day, end_hour, end_minute]):
+            end_dt = datetime.datetime(year=end_year, month=end_month, day=end_day,
+                                    hour=end_hour, minute=end_minute)
+        else:
+            end_dt = None
+            
     return [start_dt, end_dt]
 
 def compute_previous_timestamp(timestamp, resolution, delta=1):
@@ -911,7 +921,7 @@ def handle_transform_model_output(transform_model_output, result_dict, dict_conf
 
 
 def read_simulation_settings_from_configuration_object_refactored(configurationObject: dict, **kwargs) -> dict:
-    # TODO finish this function
+    # TODO finish this function; idea is to refactor read_simulation_settings_from_configuration_object such that it is more modular
     result_dict = dict()
     dict_config_simulation_settings = get_simulation_settings(configurationObject)
 
@@ -980,7 +990,7 @@ def read_simulation_settings_from_configuration_object(configurationObject: dict
     if "qoi" in kwargs:
         qoi = kwargs['qoi']
     else:
-        qoi = dict_config_simulation_settings.get("qoi", "Q")
+        qoi = dict_config_simulation_settings.get("qoi", "model_output")
     result_dict["qoi"] = qoi
 
     if "qoi_column" in kwargs:
@@ -1053,7 +1063,7 @@ def read_simulation_settings_from_configuration_object(configurationObject: dict
             except KeyError:
                 qoi_column_measured = [None] * result_dict["number_of_qois"]
         else:
-            qoi_column_measured = dict_config_simulation_settings.get("qoi_column_measured", "streamflow")
+            qoi_column_measured = dict_config_simulation_settings.get("qoi_column_measured", "None")
             if qoi_column_measured == "None":
                 qoi_column_measured = None
     result_dict["qoi_column_measured"] = qoi_column_measured
@@ -1500,6 +1510,52 @@ def configuring_parameter_values(parameters, configurationObject: Union[dict, Li
     return parameters_dict
 
 
+def generate_distributions(configurationObject, algorithm="mc"):
+    """
+    Generate joint and standard distributions based on the given configuration object.
+
+    Args:
+        configurationObject (dict): The configuration object containing information about the parameters and their distributions.
+        algorithm (str, optional): The UQ algorithm to use. Options: "mc", "sc", "pce", "kl". Defaults to "mc".
+
+    Returns:
+        tuple: A tuple containing the joint distribution, the standard distribution, and a list of parameter names.
+
+    Raises:
+        NotImplementedError: If the specified UQ algorithm is not supported yet or if the distribution is not supported yet.
+
+    Note:
+        Currently only "Uniform", "LogUniform", and "Normal" are supported
+    """
+    list_of_single_dist = []
+    list_of_single_standard_dist = []
+    param_names = []
+
+    for param in configurationObject["parameters"]:
+        param_names.append(param["name"])
+        if param["distribution"] == "Uniform":
+            list_of_single_dist.append(cp.Uniform(param["lower"], param["upper"]))
+            if algorithm == "mc" or algorithm == "sampling" or algorithm == "samples":
+                list_of_single_standard_dist.append(cp.Uniform(0, 1))
+            elif algorithm == "kl" or algorithm == "pce" or algorithm == "sc":
+                list_of_single_standard_dist.append(cp.Uniform(-1, 1))
+            else:
+                raise NotImplementedError(f"Sorry, the algorithm {algorithm} is not supported yet")
+        elif param["distribution"] == "LogUniform":
+            list_of_single_dist.append(cp.LogUniform(param["lower"], param["upper"]))
+            list_of_single_standard_dist.append(cp.LogUniform())
+        elif param["distribution"] == "Normal":
+            list_of_single_dist.append(cp.Normal(param["mu"], param["sigma"]))
+            list_of_single_standard_dist.append(cp.Normal())
+        # TODO add a general branch that checks if the distribution exists in chaospy
+        else:
+            raise NotImplementedError(f"Sorry, the distribution {param['distribution']} is not supported yet")
+
+    joint_dist = cp.J(*list_of_single_dist)
+    joint_dist_standard  = cp.J(*list_of_single_standard_dist)
+
+    return joint_dist, joint_dist_standard, param_names
+
 # def parameters_configuration_for_gradient_approximation(
 #         parameters_dict, configurationObject, parameter_index_to_perturb, eps_val=1e-4, take_direct_value=False):
 #
@@ -1654,8 +1710,17 @@ def create_statistics_dictionary_from_saved_single_qoi_statistics_dictionary(wor
         statistics_dictionary[single_qoi] = statistics_dictionary_temp
     return statistics_dictionary
 
+def read_all_saved_simulations(df_all_simulations_file):
+    if df_all_simulations_file.is_file():
+        # Reading Saved Simulations - Note: This migh be a huge file,
+        # especially for MC/Saltelli kind of simulations
+        df_simulation_result = pd.read_pickle(df_all_simulations_file, compression="gzip")
+    else:
+        df_simulation_result = None
+    return df_simulation_result
+
 ###################################################################################################################
-# Plotting params and GoF values - mostly from df_index_parameter_gof filtered for a single station
+# Plotting params and GoF values - mostly from df_index_parameter or df_index_parameter_gof filtered for a single station
 ###################################################################################################################
 
 
@@ -1664,7 +1729,7 @@ def _get_parameter_columns_df_index_parameter_gof(df_index_parameter_gof):
         if isinstance(x, tuple):
             x = x[0]
         return x not in list(mapping_gof_names_to_functions.keys()) and not x.startswith("d_") and \
-               x not in ["index_run", "station", "successful_run", "qoi"]
+               x not in ["index_run", "station", "successful_run", "success", "qoi"]
     return [x for x in df_index_parameter_gof.columns.tolist() if check_if_column_stores_parameter(x)]
 
 
@@ -1683,23 +1748,63 @@ def _get_grad_columns_df_index_parameter_gof(df_index_parameter_gof):
 def plot_hist_of_gof_values_from_df(df_index_parameter_gof, name_of_gof_column="NSE"):
     return df_index_parameter_gof.hist(name_of_gof_column)
 
+def plot_hist(ax, data, param_name, num_bins=20):
+    counts, bins, _ = ax.hist(data, bins=num_bins)
+    ax.set_xlabel(param_name)
+
+def plot_log_hist(ax, data, param_name, num_bins=20):
+    counts, bins, _ = ax.hist(data, bins=num_bins)
+    logbins = np.logspace(np.log10(bins[0]),np.log10(bins[-1]),len(bins))
+    ax.cla()
+    counts, bins, _ = ax.hist(data, bins=logbins)
+    ax.set_xscale('log')
+    ax.set_xlabel(param_name)
+
+def plot_subplot_params_hist_from_df_and_configurationObject(df_index_parameter, configurationObject):
+    list_of_params_dict_info = configurationObject['parameters']
+    fig, axes = plt.subplots(len(list_of_params_dict_info), 1, figsize=(6,12))
+    index = 0
+    for single_param_dict in list_of_params_dict_info:
+        if single_param_dict["distribution"] == "Uniform" or single_param_dict["distribution"] == "Normal":
+            plot_hist(axes[index], df_index_parameter[single_param_dict["name"]], single_param_dict["name"], num_bins=50)
+        if single_param_dict["distribution"] == "LogUniform" or single_param_dict["distribution"] == "LogNormal":
+            plot_log_hist(axes[index], df_index_parameter[single_param_dict["name"]], single_param_dict["name"], num_bins=50)
+        index += 1
+    plt.tight_layout()
+    return fig
 
 def plot_subplot_params_hist_from_df(df_index_parameter_gof):
     columns_with_parameters = _get_parameter_columns_df_index_parameter_gof(df_index_parameter_gof)
     fig = make_subplots(rows=1, cols=len(columns_with_parameters))
     for i in range(len(columns_with_parameters)):
         if isinstance(columns_with_parameters[i], tuple):
+            param_name = columns_with_parameters[i][0]
             fig.append_trace(
                 go.Histogram(
                     x=df_index_parameter_gof[columns_with_parameters[i]],
-                    name=columns_with_parameters[i][0]
+                    name=param_name
                 ), row=1, col=i + 1)
+            fig.update_xaxes(title_text=f'{param_name}', row=1, col=i + 1)
         else:
+            param_name = columns_with_parameters[i]
             fig.append_trace(
                 go.Histogram(
                     x=df_index_parameter_gof[columns_with_parameters[i]],
-                    name=columns_with_parameters[i]
+                    name=param_name
                 ), row=1, col=i + 1)
+            fig.update_xaxes(title_text=f'{param_name}', row=1, col=i + 1)
+    fig.add_annotation(
+        dict(
+        text='Histrogram',
+        x=-0.05,  # Position the label outside the left side of the plot
+        y=0.5,
+        showarrow=False,
+        textangle=-90,  # Rotate the text
+        xref='paper',
+        yref='paper',
+        font=dict(size=16)
+        )
+        )
     return fig
 
 
@@ -1720,17 +1825,33 @@ def plot_subplot_params_hist_from_df_conditioned(df_index_parameter_gof, name_of
     fig = make_subplots(rows=1, cols=len(columns_with_parameters))
     for i in range(len(columns_with_parameters)):
         if isinstance(columns_with_parameters[i], tuple):
+            param_name = columns_with_parameters[i][0]
             fig.append_trace(
                 go.Histogram(
                     x=df_index_parameter_gof[mask][columns_with_parameters[i]],
-                    name=columns_with_parameters[i][0]
+                    name=param_name
                 ), row=1, col=i + 1)
+            fig.update_xaxes(title_text=f'{param_name}', row=1, col=i + 1)
         else:
+            param_name = columns_with_parameters[i]
             fig.append_trace(
                 go.Histogram(
                     x=df_index_parameter_gof[mask][columns_with_parameters[i]],
-                    name=columns_with_parameters[i]
+                    name=param_name
                 ), row=1, col=i + 1)
+            fig.update_xaxes(title_text=f'{param_name}', row=1, col=i + 1)
+    fig.add_annotation(
+        dict(
+        text='Histrogram',
+        x=-0.05,  # Position the label outside the left side of the plot
+        y=0.5,
+        showarrow=False,
+        textangle=-90,  # Rotate the text
+        xref='paper',
+        yref='paper',
+        font=dict(size=16)
+        )
+        )
     return fig
 
 
@@ -1739,8 +1860,8 @@ def plot_scatter_matrix_params_vs_gof(df_index_parameter_gof, name_of_gof_column
     columns_with_parameters = _get_parameter_columns_df_index_parameter_gof(df_index_parameter_gof)
     fig = px.scatter_matrix(df_index_parameter_gof,
                             dimensions=columns_with_parameters,
-                            color=name_of_gof_column,
-                            hover_name=hover_name)
+                            color=name_of_gof_column)
+                            # hover_name=hover_name)
     fig.update_traces(diagonal_visible=False)
     return fig
 
@@ -1828,6 +1949,57 @@ def scatter_3d_params_static(df_index_parameter_gof, param1, param2, param3):
     axs.set_zlabel(param3)
     plt.show()
 
+def plot_all_model_runs(df_simulation_result: pd.DataFrame, single_qoi_column: str=QOI_COLUMN_NAME, 
+                        time_column_name: str=TIME_COLUMN_NAME, index_column_name: str=INDEX_COLUMN_NAME, save_plot: bool=False, workingDir: pathlib.PosixPath=None):
+    """
+    This function plots all model runs for a single QoI
+    :param df_simulation_result: DataFrame storing simulation results; it should contain columns: time, index, QoI
+    :param single_qoi_column: name of the column storing the QoI
+    :param time_column_name: name of the column storing time
+    :param index_column_name: name of the column storing index
+    :param save_plot: if True, the plot will be saved
+    :param workingDir: directory where the plot will be saved if save_plot is True 
+    :return: plotly figure
+    """
+    model_runs = np.empty((
+        df_simulation_result[index_column_name].nunique(), df_simulation_result[time_column_name].nunique()
+    ))
+    total_number_model_runs =  df_simulation_result[index_column_name].nunique()
+    list_of_dates_of_interest = df_simulation_result[index_column_name].unique()
+    grouped = df_simulation_result.groupby(index_column_name)
+    groups = grouped.groups
+    keyIter = list(groups.keys())
+    index_run_local = 0
+    for key in keyIter:
+        model_runs[index_run_local] = df_simulation_result.loc[groups[key].values, single_qoi_column]
+        index_run_local += 1
+
+    fig = go.Figure()
+    lines = [
+        go.Scatter(
+            x=list_of_dates_of_interest,
+            y=single_row,
+            showlegend=False,
+            # legendgroup=colours[i],
+            mode="lines",
+            line=dict(
+                color='LightSkyBlue'),
+            opacity=0.1
+        )
+        for single_row in model_runs
+    ]
+    for trace in lines:
+        fig.add_trace(trace)
+    fig.update_traces(mode='lines')
+    fig.update_layout(
+        title=f"Simulation Results - #runs {total_number_model_runs}",
+        xaxis_title="time t",
+        yaxis_title=f"{single_qoi_column}",)
+    if save_plot and workingDir.is_file():
+        fileName = f"model_runs_plot_{single_qoi_column}.html"
+        fileName = str(workingDir) + fileName        
+        pyo.plot(fig, filename=fileName)
+    return fig
 # ===================================================================================================================
 # Functions for saving the GPCE surrogate model
 # ===================================================================================================================
@@ -2061,6 +2233,7 @@ def computing_mc_statistics(
     numEvaluations: int, 
     time_column_name: str=TIME_COLUMN_NAME,
     single_qoi_column: str=QOI_COLUMN_NAME,
+    compute_only_mean:bool=False,
     compute_Sobol_t:bool=False,
     samples=None
     ) -> Dict[Any, Dict[str, Any]]:
@@ -2075,6 +2248,7 @@ def computing_mc_statistics(
     - single_qoi_column: str, optional
         The name of the column representing the quantity of interest (QoI).
         Default is QOI_COLUMN_NAME.
+    - compute_only_mean: bool, optional. Default is False.
     - compute_Sobol_t: bool, optional. Default is False.
     - samples: np.array, optional; only relevan if compute_Sobol_t is True
         matrix of parameter samples used to force the model should be of the size NxD. Defaults to None.
@@ -2095,7 +2269,7 @@ def computing_mc_statistics(
     result_dict = defaultdict(dict)
     for key, val_indices in groups.items():
         _, result_dict[key] = computing_mc_statistics_single_date(
-            key, val_indices, df_simulation_result, numEvaluations, single_qoi_column, compute_Sobol_t, samples
+            key, val_indices, df_simulation_result, numEvaluations, single_qoi_column, compute_only_mean, compute_Sobol_t, samples
             )
     return result_dict
 
@@ -2134,6 +2308,7 @@ def computing_mc_statistics_single_date(
     df_simulation_result: pd.DataFrame, 
     numEvaluations: int, 
     single_qoi_column: str=QOI_COLUMN_NAME,
+    compute_only_mean:bool=False,
     compute_Sobol_t:bool=False,
     samples=None):
     """
@@ -2148,6 +2323,7 @@ def computing_mc_statistics_single_date(
     - single_qoi_column: str, optional
         The name of the column representing the quantity of interest (QoI).
         Default is QOI_COLUMN_NAME.
+    - compute_only_mean: bool, optional. Default is False.
     - compute_Sobol_t: bool, optional. Default is False.
     - samples: np.array, optional; only relevan if compute_Sobol_t is True
         matrix of parameter samples used to force the model should be of the size NxD. Defaults to None.
@@ -2172,17 +2348,18 @@ def computing_mc_statistics_single_date(
     mean = result_dict['E'] = np.mean(qoi_values, 0)
     df_simulation_result.loc[val_indices, single_qoi_column_centered] = df_simulation_result.loc[val_indices, single_qoi_column] - mean
 
-    result_dict['Var'] = np.sum((qoi_values - result_dict["E"]) ** 2, axis=0,
-                                                        dtype=np.float64) / (numEvaluations - 1)
-    result_dict["StdDev"] = np.std(qoi_values, 0, ddof=1)
-    result_dict["Skew"] = scipy.stats.skew(qoi_values, axis=0, bias=True)
-    result_dict["Kurt"] = scipy.stats.kurtosis(qoi_values, axis=0, bias=True)
+    if not compute_only_mean:
+        result_dict['Var'] = np.sum((qoi_values - result_dict["E"]) ** 2, axis=0,
+                                                            dtype=np.float64) / (numEvaluations - 1)
+        result_dict["StdDev"] = np.std(qoi_values, 0, ddof=1)
+        result_dict["Skew"] = scipy.stats.skew(qoi_values, axis=0, bias=True)
+        result_dict["Kurt"] = scipy.stats.kurtosis(qoi_values, axis=0, bias=True)
 
-    result_dict["P10"] = np.percentile(qoi_values, 10, axis=0)
-    result_dict["P90"] = np.percentile(qoi_values, 90, axis=0)
+        result_dict["P10"] = np.percentile(qoi_values, 10, axis=0)
+        result_dict["P90"] = np.percentile(qoi_values, 90, axis=0)
 
-    result_dict["E_minus_std"] = result_dict['E'] - result_dict['StdDev']
-    result_dict["E_plus_std"] = result_dict['E'] + result_dict['StdDev']
+        result_dict["E_minus_std"] = result_dict['E'] - result_dict['StdDev']
+        result_dict["E_plus_std"] = result_dict['E'] + result_dict['StdDev']
 
     if compute_Sobol_t and samples is not None:
         dim = samples.shape[1]
@@ -2198,6 +2375,7 @@ def computing_mc_statistics_parallel_in_time(
     numEvaluations: int, 
     time_column_name: str=TIME_COLUMN_NAME,
     single_qoi_column: str=QOI_COLUMN_NAME,
+    compute_only_mean:bool=False,
     compute_Sobol_t:bool=False,
     samples=None
 ) -> Dict[Any, Dict[str, Any]]:
@@ -2210,6 +2388,7 @@ def computing_mc_statistics_parallel_in_time(
         numEvaluations (int): The number of evaluations.
         time_column_name (str, optional): The name of the column representing time. Defaults to TIME_COLUMN_NAME.
         single_qoi_column (str, optional): The name of the single QoI column. Defaults to QOI_COLUMN_NAME.
+        compute_only_mean (bool, optional): Whether to compute the rest of the statistics of only mean. Default is False.
         compute_Sobol_t (bool, optional): Whether to compute Sobol indices. Defaults to False.
         samples (np.array, optional): Matrix of parameter samples used to force the model should be of the size NxD.
             only relevan if compute_Sobol_t is True; Defaults to None.
@@ -2220,7 +2399,7 @@ def computing_mc_statistics_parallel_in_time(
         with multiprocessing.Pool(processes=num_processes) as pool:
             for date, result_dict_single_date in pool.starmap(computing_mc_statistics_single_date, \
                                        [(key, val_indices, df_simulation_result, numEvaluations,
-                                       single_qoi_column, compute_Sobol_t, samples) for key, val_indices in groups.items()]):
+                                       single_qoi_column, compute_only_mean, compute_Sobol_t, samples) for key, val_indices in groups.items()]):
                 yield date, result_dict_single_date
     
     result_dict = defaultdict(dict)
@@ -2325,7 +2504,7 @@ def computing_gpce_statistics_single_date(
 
     coeff = None
     if regression:
-        qoi_gPCE = cp.fit_regression(polynomial_expansion, nodes, qoi_values)
+        qoi_gPCE, coeff = cp.fit_regression(polynomial_expansion, nodes, qoi_values)
     else:
         qoi_gPCE, coeff = cp.fit_quadrature(polynomial_expansion, nodes, weights, qoi_values, retall=True)
 
@@ -2333,17 +2512,19 @@ def computing_gpce_statistics_single_date(
 
     if store_gpce_surrogate_in_stat_dict:
         result_dict["gPCE"] = qoi_gPCE
-        result_dict["coeff"] = coeff
+        result_dict["gpce_coeff"] = coeff  # gpce_coeff
 
-    if save_gpce_surrogate:
-        # TODO create a unique file with time_stamp and save it in a working directory
-        pass
+    # TODO This saving should be performed outside, since ther is no workingDir here...
+    # if save_gpce_surrogate and "gPCE" in result_dict:
+    #     save_gpce_surrogate_model(workingDir=workingDir, gpce=result_dict["gPCE"], qoi=single_qoi_column, timestamp=time_stamp)
+    #     if "gpce_coeff" in result_dict:
+    #         save_gpce_coeffs(workingDir=workingDir, coeff=result_dict["gpce_coeff"], qoi=single_qoi_column, timestamp=time_stamp)
+
+    mean = result_dict["E"] = float(cp.E(qoi_gPCE, dist))  # TODO I can as well compute the mean from the samples
+    result_dict["E_quad"] = np.dot(qoi_values, weights)
+    df_simulation_result.loc[val_indices, single_qoi_column_centered] = df_simulation_result.loc[val_indices, single_qoi_column] - mean
 
     if not compute_only_gpce:
-        mean = result_dict["E"] = float(cp.E(qoi_gPCE, dist))  # TODO I can as well compute the mean from the samples
-        result_dict["E_quad"] = np.dot(qoi_values, weights)
-        df_simulation_result.loc[val_indices, single_qoi_column_centered] = df_simulation_result.loc[val_indices, single_qoi_column] - mean
-
         result_dict["Var"] = float(cp.Var(qoi_gPCE, dist))
         result_dict["StdDev"] = float(cp.Std(qoi_gPCE, dist))
 
@@ -2447,7 +2628,7 @@ def compute_mean_from_df_simulation_result(df_simulation_result, algorithm: str=
     for key, val_indices in groups.items():
         qoi_values = df_simulation_result.loc[val_indices.values][single_qoi_column].values
         # compute mean
-        if algorithm == "samples" or algorithm == "mc":
+        if algorithm == "samples" or algorithm == "sampling" or algorithm == "mc":
             mean = np.mean(qoi_values, 0)
         elif algorithm == "quadrature" or algorithm == "pce" or algorithm == "sc" or algorithm == "kl":
             if weights is None:
@@ -2467,7 +2648,7 @@ def add_centered_qoi_column_to_df_simulation_result(df_simulation_result, algori
     for key, val_indices in groups.items():
         qoi_values = df_simulation_result.loc[val_indices.values][single_qoi_column].values
         # compute mean
-        if algorithm == "samples" or algorithm == "mc":
+        if algorithm == "samples" or algorithm == "sampling" or algorithm == "mc":
             mean = np.mean(qoi_values, 0)
         elif algorithm == "quadrature" or algorithm == "pce" or algorithm == "sc" or algorithm == "kl":
             if weights is None:
@@ -2478,7 +2659,7 @@ def add_centered_qoi_column_to_df_simulation_result(df_simulation_result, algori
         df_simulation_result.loc[val_indices, single_qoi_column_centered] = df_simulation_result.loc[val_indices, single_qoi_column] - mean
 
 
-def center_outputs(N, N_quad, df_simulation_result, weights, single_qoi_column, index_column_name: str==INDEX_COLUMN_NAME, algorithm: str= "samples", time_column_name: str=TIME_COLUMN_NAME):
+def center_outputs(N, N_quad, df_simulation_result, weights, single_qoi_column, index_column_name: str=INDEX_COLUMN_NAME, algorithm: str= "samples", time_column_name: str=TIME_COLUMN_NAME):
     centered_outputs = np.empty((N, N_quad))
 
     single_qoi_column_centered = single_qoi_column + "_centered"
@@ -2497,7 +2678,8 @@ def compute_covariance_matrix_in_time(N_quad, centered_outputs, weights, algorit
     covariance_matrix = np.empty((N_quad, N_quad))
     for c in range(N_quad):
         for s in range(N_quad):
-            if algorithm == "samples" or algorithm == "mc":
+            if algorithm == "samples" or algorithm == "sampling"  or algorithm == "mc":
+                N = centered_outputs.shape[0]  # len(centered_outputs[:, c])
                 covariance_matrix[s, c] = 1/(N-1) * \
                 np.dot(centered_outputs[:, c], centered_outputs[:, s])
             elif algorithm == "quadrature" or algorithm == "pce" or algorithm == "sc" or algorithm == "kl":
@@ -2594,7 +2776,7 @@ def setup_kl_expansion_matrix(eigenvalues, N_kl, N, N_quad, weights, centered_ou
     return f_kl_eval_at_params
 
 
-def pce_of_kl_expansion(N_kl, polynomial_expansion, nodes, weights, f_kl_eval_at_params):
+def pce_of_kl_expansion(N_kl, polynomial_expansion, nodes, weights, f_kl_eval_at_params, regression=False):
     # PCE of the KL Expansion
     f_kl_surrogate_dict = {}
     # f_kl_surrogate_coefficients = np.empty(N_kl, c_number)
@@ -2602,10 +2784,14 @@ def pce_of_kl_expansion(N_kl, polynomial_expansion, nodes, weights, f_kl_eval_at
     for i in range(N_kl):
         # TODO Change this data structure, make it that the keys are time-stampes to resamble result_dict_statistics
         f_kl_surrogate_dict[i] = {}
-        f_kl_gPCE, f_kl_coeff = cp.fit_quadrature(polynomial_expansion, nodes, weights, f_kl_eval_at_params[i,:], retall=True)
+        # print(f"DEBUGGING - f_kl_eval_at_params[{i},:].shape - {f_kl_eval_at_params[i,:].shape}")
+        if regression:
+            f_kl_gPCE, f_kl_coeff = cp.fit_regression(polynomial_expansion, nodes, f_kl_eval_at_params[i,:], retall=True)
+        else:
+            f_kl_gPCE, f_kl_coeff = cp.fit_quadrature(polynomial_expansion, nodes, weights, f_kl_eval_at_params[i,:], retall=True)        
         f_kl_surrogate_dict[i]["gPCE"] = f_kl_gPCE
-        f_kl_surrogate_dict[i]["coeff"] = f_kl_coeff
-    #     f_kl_surrogate_coefficients[i] = np.asfarray(f_kl_coeff).T
+        f_kl_surrogate_dict[i]["gpce_coeff"] = f_kl_coeff
+        # f_kl_surrogate_coefficients[i] = np.asfarray(f_kl_coeff).T
         f_kl_surrogate_coefficients.append(np.asfarray(f_kl_coeff))
     f_kl_surrogate_coefficients = np.asfarray(f_kl_surrogate_coefficients)
     return f_kl_surrogate_dict, f_kl_surrogate_coefficients
@@ -2633,10 +2819,9 @@ def computing_generalized_sobol_total_indices_from_kl_expan(
     for idx in range(len(alphas[0])):
         dict_of_num[idx] = []
 
-    variance_over_time_array = []
-
+    # variance_over_time_array = []
     # for time_stamp in result_dict_statistics.keys():  
-    #     coefficients = np.asfarray(result_dict_statistics[time_stamp]['coeff'])
+    #     coefficients = np.asfarray(result_dict_statistics[time_stamp]['gpce_coeff'])
     #     variance = np.sum(coefficients[index] ** 2, axis=0)
     #     variance_over_time_array.append(variance)
     #     for idx in range(len(alphas[0])):
@@ -2644,15 +2829,16 @@ def computing_generalized_sobol_total_indices_from_kl_expan(
     #         dict_of_num[idx].append(np.sum(coefficients[index_local] ** 2, axis=0))  # scaling with norm of the polynomial corresponding to the index_local
     for i in range(f_kl_surrogate_coefficients.shape[0]):
         coefficients = np.asfarray(f_kl_surrogate_coefficients[i,:])
-        variance = np.sum(coefficients[index] ** 2, axis=0)
-        variance_over_time_array.append(variance)
+        # variance = np.sum(coefficients[index] ** 2, axis=0)
+        # variance_over_time_array.append(variance)
         for idx in range(len(alphas[0])):
             index_local = np.array([alpha[idx] > 0 for alpha in alphas])  # Compute the total Sobol indices
             dict_of_num[idx].append(np.sum(coefficients[index_local] ** 2, axis=0))
 
-    variance_over_time_array = np.asfarray(variance_over_time_array)
+    # variance_over_time_array = np.asfarray(variance_over_time_array)
     if total_variance is None:
-        denum = np.dot(variance_over_time_array, weights)
+        # denum = np.dot(variance_over_time_array, weights)
+        raise ValueError("Total variance must be provided")
     else:
         denum = total_variance
         
@@ -2682,7 +2868,7 @@ def computing_generalized_sobol_total_indices_from_poly_expan(
 
     Args:
         result_dict_statistics (Dict[Any, Dict[str, Any]]): A dictionary containing the statistics of the results.
-         Important assumtion is that it contains the coefficients of the polynomial expansion under 'coeff' key over time.
+         Important assumtion is that it contains the coefficients of the polynomial expansion under 'gpce_coeff' key over time.
         polynomial_expansion (cp.polynomial): The polynomial expansion.
         weights (np.ndarray): An array of weights for time quadratures.
         param_names (List[str]): A list of parameter names.
@@ -2710,7 +2896,7 @@ def computing_generalized_sobol_total_indices_from_poly_expan(
     variance_over_time_array = []
 
     for time_stamp in result_dict_statistics.keys():  
-        coefficients = np.asfarray(result_dict_statistics[time_stamp]['coeff'])
+        coefficients = np.asfarray(result_dict_statistics[time_stamp]['gpce_coeff'])
         variance = np.sum(coefficients[index] ** 2, axis=0)
         variance_over_time_array.append(variance)
         for idx in range(len(alphas[0])):

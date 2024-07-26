@@ -7,8 +7,11 @@ but here we are trying to provide a more general set of functions that can be us
 @author: Ivana Jovanovic Buha
 """
 from collections import defaultdict
+import dill
+import pickle
 import os
 import numpy as np
+import pathlib
 import pandas as pd
 import pickle
 
@@ -28,10 +31,11 @@ import chaospy as cp
 
 from uqef_dynamic.utils import colors
 from uqef_dynamic.utils import utility
+from uqef_dynamic.utils import create_stat_object
 
 
 def extend_statistics_object(statisticsObject, statistics_dictionary, df_simulation_result=None,
-                             time_stamp_column="TimeStamp", get_measured_data=False, get_unaltered_data=False):
+                             time_stamp_column=utility.TIME_COLUMN_NAME, get_measured_data=False, get_unaltered_data=False):
     statisticsObject.set_result_dict(statistics_dictionary)
     # Update statisticsObject.list_qoi_column based on columns inside df_simulation_result
     statisticsObject.list_qoi_column = list(statistics_dictionary.keys())
@@ -44,17 +48,16 @@ def extend_statistics_object(statisticsObject, statistics_dictionary, df_simulat
         statisticsObject.set_timesteps_max(df_simulation_result[time_stamp_column].max())
         statisticsObject.set_number_of_unique_index_runs(
             get_number_of_unique_runs(
-                df_simulation_result, index_run_column_name="Index_run")
+                df_simulation_result, index_run_column_name=utility.INDEX_COLUMN_NAME)
         )
     else:
         # Read all this data from statistics_dictionary = statisticsObject.result_dict
         statisticsObject.set_timesteps()
         statisticsObject.set_timesteps_min()
         statisticsObject.set_timesteps_max()
+        # statisticsObject.set_number_of_unique_index_runs()
 
-    timestepRange = (pd.Timestamp(statisticsObject.timesteps_min),
-                     pd.Timestamp(statisticsObject.timesteps_max))
-
+    timestepRange = statisticsObject.get_time_range()
 
     statisticsObject.set_numTimesteps()
 
@@ -70,7 +73,7 @@ def extend_statistics_object(statisticsObject, statistics_dictionary, df_simulat
         statisticsObject.get_unaltered_run_data(timestepRange=timestepRange)
 
 
-def get_number_of_unique_runs(df, index_run_column_name="Index_run"):
+def get_number_of_unique_runs(df, index_run_column_name=utility.INDEX_COLUMN_NAME):
     return df[index_run_column_name].nunique()
 
 
@@ -244,6 +247,125 @@ def read_single_gpce_coeffs(workingDir, single_qoi, single_timestep, throw_error
             raise FileNotFoundError(f"The gpce coefficients file for qoi-{single_qoi} and time-stamp-{single_timestep} does not exist")
         else:
             return None
+
+# ==============================================================================================================
+# Functions for reading all saved output files from UQ and SA simulations and creating a DataFrame
+# ==============================================================================================================
+def get_df_statistics_and_df_si_from_saved_files(workingDir, inputModelDir=None):
+    """
+    Retrieves the statistics and sensitivity indices data from saved files.
+
+    Args:
+        workingDir (str): The working directory where the saved files are located.
+        inputModelDir (str, optional): The input model directory. Defaults to None.
+
+    Returns:
+        tuple: A tuple containing the following:
+            - statisticsObject: The statistics object.
+            - df_statistics_and_measured: The DataFrame containing the statistics and measured data.
+            - si_t_df: The DataFrame containing the sensitivity indices.
+
+    Raises:
+        FileNotFoundError: If any of the required files are not found.
+    """
+    dict_output_file_paths = utility.get_dict_with_output_file_paths_based_on_workingDir(workingDir)
+    args_file = dict_output_file_paths.get("args_file")
+    configuration_object_file = dict_output_file_paths.get("configuration_object_file")
+    nodes_file = dict_output_file_paths.get("nodes_file")
+    df_all_index_parameter_file = dict_output_file_paths.get("df_all_index_parameter_file")
+    df_all_index_parameter_gof_file = dict_output_file_paths.get("df_all_index_parameter_gof_file")
+    df_all_simulations_file = dict_output_file_paths.get("df_all_simulations_file")
+    
+    with open(configuration_object_file, 'rb') as f:
+        configurationObject = dill.load(f)
+    simulation_settings_dict = utility.read_simulation_settings_from_configuration_object(configurationObject)
+    with open(args_file, 'rb') as f:
+        uqsim_args = pickle.load(f)
+    uqsim_args_dict = vars(uqsim_args)
+    model = uqsim_args_dict["model"]
+    if inputModelDir is None:
+        inputModelDir = pathlib.Path(uqsim_args_dict["inputModelDir"])
+    else:
+        inputModelDir = pathlib.Path(inputModelDir) 
+
+    # with open(nodes_file, 'rb') as f:
+    #     simulationNodes = pickle.load(f)
+        
+    if df_all_index_parameter_file.is_file():
+        df_index_parameter = pd.read_pickle(df_all_index_parameter_file, compression="gzip")
+    else:
+        df_index_parameter = None
+    if df_index_parameter is not None:
+        params_list = utility._get_parameter_columns_df_index_parameter_gof(
+            df_index_parameter)
+    else:
+        params_list = []
+        for single_param in configurationObject["parameters"]:
+            params_list.append(single_param["name"])
+    if df_all_index_parameter_gof_file.is_file():
+        df_index_parameter_gof = pd.read_pickle(df_all_index_parameter_gof_file, compression="gzip")
+        df_index_parameter_gof
+    else:
+        print(f"Be careful - {df_all_index_parameter_gof_file} does not exist!")
+        df_index_parameter_gof = None
+    if df_index_parameter_gof is not None:
+        gof_list = utility._get_gof_columns_df_index_parameter_gof(
+            df_index_parameter_gof)
+    else:
+        gof_list = None
+        print(f"Be careful - {df_all_index_parameter_gof_file} does not exist - therefore gof_list is not populated!")
+
+    # df_nodes = utility.get_df_from_simulationNodes(simulationNodes, nodes_or_paramters="nodes", params_list=params_list)
+    # df_nodes_params = utility.get_df_from_simulationNodes(simulationNodes, nodes_or_paramters="parameters",  params_list=params_list)
+
+    read_all_saved_simulations_file = False
+    if read_all_saved_simulations_file and df_all_simulations_file.is_file():
+        # Reading Saved Simulations - Note: This might be a huge file,
+        # especially for MC/Saltelli kind of simulations
+        df_simulation_result = pd.read_pickle(df_all_simulations_file, compression="gzip")
+    else:
+        df_simulation_result = None
+
+    statisticsObject = create_stat_object.create_statistics_object(
+        configurationObject, uqsim_args_dict, workingDir, model=model)
+    statistics_dictionary = read_all_saved_statistics_dict(\
+        workingDir, statisticsObject.list_qoi_column, uqsim_args_dict.get("instantly_save_results_for_each_time_step", False), throw_error=True)
+
+    extend_statistics_object(
+        statisticsObject=statisticsObject, 
+        statistics_dictionary=statistics_dictionary, 
+        df_simulation_result=df_simulation_result,  # df_simulation_result=None,
+        get_measured_data=False, 
+        get_unaltered_data=False
+    )
+
+    # Add measured Data
+    # This is hardcoded for HBV fro now
+    if model == "HBV" or model == "hbvsask" or model == "hbv" or model == "HBV-SASK" or model == "hbv-sask":
+        basis = configurationObject['model_settings']['basis']
+        statisticsObject.inputModelDir_basis = inputModelDir / basis
+        statisticsObject.get_measured_data(
+            timestepRange=(statisticsObject.timesteps_min, statisticsObject.timesteps_max), 
+            transforme_mesured_data_as_original_model="False")
+
+    # Create a Pandas.DataFrame
+    statisticsObject.create_df_from_statistics_data()
+
+    # Add forcing Data
+    statisticsObject.get_forcing_data(time_column_name="TimeStamp")
+
+    # Merge Everything
+    df_statistics_and_measured = pd.merge(
+        statisticsObject.df_statistics, 
+        statisticsObject.forcing_df, left_on=statisticsObject.time_column_name, right_index=True)
+
+    df_statistics_and_measured['E_minus_std'] = df_statistics_and_measured['E_minus_std'].apply(lambda x: max(0, x))
+    df_statistics_and_measured['P10'] = df_statistics_and_measured['P10'].apply(lambda x: max(0, x))
+
+    si_t_df = statisticsObject.create_df_from_sensitivity_indices(si_type="Sobol_t")
+
+    return statisticsObject, df_statistics_and_measured, si_t_df
+
 # ==============================================================================================================
 # Functions for computing goodness-of-fit functions for different statistics time-signals produced by UQ and SA simulations
 # ==============================================================================================================
@@ -347,10 +469,10 @@ def describe_df_statistics(df_statistics_and_measured, single_qoi=None):
 
 
 def _get_sensitivity_indices_subset_of_big_df_statistics(df_statistics, single_qoi, param_names,
-        si_type="Sobol_t"):
+        si_type="Sobol_t", list_of_columns_to_keep=["measured", "precipitation", "temperature"]):
     df_statistics_and_measured_single_qoi = df_statistics.loc[df_statistics['qoi'] == single_qoi]
     # TODO allow user to specify which column names
-    list_of_columns_to_keep = ["measured", "precipitation", "temperature"]
+    # list_of_columns_to_keep = ["measured", "precipitation", "temperature"]
     if not isinstance(param_names, list):
         param_names = [param_names,]
     for param_name in param_names:
@@ -366,9 +488,10 @@ def _get_sensitivity_indices_subset_of_big_df_statistics(df_statistics, single_q
 
 def describe_sensitivity_indices_single_qoi_under_some_condition(
         df_statistics, single_qoi, param_names,
-        si_type="Sobol_t", condition_columns=None,condition_value=None, condition_sign="equal"):
+        si_type="Sobol_t", condition_columns=None,condition_value=None, condition_sign="equal",
+        list_of_columns_to_keep=["measured", "precipitation", "temperature"]):
     df_statistics_and_measured_single_qoi_subset = _get_sensitivity_indices_subset_of_big_df_statistics(
-        df_statistics, single_qoi, param_names, si_type)
+        df_statistics, single_qoi, param_names, si_type, list_of_columns_to_keep)
     if condition_columns is None or condition_value is None:
         result_describe = df_statistics_and_measured_single_qoi_subset.describe(include=np.number)
         print(f"{result_describe}")
@@ -406,10 +529,10 @@ def describe_sensitivity_indices_single_qoi_under_some_condition(
 
 def compute_df_statistics_columns_correlation(
         df_statistics, single_qoi, param_names,
-        only_sensitivity_indices_columns=True, si_type="Sobol_t", plot=True):
+        only_sensitivity_indices_columns=True, si_type="Sobol_t", plot=True, list_of_columns_to_keep=["measured", "precipitation", "temperature"]):
     if only_sensitivity_indices_columns:
         df_statistics_and_measured_single_qoi_subset = _get_sensitivity_indices_subset_of_big_df_statistics(
-            df_statistics, single_qoi, param_names, si_type)
+            df_statistics, single_qoi, param_names, si_type, list_of_columns_to_keep)
     else:
         df_statistics_and_measured_single_qoi = df_statistics.loc[df_statistics['qoi'] == single_qoi]
         df_statistics_and_measured_single_qoi_subset = df_statistics_and_measured_single_qoi
@@ -431,8 +554,9 @@ def compute_df_statistics_columns_correlation(
 ###################################################################################################################
 
 def plot_parameters_sensitivity_indices_vs_temp_prec_measured(
-        df_statistics, single_qoi, param_names, si_type="Sobol_t"):
+        df_statistics, single_qoi, param_names, si_type="Sobol_t", list_of_columns_to_keep=["measured", "precipitation", "temperature"]):
     """
+    Note: important assumption is that the df_statistics DataFrame has columns with names like: "measured", "precipitation", "temperature"
     :param df_statistics:
     :param single_qoi:
     :param param_names:
@@ -440,7 +564,7 @@ def plot_parameters_sensitivity_indices_vs_temp_prec_measured(
     :return:
     """
     df_statistics_and_measured_single_qoi_subset = _get_sensitivity_indices_subset_of_big_df_statistics(
-        df_statistics, single_qoi, param_names, si_type)
+        df_statistics, single_qoi, param_names, si_type, list_of_columns_to_keep)
     num_param = len(param_names)
     fig, axs = plt.subplots(3, num_param, figsize=(15, 8))
     # param = configurationObject["parameters"][0]["name"]
@@ -491,7 +615,7 @@ def plot_parameters_sensitivity_indices_vs_temp_prec_measured(
 
 def plot_cdfs_of_parameters_sensitivity_indices(df_statistics, single_qoi, param_names, si_type="Sobol_t"):
     df_statistics_and_measured_single_qoi_subset = _get_sensitivity_indices_subset_of_big_df_statistics(
-        df_statistics, single_qoi, param_names, si_type)
+        df_statistics, single_qoi, param_names, si_type, list_of_columns_to_keep=[])
     num_param = len(param_names)
 
     t = np.linspace(0, 1.0, 1000)
@@ -517,7 +641,7 @@ def single_param_single_qoi_sensitivity_indices_GaussianKDE(
         df_statistics, single_qoi, param_name, si_type="Sobol_t", plot=True, plot_pdf_or_cdf="pdf",
         h_mat=0.02, alpha=0.5):
     df_statistics_and_measured_single_qoi_subset = _get_sensitivity_indices_subset_of_big_df_statistics(
-        df_statistics, single_qoi, param_name, si_type)
+        df_statistics, single_qoi, param_name, si_type, list_of_columns_to_keep=[])
     column_to_keep = None
     if si_type == "Sobol_t":
         column_to_keep = f"Sobol_t_{param_name}"
@@ -589,13 +713,17 @@ def plot_heatmap_si_single_qoi(qoi_column, si_df, si_type="Sobol_t", uq_method="
         reset_index_at_the_end = True
 
     si_columns_to_plot = [x for x in si_df.columns.tolist() if x != 'measured' and x != 'measured_norm' and x != 'qoi']
+    si_columns_to_label = [single_column.split('_')[-1] for single_column in si_columns_to_plot]
+
     # fig = px.imshow(si_df[si_columns_to_plot].T, labels=dict(y='Parameters', x='Dates'))
 
     if 'qoi' in si_df.columns.tolist():
         fig = px.imshow(si_df.loc[si_df['qoi'] == qoi_column][si_columns_to_plot].T,
+                        # color_continuous_scale='Inferno',
                         labels=dict(y='Parameters', x='Dates'))
     else:
         fig = px.imshow(si_df[si_columns_to_plot].T,
+                        # color_continuous_scale='Inferno',
                         labels=dict(y='Parameters', x='Dates'))
 
     if reset_index_at_the_end:
@@ -622,7 +750,16 @@ def plot_si_and_normalized_measured_time_signal_single_qoi(
     return fig
 
 
+# ============================================================================================
+# plotting functions for HBV model
+# ============================================================================================
+
 def plot_forcing_mean_predicted_and_observed_all_qoi(statisticsObject, directory="./", fileName="simulation_big_plot.html"):
+    """
+    At the moment this is tailored for HBV model
+    :param df:
+    :return:
+    """
     measured_column_names_set = set()
     for single_qoi in statisticsObject.list_qoi_column:
         measured_column_names_set.add(statisticsObject.dict_corresponding_original_qoi_column[single_qoi])
