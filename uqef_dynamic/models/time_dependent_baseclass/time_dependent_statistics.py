@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 import chaospy as cp
 from collections import defaultdict
 from distutils.util import strtobool
@@ -22,7 +23,7 @@ from uqef.stat import Statistics
 
 from uqef_dynamic.utils import sensIndicesSamplingBasedHelpers
 from uqef_dynamic.utils import parallelStatistics
-from uqef_dynamic.utils import uqPostprocessing
+# from uqef_dynamic.utils import uqPostprocessing
 from uqef_dynamic.utils import utility
 from uqef_dynamic.utils import colors
 
@@ -32,6 +33,11 @@ from uqef_dynamic.utils import colors
 # }
 
 # TODO two cases - time_column_name is or is not an index column in returned data!?
+# TODO Samples class - write in some log file runs which have returned None, in case of model break!
+# TODO Samples class - eventually, add a subroutine that will check some metric in gof_df and conditioned on that potentially disregard the run
+# TODO Samples class - Add 'qoi' column to self.df_simulation_result
+# TODO Samples class - Move computation of dict_of_approx_matrix_c and dict_of_matrix_c_eigen_decomposition from Sample class to Statistics class!?
+# TODO Samples class - Eventually, add options to set other dataframes as well
 class Samples(object):
     def __init__(self, rawSamples, qoi_columns="Value", time_column_name="TimeStamp", **kwargs):
         """
@@ -48,7 +54,8 @@ class Samples(object):
           "grad_matrix": a dictionary containing the gradient matrix for each QoI and each parameter, 
           "state_df": a DataFrame containing the state variables over different model runs
 
-        :param rawSamples:
+        :param rawSamples: if None, then the class will try to fatch df_simulation_result from kwargs;
+          otherwise it will be initialized with None values for all attributes
         :param qoi_columns: should be a list or a string containing column names from the result DF,
         :param time_column_name: default is "TimeStamp"
         :param kwargs:
@@ -57,6 +64,16 @@ class Samples(object):
             "grad_columns" - default is []
             "collect_and_save_state_data" - default is False
             "extract_only_qoi_columns" - default is False
+            "df_simulation_result" - default is None; if rawSamples is None, 
+                then the class checks if this parameter containsed saved simulation results is a form of a DataFrame
+            "df_state_results" - default is None; relevant only if rawSamples is None and df_simulation_result is not None
+            "df_index_parameter_values" - default is None; relevant only if rawSamples is None and df_simulation_result is not None
+            "df_index_parameter_gof_values" - default is None; relevant only if rawSamples is None and df_simulation_result is not None
+            "dict_of_approx_matrix_c" - default is None; relevant only if rawSamples is None and df_simulation_result is not None
+            "dict_of_matrix_c_eigen_decomposition" - default is None; relevant only if rawSamples is None and df_simulation_result is not None
+
+        Note: logic in Samples (and therefore in Statistics class) is opposite the one in a Model, e.g., 
+          it is assumed that time_column is not an index in all the received/processed DFs!
         """
         self.time_column_name = time_column_name
         original_model_output_column = kwargs.get('original_model_output_column', "Value")
@@ -64,80 +81,103 @@ class Samples(object):
         grad_columns = kwargs.get('grad_columns', [])
         collect_and_save_state_data =  kwargs.get('collect_and_save_state_data', False)
         self.index_column_name = kwargs.get('index_column_name', utility.INDEX_COLUMN_NAME)
+        extract_only_qoi_columns = kwargs.get('extract_only_qoi_columns', False)
+        df_simulation_result = kwargs.get('df_simulation_result', None)
 
         if not isinstance(qoi_columns, list):
             qoi_columns = [qoi_columns, ]
 
-        qoi_columns = qoi_columns + [self.time_column_name, self.index_column_name]
+        self.qoi_columns = qoi_columns + [self.time_column_name, self.index_column_name]
 
         if grad_columns:
-            qoi_columns = qoi_columns + grad_columns
+            self.qoi_columns = self.qoi_columns + grad_columns
 
-        extract_only_qoi_columns = kwargs.get('extract_only_qoi_columns', False)
-
+        if rawSamples is not None:
+            self._process_raw_samples(rawSamples, collect_and_save_state_data, extract_only_qoi_columns)
+        elif df_simulation_result is not None:
+            # self.df_simulation_result = df_simulation_result
+            self.df_simulation_result = self._process_df_simulation_result(df_simulation_result, extract_only_qoi_columns)
+            self.df_state_results = kwargs.get('df_state_results', None)
+            self._process_state_df()
+            self.df_index_parameter_values = kwargs.get('df_index_parameter_values', None)
+            self.df_index_parameter_gof_values = kwargs.get('df_index_parameter_gof_values', None)
+            self.dict_of_approx_matrix_c = kwargs.get('dict_of_approx_matrix_c', None)
+            self.dict_of_matrix_c_eigen_decomposition = kwargs.get('dict_of_matrix_c_eigen_decomposition', None)
+            self.list_index_run_with_None = []
+        else:
+            self.df_simulation_result = None
+            self.df_state_results = None
+            self.df_index_parameter_values = None
+            self.df_index_parameter_gof_values = None
+            self.dict_of_approx_matrix_c = None
+            self.dict_of_matrix_c_eigen_decomposition = None
+            self.list_index_run_with_None = []
+        
+    def _process_raw_samples(self, rawSamples, collect_and_save_state_data, extract_only_qoi_columns):
         list_of_single_df = []
         list_index_parameters_dict = []
         list_of_single_index_parameter_gof_df = []
         list_of_gradient_matrix_dict = []
         list_of_single_state_df = []
+        self.list_index_run_with_None = []
         for index_run, value in enumerate(rawSamples, ):
             df_result = None
+            parameters_dict = None
+            gof_df = None
+            gradient_matrix_dict = None
             state_df = None
-            if value is None:
-                # TODO write in some log file runs which have returned None, in case of sc break!
-                continue
+            # this branch is due to some legacy code
             if isinstance(value, tuple):
-                # this is due to some legacy code
                 df_result = value[0]
-                list_index_parameters_dict.append(value[1])
+                parameters_dict = value[1]
+                list_index_parameters_dict.append(parameters_dict)
+            # the expected structure of value is dictionary with the following keys
             elif isinstance(value, dict):
                 if "result_time_series" in value:
                     df_result = value["result_time_series"]
                 if "parameters_dict" in value:
-                    list_index_parameters_dict.append(value["parameters_dict"])
+                    parameters_dict = value["parameters_dict"]
                 if "gof_df" in value:
-                    list_of_single_index_parameter_gof_df.append(value["gof_df"])
+                    gof_df = value["gof_df"]
                 if "grad_matrix" in value:
                     gradient_matrix_dict = value["grad_matrix"]
-                    if gradient_matrix_dict is not None:
-                        # TODO Extract only entry for station and one or multiple gofs
-                        list_of_gradient_matrix_dict.append(gradient_matrix_dict)
-                if collect_and_save_state_data:
-                    if "state_df" in value:
-                        state_df = value["state_df"]
+                if "state_df" in value:
+                    state_df = value["state_df"]
             else:
                 df_result = value
 
-            # logic in Statistics is opposite the one in a Model, e.g.,
-            # it is assumed that time_column is not an index in DFs
+            # Processing collected results
             if df_result is not None:
-                if isinstance(df_result, pd.DataFrame) and df_result.index.name == time_column_name:
-                    df_result = df_result.reset_index()
-                    df_result.rename(columns={df_result.index.name: time_column_name}, inplace=True)
-                if time_column_name not in list(df_result.columns):
-                    raise Exception(f"Error in Samples class - {time_column_name} is not in the "
-                                    f"columns of the result DataFrame")
-                if extract_only_qoi_columns:
-                    list_of_single_df.append(df_result[qoi_columns])
+                df_result = self._process_df_simulation_result(df_result, extract_only_qoi_columns)
+                list_of_single_df.append(df_result)                    
+            else:
+                if parameters_dict is not None and "successful_run" in parameters_dict and parameters_dict["successful_run"]:
+                    print(f"Samples INFO - run {index_run} returned None, but successful_run flag is True! Something might be wrong!")
+                # any other case is considered to be a clear flag that model execution was unsuccessful
                 else:
-                    list_of_single_df.append(df_result)
+                    print(f"Samples INFO - run {index_run} returned None, and successful_run flag is False! This is expected!")    
+                    self.list_index_run_with_None.append(index_run)
+                    continue
+            
+            if parameters_dict is not None:
+                list_index_parameters_dict.append(parameters_dict)
 
-            if state_df is not None:
-                if isinstance(state_df, pd.DataFrame) and state_df.index.name == time_column_name:
+            if gof_df is not None:
+                list_of_single_index_parameter_gof_df.append(gof_df)
+
+            if gradient_matrix_dict is not None:
+                list_of_gradient_matrix_dict.append(gradient_matrix_dict)
+
+            if collect_and_save_state_data and state_df is not None:
+                if isinstance(state_df, pd.DataFrame) and state_df.index.name == self.time_column_name:
                     state_df = state_df.reset_index()
-                    state_df.rename(columns={state_df.index.name: time_column_name}, inplace=True)
+                    state_df.rename(columns={state_df.index.name: self.time_column_name}, inplace=True)
                 list_of_single_state_df.append(state_df)
 
-        # TODO Add 'qoi' column
         if list_of_single_df:
             self.df_simulation_result = pd.concat(list_of_single_df, ignore_index=True, sort=False, axis=0)
         else:
             self.df_simulation_result = None
-
-        if collect_and_save_state_data and list_of_single_state_df:
-            self.df_state_results = pd.concat(list_of_single_state_df, ignore_index=True, sort=False, axis=0)
-        else:
-            self.df_state_results = None
 
         if list_index_parameters_dict:
             self.df_index_parameter_values = pd.DataFrame(list_index_parameters_dict)
@@ -150,27 +190,60 @@ class Samples(object):
         else:
             self.df_index_parameter_gof_values = None
 
-        # TODO Move this outside Sample class!?
         # In case compute_gradients mode was turned on and compute_active_subspaces set to True
         if list_of_gradient_matrix_dict:
-            # self.list_of_gradient_matrix_dict = list_of_gradient_matrix_dict
-            gradient_matrix_dict = defaultdict(list)
-            self.dict_of_approx_matrix_c = defaultdict(list)
-            self.dict_of_matrix_c_eigen_decomposition = defaultdict(list)
-
-            for single_gradient_matrix_dict in list_of_gradient_matrix_dict:
-                for key, value in single_gradient_matrix_dict.items():
-                    gradient_matrix_dict[key].append(np.array(value))
-
-            for key in gradient_matrix_dict.keys():
-                # for single_objective_function in self.list_objective_function_qoi:
-                self.dict_of_approx_matrix_c[key] = \
-                    sum(gradient_matrix_dict[key]) / len(gradient_matrix_dict[key])
-                self.dict_of_matrix_c_eigen_decomposition[key] = np.linalg.eigh(self.dict_of_approx_matrix_c[key])
-                # np.linalg.eig(self.dict_of_approx_matrix_c[key])
+            self._process_list_of_gradient_matrix_dict(list_of_gradient_matrix_dict)
         else:
             self.dict_of_approx_matrix_c = None
             self.dict_of_matrix_c_eigen_decomposition = None
+
+        if collect_and_save_state_data and list_of_single_state_df:
+            self.df_state_results = pd.concat(list_of_single_state_df, ignore_index=True, sort=False, axis=0)
+        else:
+            self.df_state_results = None
+        
+    def _process_df_simulation_result(self, df_result, extract_only_qoi_columns=False):
+        # Note: logic in Statistics is opposite the one in a Model, e.g., it is assumed that time_column is not an index in DFs
+        if df_result is not None:
+            if isinstance(df_result, pd.DataFrame) and df_result.index.name == self.time_column_name:
+                df_result = df_result.reset_index()
+                df_result.rename(columns={df_result.index.name: self.time_column_name}, inplace=True)
+            if self.time_column_name not in list(df_result.columns):
+                raise Exception(f"Error in Samples class - {self.time_column_name} is not in the "
+                                f"columns of the result DataFrame")
+            if extract_only_qoi_columns:
+                df_result = df_result[self.qoi_columns]
+        return df_result
+
+    def _process_state_df(self):
+        if self.df_state_results is not None:
+            if self.df_state_results.index.name == self.time_column_name:
+                self.df_state_results = self.df_state_results.reset_index()
+                self.df_state_results.rename(columns={self.df_state_results.index.name: self.time_column_name}, inplace=True)
+
+    def _process_list_of_gradient_matrix_dict(self, list_of_gradient_matrix_dict):
+        """ 
+        This function is used to process the list of gradient matrix dictionaries
+        and compute the average gradient matrix and its eigen decomposition.
+        """
+        # self.list_of_gradient_matrix_dict = list_of_gradient_matrix_dict
+        gradient_matrix_dict = defaultdict(list)
+        self.dict_of_approx_matrix_c = defaultdict(list)
+        self.dict_of_matrix_c_eigen_decomposition = defaultdict(list)
+
+        for single_gradient_matrix_dict in list_of_gradient_matrix_dict:
+            for key, value in single_gradient_matrix_dict.items():
+                gradient_matrix_dict[key].append(np.array(value))
+
+        for key in gradient_matrix_dict.keys():
+            # for single_objective_function in self.list_objective_function_qoi:
+            self.dict_of_approx_matrix_c[key] = \
+                sum(gradient_matrix_dict[key]) / len(gradient_matrix_dict[key])
+            self.dict_of_matrix_c_eigen_decomposition[key] = np.linalg.eigh(self.dict_of_approx_matrix_c[key])
+            # np.linalg.eig(self.dict_of_approx_matrix_c[key])
+
+    def set_df_simulation_result(self, df_simulation_result, extract_only_qoi_columns=False):
+        self.df_simulation_result = self._process_df_simulation_result(df_simulation_result, extract_only_qoi_columns)
 
     def save_all_simulations_to_file(self, file_path='./'):
         file_path = str(file_path)
@@ -210,12 +283,21 @@ class Samples(object):
             with open(fileName, 'wb') as handle:
                 pickle.dump(self.dict_of_matrix_c_eigen_decomposition, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
+    def get_list_index_run_with_None(self):
+        return self.list_index_run_with_None
+    
     def get_number_of_runs(self, index_run_column_name="Index_run"):
-        self.number_unique_model_runs = self.df_simulation_result[index_run_column_name].nunique()
+        if self.df_simulation_result is not None:
+            self.number_unique_model_runs = self.df_simulation_result[index_run_column_name].nunique()
+        else:
+            self.number_unique_model_runs = None
         return self.number_unique_model_runs
 
     def get_number_of_timesteps(self, time_stamp_column="TimeStamp"):
-        self.number_unique_timesteps = self.df_simulation_result[time_stamp_column].nunique()
+        if self.df_simulation_result is not None:
+            self.number_unique_timesteps = self.df_simulation_result[time_stamp_column].nunique()
+        else:
+            self.number_unique_timesteps = None
         return self.number_unique_timesteps
 
     def get_simulation_timesteps(self, time_stamp_column="TimeStamp"):
@@ -237,7 +319,7 @@ class Samples(object):
             return None
 
 
-class TimeDependentStatistics(Statistics):
+class TimeDependentStatistics(ABC, Statistics):
     def __init__(self, configurationObject, workingDir=None, *args, **kwargs):
         Statistics.__init__(self)
 
@@ -248,12 +330,16 @@ class TimeDependentStatistics(Statistics):
 
         # in the statistics class specification of the workingDir is necessary
         self.workingDir = pathlib.Path(workingDir)
-
+        self.dict_output_file_paths = utility.get_dict_with_output_file_paths_based_on_workingDir(self.workingDir)
         #####################################
         # Set of configuration variables propagated via UQsim.args and/or **kwargs
         # These are mainly UQ simulation - related configurations
         #####################################
         self.uq_method = kwargs.get('uq_method', None)
+
+        self.raise_exception_on_model_break = kwargs.get('raise_exception_on_model_break', False)
+        if self.uq_method is not None and self.uq_method == "sc":  # always break when running gPCE simulation
+            self.raise_exception_on_model_break = True
 
         self.sampleFromStandardDist = kwargs.get('sampleFromStandardDist', False)
 
@@ -306,15 +392,20 @@ class TimeDependentStatistics(Statistics):
         self.index_column_name = kwargs.get("index_column_name", utility.INDEX_COLUMN_NAME)
         self.forcing_data_column_names = kwargs.get("forcing_data_column_names", "precipitation")
 
-        self.resolution = self.configurationObject["time_settings"]["resolution"]
-        if self.resolution != "daily" and self.resolution != "hourly" and self.resolution != "minute":
-            raise Exception(f"Error in Statistics class - resolution is not daily, hourly or minute")
-
+        try:
+            self.resolution = self.configurationObject["time_settings"]["resolution"]
+        except KeyError as e:
+            self.resolution = "integer"
+        if self.resolution != "daily" and self.resolution != "hourly" and self.resolution != "minute" and self.resolution != "integer":
+            raise Exception(f"Error in Statistics class - resolution is not daily, hourly, minute or integer")
+        
         if "corrupt_forcing_data" in kwargs:
             self.corrupt_forcing_data = kwargs['corrupt_forcing_data']
         else:
-            self.corrupt_forcing_data = strtobool(self.configurationObject["model_settings"].get(
-                "corrupt_forcing_data", False))
+            try:
+                self.corrupt_forcing_data = strtobool(self.configurationObject["model_settings"]["corrupt_forcing_data"])
+            except KeyError as e:
+                self.corrupt_forcing_data = False
 
         self.dict_what_to_plot = kwargs.get("dict_what_to_plot", utility.DEFAULT_DICT_WHAT_TO_PLOT)
 
@@ -338,6 +429,7 @@ class TimeDependentStatistics(Statistics):
         # Initialize different variables of the Statistics class
         #####################################
         self.samples = None
+        self.list_of_unsuccessful_runs = []
         # self.result_dict = dict()
         self.result_dict = None
         self.groups = None
@@ -367,7 +459,7 @@ class TimeDependentStatistics(Statistics):
         self.pdTimesteps = None
         self.timestep_qoi = None
 
-        self.number_of_unique_index_runs = None
+        self.number_of_unique_index_runs = None  # depricated; the same as self.number_unique_model_runs
         self.numEvaluations = None
         self.N = None
         self.number_unique_model_runs = None
@@ -420,6 +512,7 @@ class TimeDependentStatistics(Statistics):
 
     def infer_qoi_column_names(self, **kwargs):
         """
+        This is an important function when some other output or processed model output is regarded as final QoI.
         This function largely depends on the way different qoi columns were computed and named in the Model class!
         :param kwargs:
         :return:
@@ -555,28 +648,63 @@ class TimeDependentStatistics(Statistics):
         return list_of_columns_to_filter_from_results
 
     def prepare(self, rawSamples, **kwargs):
+        """
+        Prepares the data for statistical analysis. This method is called before any statistical analysis is performed.
+
+        Args:
+            rawSamples (list or numpy.ndarray): The raw samples data.
+            **kwargs: Additional keyword arguments.
+
+        Keyword Args:
+            timesteps (list or numpy.ndarray): The timesteps data. UQEF inherited. Will most likely be overwritten based on samples data.
+            solverTimes (list or numpy.ndarray): The solver times data. UQEF inherited.
+            work_package_indexes (list or numpy.ndarray): The work package indexes data. UQEF inherited.
+            extract_only_qoi_columns (bool): Flag indicating whether to extract only QoI columns.
+            read_saved_simulations (bool): Flag indicating whether to read saved simulations. Will be set to True if rawSamples is None.
+
+        Raises:
+            Exception: If the specified file for reading saved simulations does not exist. 
+            Logic is that if read_saved_simulations is True or rawSamples is None
+            then the class will try to read df_simulation_result from df_all_simulations_file; 
+            otherwise it will throw an exception if df_all_simulations_file does not exist.
+
+        Returns:
+            None
+        """
         self.timesteps = kwargs.get('timesteps', None)
         self.solverTimes = kwargs.get('solverTimes', None)
         self.work_package_indexes = kwargs.get('work_package_indexes', None)
         self.extract_only_qoi_columns = kwargs.get('extract_only_qoi_columns', False)
-
+        self.read_saved_simulations = kwargs.get('read_saved_simulations', False)
         # TODO a couple of similar/redundant variables
         # self.store_qoi_data_in_stat_dict, self.extract_only_qoi_columns always_process_original_model_output
 
         list_of_columns_to_filter_from_results = self._get_list_of_columns_to_filter_from_results()
 
         self.samples = Samples(rawSamples,
-                               qoi_columns=list_of_columns_to_filter_from_results,
-                               time_column_name=self.time_column_name,
-                               extract_only_qoi_columns=self.extract_only_qoi_columns,
-                               original_model_output_column=self.list_original_model_output_columns,
-                               qoi_is_a_single_number=self.qoi_is_a_single_number,
-                               grad_columns=self.list_grad_columns,
-                               collect_and_save_state_data=self.collect_and_save_state_data,
-                               )
-        # TODO add an option to read self.samples from self.df_simulation_result DataFrame
+                        qoi_columns=list_of_columns_to_filter_from_results,
+                        time_column_name=self.time_column_name,
+                        extract_only_qoi_columns=self.extract_only_qoi_columns,
+                        original_model_output_column=self.list_original_model_output_columns,
+                        qoi_is_a_single_number=self.qoi_is_a_single_number,
+                        grad_columns=self.list_grad_columns,
+                        collect_and_save_state_data=self.collect_and_save_state_data,
+                        )
+        
+        if rawSamples is None:
+            self.read_saved_simulations = True
+
+        if self.read_saved_simulations:
+            df_all_simulations_file = self.dict_output_file_paths.get("df_all_simulations_file")
+            if df_all_simulations_file.is_file():
+                df_simulation_result = pd.read_pickle(df_all_simulations_file, compression="gzip")
+                self.samples.set_df_simulation_result(df_simulation_result, extract_only_qoi_columns=self.extract_only_qoi_columns)
+            else:
+                raise Exception(f"Error in Statistics class - file {df_all_simulations_file} does not exist!")
 
         if self.samples is not None:
+            self.list_of_unsuccessful_runs = self.samples.get_list_index_run_with_None()
+
             if self.samples.df_simulation_result is not None:
                 self.samples.df_simulation_result.sort_values(
                     by=[self.index_column_name, self.time_column_name], ascending=[True, True], inplace=True, kind='quicksort',
@@ -595,6 +723,7 @@ class TimeDependentStatistics(Statistics):
             if self.compute_gradients and self.gradient_analysis:
                 self.param_grad_analysis()
 
+            # saving the results of the model runs
             if self.save_all_simulations:
                 self.samples.save_all_simulations_to_file(self.workingDir)
             if self.collect_and_save_state_data:
@@ -606,7 +735,7 @@ class TimeDependentStatistics(Statistics):
                 self.samples.save_dict_of_approx_matrix_c(self.workingDir)
                 self.samples.save_dict_of_matrix_c_eigen_decomposition(self.workingDir)
 
-            # Read info about the time from propagated model runs, i.e., samples
+            # Read info about the time and total number of model runs from propagated model runs, i.e., samples
             self.timesteps = self.samples.get_simulation_timesteps()
             self.timesteps_min = self.samples.get_timesteps_min()
             self.timesteps_min_minus_one = utility.compute_previous_timestamp(
@@ -614,7 +743,17 @@ class TimeDependentStatistics(Statistics):
             self.timesteps_max = self.samples.get_timesteps_max()
             self.number_of_unique_index_runs = self.number_unique_model_runs = self.samples.get_number_of_runs()
 
-        self.pdTimesteps = [pd.Timestamp(timestep) for timestep in self.timesteps]
+            print(f"DEBUGGING self.samples.df_simulation_result\n{self.samples.df_simulation_result}")
+            print(f"DEBUGGING self.samples.df_simulation_result.columns\n{self.samples.df_simulation_result.columns}")
+            print(f"DEBUGGING self.samples.df_simulation_result.dtypes\n{self.samples.df_simulation_result.dtypes}")
+
+        # if self.resolution == "integer":
+        #     self.pdTimesteps = self.timesteps
+        # elif self.resolution == "daily" or self.resolution == "hourly" or self.resolution == "minute":
+        #     self.pdTimesteps = [pd.Timestamp(timestep) for timestep in self.timesteps]
+        # else:
+        #     self.pdTimesteps = self.timesteps
+        self._set_pdTimesteps_based_on_timesteps_and_resolution()
         self.numTimesteps = self.N_quad = len(self.timesteps)
 
         self.centered_output = defaultdict(np.ndarray, {key:[] for key in self.list_qoi_column})
@@ -626,6 +765,7 @@ class TimeDependentStatistics(Statistics):
                 timestepRange=[self.timesteps_min_minus_one, self.timesteps_max],
                 qoi_column_name=self.list_original_model_output_columns  # or list(self.dict_corresponding_original_qoi_column.values)
             )
+        
         # This, though, does not hold for Saltelli's approach
         # self.numEvaluations = self.number_of_unique_index_runs
 
@@ -652,6 +792,14 @@ class TimeDependentStatistics(Statistics):
     #         previous_timestamp = pd.to_datetime(timestamp) - pd.Timedelta(m=1)
     #     return previous_timestamp
 
+    def _set_pdTimesteps_based_on_timesteps_and_resolution(self):
+        if self.resolution == "integer":
+            self.pdTimesteps = self.timesteps
+        elif self.resolution == "daily" or self.resolution == "hourly" or self.resolution == "minute":
+            self.pdTimesteps = [pd.Timestamp(timestep) for timestep in self.timesteps]
+        else:
+            self.pdTimesteps = self.timesteps
+    
     def set_timesteps(self, timesteps=None):
         if timesteps is not None:
             self.timesteps = timesteps
@@ -665,14 +813,16 @@ class TimeDependentStatistics(Statistics):
                       f"however, entry {self.list_qoi_column[0]} does not exist in the dict")
                 raise
         if self.timesteps is not None:
-            self.pdTimesteps = [pd.Timestamp(timestep) for timestep in self.timesteps]
+            self._set_pdTimesteps_based_on_timesteps_and_resolution()
+            # self.pdTimesteps = [pd.Timestamp(timestep) for timestep in self.timesteps]
             self.numTimesteps = len(self.timesteps)
 
     def set_pdTimesteps(self, pdTimesteps=None):
         if pdTimesteps is not None:
             self.pdTimesteps = pdTimesteps
         elif self.timesteps is not None:
-            self.pdTimesteps = [pd.Timestamp(timestep) for timestep in self.timesteps]
+            self._set_pdTimesteps_based_on_timesteps_and_resolution()
+            # self.pdTimesteps = [pd.Timestamp(timestep) for timestep in self.timesteps]
 
     def set_timesteps_min(self, timesteps_min=None):
         if timesteps_min is not None:
@@ -715,6 +865,13 @@ class TimeDependentStatistics(Statistics):
         else:
             self.timestep_qoi = self.timesteps
 
+    def get_time_range(self):
+        if self.resolution == "integer":
+            return (self.timesteps_min, self.timesteps_max)
+        elif self.resolution == "daily" or self.resolution == "hourly" or self.resolution == "minute":
+            return (pd.Timestamp(self.timesteps_min), pd.Timestamp(self.timesteps_max))
+        else:
+            return (self.timesteps_min, self.timesteps_max)
     # =================================================================================================
 
     def param_grad_analysis(self):
@@ -776,8 +933,10 @@ class TimeDependentStatistics(Statistics):
                 raise Exception
 
     def prepareForScStatistics(self, simulationNodes, order, poly_normed, poly_rule, *args, **kwargs):
+        # TODO Check if self.list_of_unsuccessful_runs is empty; if not
+        # the program should not proceed with the analysis; or when regression (uq_method=) should update the self.nodes; self.N = self.numEvaluations
         self.nodes = simulationNodes.distNodes
-        self.N = self.numEvaluations = self.nodes.shape[0]
+        self.N = self.numEvaluations = self.nodes.shape[0]  # should be equal to self.number_of_unique_index_runs
         self.dim = self.nodes.shape[1]
         if self.sampleFromStandardDist:
             self.dist = simulationNodes.joinedStandardDists
@@ -916,6 +1075,7 @@ class TimeDependentStatistics(Statistics):
         if self.rank == 0:
             self._groupby_df_simulation_results()
             keyIter = list(self.groups.keys())
+            print(f"DEBUGGING - keyIter - {keyIter}")
 
         compute_other_stat_besides_pce_surrogate = kwargs.get("compute_other_stat_besides_pce_surrogate", self.compute_other_stat_besides_pce_surrogate)
 
@@ -1463,7 +1623,7 @@ class TimeDependentStatistics(Statistics):
         if qoi_column is None:
             qoi_column = self.list_qoi_column[0]
         if timestamp is None:
-            timestamp = self.pdTimesteps[0]
+            timestamp = self.pdTimesteps[0] # self.timesteps[0]
         try:
             self._is_Sobol_t_computed = "Sobol_t" in self.result_dict[qoi_column][
                 timestamp]  # hasattr(self.result_dict[keyIter[0], "Sobol_t")
@@ -1474,7 +1634,7 @@ class TimeDependentStatistics(Statistics):
         if qoi_column is None:
             qoi_column = self.list_qoi_column[0]
         if timestamp is None:
-            timestamp = self.pdTimesteps[0]
+            timestamp = self.pdTimesteps[0] # self.timesteps[0]
         try:
             self._is_Sobol_m_computed = "Sobol_m" in self.result_dict[qoi_column][timestamp]
         except KeyError as e:
@@ -1484,7 +1644,7 @@ class TimeDependentStatistics(Statistics):
         if qoi_column is None:
             qoi_column = self.list_qoi_column[0]
         if timestamp is None:
-            timestamp = self.pdTimesteps[0]
+            timestamp = self.pdTimesteps[0] # self.timesteps[0]
         try:
             self._is_Sobol_m2_computed = "Sobol_m2" in self.result_dict[qoi_column][timestamp]
         except KeyError as e:
@@ -1577,10 +1737,10 @@ class TimeDependentStatistics(Statistics):
                     np.dot(centered_output[:, c], centered_output[:, s])
                 elif self.uq_method == "quadrature" or self.uq_method =="pce" or self.uq_method == "sc" or self.uq_method == "kl":
                     if self.weights is None:
-                        raise ValueError("Weights must be provided for quadrature-based algorithms")
+                        raise ValueError("[STAT ERROR] - Weights must be provided for quadrature-based algorithms")
                     covariance_matrix[s, c] = np.dot(self.weights, centered_output[:, c]*centered_output[:,s])
                 else:
-                    raise ValueError(f"Unknown algorithm - {self.uq_method}")
+                    raise ValueError(f"[STAT ERROR] - Unknown algorithm - {self.uq_method}")
         utility.save_covariance_matrix(covariance_matrix, self.workingDir, single_qoi_column)
         utility.plot_covariance_matrix(covariance_matrix, self.workingDir, filname=f"covariance_matrix_{single_qoi_column}.png")
         return covariance_matrix
@@ -1595,7 +1755,8 @@ class TimeDependentStatistics(Statistics):
 
     def _get_measured_single_qoi(self, timestepRange=None, time_column_name="TimeStamp",
                 qoi_column_measured="measured", **kwargs):
-        raise NotImplementedError
+        return None
+        # raise NotImplementedError
 
     def get_measured_data(self, timestepRange=None, time_column_name="TimeStamp", qoi_column_name="measured",
                               **kwargs):
@@ -1606,6 +1767,9 @@ class TimeDependentStatistics(Statistics):
          :param qoi_column_name:
          :param kwargs:
          :return: set self.df_measured to be a pd.DataFrame with three columns "TimeStamp", "qoi", "measured"
+
+         Note: this function rely on previously computed dict_qoi_column_and_measured_info 
+         (computed in utility.read_simulation_settings_from_configuration_object function)
          """
 
         if not isinstance(qoi_column_name, list):
@@ -1638,12 +1802,15 @@ class TimeDependentStatistics(Statistics):
             single_qoi_column_measured = single_qoi_column_info[1]
             single_qoi_transform_model_output = single_qoi_column_info[2]
 
-            if not single_qoi_read_measured_data:
+            if not single_qoi_read_measured_data or single_qoi_read_measured_data is None:
                 continue
 
             df_measured_single_qoi = self._get_measured_single_qoi(
                 timestepRange=timestepRange, time_column_name=time_column_name,
                 qoi_column_measured=single_qoi_column_measured, **kwargs)
+
+            if df_measured_single_qoi is None:
+                continue
 
             # This data will be used for plotting or comparing with approximated data
             # Perform the same transformation as on original model output
@@ -1676,14 +1843,49 @@ class TimeDependentStatistics(Statistics):
 
     def get_unaltered_run_data(self, timestepRange=None, time_column_name="TimeStamp", qoi_column_name="streamflow",
                               **kwargs):
-        raise NotImplementedError
+        return None
+        # raise NotImplementedError
 
     def get_forcing_data(self, timestepRange=None, time_column_name="TimeStamp", forcing_column_names="precipitation",
                          **kwargs):
+        return None
+        # raise NotImplementedError
+
+    # =================================================================================================
+
+    @abstractmethod
+    def prepare_for_plotting(self, timestep=-1, display=False,
+                    fileName="", fileNameIdent="", directory="./",
+                    fileNameIdentIsFullName=False, safe=True, **kwargs):
         raise NotImplementedError
 
+    @abstractmethod
+    def plotResults_single_qoi(self, single_qoi_column, dict_time_vs_qoi_stat=None, timestep=-1, display=False, fileName="",
+                               fileNameIdent="", directory="./", fileNameIdentIsFullName=False, safe=True,
+                               dict_what_to_plot=None, **kwargs):
+        """
+        This function plots the statistics of a single QoI.
+        It is more relevant that the plotResults function, which plots all the QoIs.
+        """
+        raise NotImplementedError
+
+    def _plotStatisticsDict_plotly_single_qoi(self, single_qoi_column, dict_time_vs_qoi_stat=None, unalatered=False,
+                                              measured=False, forcing=False, recalculateTimesteps=False,
+                                              window_title='Forward UQ & SA', filename="sim-plotly.html", display=False,
+                                              dict_what_to_plot=None, **kwargs):
+        """
+        This function plots the statistics of a single QoI.
+        It should implement the plotting based on plotly library, and present a background engine for the plotResults_single_qoi function.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
     def plotResults(self, timestep=-1, display=False, fileName="", fileNameIdent="", directory="./",
                     fileNameIdentIsFullName=False, safe=True, dict_what_to_plot=None, **kwargs):
+        """
+        This function plots the statistics of a single, or multiple, QoI.
+        Thake a look at the plotResults_single_qoi function for more details.
+        """
         raise NotImplementedError
 
     def _plotStatisticsDict_plotly(self, unalatered=False, measured=False, forcing=False, recalculateTimesteps=False,
@@ -1693,7 +1895,7 @@ class TimeDependentStatistics(Statistics):
 
     def _compute_number_of_rows_for_plotting(self, dict_what_to_plot=None, forcing=False,
                                              list_qoi_column_to_plot=None, result_dict=None, **kwargs):
-        keyIter = list(self.pdTimesteps)
+        keyIter = list(self.pdTimesteps)  # self.timesteps
 
         n_rows = 0
 
@@ -1760,39 +1962,21 @@ class TimeDependentStatistics(Statistics):
 
     # =================================================================================================
 
-    def prepare_for_plotting(self, timestep=-1, display=False,
-                    fileName="", fileNameIdent="", directory="./",
-                    fileNameIdentIsFullName=False, safe=True, **kwargs):
-        raise NotImplementedError
-
-    def plotResults_single_qoi(self, single_qoi_column, dict_time_vs_qoi_stat=None, timestep=-1, display=False, fileName="",
-                               fileNameIdent="", directory="./", fileNameIdentIsFullName=False, safe=True,
-                               dict_what_to_plot=None, **kwargs):
-        raise NotImplementedError
-
-    def _plotStatisticsDict_plotly_single_qoi(self, single_qoi_column, dict_time_vs_qoi_stat=None, unalatered=False,
-                                              measured=False, forcing=False, recalculateTimesteps=False,
-                                              window_title='Forward UQ & SA', filename="sim-plotly.html", display=False,
-                                              dict_what_to_plot=None, **kwargs):
-        raise NotImplementedError
-
-    # =================================================================================================
-
     def extract_mean_time_series(self):
         if self.result_dict is None:
             raise Exception('[STAT INFO] extract_mean_time_series - self.result_dict is None. '
                             'Calculate the statistics first!')
         list_of_single_qoi_mean_df = []
         for single_qoi_column in self.list_qoi_column:
-            keyIter = list(self.pdTimesteps)
+            keyIter = list(self.pdTimesteps)  #self.timesteps (?)
             try:
                 mean_time_series = [self.result_dict[single_qoi_column][key]["E"] for key in keyIter]
             except KeyError as e:
                 continue
             qoi_column = [single_qoi_column] * len(keyIter)
             mean_df_single_qoi = pd.DataFrame(list(zip(qoi_column, mean_time_series, self.pdTimesteps)),
-                                              columns=['qoi', 'mean_qoi', self.time_column_name])
-            list_of_single_qoi_mean_df.append(mean_df_single_qoi)
+                                              columns=['qoi', 'mean_qoi', self.time_column_name])  # self.timesteps (?)
+            list_of_single_qoi_mean_df.append(mean_df_single_qoi) 
 
         if list_of_single_qoi_mean_df:
             self.qoi_mean_df = pd.concat(list_of_single_qoi_mean_df, ignore_index=True, sort=False, axis=0)
@@ -1876,9 +2060,9 @@ class TimeDependentStatistics(Statistics):
         if not self.result_dict[qoi_column]:
             return None
 
-        keyIter = list(self.pdTimesteps)
+        keyIter = list(self.pdTimesteps)  # self.timesteps (?)
 
-        list_of_columns = [self.pdTimesteps, ]
+        list_of_columns = [self.pdTimesteps, ]  # self.timesteps (?)
         list_of_columns_names = [self.time_column_name, ]
         # list_of_columns = [self.pdTimesteps, mean_time_series, std_time_series,
         #                    p10_time_series, p90_time_series]
@@ -1988,7 +2172,7 @@ class TimeDependentStatistics(Statistics):
         if not self.result_dict[qoi_column]:
             return None
 
-        keyIter = list(self.pdTimesteps)
+        keyIter = list(self.pdTimesteps)  # self.timesteps (?)
         is_Sobol_t_computed = "Sobol_t" in self.result_dict[qoi_column][keyIter[0]]
         is_Sobol_m_computed = "Sobol_m" in self.result_dict[qoi_column][keyIter[0]]
         is_Sobol_m2_computed = "Sobol_m2" in self.result_dict[qoi_column][keyIter[0]]
@@ -2007,7 +2191,7 @@ class TimeDependentStatistics(Statistics):
             # else:
             si_single_param = [self.result_dict[qoi_column][key][si_type][i] for key in keyIter]
             df_temp = pd.DataFrame(list(zip(si_single_param, self.pdTimesteps)),
-                                   columns=[si_type + "_" + self.labels[i], self.time_column_name])
+                                   columns=[si_type + "_" + self.labels[i], self.time_column_name])  #self.timesteps (?)
             list_of_df_over_parameters.append(df_temp)
         si_df = reduce(lambda left, right: pd.merge(left, right, on=self.time_column_name, how='outer'),
                        list_of_df_over_parameters)
@@ -2054,12 +2238,16 @@ class TimeDependentStatistics(Statistics):
 
         si_columns_to_plot = [x for x in si_df.columns.tolist() if x != 'measured' \
                               and x != 'measured_norm' and x != 'qoi']
+        
+        si_columns_to_label = [single_column.split('_')[-1] for single_column in si_columns_to_plot]
 
         if 'qoi' in si_df.columns.tolist():
             fig = px.imshow(si_df.loc[si_df['qoi'] == qoi_column][si_columns_to_plot].T,
+                            y=si_columns_to_label,
                             labels=dict(y='Parameters', x='Dates'))
         else:
             fig = px.imshow(si_df[si_columns_to_plot].T,
+                            y=si_columns_to_label,
                             labels=dict(y='Parameters', x='Dates'))
 
         if reset_index_at_the_end:
@@ -2070,7 +2258,7 @@ class TimeDependentStatistics(Statistics):
 
     def plot_si_indices_over_time_single_qoi(self, qoi_column, si_type="Sobol_t", uq_method="sc"):
         fig = go.Figure()
-        keyIter = list(self.pdTimesteps)
+        keyIter = list(self.pdTimesteps)  # self.timesteps (?)
         for i in range(len(self.labels)):
             # if uq_method == "saltelli":
             #     fig.add_trace(
@@ -2080,7 +2268,7 @@ class TimeDependentStatistics(Statistics):
             try:
                 fig.add_trace(
                     go.Scatter(x=self.pdTimesteps, y=[self.result_dict[qoi_column][key][si_type][i] for key in keyIter],
-                               name=self.labels[i], legendgroup=self.labels[i], line_color=colors.COLORS[i]))
+                               name=self.labels[i], legendgroup=self.labels[i], line_color=colors.COLORS[i])) #self.timesteps (?)
             except KeyError as e:
                 print(f"Error in plot_si_indices_over_time_single_qoi - "
                       f"StatisticsObject.result_dict has not key {qoi_column}")
@@ -2102,10 +2290,11 @@ class TimeDependentStatistics(Statistics):
         self._check_if_df_statistics_is_computed(recompute_if_not=True)
         if objective_function is None:
             objective_function = self.objective_function
-        uqPostprocessing.compute_gof_over_different_time_series(df_statistics=self.df_statistics,
-                                                                objective_function=objective_function,
-                                                                qoi_column=qoi_column,
-                                                                measuredDF_column_names=measuredDF_column_names)
+        # TODO move compute_gof_over_different_time_series to utility; when importing uqPostprocessing these is a circular import
+        # uqPostprocessing.compute_gof_over_different_time_series(df_statistics=self.df_statistics,
+        #                                                         objective_function=objective_function,
+        #                                                         qoi_column=qoi_column,
+        #                                                         measuredDF_column_names=measuredDF_column_names)
 
     def calculate_p_factor_single_qoi(self, qoi_column, df_statistics=None,
                            column_lower_uncertainty_bound="P10", column_upper_uncertainty_bound="P90",
@@ -2255,16 +2444,17 @@ class TimeDependentStatistics(Statistics):
     @staticmethod
     def _compute_active_score(dict_of_matrix_c_eigen_decomposition):
         dict_of_active_scores = dict()
-        for key in dict_of_matrix_c_eigen_decomposition.keys():
-            # w, v = np.linalg.eigh(self.samples.dict_of_approx_matrix_c[key])
-            w, v = dict_of_matrix_c_eigen_decomposition[key]
-            scores_vect = []
-            for i in range(len(w)):
-                # temp = np.dot(w, np.power(v[i,:], 2))
-                temp = 0
-                for j in range(v.shape[1]):
-                    temp += w[j] * v[i, j] ** 2
-                scores_vect.append(temp)
-            dict_of_active_scores[key] = scores_vect
+        if dict_of_matrix_c_eigen_decomposition is not None:
+            for key in dict_of_matrix_c_eigen_decomposition.keys():
+                # w, v = np.linalg.eigh(self.samples.dict_of_approx_matrix_c[key])
+                w, v = dict_of_matrix_c_eigen_decomposition[key]
+                scores_vect = []
+                for i in range(len(w)):
+                    # temp = np.dot(w, np.power(v[i,:], 2))
+                    temp = 0
+                    for j in range(v.shape[1]):
+                        temp += w[j] * v[i, j] ** 2
+                    scores_vect.append(temp)
+                dict_of_active_scores[key] = scores_vect
         return dict_of_active_scores
 

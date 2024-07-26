@@ -1,11 +1,20 @@
+"""
+This module is still work-in-progress
+
+It should eventually contain the general code extracted from HBVSASKModel
+"""
+from abc import ABC, abstractmethod
 import copy
 import datetime
 import dill
 from distutils.util import strtobool
 import json
 import pandas as pd
+from pathlib import Path
 import time
+from typing import List, Optional, Dict, Any, Union
 
+from uqef.model import Model
 from uqef_dynamic.utils import utility
 
 
@@ -20,14 +29,14 @@ class TimeDependentModelConfig(object):
         else:
             self.configurationObject = configurationObject
 
-        dict_config_time_settings = self.configurationObject.get("time_settings", dict())
+        self.dict_config_time_settings = self.configurationObject.get("time_settings", dict())
         self.timeframe = None
         self.warm_up_duration = None
         self.cut_runs = False
         self.timestep = 5
         self.timestep_in_hours = False
 
-        dict_config_model_settings = self.configurationObject.get("model_settings", dict())
+        self.dict_config_model_settings = self.configurationObject.get("model_settings", dict())
         self.boolean_writing_results_to_a_file = False
         self.boolean_make_local_copy_of_master_dir = False
         self.boolean_run_unaltered_sim = False
@@ -46,56 +55,62 @@ class TimeDependentModelConfig(object):
 
         #####################################
         # TODO add that first parameter values is read from kwargs
-        self.timeframe = utility.parse_datetime_configuration(dict_config_time_settings)
-        self.warm_up_duration = dict_config_time_settings.get("warm_up_duration", None)
-        self.cut_runs = strtobool(dict_config_time_settings.get("cut_runs", "False"))
-        self.timestep = dict_config_time_settings.get("timestep", 5)
-        self.timestep_in_hours = strtobool(dict_config_time_settings.get("timestep_in_hours", "False"))
+        self.timeframe = utility.parse_datetime_configuration(self.dict_config_time_settings)
+        self.resolution = self.dict_config_time_settings.get("resolution", "integer")
+        self.warm_up_duration = self.dict_config_time_settings.get("warm_up_duration", None)
+        self.cut_runs = strtobool(self.dict_config_time_settings.get("cut_runs", "False"))
+        self.timestep = self.dict_config_time_settings.get("timestep", 5)
+        self.timestep_in_hours = strtobool(self.dict_config_time_settings.get("timestep_in_hours", "False"))
 
         if "run_full_timespan" in kwargs:
             self.run_full_timespan = kwargs['run_full_timespan']
         else:
-            self.run_full_timespan = strtobool(dict_config_time_settings.get(
+            self.run_full_timespan = strtobool(self.dict_config_time_settings.get(
                 "run_full_timespan", 'False'))
 
         #####################################
         if "writing_results_to_a_file" in kwargs:
             self.boolean_writing_results_to_a_file = kwargs['writing_results_to_a_file']
         else:
-            self.boolean_writing_results_to_a_file = strtobool(dict_config_model_settings.get("writing_results_to_a_file", "False"))
+            self.boolean_writing_results_to_a_file = strtobool(self.dict_config_model_settings.get("writing_results_to_a_file", "False"))
+        self.writing_results_to_a_file = self.boolean_writing_results_to_a_file  # legacy
 
         if "make_local_copy_of_master_dir" in kwargs:
             self.boolean_make_local_copy_of_master_dir = kwargs['make_local_copy_of_master_dir']
         else:
             self.boolean_make_local_copy_of_master_dir = strtobool(
-                dict_config_model_settings.get("make_local_copy_of_master_dir", "False"))
+                self.dict_config_model_settings.get("make_local_copy_of_master_dir", "False"))
 
         if "run_unaltered_sim" in kwargs:
             self.boolean_run_unaltered_sim = kwargs['run_unaltered_sim']
         else:
-            self.boolean_run_unaltered_sim = strtobool(dict_config_model_settings.get("run_unaltered_sim", "False"))
+            self.boolean_run_unaltered_sim = strtobool(self.dict_config_model_settings.get("run_unaltered_sim", "False"))
 
         if "raise_exception_on_model_break" in kwargs:
             self.raise_exception_on_model_break = kwargs['raise_exception_on_model_break']
         else:
             self.raise_exception_on_model_break = strtobool(
-                dict_config_model_settings.get("raise_exception_on_model_break", "True"))
+                self.dict_config_model_settings.get("raise_exception_on_model_break", "True"))
 
         if "max_retries" in kwargs:
             self.max_retries = kwargs['max_retries']
         else:
-            self.max_retries = dict_config_model_settings.get("max_retries", None)
+            self.max_retries = self.dict_config_model_settings.get("max_retries", None)
 
         if "plotting" in kwargs:
             self.plotting = kwargs['plotting']
         else:
-            self.plotting = strtobool(self.configurationObject["model_settings"].get("plotting", True))
+            if "model_settings" in self.configurationObject:
+                self.plotting = strtobool(self.configurationObject["model_settings"].get(
+                    "plotting", "True"))
+            else:
+                self.plotting = False 
 
         if "corrupt_forcing_data" in kwargs:
             self.corrupt_forcing_data = kwargs['corrupt_forcing_data']
         else:
             self.corrupt_forcing_data = strtobool(self.configurationObject["model_settings"].get(
-                "corrupt_forcing_data", False))
+                "corrupt_forcing_data", "False"))
         #####################################
         # TODO maybe this is not necessary here...
         self.calculate_GoF = strtobool(dict_config_output_settings.get("calculate_GoF", "True"))
@@ -132,14 +147,27 @@ class TimeDependentModelConfig(object):
         return values
 
 
-class TimeDependentModel(object):
+class TimeDependentModel(ABC, Model):
     def __init__(self, configurationObject, inputModelDir, workingDir=None, *args, **kwargs):
         if isinstance(configurationObject, TimeDependentModelConfig):
-            self.hydroModelConfig = configurationObject
+            self.timeDependentModelConfig = configurationObject
         else:
-            self.hydroModelConfig = TimeDependentModelConfig(configurationObject, deep_copy=False, *args, **kwargs)
-        self.configurationObject = self.hydroModelConfig.configurationObject  # TODO - remove this eventually
+            self.timeDependentModelConfig = TimeDependentModelConfig(configurationObject, deep_copy=False, *args, **kwargs)
+        for attr, value in self.timeDependentModelConfig.__dict__.items():
+            setattr(self, attr, value)
+        # self.configurationObject = self.timeDependentModelConfig.configurationObject  # TODO - remove this eventually
+        
+        self.inputModelDir = Path(inputModelDir)
+
+        if workingDir is None:
+            workingDir = self.inputModelDir
+        self.workingDir = Path(workingDir)
+        self.workingDir.mkdir(parents=True, exist_ok=True)
+
         #####################################
+        # these set of control variables are for UQEF & UQEF-Dynamic framework...
+        #####################################
+
         self.uq_method = kwargs.get('uq_method', None)
         self.raise_exception_on_model_break = kwargs.get('raise_exception_on_model_break', False)
         if self.uq_method is not None and self.uq_method == "sc":  # always break when running gPCE simulation
@@ -149,60 +177,45 @@ class TimeDependentModel(object):
         #     self.writing_results_to_a_file = False
 
         #####################################
-        dict_processed_config_simulation_settings = utility.read_simulation_settings_from_configuration_object(
-            self.configurationObject, **kwargs)
-
-        self.qoi = dict_processed_config_simulation_settings["qoi"]
-        self.qoi_column = dict_processed_config_simulation_settings["qoi_column"]
-        self.transform_model_output = dict_processed_config_simulation_settings["transform_model_output"]
-        self.multiple_qoi = dict_processed_config_simulation_settings["multiple_qoi"]
-        self.number_of_qois = dict_processed_config_simulation_settings["number_of_qois"]
-        self.qoi_column_measured = dict_processed_config_simulation_settings["qoi_column_measured"]
-        self.read_measured_data = dict_processed_config_simulation_settings["read_measured_data"]
-
-        self.calculate_GoF = dict_processed_config_simulation_settings["calculate_GoF"]
-        self.objective_function = dict_processed_config_simulation_settings["objective_function"]
-        self.objective_function_qoi = dict_processed_config_simulation_settings["objective_function_qoi"]
-        self.objective_function_names_qoi = dict_processed_config_simulation_settings["objective_function_names_qoi"]
-
-        # list versions of the above variables
-        self.list_qoi_column = dict_processed_config_simulation_settings["list_qoi_column"]
-        self.list_qoi_column_measured = dict_processed_config_simulation_settings["list_qoi_column_measured"]
-        self.list_read_measured_data = dict_processed_config_simulation_settings["list_read_measured_data"]
-        self.list_transform_model_output = dict_processed_config_simulation_settings["list_transform_model_output"]
-
-        self.dict_qoi_column_and_measured_info = dict_processed_config_simulation_settings[
-            "dict_qoi_column_and_measured_info"]
-
-        self.list_calculate_GoF = dict_processed_config_simulation_settings["list_calculate_GoF"]
-
-        self.list_objective_function_qoi = dict_processed_config_simulation_settings["list_objective_function_qoi"]
-        self.list_objective_function_names_qoi = dict_processed_config_simulation_settings[
-            "list_objective_function_names_qoi"]
-
-        self.mode = dict_processed_config_simulation_settings["mode"]
-        self.method = dict_processed_config_simulation_settings["method"]
-        self.interval = dict_processed_config_simulation_settings["interval"]
-        self.min_periods = dict_processed_config_simulation_settings["min_periods"]
-        self.center = dict_processed_config_simulation_settings["center"]
-
-        self.compute_gradients = dict_processed_config_simulation_settings["compute_gradients"]
-        self.CD = dict_processed_config_simulation_settings["CD"]
-        self.eps_val_global = dict_processed_config_simulation_settings["eps_val_global"]
-        self.compute_active_subspaces = dict_processed_config_simulation_settings["compute_active_subspaces"]
-        self.save_gradient_related_runs = dict_processed_config_simulation_settings["save_gradient_related_runs"]
+        self.dict_processed_simulation_settings_from_config_file = None
 
         self._setup(**kwargs)
 
     def _setup(self, **kwargs):
+        self.set_attributes_based_on_dict_processed_simulation_settings_from_config_file(**kwargs)
+        self._setup_model_related(**kwargs)
         self._timespan_setup(**kwargs)
+
+    def _setup_model_related(self, **kwargs):
+        pass
+
+    def set_attributes_based_on_dict_processed_simulation_settings_from_config_file(self, **kwargs):
+        if self.dict_processed_simulation_settings_from_config_file is None:
+            self.set_dict_processed_simulation_settings_from_config_file(**kwargs)
+
+        self.assign_values(self.dict_processed_simulation_settings_from_config_file)
+
+    def set_dict_processed_simulation_settings_from_config_file(
+            self, dict_processed_simulation_settings_from_config_file=None, **kwargs):
+        if dict_processed_simulation_settings_from_config_file is None:
+            self.dict_processed_simulation_settings_from_config_file = \
+                utility.read_simulation_settings_from_configuration_object(
+            self.configurationObject, **kwargs)
+        else:
+            self.dict_processed_simulation_settings_from_config_file = dict_processed_simulation_settings_from_config_file
+
+    def assign_values(self, config_dict):
+        for key, value in config_dict.items():
+            setattr(self, key, value)
 
     def _timespan_setup(self, **kwargs):
         """
+        TODO Rewrite this; this is too specific for HBV model
         TODO make sure it works both for hourly and daily resolution!
         :param kwargs:
         :return:
         """
+        # self.timesteps = None
         if self.run_full_timespan:
             self.start_date, self.end_date = self._get_full_time_span(self.basis)
         else:
@@ -264,18 +277,167 @@ class TimeDependentModel(object):
         return parameter
 
     def timesteps(self):
+        # TODO Rewrite this
         return list(self.full_data_range)
 
-    def run(self, i_s=[0, ], parameters=None, raise_exception_on_model_break=None, *args, **kwargs):
+    def run(
+            self, i_s: Optional[List[int]] = [0, ], 
+            parameters: Optional[Union[Dict[str, Any], List[Any]]] = None,
+            raise_exception_on_model_break: Optional[Union[bool, Any]] = None, *args, **kwargs
+            ):
         if raise_exception_on_model_break is None:
             raise_exception_on_model_break = self.raise_exception_on_model_break
         take_direct_value = kwargs.get("take_direct_value", False)
+        if self.uq_method == "ensemble":
+            take_direct_value = True
+        createNewFolder = kwargs.get("createNewFolder", False)
+        deleteFolderAfterwards = kwargs.get("deleteFolderAfterwards", True)
+        writing_results_to_a_file = kwargs.get("writing_results_to_a_file", self.writing_results_to_a_file)
+        plotting = kwargs.get("plotting", self.plotting)
+
+        results_array = []
+        # parameter = None  # Initialize parameter here
+        for ip in range(0, len(i_s)):  # for each piece of work
+            start = time.time()
+
+            unique_run_index = i_s[ip]  # Note: i is used in some legacy code as a unique index run
+
+            if parameters is not None:
+                parameter = parameters[ip]
+            else:
+                parameter = None  # an unaltered run will be executed
+
+            id_dict = {"index_run": unique_run_index}
+
+            # this indeed represents the number of parameters considered to be uncertain, later on parameters_dict might
+            # be extanded with fixed parameters that occure in configurationObject
+            if parameter is None:
+                number_of_uncertain_params = 0
+            elif isinstance(parameter, dict):
+                number_of_uncertain_params = len(list(parameter.keys()))
+            else:
+                number_of_uncertain_params = len(parameter)
+
+            parameters_dict = self._parameters_configuration(parameters=parameter, take_direct_value=take_direct_value)
+            print(f"{unique_run_index} parameters_dict - {parameters_dict} \n")
+
+            # create local directory for this particular run
+            if createNewFolder:
+                curr_working_dir = self.workingDir / f"run_{unique_run_index}"
+                curr_working_dir.mkdir(parents=True, exist_ok=True)
+            else:
+                curr_working_dir = self.workingDir
+
+            try:
+                model_output = self._model_run(parameters_dict=parameters_dict)
+            except:
+                result_df = None
+                index_run_and_parameters_dict = {**id_dict, **parameters_dict, "successful_run": False}
+                if raise_exception_on_model_break:
+                    raise Exception(f"[ERROR] Model broke for run {unique_run_index}")
+            else:
+                index_run_and_parameters_dict = {**id_dict, **parameters_dict, "successful_run": True}
+                result_df = self._process_model_output(model_output, unique_run_index)
+                self._transform_model_output(result_df)
+
+                if utility.INDEX_COLUMN_NAME not in result_df.columns:
+                    result_df[utility.INDEX_COLUMN_NAME] = unique_run_index
+                if utility.TIME_COLUMN_NAME not in result_df.columns:
+                    result_df[utility.TIME_COLUMN_NAME] = self.timesteps()
+                
+                if plotting:
+                    self._plotting(result_df, unique_run_index, curr_working_dir)
+            
+            end = time.time()
+            runtime = end - start
+
+            if writing_results_to_a_file and curr_working_dir is not None:
+                # TODO finish this
+                pass
+
+            result_dict = {
+                "run_time": runtime,
+                "result_time_series":result_df,
+                "parameters_dict": index_run_and_parameters_dict
+            }
+
+            results_array.append((result_dict, runtime))
+
+        return results_array
+
+    @abstractmethod
+    def _parameters_configuration(self, parameters, take_direct_value, *args, **kwargs):
+        """
+        This function should return a dictionary of parameters to be used in the model.
+
+        Note: it should contain only uncertain parameters.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def _model_run(self, parameters_dict, *args, **kwargs):
+        raise NotImplementedError
+    
+    @abstractmethod
+    def _process_model_output(self, model_output, unique_run_index, *args, **kwargs):
+        raise NotImplementedError
+    
+    @abstractmethod
+    def _transform_model_output(self, model_output_df, *args, **kwargs):
+        raise NotImplementedError
+    
+    def _plotting(self, result_df, unique_run_index, curr_working_dir):
+        pass
+
+    # ====================================================================
+    # Below code still requires refactoring
+    # ====================================================================
+
+    def run_detailed(
+            self, i_s: Optional[List[int]] = [0, ], 
+            parameters: Optional[Union[Dict[str, Any], List[Any]]] = None,
+            raise_exception_on_model_break: Optional[Union[bool, Any]] = None, *args, **kwargs
+            ):
+        """
+            This is the main function to run the model.
+
+            Parameters:
+            :i_s (Optional[List[int]]): A list of unique model run ids. Default is [0].
+            :parameters (Optional[Union[Dict[str, Any], List[Any]]]): A dictionary of parameters to be used in the model;
+            or a list of values for the parameters specified in the configuration file. Default is None.
+            :raise_exception_on_model_break (Optional[Union[bool, Any]]): If True, the function will raise an exception when the model breaks.
+            Important when uq_method is gPCE. Default is None.
+            :*args: Variable length argument list.
+            :**kwargs (dict, optional): Additional keyword arguments.
+            Can include:
+                - take_direct_value (bool): 
+                    If True, the function will take the direct value of the parameter 
+                    (e.g., it is expeced that parameters[unique_run_index] is a dict with keys being paramter name and values being parameter values). 
+                    If take_direct_value is False then parameters[unique_run_index] should be a list of parameter values corresponding to the order of the parameters in the configuration file
+                    Default is False.
+                - createNewFolder (bool): If True, the function will create a new folder for the results. Default is False.
+                - deleteFolderAfterwards (bool): If True, the function will delete the folder after the results are retrieved. Default is True.
+
+            Returns: 
+            List[Tuple[Dict[str, Any], float]]: A list of tuples for each model run; each tuple is in the form (result_dict, runtime); 
+            - result_dict is a dictionary that might contain the following key-value entries (depending on the configuration file):
+            - ("result_time_series", flux_df): a dataframe containing the model output for the time period specified in the configuration file.
+            - ("state_df", state_df): a dataframe containing the model state for the time period specified in the configuration file.
+            - ("gof_df", index_parameter_gof_DF): a dataframe containing the goodness-of-fit values for the time period specified in the configuration file.
+            - ("parameters_dict", index_run_and_parameters_dict): a dictionary containing the parameter values for the time period specified in the configuration file.
+            - ("run_time", runtime): the runtime of a single model run; should have the same value as runtime variable
+            - ("grad_matrix", gradient_matrix_dict): a dictionary containing the gradient vectors for the time period specified in the configuration file.
+        """
+        if raise_exception_on_model_break is None:
+            raise_exception_on_model_break = self.raise_exception_on_model_break
+        take_direct_value = kwargs.get("take_direct_value", False)
+        if self.uq_method == "ensemble":
+            take_direct_value = True
         createNewFolder = kwargs.get("createNewFolder", False)
         deleteFolderAfterwards = kwargs.get("deleteFolderAfterwards", True)
         writing_results_to_a_file = kwargs.get("writing_results_to_a_file", self.writing_results_to_a_file)
         plotting = kwargs.get("plotting", self.plotting)
         corrupt_forcing_data = kwargs.get("corrupt_forcing_data", self.corrupt_forcing_data)
-
         merge_output_with_measured_data = kwargs.get("merge_output_with_measured_data", False)
         if any(self.list_calculate_GoF):
             merge_output_with_measured_data = True
@@ -302,8 +464,8 @@ class TimeDependentModel(object):
             else:
                 number_of_uncertain_params = len(parameter)
 
-            parameters_dict = self._parameters_configuration(parameters=parameter,take_direct_value=take_direct_value)
-            print(f"parameters_dict - {parameters_dict} \n")
+            parameters_dict = self._parameters_configuration(parameters=parameter, take_direct_value=take_direct_value)
+            # print(f"parameters_dict - {parameters_dict} \n")
 
             start = time.time()
 
@@ -354,11 +516,13 @@ class TimeDependentModel(object):
             side_effect_return = self._compute_index_parameter_gof_DF(model_output_df, index_run_and_parameters_dict)
             if side_effect_return is not None:
                 index_parameter_gof_DF = side_effect_return
+            
             ######################################################################################################
             # Computing gradients
             ######################################################################################################
             # TODO mitigate this part
             gradient_matrix_dict = None
+            
             ######################################################################################################
             # Final savings and plots
             ######################################################################################################
@@ -408,12 +572,9 @@ class TimeDependentModel(object):
                 # TODO add option for plotting
                 pass
 
-            return results_array
-
-    def _parameters_configuration(self, parameters, take_direct_value):
-        raise NotImplementedError
-
-    def _model_run(self, par_values_dict, printing=False, corrupt_forcing_data=False, **kwargs):
+        return results_array
+    
+    def _model_run_depr(self, par_values_dict, printing=False, corrupt_forcing_data=False, **kwargs):
         raise NotImplementedError
 
     def _process_model_output_and_states(self, model_output, state):
