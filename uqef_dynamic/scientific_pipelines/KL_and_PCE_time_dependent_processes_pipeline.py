@@ -1,9 +1,29 @@
+"""
+KL_and_PCE_time_dependent_processes_pipeline.py
+
+This module contains functions for performing the KL (Karhunen-Loève) expansion and PCE (Polynomial Chaos Expansion) for time-dependent processes.
+
+Functions:
+- center_outputs(N, N_quad, df_simulation_result, weights, single_qoi_column, index_column_name=INDEX_COLUMN_NAME, algorithm: str= "samples", time_column_name: str=TIME_COLUMN_NAME): Centers the outputs of the simulation results.
+- compute_covariance_matrix_in_time(N_quad, centered_outputs, weights, algorithm: str= "samples"): Computes the covariance matrix in time.
+- plot_covariance_matrix(covariance_matrix, directory_for_saving_plots): Plots the covariance matrix.
+- solve_eigenvalue_problem(covariance_matrix, weights): Solves the eigenvalue problem for the covariance matrix.
+- plot_eigenvalues(eigenvalues, directory_for_saving_plots): Plots the eigenvalues of the covariance operator.
+- setup_kl_expansion_matrix(eigenvalues, N_kl, N, N_quad, weights, centered_outputs, eigenvectors): Sets up the KL expansion matrix.
+- pce_of_kl_expansion(N_kl, polynomial_expansion, nodes, weights, f_kl_eval_at_params): Computes the PCE of the KL expansion.
+- computing_generalized_sobol_total_indices_from_kl_expan(f_kl_surrogate_coefficients: np.ndarray, polynomial_expansion: cp.polynomial, weights: np.ndarray, param_names: List[str], fileName: str, total_variance=None): Computes the generalized Sobol total indices from the KL expansion.
+
+Note: This module requires the following dependencies: collections, pathlib, pandas, numpy, os, time, typing, matplotlib, plotly, multiprocessing, chaospy, and uqef_dynamic.utils.
+
+The module was written by Ivana Jovanovic Buha; March 2024
+"""
 from collections import defaultdict
 import pathlib
 import pandas as pd
 import numpy as np
 import os
 import time
+import sys
 
 from typing import List, Optional, Dict, Any, Union, Tuple
 
@@ -18,11 +38,18 @@ import multiprocessing
 
 import chaospy as cp
 
+system = "local"
+if system == "cluster":
+    sys.path.insert(0, '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic')
+elif system == "local":
+    sys.path.insert(0, '/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic')
+
 from uqef_dynamic.utils import utility
 
 # HBV-SASK Model related stuff
 from uqef_dynamic.models.hbv_sask import HBVSASKModel as hbvmodel
 from uqef_dynamic.models.hbv_sask import hbvsask_utility as hbv_utility
+from uqef_dynamic.models.pybamm import pybammModelUQ as pybammmodel
 
 # definition of some 'static' variables
 PLOT_ALL_THE_RUNS = True  # set this to False when there are a lot of samples
@@ -32,16 +59,20 @@ index_column_name = INDEX_COLUMN_NAME = "Index_run"
 QOI_COLUMN_NAME = "model"  # "Value"
 QOI_COLUM_NAME_MESURED = None
 QOI_COLUMN_NAME_CENTERED = QOI_COLUMN_NAME + "_centered"
-MODEL = 'hbvsask'  #'hbvsask' # 'banchmark_model' or 'simple_model' or 'hbvsask'
+MODEL = 'battery' #'hbvsask' # 'banchmark_model' or 'simple_model' or 'hbvsask' 'battery'
 if MODEL == 'hbvsask':
     QOI_COLUMN_NAME = "Q_cms"
     QOI_COLUM_NAME_MESURED = "streamflow"
     QOI_COLUMN_NAME_CENTERED = QOI_COLUMN_NAME + "_centered"
     PLOT_FORCING_DATA = True
     OBSERVED_COLUM_NAME = 'streamflow'
+elif MODEL == 'battery':
+    QOI_COLUMN_NAME = "V_sol"
+    QOI_COLUMN_NAME_CENTERED = QOI_COLUMN_NAME + "_centered"
+    OBSERVED_COLUM_NAME = 'current'
 single_qoi_column = QOI_COLUMN_NAME
 single_qoi_column_centered = QOI_COLUMN_NAME + "_centered"
-UQ_ALGORITHM = "pce"  # "mc" or "kl" or "pce"
+UQ_ALGORITHM = "kl"  # "mc" or "kl" or "pce"
 
 # N_kl =  60 # [2, 4, 6, 8, 10]
 # sgq_level = 6
@@ -51,15 +82,51 @@ UQ_ALGORITHM = "pce"  # "mc" or "kl" or "pce"
 # ne = number_of_particles = numSamples = numEvaluations = N = 2000
 
 READ_FROM_FILE_SG_QUADRATURE = True
+ROUNDING = False
+ROUND_DECIMAL_POSITIONS = 4
+REGRESSION = True
 PARALLEL_COMPUTING = True
-COMPUTE_GENERALIZED_SOBOL_INDICES = False #True
+COMPUTE_GENERALIZED_SOBOL_INDICES = True #True
 REEVALUATE_SURROGET_MODEL = True
+TRANSFORM_NODES = True
 
 # =========================================================
 # Utility Functions for the Algorithm 3
 # =========================================================
 # TODO Add doc-strings to these functions!
 # TODO Move these fucntions to a separate file
+
+
+def generate_distributions(configurationObject, algorithm="mc"):
+    list_of_single_dist = []
+    list_of_single_standard_dist = []
+    param_names = []
+
+    for param in configurationObject["parameters"]:
+        param_names.append(param["name"])
+        if param["distribution"] == "Uniform":
+            list_of_single_dist.append(cp.Uniform(param["lower"], param["upper"]))
+            if algorithm == "mc":
+                list_of_single_standard_dist.append(cp.Uniform(0, 1))
+            elif algorithm == "kl" or algorithm == "pce" or algorithm == "sc":
+                list_of_single_standard_dist.append(cp.Uniform(-1, 1))
+            else:
+                raise NotImplementedError(f"Sorry, the algorithm {algorithm} is not supported yet")
+        elif param["distribution"] == "LogUniform":
+            list_of_single_dist.append(cp.LogUniform(param["lower"], param["upper"]))
+            list_of_single_standard_dist.append(cp.LogUniform())
+        elif param["distribution"] == "Normal":
+            list_of_single_dist.append(cp.Normal(param["mu"], param["sigma"]))
+            list_of_single_standard_dist.append(cp.Normal())
+        # TODO add a general branch that checks if the distribution exists in chaospy
+        else:
+            raise NotImplementedError(f"Sorry, the distribution {param['distribution']} is not supported yet")
+
+    joint_dist = cp.J(*list_of_single_dist)
+    joint_dist_standard  = cp.J(*list_of_single_standard_dist)
+
+    return joint_dist, joint_dist_standard, param_names
+
 
 def center_outputs(N, N_quad, df_simulation_result, weights, single_qoi_column, index_column_name=INDEX_COLUMN_NAME, algorithm: str= "samples", time_column_name: str=TIME_COLUMN_NAME):
     centered_outputs = np.empty((N, N_quad))
@@ -175,7 +242,7 @@ def setup_kl_expansion_matrix(eigenvalues, N_kl, N, N_quad, weights, centered_ou
     return f_kl_eval_at_params
 
 
-def pce_of_kl_expansion(N_kl, polynomial_expansion, nodes, weights, f_kl_eval_at_params):
+def pce_of_kl_expansion(N_kl, polynomial_expansion, nodes, weights, f_kl_eval_at_params, regression=False):
     # PCE of the KL Expansion
     f_kl_surrogate_dict = {}
     # f_kl_surrogate_coefficients = np.empty(N_kl, c_number)
@@ -184,9 +251,12 @@ def pce_of_kl_expansion(N_kl, polynomial_expansion, nodes, weights, f_kl_eval_at
         # TODO Change this data structure, make it that the keys are time-stampes to resamble result_dict_statistics
         f_kl_surrogate_dict[i] = {}
         # print(f"DEBUGGING - f_kl_eval_at_params[{i},:].shape - {f_kl_eval_at_params[i,:].shape}")
-        f_kl_gPCE, f_kl_coeff = cp.fit_quadrature(polynomial_expansion, nodes, weights, f_kl_eval_at_params[i,:], retall=True)
+        if regression:
+            f_kl_gPCE, f_kl_coeff = cp.fit_regression(polynomial_expansion, nodes, f_kl_eval_at_params[i,:], retall=True)
+        else:
+            f_kl_gPCE, f_kl_coeff = cp.fit_quadrature(polynomial_expansion, nodes, weights, f_kl_eval_at_params[i,:], retall=True)
         f_kl_surrogate_dict[i]["gPCE"] = f_kl_gPCE
-        f_kl_surrogate_dict[i]["coeff"] = f_kl_coeff
+        f_kl_surrogate_dict[i]["gpce_coeff"] = f_kl_coeff
     #     f_kl_surrogate_coefficients[i] = np.asfarray(f_kl_coeff).T
         f_kl_surrogate_coefficients.append(np.asfarray(f_kl_coeff))
     f_kl_surrogate_coefficients = np.asfarray(f_kl_surrogate_coefficients)
@@ -394,12 +464,26 @@ def run_model_single_parameter_node(model, parameter_value, unique_index_model_r
             merge_output_with_measured_data=True,
         )
         # extract y_t produced by the model
-        y_t_model = results_list[0][0]['result_time_series'][qoi_column_name].to_numpy()
+        if results_list[0][0]['result_time_series'] is not None:
+            y_t_model = results_list[0][0]['result_time_series'][qoi_column_name].to_numpy()
+        else:
+            y_t_model = None
         # if qoi_column_name_measured is not None and qoi_column_name_measured in results_list[0][0]['result_time_series']:
         #     y_t_observed = results_list[0][0]['result_time_series'][qoi_column_name_measured].to_numpy()
         #     # y_t_observed = model.time_series_measured_data_df[qoi_column_name_measured].values
         # else:
-        #     y_t_observed = None  
+        #     y_t_observed = None 
+    elif MODEL == 'battery':
+        results_list = model.run(
+            i_s=[unique_index_model_run, ],
+            parameters=[parameter_value, ],
+            createNewFolder=False,
+            take_direct_value=True
+        )
+        if results_list[0][0]['result_time_series'] is not None:
+            y_t_model = results_list[0][0]['result_time_series'][qoi_column_name].to_numpy()
+        else:
+            y_t_model = None
     elif MODEL == 'simple_model' or MODEL == 'banchmark_model':
         # t = kwargs['t']
         # y_t_model = model.run(parameter_value['alpha'], parameter_value['beta'], parameter_value['l'])
@@ -415,7 +499,7 @@ def extend_plot(fig, list_of_dates_of_interest, model, num_model_runs, plot_forc
     if MODEL == 'hbvsask':
         fig = hbv_utility.extend_hbv_plot_with_observed_and_forcing_data_and_update_layout(
             fig, list_of_dates_of_interest, model, num_model_runs, time_column_name=TIME_COLUMN_NAME, plot_forcing_data=plot_forcing_data, **kwargs)
-    elif MODEL == 'simple_model' or MODEL == 'banchmark_model':
+    elif MODEL == 'simple_model' or MODEL == 'banchmark_model' or MODEL == 'battery':
         # Set x-axis title
         fig.update_xaxes(title_text="Date", autorange=True, range=[list_of_dates_of_interest[0], list_of_dates_of_interest[-1]])
 
@@ -451,7 +535,7 @@ def main_routine():
     print(f"Number of parallel processes = {num_processes}")
 
     # Defining paths and Creating Model Object
-    # TODO - change these paths accordingly
+    # TODO - change these paths accordingly; distinguish btw local and cluster mode1?
     if MODEL == 'hbvsask':
         hbv_model_data_path = pathlib.Path("/work/ga45met/Hydro_Models/HBV-SASK-data")
         # configurationObject = pathlib.Path('/work/ga45met/Hydro_Models/HBV-SASK-py-tool/configurations/configuration_hbv_3D.json')
@@ -471,6 +555,19 @@ def main_routine():
             inputModelDir=inputModelDir,
             workingDir=workingDir,
             basis=basis,
+            writing_results_to_a_file=writing_results_to_a_file,
+            plotting=plotting
+        )
+    elif MODEL == 'battery':
+        configurationObject = pathlib.Path('/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic/data/configurations/configuration_battery.json')
+        workingDir =  pathlib.Path("/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic/simulations/battery/kl_6d_p2_k10_sgq6")
+        inputModelDir = pathlib.Path('/work/ga45met/anaconda3/envs/py3115_uq/lib/python3.11/site-packages/pybamm/input/drive_cycles')
+        writing_results_to_a_file = False
+        plotting = False
+        model = pybammmodel.pybammModelUQ(
+            configurationObject=configurationObject,
+            inputModelDir=inputModelDir,
+            workingDir=workingDir,
             writing_results_to_a_file=writing_results_to_a_file,
             plotting=plotting
         )
@@ -532,6 +629,12 @@ def main_routine():
         N_quad = len(time_quadrature)
         t_starting = model.start_date_predictions
         t_final = model.end_date
+    elif MODEL == 'battery':
+        list_of_dates_of_interest = model.t_sol
+        t_starting = start_date = min(model.t_sol)
+        t_final = end_date = max(model.t_sol)
+        N_quad = len(list_of_dates_of_interest)
+        time_quadrature = t = list_of_dates_of_interest  # np.linspace(0, 10, N_quad)
     elif MODEL == 'simple_model' or MODEL == 'banchmark_model':
         t_starting = start_date = 0
         t_final = end_date = 10
@@ -548,6 +651,7 @@ def main_routine():
     weights_time[0] /= 2
     weights_time[-1] /= 2
     weights_time = np.asfarray(weights_time)
+
     # =========================================================
     # Code for seting-up uncertain parameters info and generating nodes in the parameter space
     # =========================================================
@@ -558,26 +662,34 @@ def main_routine():
     # on can as well just fetch the configurationObject from the model
     configurationObject = model.configurationObject
 
+    joint_dist, joint_dist_standard, param_names = generate_distributions(configurationObject, algorithm=UQ_ALGORITHM)
+    if not TRANSFORM_NODES:
+        joint_dist_standard = joint_dist
+
     # Sampling from the parameter space or generating quadrature points
     # in short, generating parameter nodes in some way...
-    list_of_single_dist = []
-    list_of_single_standard_dist = []
-    param_names = []
-    for param in configurationObject["parameters"]:
-        # for now the Uniform distribution is only supported
-        if param["distribution"] == "Uniform":
-            param_names.append(param["name"])
-            list_of_single_dist.append(cp.Uniform(param["lower"], param["upper"]))
-            if UQ_ALGORITHM == "mc":
-                list_of_single_standard_dist.append(cp.Uniform(0, 1))
-            elif UQ_ALGORITHM == "kl" or UQ_ALGORITHM == "pce":
-                list_of_single_standard_dist.append(cp.Uniform(-1, 1))
-            else:
-                raise NotImplementedError(f"Sorry, the UQ_ALGORITHM {UQ_ALGORITHM} is not supported yet")
-        else:
-            raise NotImplementedError(f"Sorry, the distribution {param['distribution']} is not supported yet")
-    joint_dist = cp.J(*list_of_single_dist)
-    joint_dist_standard  = cp.J(*list_of_single_standard_dist)
+    # list_of_single_dist = []
+    # list_of_single_standard_dist = []
+    # param_names = []
+    # for param in configurationObject["parameters"]:
+    #     # for now the Uniform distribution is only supported
+    #     if param["distribution"] == "Uniform":
+    #         param_names.append(param["name"])
+    #         list_of_single_dist.append(cp.Uniform(param["lower"], param["upper"]))
+    #         if UQ_ALGORITHM == "mc":
+    #             list_of_single_standard_dist.append(cp.Uniform(0, 1))
+    #         elif UQ_ALGORITHM == "kl" or UQ_ALGORITHM == "pce":
+    #             list_of_single_standard_dist.append(cp.Uniform(-1, 1))
+    #         else:
+    #             raise NotImplementedError(f"Sorry, the UQ_ALGORITHM {UQ_ALGORITHM} is not supported yet")
+    #     elif param["distribution"] == "LogUniform":
+    #         param_names.append(param["name"])
+    #         list_of_single_dist.append(cp.LogUniform(param["lower"], param["upper"]))
+    #         list_of_single_standard_dist.append(cp.LogUniform())
+    #     else:
+    #         raise NotImplementedError(f"Sorry, the distribution {param['distribution']} is not supported yet")
+    # joint_dist = cp.J(*list_of_single_dist)
+    # joint_dist_standard  = cp.J(*list_of_single_standard_dist)
 
     dim = len(param_names)
 
@@ -586,13 +698,19 @@ def main_routine():
     # =========================================================
 
     if UQ_ALGORITHM == "mc":
+        rounding = ROUNDING
         # this is actually the number of different samples in the parameter space
-        ne = number_of_particles = numSamples = numEvaluations = N = 10**4 #10**3 #150
-        rule = 'random'  # rule can as well be: 'sobol' | 'random' | "latin_hypercube" | "halton"
+        ne = number_of_particles = numSamples = numEvaluations = N = 10**3 #10**3 #150
+        rule = 'latin_hypercube'  # rule can as well be: 'c' | 'random' | "latin_hypercube" | "halton"
         print(f"Number of Particles: {ne}")
 
         # MC approach
-        nodes = joint_dist_standard.sample(size=numSamples, rule=rule).round(4)  # Should be of size (dimxnumSamples)
+        if rounding:
+            round_decimal_positions = ROUND_DECIMAL_POSITIONS
+            nodes = joint_dist_standard.sample(size=numSamples, rule=rule).round(round_decimal_positions)  # Should be of size (dimxnumSamples)
+        else:
+            nodes = joint_dist_standard.sample(size=numSamples, rule=rule) #.round(4)  # Should be of size (dimxnumSamples)
+        # weights = np.nan(nodes.shape[1])
 
     # =========================================================
     # 2. Quadrature approach
@@ -600,7 +718,7 @@ def main_routine():
 
     elif UQ_ALGORITHM == "kl" or UQ_ALGORITHM == "pce":
         if READ_FROM_FILE_SG_QUADRATURE == True:
-            sgq_level = 7  # 6, 10
+            sgq_level = 6  # 6, 10
             # path_to_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/sparse_grid_nodes_weights") 
             path_to_file = pathlib.Path("/work/ga45met/mnt/linux_cluster_2/sparse_grid_nodes_weights")  # TODO Change this path accordingly
             parameters_file = path_to_file / f"KPU_d{dim}_l{sgq_level}.asc"
@@ -634,15 +752,19 @@ def main_routine():
     # Generate parameters for forcing the model
     # =========================================================
 
-    parameters = utility.transformation_of_parameters(nodes, joint_dist_standard, joint_dist)
-    # print(f"DEBUGGING parameters.shape {parameters.shape}")
+    if TRANSFORM_NODES:
+        parameters = utility.transformation_of_parameters(nodes, joint_dist_standard, joint_dist)
+    else:
+        parameters = nodes
+    print(f"DEBUGGING parameters - {parameters}")
+    print(f"DEBUGGING parameters.shape {parameters.shape}")
 
     # list_unique_index_model_run_list = list(range(0, len(list_parameter_value_particles))) 
     list_unique_index_model_run_list = list(range(0, parameters.shape[1])) 
     # assert numEvaluations == len(list_unique_index_model_run_list)  # this holds for MC
 
     # Create list-of-dictionaries for the parameter values instead of only matrices of values stored in parameters
-    list_parameter_value_particles = parameters.T  # Should be of size (numSamplesxdim)
+    list_parameter_value_particles = parameters.T  # Should be of size (numSamplesxdim x dim)
     # print(f"DEBUGGING list_parameter_value_particles.shape {list_parameter_value_particles.shape}")
     list_of_dict_parameter_value_particles = []
     for parameter_particle in list_parameter_value_particles:
@@ -652,6 +774,7 @@ def main_routine():
     # =========================================================
     # Running the model
     # =========================================================
+    print(f"INFO: Model runs started..")
 
     model_runs = np.empty((parameters.shape[1], len(t)))
     list_of_single_df = []
@@ -662,16 +785,25 @@ def main_routine():
                                     [(model, particle[0], particle[1]) \
                                     for particle in particles_to_process]):
                 yield index_run, y_t_model, parameter_value
+    index_run_local = 0
     for index_run, y_t_model, parameter_value in process_particles_concurrently(\
     zip(parameters.T, list_unique_index_model_run_list)):
-        model_runs[index_run] = y_t_model
+        # if MODEL == 'battery':  # for now, we have a mechanism to dismiss unsuccessful values only for the battery model.
+        #     if np.any(np.isnan(y_t_model)):
+        #         print(f"NaN values returned for {index_run} - {parameter_value}")
+        #         continue
+        if y_t_model is None or np.any(np.isnan(y_t_model)):
+            print(f"None values returned for {index_run} - {parameter_value}")
+            continue
+        model_runs[index_run_local] = y_t_model  # model_runs[index_run] = y_t_model
         df_temp = pd.DataFrame(y_t_model, columns=[QOI_COLUMN_NAME])
         df_temp[TIME_COLUMN_NAME] = t  # list_of_dates_of_interest
-        df_temp[index_column_name] = index_run
+        df_temp[INDEX_COLUMN_NAME] = index_run_local  # index_run
         tuple_column = [tuple(parameter_value)] * len(df_temp)
         df_temp['Parameters'] = tuple_column
         list_of_single_df.append(df_temp)
-    
+        index_run_local += 1
+
     df_simulation_result = pd.concat(
         list_of_single_df, ignore_index=True, sort=False, axis=0)
     
@@ -683,35 +815,19 @@ def main_routine():
     print(f"DEBUGGING - df_simulation_result - {df_simulation_result}")
     print(f"DEBUGGING - df_simulation_result.columns - {df_simulation_result.columns}")
 
-    N = total_number_model_runs = model_runs.shape[0]
+    N = total_number_model_runs = numEvaluations = model_runs.shape[0]
+    print(f"The total number of saved model runs is - {N}")
     N_quad = model_runs.shape[1]
 
-    # =========================================================
-    # Collecting all the model runs, conducting postprocessing step and producing different statistics
-    # =========================================================
+    print(f"INFO: Model runs finished..")
 
     # =========================================================
-    # 1.2 MC Evaluation of the model
+    # Setting up some additional algorithm related parameters for gPCE and KL
     # =========================================================
-    result_dict_statistics  = None
-    if UQ_ALGORITHM == "mc":
-        compute_Sobol_t=True
-        if PARALLEL_COMPUTING:
-            result_dict_statistics = utility.computing_mc_statistics_parallel_in_time(
-                num_processes, df_simulation_result, numEvaluations, single_qoi_column=QOI_COLUMN_NAME,
-                compute_Sobol_t=compute_Sobol_t,samples=parameters.T)
-        else:
-            result_dict_statistics = utility.computing_mc_statistics(
-                df_simulation_result, numEvaluations, single_qoi_column=QOI_COLUMN_NAME,
-                compute_Sobol_t=compute_Sobol_t,samples=parameters.T)
-
-    # =========================================================
-    # 2.2 Computing polynomial basis and building gPCE surrogate over time
-    # =========================================================
-
-    elif UQ_ALGORITHM == "kl" or UQ_ALGORITHM == "pce":
+    
+    if UQ_ALGORITHM == "kl" or UQ_ALGORITHM == "pce":
         import scipy.special
-        order = p = 3 #3 # 3
+        order = p = 2 #3 # 3
         c_number = scipy.special.binom(dim+order, dim)
         print(f"Max order of polynomial: {order}")
         print(f"Total number of expansion coefficients in {dim}D space: {int(c_number)}")
@@ -719,19 +835,67 @@ def main_routine():
         # computing polynomial basis - normalized...
         poly_rule = 'three_terms_recurrence'  # 'three_terms_recurrence', 'gram_schmidt', 'cholesky'
         poly_normed = True
+        regression = REGRESSION
+        if UQ_ALGORITHM == "kl":
+            N_kl =  10 # [2, 4, 6, 8, 10]
+
+    # =========================================================
+    # Collecting all the model runs, conducting postprocessing step and producing different statistics
+    # =========================================================
+
+    # =========================================================
+    # 1.2 MC Processing of the model runs, producing statistics data...
+    # =========================================================
+    result_dict_statistics  = None
+    if UQ_ALGORITHM == "mc":
+        print(f"INFO: MC Processing of the results started...")
+        compute_only_mean = True
+        compute_Sobol_t = True  #True
+        if PARALLEL_COMPUTING:
+            result_dict_statistics = utility.computing_mc_statistics_parallel_in_time(
+                num_processes, df_simulation_result, numEvaluations, single_qoi_column=QOI_COLUMN_NAME,
+                compute_only_mean=compute_only_mean,
+                compute_Sobol_t=compute_Sobol_t,samples=parameters.T)
+        else:
+            result_dict_statistics = utility.computing_mc_statistics(
+                df_simulation_result, numEvaluations, single_qoi_column=QOI_COLUMN_NAME,
+                compute_only_mean=compute_only_mean,
+                compute_Sobol_t=compute_Sobol_t,samples=parameters.T)
+        print(f"INFO: MC Processing of the results finished...")
+
+    # =========================================================
+    # 2.2 Computing polynomial basis and building gPCE surrogate over time
+    # =========================================================
+    
+    elif UQ_ALGORITHM == "kl" or UQ_ALGORITHM == "pce":
+        print(f"INFO: setting up orthognal polynomials for gPCE and/or KL method started...")
+        # import scipy.special
+        # order = p = 2 #3 # 3
+        # c_number = scipy.special.binom(dim+order, dim)
+        # print(f"Max order of polynomial: {order}")
+        # print(f"Total number of expansion coefficients in {dim}D space: {int(c_number)}")
+        # print(f"Total number of time-stamps: {len(t)}")
+        # # computing polynomial basis - normalized...
+        # poly_rule = 'three_terms_recurrence'  # 'three_terms_recurrence', 'gram_schmidt', 'cholesky'
+        # poly_normed = True
+        # regression = True
         polynomial_expansion, norms = cp.generate_expansion(
             order, joint_dist_standard, rule=poly_rule, normed=poly_normed, retall=True)
         # polynomial_expansion, norms = utility.generate_polynomial_expansion(
         #     joint_dist_standard, order=order, rule=poly_rule, poly_normed=poly_normed)
         print(f"DEBUGGING - polynomial_expansion - {polynomial_expansion}")
         print(f"DEBUGGING - norms - {norms}")
+        print(f"INFO: setting up orthognal polynomials for gPCE and/or KL method finished...")
 
         if UQ_ALGORITHM == "pce":
-            regression = False
-            compute_only_gpce = False
+            print(f"INFO: gPCE Processing of the results started...")
+            compute_only_gpce = True
             compute_Sobol_t=True
-            compute_Sobol_m=True
+            compute_Sobol_m=False
             compute_Sobol_m2=False
+            if COMPUTE_GENERALIZED_SOBOL_INDICES:
+                compute_only_gpce = False
+                compute_Sobol_t=True
             if PARALLEL_COMPUTING:
                 result_dict_statistics = utility.computing_gpce_statistics_parallel_in_time(
                     num_processes, df_simulation_result, polynomial_expansion, 
@@ -747,6 +911,8 @@ def main_routine():
                     compute_only_gpce=compute_only_gpce,
                     compute_Sobol_t=compute_Sobol_t, compute_Sobol_m=compute_Sobol_m, compute_Sobol_m2=compute_Sobol_m2
                     )
+            print(f"INFO: gPCE Processing of the results finished...")
+
         # elif UQ_ALGORITHM == "kl":
         #     result_dict_statistics = None
         #     # TODO compute mean and centered model output
@@ -766,6 +932,7 @@ def main_routine():
     # =========================================================
     # Crete a DataFrame storing a Statistics Data
     # =========================================================
+    print(f"DEBUGGIN: result_dict_statistics - {result_dict_statistics}")
     if result_dict_statistics is not None:
         df_stat = utility.statistics_result_dict_to_df(result_dict_statistics)
     else:
@@ -798,6 +965,7 @@ def main_routine():
         # =========================================================
         # Plotting
         # =========================================================
+        print(f"INFO: Plotting started...")
 
         # if PLOT_ALL_THE_RUNS:
         #     # plotting all the realizations...
@@ -805,8 +973,8 @@ def main_routine():
         #         df_simulation_result,
         #         x=time_column_name, 
         #         y=single_qoi_column, # single_qoi_column_centered
-        #         color=index_column_name,
-        #         line_group=index_column_name, hover_name="Parameters",
+        #         color=INDEX_COLUMN_NAME,
+        #         line_group=INDEX_COLUMN_NAME, hover_name="Parameters",
         #         labels={time_column_name: "time t",
         #                 single_qoi_column: "displacement y(t)"
         #             },
@@ -853,7 +1021,7 @@ def main_routine():
         fig.update_layout(
             title=f"Simulation Results - {UQ_ALGORITHM} - {MODEL} - #runs {total_number_model_runs}",
             xaxis_title="time t",
-            yaxis_title="displacement y(t)",)
+            yaxis_title=f"{single_qoi_column}",)
         fig.show()
         fileName = "statistics_plot.html"
         fileName = directory_for_saving_plots + fileName        
@@ -901,16 +1069,22 @@ def main_routine():
             fileName = directory_for_saving_plots + fileName
             pyo.plot(fig, filename=fileName)
 
+    print(f"INFO: Plotting completed...")
+    
     # =========================================================
     # Algorithm 2 - Time-wise gPCE Surrogate, time-wise Sobol Indices and Generalized Sobol Indices
     # =========================================================
         
     if COMPUTE_GENERALIZED_SOBOL_INDICES and UQ_ALGORITHM == "pce":
+        print(f"INFO: computation of generalized S.S.I based on gPCE started...")
         fileName = "generalized_sobol_t.txt"
         fileName = directory_for_saving_plots + fileName
         
         SOBOL_T_COMPUTED = False  # TODO remove
         if SOBOL_T_COMPUTED: 
+            """
+            Computation of generalized total S.S.I based on already computed time-wise Sobol Total Indices
+            """
             df_stat['Var_temp'] = df_stat['Var']*weights_time
             for param_name in param_names:       
                 df_stat[f'Sobol_t_{param_name}_temp'] = df_stat[f"Sobol_t_{param_name}"]*df_stat['Var']*weights_time
@@ -924,13 +1098,15 @@ def main_routine():
             # TODO Important aspect here is if polynomial_expansion is normalized or not
             computing_generalized_sobol_total_indices_from_poly_expan(
                 result_dict_statistics, polynomial_expansion, weights_time, param_names, fileName)
+        print(f"INFO: computation of generalized S.S.I based on gPCE finished...")
 
     # =========================================================
     # Algorithm 3 - Note: weights are in stohastic space, and weights_time are in time-domian
     # =========================================================
     if UQ_ALGORITHM == "kl":
+        print(f"INFO: computation of generalized S.S.I based on KL+gPCE started...")
         # 3.1 Creating a matrix with centered_outputs storing centerd model outputs over time and parameters (quadrature points)
-        centered_outputs = center_outputs(N, N_quad, df_simulation_result, weights, single_qoi_column, index_column_name, algorithm="quadrature")
+        centered_outputs = center_outputs(N, N_quad, df_simulation_result, weights, single_qoi_column, INDEX_COLUMN_NAME, algorithm="quadrature")
         
         # 3.2 Computation of the covariance matrix
         covariance_matrix = compute_covariance_matrix_in_time(N_quad, centered_outputs, weights, algorithm="quadrature")
@@ -951,14 +1127,14 @@ def main_routine():
     
         # 3.4 Approximating the KL Expansion
         Var_kl_approx = np.sum(eigenvalues)
-        N_kl =  60 # [2, 4, 6, 8, 10]
+        # N_kl =  60 # [2, 4, 6, 8, 10]
         weights_time = np.asfarray(weights_time)
         print(f"DEBUGGING - N {N}")
         f_kl_eval_at_params = setup_kl_expansion_matrix(eigenvalues, N_kl, N, N_quad, weights_time, centered_outputs, eigenvectors)
         print(f"DEBUGGING - f_kl_eval_at_params.shape {f_kl_eval_at_params.shape}")
 
         # 3.5 PCE of the KL Expansion
-        f_kl_surrogate_dict, f_kl_surrogate_coefficients = pce_of_kl_expansion(N_kl, polynomial_expansion, nodes, weights, f_kl_eval_at_params)
+        f_kl_surrogate_dict, f_kl_surrogate_coefficients = pce_of_kl_expansion(N_kl, polynomial_expansion, nodes, weights, f_kl_eval_at_params, regression=regression)
         
         # 3.6 Generalized Sobol Indices
         if COMPUTE_GENERALIZED_SOBOL_INDICES:
@@ -966,7 +1142,8 @@ def main_routine():
             fileName = directory_for_saving_plots + fileName
             computing_generalized_sobol_total_indices_from_kl_expan(
                 f_kl_surrogate_coefficients, polynomial_expansion, weights_time, param_names, fileName, total_variance=Var_kl_approx)
-    
+        print(f"INFO: computation of generalized S.S.I based on KL+gPCE finished...")
+
     end_time_model_simulations = time.time()
     time_model_simulations = end_time_model_simulations - start_time_model_simulations
     with open(time_infoFileName, 'a') as fp:
@@ -978,12 +1155,15 @@ def main_routine():
     # =========================================================
 
     if REEVALUATE_SURROGET_MODEL and UQ_ALGORITHM == "kl" or UQ_ALGORITHM == "pce":
-        print(f"RE-evaluationg a surrogate model computed based on {UQ_ALGORITHM} just started!")
+        print(f"INFO: RE-evaluationg a surrogate model computed based on {UQ_ALGORITHM} just started...")
         start_time_surrogate_model_reevaluation = time.time()
         # RE-evaulate the surroget model
         numSamples = 10**3
         rule = 'random'
-        nodes_to_eval_kl_surrogate = joint_dist_standard.sample(size=numSamples, rule=rule).round(4)
+        if ROUNDING:
+            nodes_to_eval_kl_surrogate = joint_dist_standard.sample(size=numSamples, rule=rule).round(ROUND_DECIMAL_POSITIONS)
+        else:
+            nodes_to_eval_kl_surrogate = joint_dist_standard.sample(size=numSamples, rule=rule)
         surrogate_eval = np.zeros((len(t),nodes_to_eval_kl_surrogate.shape[1]))
         if UQ_ALGORITHM == "kl":
             mean_dict = utility.compute_mean_from_df_simulation_result(df_simulation_result, algorithm="quadrature", weights=weights, single_qoi_column=single_qoi_column, time_column_name=time_column_name)  ## df_stat['E'].to_numpy()
@@ -1009,12 +1189,14 @@ def main_routine():
             #     surrogate_eval[m,:] = df_stat.iloc[t[m],"gPCE"](*nodes_to_eval_kl_surrogate)
         else:
             print(f"Sorry, the UQ_ALGORITHM {UQ_ALGORITHM} does not produce a surrogate model, therefore, REEVALUATE_SURROGET_MODEL should be set to False")
-        
+        print(f"INFO: RE-evaluationg a surrogate model computed based on {UQ_ALGORITHM} just finished...")
+        # numSamples = surrogate_eval.shape[1]
         end_time_surrogate_model_reevaluation = time.time()
         time_surrogate_model_reevaluation = end_time_surrogate_model_reevaluation - start_time_surrogate_model_reevaluation
         with open(time_infoFileName, 'a') as fp:
             fp.write(f'time_surrogate_model_reevaluation: {time_surrogate_model_reevaluation}\n')
 
+        print(f"INFO: Plotting surrogate model evaluations just started...")
         fig = go.Figure()
         lines = [
             go.Scatter(
@@ -1044,16 +1226,17 @@ def main_routine():
         #     title="Surrogate model re-evaluation - {UQ_ALGORITHM}",
         #     xaxis_title="time t",
         #     yaxis_title="displacement y(t)",)
-        extend_plot(fig, list_of_dates_of_interest, model, total_number_model_runs, plot_forcing_data=PLOT_FORCING_DATA)
+        extend_plot(fig, list_of_dates_of_interest, model, numSamples, plot_forcing_data=PLOT_FORCING_DATA)
         fig.update_layout(
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-            title=f"Surrogate model re-evaluation - {UQ_ALGORITHM} - {MODEL} - #runs {total_number_model_runs}",
+            title=f"Surrogate model re-evaluation - {UQ_ALGORITHM} - {MODEL} - #runs {numSamples}",
             xaxis_title="time t",
             yaxis_title="displacement y(t)",)
         fig.show()
         fileName = "surrogate_model_reevaluated.html"
         fileName = directory_for_saving_plots + fileName
         pyo.plot(fig, filename=fileName)
+        print(f"INFO: Plotting surrogate model evaluations just finished...")
 
 
 if __name__ == "__main__":
