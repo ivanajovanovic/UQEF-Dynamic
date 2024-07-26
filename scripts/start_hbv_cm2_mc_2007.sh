@@ -129,7 +129,7 @@ echo "---- start HBV sim: \`date\`"
                             --outputResultDir $resultsPath \
                             --inputModelDir $modelMasterPath \
                             --sourceDir $baseSourcePath \
-                            --config_file $baseSourcePath/data/configurations/configuration_hbv_10D_MC.json \
+                            --config_file $baseSourcePath/data/configurations/configuration_hbv_10D_MC_2007.json \
                             --model "$model" \
                             --uncertain "$uncertain" \
                             --opt_strategy "$strategy" --opt_algorithm "$algorithm" \
@@ -150,10 +150,10 @@ echo "---- start HBV sim: \`date\`"
 
 echo "---- end HBV sim: \`date\`"
 
-" > $baseSourcePath/hbv_uq_cm2_mc_100000_lhc_gof_sliding_2006_oldman.cmd
+" > $baseSourcePath/hbv_uq_cm2_mc_100000_lhc_gof_sliding_2007_oldman.cmd
 
     #execute batch file
-    sbatch $baseSourcePath/hbv_uq_cm2_mc_100000_lhc_gof_sliding_2006_oldman.cmd
+    sbatch $baseSourcePath/hbv_uq_cm2_mc_100000_lhc_gof_sliding_2007_oldman.cmd
 
 }
 
@@ -162,7 +162,7 @@ opt_add="--parallel_statistics --sampleFromStandardDist --compute_Sobol_t"  # --
 nodes=4
 tasks_per_node=22
 low_time="2:30:00"
-mid_time="3:30:00"
+mid_time="2:30:00"
 max_time="72:00:00"
 uq_method="mc"
 q_order=5
