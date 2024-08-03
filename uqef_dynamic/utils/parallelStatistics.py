@@ -72,10 +72,29 @@ def parallel_calc_stats_for_SC(keyIter_chunk, qoi_values_chunk, dist, polynomial
     pass
 
 
+def parallel_calc_stats_for_KL(
+        keyIter_chunk, qoi_values_chunk, weights=None,
+        regression=False, store_qoi_data_in_stat_dict=False):
+    results = []
+    for ip in range(0, len(keyIter_chunk)):  # for each piece of work
+        key = keyIter_chunk[ip]
+        qoi_values = qoi_values_chunk[ip]
+        local_result_dict = dict()
+        if store_qoi_data_in_stat_dict:
+            local_result_dict["qoi_values"] = qoi_values
+        if weights is None or regression:
+            local_result_dict["E"] = np.mean(qoi_values, 0)
+        else:
+            local_result_dict["E"] = np.dot(qoi_values, weights)
+        results.append([key, local_result_dict])
+    return results
+    
+
 def parallel_calc_stats_for_gPCE(keyIter_chunk, qoi_values_chunk, dist, polynomial_expansion, nodes, weights=None,
                                   regression=False, compute_Sobol_t=False, compute_Sobol_m=False,
                                   store_qoi_data_in_stat_dict=False, store_gpce_surrogate_in_stat_dict=False,
-                                  save_gpce_surrogate=False, compute_other_stat_besides_pce_surrogate=True):
+                                  save_gpce_surrogate=False, compute_other_stat_besides_pce_surrogate=True,
+                                  always_compute_mean=False):
     results = []
     for ip in range(0, len(keyIter_chunk)):  # for each piece of work
         key = keyIter_chunk[ip]
@@ -102,7 +121,7 @@ def parallel_calc_stats_for_gPCE(keyIter_chunk, qoi_values_chunk, dist, polynomi
 
         calculate_stats_gpce(
             local_result_dict, qoi_gPCE, dist, compute_other_stat_besides_pce_surrogate,
-            compute_Sobol_t, compute_Sobol_m)
+            compute_Sobol_t, compute_Sobol_m, always_compute_mean)
 
         results.append([key, local_result_dict])
     return results
@@ -111,7 +130,7 @@ def parallel_calc_stats_for_gPCE(keyIter_chunk, qoi_values_chunk, dist, polynomi
 # TODO Remove eventually time_info_dict computation and printing
 def calculate_stats_gpce(
     local_result_dict, qoi_gPCE, dist, compute_other_stat_besides_pce_surrogate=True,
-    compute_Sobol_t=False, compute_Sobol_m=False, compute_Sobol_m2=False):
+    compute_Sobol_t=False, compute_Sobol_m=False, compute_Sobol_m2=False, always_compute_mean=False):
     start = time.time()
     time_info_dict = {}
 
