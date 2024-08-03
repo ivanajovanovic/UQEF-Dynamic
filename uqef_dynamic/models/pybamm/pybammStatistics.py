@@ -47,9 +47,7 @@ class pybammStatistics(time_dependent_statistics.TimeDependentStatistics):
                                               dict_what_to_plot=None, **kwargs):
 
         pdTimesteps = self.timesteps
-        print(f"DEBUGGING INFO: pdTimesteps: {pdTimesteps}")
         keyIter = list(pdTimesteps)
-        print(f"DEBUGGING INFO: keyIter: {keyIter}")
 
         window_title = window_title + f": QoI - {single_qoi_column}"
 
@@ -174,6 +172,25 @@ class pybammStatistics(time_dependent_statistics.TimeDependentStatistics):
             dict_plot_rows["Sobol_t"] = starting_row
             starting_row += 1
 
+        plot_generalized_sobol_indices = False
+        for key in dict_time_vs_qoi_stat[keyIter[-1]].keys():
+            if key.startswith("generalized_sobol_total_index_"):
+                plot_generalized_sobol_indices = True
+                break
+        if plot_generalized_sobol_indices:  
+            for i in range(len(self.labels)):
+                name = f"generalized_sobol_total_index_{self.labels[i]}"
+                if self.compute_generalized_sobol_indices_over_time:
+                    y = [dict_time_vs_qoi_stat[key][name] for key in keyIter]
+                else:
+                    y = [dict_time_vs_qoi_stat[keyIter[-1]][name]]*len(keyIter)
+                fig.add_trace(go.Scatter(
+                    x=pdTimesteps,
+                    y=y,
+                    name=name, legendgroup=self.labels[i], line_color=colors.COLORS[i], mode='lines'),
+                    row=starting_row, col=1)
+            dict_plot_rows["generalized_sobol_total_index"] = starting_row
+            starting_row += 1
 
         fig.update_yaxes(title_text=single_qoi_column, showgrid=True, side='left',
                          row=dict_plot_rows["qoi"], col=1)
@@ -197,6 +214,9 @@ class pybammStatistics(time_dependent_statistics.TimeDependentStatistics):
         if "Sobol_t" in dict_time_vs_qoi_stat[keyIter[0]] and dict_what_to_plot.get("Sobol_t", False):
             fig.update_yaxes(title_text=f"T. SI", showgrid=True, range=[0, 1],
                              row=dict_plot_rows["Sobol_t"], col=1)
+        if plot_generalized_sobol_indices and dict_plot_rows.get("generalized_sobol_total_index", False):
+            fig.update_yaxes(title_text=f"Gener. T. SI", showgrid=True, range=[0, 1],
+                             row=dict_plot_rows["generalized_sobol_total_index"], col=1)
 
         fig.update_layout(width=1000)
         fig.update_layout(title_text=window_title)
