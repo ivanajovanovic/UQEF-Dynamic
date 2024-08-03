@@ -1172,6 +1172,7 @@ def main_routine():
             for m in range(len(t)):
                 surrogate_eval[m,:] = mean_dict[t[m]] #mean_vector[m] df_stat.loc(t[m])
                 for i in range(N_kl):
+                    # TODO do I need here multiplication with the sqrt(eigenvalues)!!!
                     surrogate_eval[m,:] += f_kl_surrogate_dict[i]["gPCE"](*nodes_to_eval_kl_surrogate)*eigenvectors[m,i]
         elif UQ_ALGORITHM == "pce":
             def process_dates_concurrently(dates, df_stat, nodes):

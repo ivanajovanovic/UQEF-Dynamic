@@ -59,18 +59,18 @@ if local_debugging:
     uqsim.args.uncertain = "all"
     uqsim.args.chunksize = 1
 
-    uqsim.args.uq_method = "mc"  # "sc" | "saltelli" | "mc" | "ensemble"
-    uqsim.args.mc_numevaluations = 10000
+    uqsim.args.uq_method = "sc"  # "sc" | "saltelli" | "mc" | "ensemble"
+    uqsim.args.mc_numevaluations = 1000
     uqsim.args.sampling_rule = "random"  # "random" | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
-    uqsim.args.sc_q_order = 7  # 7 #10 3
-    uqsim.args.sc_p_order = 3  # 4, 5, 6, 8
+    uqsim.args.sc_q_order = 5  # 7 #10 3
+    uqsim.args.sc_p_order = 2  # 4, 5, 6, 8
     uqsim.args.sc_quadrature_rule = "g"  # "p" "genz_keister_24" "leja" "clenshaw_curtis"
 
-    uqsim.args.read_nodes_from_file = False
-    l = 7  # 10
+    uqsim.args.read_nodes_from_file = True
+    l = 5  # 10
     path_to_file = pathlib.Path("/work/ga45met/sparseSpACE/sparse_grid_nodes_weights")
-    uqsim.args.parameters_file = path_to_file / f"KPU_d3_l{l}.asc" # f"KPU_d7_l{l}.asc"
-    uqsim.args.parameters_setup_file = pathlib.Path("/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic/data/configurations/KPU_HBV_d3.json")
+    uqsim.args.parameters_file = path_to_file / f"KPU_d6_l{l}.asc" # f"KPU_d7_l{l}.asc"
+    uqsim.args.parameters_setup_file = None #pathlib.Path("/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic/data/configurations/KPU_HBV_d3.json")
 
     uqsim.args.sc_poly_rule = "three_terms_recurrence"  # "gram_schmidt" | "three_terms_recurrence" | "cholesky"
     uqsim.args.sc_poly_normed = True  # True
@@ -84,7 +84,7 @@ if local_debugging:
     # uqsim.args.sourceDir = os.path.abspath(os.path.join('/work/ga45met/mnt/linux_cluster_2', 'UQEF-Dynamic'))
     uqsim.args.sourceDir = pathlib.Path("/work/ga45met/Hydro_Models/HBV-SASK-data")
 
-    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/work/ga45met/battery_results", 'mc_10000_battery_voltage'))  # mc_10000 mc_10000_terminal_voltage
+    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/work/ga45met/battery_results", 'sc_kl10_p2_l5'))  # mc_10000 mc_10000_terminal_voltage
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
 
     # uqsim.args.config_file = '/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic/data/configurations/configuration_hbv_10D_MC.json'
@@ -109,7 +109,7 @@ if local_debugging:
 
     uqsim.args.save_all_simulations = True  # True for sc
     uqsim.args.store_qoi_data_in_stat_dict = False  # if set to True, the qoi_values entry is stored in the stat_dict 
-    uqsim.args.store_gpce_surrogate_in_stat_dict = True
+    uqsim.args.store_gpce_surrogate_in_stat_dict = False
     uqsim.args.collect_and_save_state_data = False # False 
 
     uqsim.setup_configuration_object()
@@ -127,6 +127,12 @@ if uqsim.args.uq_method == "mc" and uqsim.args.compute_Sobol_t:
 save_gpce_surrogate = True  # if True a gpce surrogate for each QoI for each time step is saved in a separate file
 compute_other_stat_besides_pce_surrogate = True  # This is relevant only when uq_method == "sc" 
 
+# TODO Eventually add these configurations to uqef.args
+compute_kl_expansion_of_qoi = True
+kl_expansion_order = 10
+compute_generalized_sobol_indices = True
+compute_generalized_sobol_indices_over_time = False
+compute_covariance_matrix_in_time = True
 #####################################
 # additional path settings:
 #####################################
@@ -253,6 +259,11 @@ uqsim.statistics.update({"battery"         : (lambda: pybammStatistics.pybammSta
     compute_sobol_total_indices_with_samples=compute_sobol_total_indices_with_samples,
     save_gpce_surrogate=save_gpce_surrogate,
     compute_other_stat_besides_pce_surrogate=compute_other_stat_besides_pce_surrogate,
+    compute_kl_expansion_of_qoi = compute_kl_expansion_of_qoi,
+    kl_expansion_order = kl_expansion_order,
+    compute_generalized_sobol_indices = compute_generalized_sobol_indices,
+    compute_generalized_sobol_indices_over_time = compute_generalized_sobol_indices_over_time,
+    compute_covariance_matrix_in_time = compute_covariance_matrix_in_time
 ))})
 
 #####################################
