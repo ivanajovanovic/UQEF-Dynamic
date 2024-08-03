@@ -1,0 +1,40 @@
+{
+  "time_settings": {
+    "t_start": 0,
+    "t_end": 10,
+    "N": 100, 
+    "resolution": "integer"
+  },
+  "model_settings": {
+    "plotting": "False",
+    "writing_results_to_a_file": "False",
+    "time_ooi": "Time [s]"
+  },
+  "model_paths": {
+    "model_file": "US06.csv"
+  },
+  "simulation_settings": {
+    "qoi":"displacement",
+    "qoi_column":"displacement"
+  },
+  "parameters": [
+    {
+      "name": "alpha",
+      "distribution": "Uniform",
+      "lower": 0.375, 
+      "upper": 0.625
+    }, 
+    {
+      "name": "beta",
+      "distribution": "Uniform",
+      "lower": 2.5, 
+      "upper": 3.75
+    }, 
+    {
+      "name": "l",
+      "distribution": "Uniform",
+      "lower": -1.25, 
+      "upper": -0.75
+    }    
+  ]
+}
