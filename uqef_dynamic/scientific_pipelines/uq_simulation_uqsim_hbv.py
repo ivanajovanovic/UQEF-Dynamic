@@ -43,7 +43,7 @@ if local_debugging:
     uqsim.args.uncertain = "all"
     uqsim.args.chunksize = 1
 
-    uqsim.args.uq_method = "mc"  # "sc" | "saltelli" | "mc" | "ensemble"
+    uqsim.args.uq_method = "sc"  # "sc" | "saltelli" | "mc" | "ensemble"
     uqsim.args.mc_numevaluations = 1000
     uqsim.args.sampling_rule = "latin_hypercube"  # "random" | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
     uqsim.args.sc_q_order = 7  # 7 #10 3
@@ -53,15 +53,15 @@ if local_debugging:
     # paths, if necessary change them
     uqsim.args.inputModelDir = pathlib.Path("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/HBV-SASK-data")
     uqsim.args.sourceDir = pathlib.Path("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/HBV-SASK-data")
-    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs", 'mc_sliding_rmse_nse_365days_10d_banff'))
+    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs", 'sc_kl10_p3_l7_generalized_60days_3d_oldman_experimental'))
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
-    uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/configuration_hbv_10D_MC_banff.json'
+    uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/configuration_hbv_3D_MC.json'
 
-    uqsim.args.read_nodes_from_file = False
+    uqsim.args.read_nodes_from_file = True
     l = 7  # 10
     path_to_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/sparse_grid_nodes_weights")  # this a path to the file where the nodes and weights are stored
     uqsim.args.parameters_file = path_to_file / f"KPU_d3_l{l}.asc" # f"KPU_d7_l{l}.asc"
-    uqsim.args.parameters_setup_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/KPU_HBV_d3.json")
+    uqsim.args.parameters_setup_file = None  #pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/KPU_HBV_d3.json")
 
     uqsim.args.sc_poly_rule = "three_terms_recurrence"  # "gram_schmidt" | "three_terms_recurrence" | "cholesky"
     uqsim.args.sc_poly_normed = True  # True
@@ -85,7 +85,7 @@ if local_debugging:
 
     uqsim.args.num_cores = 1
 
-    uqsim.args.save_all_simulations = False  # True for sc
+    uqsim.args.save_all_simulations = True  # True for sc
     uqsim.args.store_qoi_data_in_stat_dict = False  # if set to True, the qoi_values entry is stored in the stat_dict 
     uqsim.args.store_gpce_surrogate_in_stat_dict = True
     uqsim.args.collect_and_save_state_data = False # False 
@@ -102,9 +102,16 @@ compute_sobol_total_indices_with_samples = True  # This is only relevant in the 
 if uqsim.args.uq_method == "mc" and uqsim.args.compute_Sobol_t:
     compute_sobol_total_indices_with_samples = True
 
-save_gpce_surrogate = True  # if True a gpce surrogate for each QoI for each time step is saved in a separate file
+save_gpce_surrogate = False  # if True a gpce surrogate for each QoI for each time step is saved in a separate file
 compute_other_stat_besides_pce_surrogate = True  # This is relevant only when uq_method == "sc" 
 
+# TODO Eventually add these configurations to uqef.args
+compute_kl_expansion_of_qoi = True
+compute_timewise_gpce_next_to_kl_expansion = False
+kl_expansion_order = 10
+compute_generalized_sobol_indices = True
+compute_generalized_sobol_indices_over_time = False
+compute_covariance_matrix_in_time = True
 #####################################
 # additional path settings:
 #####################################
@@ -142,7 +149,6 @@ uqsim.models.update({"hbvsask"         : (lambda: HBVSASKModelUQ.HBVSASKModelUQ(
     disable_statistics=uqsim.args.disable_statistics,
     uq_method=uqsim.args.uq_method
 ))})
-
 #####################################
 # register statistics
 #####################################
@@ -168,6 +174,12 @@ uqsim.statistics.update({"hbvsask"         : (lambda: HBVSASKStatistics.HBVSASKS
     compute_sobol_total_indices_with_samples=compute_sobol_total_indices_with_samples,
     save_gpce_surrogate=save_gpce_surrogate,
     compute_other_stat_besides_pce_surrogate=compute_other_stat_besides_pce_surrogate,
+    compute_kl_expansion_of_qoi = compute_kl_expansion_of_qoi,
+    compute_timewise_gpce_next_to_kl_expansion=compute_timewise_gpce_next_to_kl_expansion,
+    kl_expansion_order = kl_expansion_order,
+    compute_generalized_sobol_indices = compute_generalized_sobol_indices,
+    compute_generalized_sobol_indices_over_time = compute_generalized_sobol_indices_over_time,
+    compute_covariance_matrix_in_time = compute_covariance_matrix_in_time
 ))})
 
 #####################################
@@ -197,6 +209,7 @@ if uqsim.is_master():
 #####################################
 # start the simulation
 #####################################
+
 start_time_model_simulations = time.time()
 uqsim.simulate()
 end_time_model_simulations = time.time()
@@ -214,6 +227,7 @@ if uqsim.is_master():
 #####################################
 # statistics
 #####################################
+
 start_time_computing_statistics = time.time()
 uqsim.prepare_statistics()
 uqsim.calc_statistics()
@@ -224,7 +238,7 @@ time_computing_statistics = end_time_computing_statistics - start_time_computing
 
 uqsim.save_statistics()
 
-# save the dictionary with the arguments - once before the simulation
+# save the dictionary with the arguments once again
 if uqsim.is_master():
     time_infoFileName = os.path.abspath(os.path.join(uqsim.args.outputResultDir, f"time_info.txt"))
     with open(time_infoFileName, 'w') as fp:
