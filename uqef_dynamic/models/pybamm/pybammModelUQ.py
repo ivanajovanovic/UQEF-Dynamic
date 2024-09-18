@@ -14,7 +14,6 @@ import time
 # from functools import partial
 
 # from uqef.model import Model
-from uqef_dynamic.utils import utility
 from uqef_dynamic.models.time_dependent_baseclass.time_dependent_model import TimeDependentModel
 
 class pybammModelUQ(TimeDependentModel):
@@ -155,7 +154,7 @@ class pybammModelUQ(TimeDependentModel):
         #     return np.array([np.NaN] * len(drive_cycle[:,0]))
         # else:
         #     return V_sol
-        result_dict_inner = {utility.TIME_COLUMN_NAME: t_sol, utility.INDEX_COLUMN_NAME: unique_run_index, 'current': self.current, self.qoi_column: V_sol} 
+        result_dict_inner = {self.time_column_name: t_sol, self.index_column_name: unique_run_index, 'current': self.current, self.qoi_column: V_sol} 
         result_df = pd.DataFrame(result_dict_inner)
         # print(f"DEBUGGIN result_df = {result_df}")
         return result_df
@@ -165,7 +164,7 @@ class pybammModelUQ(TimeDependentModel):
     
     def _plotting(self, result_df, unique_run_index, curr_working_dir, *args, **kwargs):
         plt.figure()
-        plt.plot(result_df[utility.TIME_COLUMN_NAME].values(), result_df[self.qoi_column].values())
+        plt.plot(result_df[self.time_column_name].values(), result_df[self.qoi_column].values())
         plt.xlabel("Time / s")
         plt.ylabel("Voltage / V")
 
@@ -239,7 +238,7 @@ class pybammModelUQ(TimeDependentModel):
         #     else:
         #         index_run_and_parameters_dict = {**id_dict, **parameters_dict, "success": True}
 
-        #         result_dict_inner = {utility.TIME_COLUMN_NAME: t_sol, "Index_run": unique_run_index, 'current': self.current, 'V_sol': V_sol} 
+        #         result_dict_inner = {self.time_column_name: t_sol, "Index_run": unique_run_index, 'current': self.current, 'V_sol': V_sol} 
         #         result_df = pd.DataFrame(result_dict_inner)
 
         #         if plotting:

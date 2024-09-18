@@ -969,7 +969,10 @@ class TimeDependentStatistics(ABC, Statistics):
                 self.dist = simulationNodes.joinedStandardDists
             else:
                 self.dist = simulationNodes.joinedDists
-            self.polynomial_expansion = cp.generate_expansion(order, self.dist, rule=poly_rule, normed=poly_normed)
+            cross_truncation = kwargs.get("cross_truncation", 1.0)
+            self.polynomial_expansion, self.polynomial_norms = cp.generate_expansion(
+                order, self.dist, rule=poly_rule, normed=poly_normed,
+                graded=True, reverse=True, cross_truncation=cross_truncation, retall=True)
         
         if self.compute_sobol_total_indices_with_samples:
             if simulationNodes is not None:
@@ -993,8 +996,11 @@ class TimeDependentStatistics(ABC, Statistics):
         else:
             self.dist = simulationNodes.joinedDists
         self.weights = simulationNodes.weights
-        self.polynomial_expansion = cp.generate_expansion(order, self.dist, rule=poly_rule, normed=poly_normed)
-
+        cross_truncation = kwargs.get("cross_truncation", 1.0)
+        self.polynomial_expansion, self.polynomial_norms = cp.generate_expansion(
+            order, self.dist, rule=poly_rule, normed=poly_normed,
+            graded=True, reverse=True, cross_truncation=cross_truncation, retall=True)
+    
     def prepareForMcSaltelliStatistics(self, simulationNodes, numEvaluations=None, regression=None, order=None,
                                     poly_normed=None, poly_rule=None, *args, **kwargs):
         self.prepareForMcStatistics(simulationNodes, numEvaluations, regression, order, poly_normed, poly_rule,

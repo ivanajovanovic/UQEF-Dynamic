@@ -479,6 +479,7 @@ def compute_gpce_sparsespace(build_sg_for_e_and_var=True, modified_basis=False,
     Else
     --> Build one SG surrogate to approximate all N coefficients of the gPCE expansion
     """
+    # TODO - change this path
     config_file = pathlib.Path(
         '/work/ga45met/mnt/linux_cluster_2/Larsim-UQ/configurations/configuration_ishigami.json')
 

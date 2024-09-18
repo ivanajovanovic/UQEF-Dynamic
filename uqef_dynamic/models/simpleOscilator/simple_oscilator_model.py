@@ -4,7 +4,6 @@ import time
 from typing import List, Optional, Dict, Any, Union
 import numpy as np
 
-from uqef_dynamic.utils import utility
 from uqef_dynamic.models.time_dependent_baseclass.time_dependent_model import TimeDependentModel
 
 class simpleOscilatorUQ(TimeDependentModel):
@@ -58,6 +57,7 @@ class simpleOscilatorUQ(TimeDependentModel):
     def _parameters_configuration(self, parameters, take_direct_value, *args, **kwargs):
         """
         This function should return a dictionary of parameters to be used in the model.
+        This is the first argument of the model_run function.
 
         Note: it should contain only uncertain parameters.
         """
@@ -72,7 +72,7 @@ class simpleOscilatorUQ(TimeDependentModel):
         return temp_results
 
     def _process_model_output(self, model_output, unique_run_index, *args, **kwargs):
-        result_dict_inner = {utility.TIME_COLUMN_NAME: self.t_sol, utility.INDEX_COLUMN_NAME: unique_run_index, self.qoi_column: model_output} 
+        result_dict_inner = {self.time_column_name: self.t_sol, self.index_column_name: unique_run_index, self.qoi_column: model_output} 
         result_df = pd.DataFrame(result_dict_inner)
         # print(f"DEBUGGIN result_df = {result_df}")
         return result_df

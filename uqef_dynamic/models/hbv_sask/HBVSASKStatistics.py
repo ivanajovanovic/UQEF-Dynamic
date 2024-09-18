@@ -547,8 +547,15 @@ class HBVSASKStatistics(time_dependent_statistics.TimeDependentStatistics):
 
         pdTimesteps = self.pdTimesteps
         keyIter = list(pdTimesteps)
+        timesteps_min = min(pdTimesteps)
+        timesteps_max = max(pdTimesteps)
 
-        window_title = window_title + f": QoI - {single_qoi_column}"
+        if single_qoi_column =='Q_cms':
+            window_title = window_title + f": QoI - Streamflow[m^3/s]"
+        elif single_qoi_column =='AET':
+            window_title = window_title + f": QoI - Actual Evapotranspiration"
+        else:       
+            window_title = window_title + f": QoI - {single_qoi_column}"
 
         if dict_time_vs_qoi_stat is None:
             dict_time_vs_qoi_stat = self.result_dict[single_qoi_column]
@@ -585,14 +592,16 @@ class HBVSASKStatistics(time_dependent_statistics.TimeDependentStatistics):
             N_max = self.forcing_df[column_to_draw].max()
             fig.add_trace(go.Bar(x=self.forcing_df.index,
                                  y=self.forcing_df[column_to_draw],
-                                 name="Precipitation", marker_color='blue'),
+                                 name="Precipitation", marker_color='red',
+                                 showlegend=False),
                           row=1, col=1)
 
             # Temperature
             column_to_draw = kwargs.get('temperature_df_column_to_draw', 'temperature')
             fig.add_trace(go.Scatter(x=self.forcing_df.index,
                                      y=self.forcing_df[column_to_draw],
-                                     name="Temperature", line_color='blue', mode='lines+markers'),
+                                     name="Temperature", line_color='blue', mode='lines+markers',        
+                                     showlegend=False),
                           row=2, col=1)
 
             if reset_index_at_the_end:
@@ -615,6 +624,9 @@ class HBVSASKStatistics(time_dependent_statistics.TimeDependentStatistics):
                 streamflow_df.reset_index(inplace=True)
                 streamflow_df.rename(columns={streamflow_df.index.name: self.time_column_name}, inplace=True)
 
+        
+        local_colors = [ '#0072B2', '#E69F00', '#CC79A7', '#009E73', ]
+
         dict_plot_rows = dict()
 
         if single_qoi_column in self.list_original_model_output_columns:
@@ -627,37 +639,45 @@ class HBVSASKStatistics(time_dependent_statistics.TimeDependentStatistics):
                     timestamp_column = self.time_column_name
                     fig.add_trace(
                         go.Scatter(x=df_measured_subset[timestamp_column], y=df_measured_subset[column_to_draw],
-                                   name=f"{single_qoi_column} (measured)", line_color='red', mode='lines'),
+                                   name=f"{single_qoi_column} (measured)", line_color='red', mode='lines',
+                                   line=dict(color='green'), showlegend=True),
+                        #line_color='red'
                         row=starting_row, col=1)
 
         if "E" in dict_time_vs_qoi_stat[keyIter[0]]:
             fig.add_trace(go.Scatter(x=pdTimesteps,
                                     y=[dict_time_vs_qoi_stat[key]["E"] for key in keyIter],
                                     name=f'E[{single_qoi_column}]',
-                                    line_color='green', mode='lines'),
+                                    line=dict(color=local_colors[0]), mode='lines'),
+                        # line_color='green'
                         row=starting_row, col=1)
 
         if dict_what_to_plot.get("E_minus_std", False) and "StdDev" in dict_time_vs_qoi_stat[keyIter[0]] and "E" in dict_time_vs_qoi_stat[keyIter[0]]:
             fig.add_trace(go.Scatter(x=pdTimesteps,
                                      y=[(dict_time_vs_qoi_stat[key]["E"] \
                                          - dict_time_vs_qoi_stat[key]["StdDev"]) for key in keyIter],
-                                     name='mean - std. dev', line_color='darkviolet', mode='lines'),
+                                     name='mean - std. dev', mode='lines', line_color="grey"
+                                    #  line_color='darkviolet'
+                                     ),
                           row=starting_row, col=1)
         if dict_what_to_plot.get("E_plus_std", False) and "StdDev" in dict_time_vs_qoi_stat[keyIter[0]] and "E" in dict_time_vs_qoi_stat[keyIter[0]]:
             fig.add_trace(go.Scatter(x=pdTimesteps,
                                      y=[(dict_time_vs_qoi_stat[key]["E"] + \
                                          dict_time_vs_qoi_stat[key]["StdDev"]) for key in keyIter],
-                                     name='mean + std. dev', line_color='darkviolet', mode='lines', fill='tonexty'),
+                                     name='mean + std. dev', mode='lines', fill='tonexty', line_color="grey"
+                                    #  line_color='darkviolet'
+                                     ),
                           row=starting_row, col=1)
         if "P10" in dict_time_vs_qoi_stat[keyIter[0]] and dict_what_to_plot.get("P10", False):
             fig.add_trace(go.Scatter(x=pdTimesteps,
                                      y=[dict_time_vs_qoi_stat[key]["P10"] for key in keyIter],
-                                     name='10th percentile', line_color='yellow', mode='lines'),
+                                     name='10th percentile', line_color='rgba(128,128,128, 0.3)', mode='lines'),
                           row=starting_row, col=1)
         if "P90" in dict_time_vs_qoi_stat[keyIter[0]] and dict_what_to_plot.get("P90", False):
             fig.add_trace(go.Scatter(x=pdTimesteps,
                                      y=[dict_time_vs_qoi_stat[key]["P90"] for key in keyIter],
-                                     name='90th percentile', line_color='yellow', mode='lines', fill='tonexty'),
+                                     name='90th percentile', mode='lines', fill='tonexty', line=dict(color='rgba(128,128,128, 0.3)'), fillcolor='rgba(128,128,128, 0.3)'),
+                                    #  line_color='yellow',
                           row=starting_row, col=1)
         dict_plot_rows["qoi"] = starting_row
         starting_row += 1
@@ -726,12 +746,32 @@ class HBVSASKStatistics(time_dependent_statistics.TimeDependentStatistics):
             dict_plot_rows["Sobol_t"] = starting_row
             starting_row += 1
 
+        plot_generalized_sobol_indices = False
+        for key in dict_time_vs_qoi_stat[keyIter[-1]].keys():
+            if key.startswith("generalized_sobol_total_index_"):
+                plot_generalized_sobol_indices = True
+                break
+        if plot_generalized_sobol_indices:  
+            for i in range(len(self.labels)):
+                name = f"generalized_sobol_total_index_{self.labels[i]}"
+                if self.compute_generalized_sobol_indices_over_time:
+                    y = [dict_time_vs_qoi_stat[key][name] for key in keyIter]
+                else:
+                    y = [dict_time_vs_qoi_stat[keyIter[-1]][name]]*len(keyIter)
+                fig.add_trace(go.Scatter(
+                    x=pdTimesteps,
+                    y=y,
+                    name=name, legendgroup=self.labels[i], line_color=colors.COLORS[i], mode='lines'),
+                    row=starting_row, col=1)
+            dict_plot_rows["generalized_sobol_total_index"] = starting_row
+            starting_row += 1
+
         # fig.update_traces(mode='lines')
         if forcing and self.forcing_data_fetched:
-            fig.update_yaxes(title_text="N [mm/h]", showgrid=True, row=1, col=1)
+            fig.update_yaxes(title_text="Precipitation [mm/day]", showgrid=True, row=1, col=1)
             fig.update_yaxes(autorange="reversed", row=1, col=1)
-            fig.update_yaxes(title_text="T [c]", showgrid=True, row=2, col=1)
-            fig.update_yaxes(title_text="Q [cms]", showgrid=True, row=3, col=1)
+            fig.update_yaxes(title_text="Temperature [°C]", showgrid=True, row=2, col=1)
+            fig.update_yaxes(title_text="Measured Streamflow [m^3/s]", showgrid=True, row=3, col=1)
 
         fig.update_yaxes(title_text=single_qoi_column, showgrid=True, side='left',
                          row=dict_plot_rows["qoi"], col=1)
@@ -755,10 +795,30 @@ class HBVSASKStatistics(time_dependent_statistics.TimeDependentStatistics):
         if "Sobol_t" in dict_time_vs_qoi_stat[keyIter[0]] and dict_what_to_plot.get("Sobol_t", False):
             fig.update_yaxes(title_text=f"T. SI", showgrid=True, range=[0, 1],
                              row=dict_plot_rows["Sobol_t"], col=1)
-
-        fig.update_layout(width=1000)
+        if plot_generalized_sobol_indices and dict_plot_rows.get("generalized_sobol_total_index", False):
+            fig.update_yaxes(title_text=f"Gener. T. SI", showgrid=True, range=[0, 1],
+                             row=dict_plot_rows["generalized_sobol_total_index"], col=1)
+            
         fig.update_layout(title_text=window_title)
-        fig.update_layout(xaxis=dict(type="date"))
+        # fig.update_layout(xaxis=dict(type="date"))
+        fig.update_layout(
+            xaxis=dict(
+                rangemode='normal',
+                range=[timesteps_min, timesteps_max],
+                type="date"
+            ),
+            yaxis=dict(
+                rangemode='normal',  # Ensures the range is not padded for markers
+                autorange=True       # Auto-range is enabled
+            )
+        )
+        fig.update_layout(height=1100, width=1100)
+        fig.update_layout(
+                # legend=dict(yanchor="bottom", y=0.01, xanchor="right", x=0.99),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1.0),
+                showlegend=True,
+                # template="plotly_white",
+            )
 
         print(f"[HVB STAT INFO] _plotStatisticsDict_plotly function for Qoi-{single_qoi_column} is almost over, just to save the plot!")
 

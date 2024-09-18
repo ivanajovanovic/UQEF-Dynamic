@@ -2,29 +2,17 @@ import numpy as np
 import matplotlib.pyplot as plotter
 import pathlib
 import pickle
-
-import chaospy as cp
 import os
 
-from uqef.stat import Statistics
-
-from uqef_dynamic import paths
-from uqef_dynamic.utils import sensIndicesSamplingBasedHelpers
-
-class Samples(object):
-    """
-    Samples is a collection of the sampled results of a whole UQ simulation
-    """
-
-    def __init__(self, rawSamples):
-        self.qoi = []
-
-        self.qoi = np.array([sample for sample in rawSamples])
+from uqef_dynamic.utils import colors
+from uqef_dynamic.models.time_dependent_baseclass.time_dependent_statistics import TimeDependentStatistics
 
 
-class IshigamiStatistics(Statistics):
+class IshigamiStatistics(TimeDependentStatistics):
 
     def __init__(self, configurationObject, workingDir=None, *args, **kwargs):
+        super().__init__(configurationObject, workingDir, *args, **kwargs)
+
         Statistics.__init__(self)
 
         self.configurationObject = configurationObject

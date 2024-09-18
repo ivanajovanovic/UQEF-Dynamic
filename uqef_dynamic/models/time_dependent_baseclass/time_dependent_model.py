@@ -54,7 +54,7 @@ class TimeDependentModelConfig(object):
         dict_config_parameters = self.configurationObject.get("parameters", dict())
 
         #####################################
-        # TODO add that first parameter values is read from kwargs
+        # TODO add that first parameter values are read from kwargs
         self.timeframe = utility.parse_datetime_configuration(self.dict_config_time_settings)
         self.resolution = self.dict_config_time_settings.get("resolution", "integer")
         self.warm_up_duration = self.dict_config_time_settings.get("warm_up_duration", None)
@@ -176,6 +176,9 @@ class TimeDependentModel(ABC, Model):
         # if not self.disable_statistics:
         #     self.writing_results_to_a_file = False
 
+        self.time_column_name = kwargs.get('time_column_name', utility.TIME_COLUMN_NAME)
+        self.index_column_name = kwargs.get('index_column_name', utility.INDEX_COLUMN_NAME)
+
         #####################################
         self.dict_processed_simulation_settings_from_config_file = None
 
@@ -278,7 +281,16 @@ class TimeDependentModel(ABC, Model):
 
     def timesteps(self):
         # TODO Rewrite this
-        return list(self.full_data_range)
+        if hasattr(self, "full_data_range"):
+            return list(self.full_data_range)
+        elif hasattr(self, "t_sol"):
+            return self.t_sol
+        elif hasattr(self, "t"):
+            return self.t
+        elif hasattr(self, "list_of_dates_of_interest"):
+            return self.list_of_dates_of_interest
+        else:
+            return None
 
     def run(
             self, i_s: Optional[List[int]] = [0, ], 
@@ -340,10 +352,10 @@ class TimeDependentModel(ABC, Model):
                 result_df = self._process_model_output(model_output, unique_run_index)
                 self._transform_model_output(result_df)
 
-                if utility.INDEX_COLUMN_NAME not in result_df.columns:
-                    result_df[utility.INDEX_COLUMN_NAME] = unique_run_index
-                if utility.TIME_COLUMN_NAME not in result_df.columns:
-                    result_df[utility.TIME_COLUMN_NAME] = self.timesteps()
+                if self.index_column_name not in result_df.columns:
+                    result_df[self.index_column_name] = unique_run_index
+                if self.time_column_name not in result_df.columns:
+                    result_df[self.time_column_name] = self.timesteps()
                 
                 if plotting:
                     self._plotting(result_df, unique_run_index, curr_working_dir)
@@ -369,6 +381,7 @@ class TimeDependentModel(ABC, Model):
     def _parameters_configuration(self, parameters, take_direct_value, *args, **kwargs):
         """
         This function should return a dictionary of parameters to be used in the model.
+        This is the first argument of the model_run function.
 
         Note: it should contain only uncertain parameters.
         """
@@ -390,7 +403,7 @@ class TimeDependentModel(ABC, Model):
         pass
 
     # ====================================================================
-    # Below code still requires refactoring
+    # Code below still requires refactoring
     # ====================================================================
 
     def run_detailed(

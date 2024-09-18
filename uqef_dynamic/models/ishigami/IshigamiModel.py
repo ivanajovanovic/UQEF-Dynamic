@@ -1,14 +1,15 @@
+import math
 import json
 import numpy as np
 import time
-from math import pow
-
-# from uqef.model import Model
+from typing import List, Optional, Dict, Any, Union
+ 
+from uqef_dynamic.models.time_dependent_baseclass.time_dependent_model import TimeDependentModel
 
 def model(p, x):
     a, b = p
     x1, x2, x3 = x
-    f = np.sin(x1) + a * pow(np.sin(x2), 2) + b * pow(x3, 4) * np.sin(x1)
+    f = np.sin(x1) + a * math.pow(np.sin(x2), 2) + b * math.pow(x3, 4) * np.sin(x1)
     return f
 
 
@@ -17,8 +18,12 @@ def model_2d(p, x):
     x1, x3 = x
     x2 = 0
     # f = np.sin(q[:, 0]) + self.a * (np.sin(q[:, 1]) ** 2) + (self.b * np.sin(q[:, 0]) * (q[:, 2] ** 4))
-    f = np.sin(x1) + a * pow(np.sin(x2), 2) + b * pow(x3, 4) * np.sin(x1)
+    f = np.sin(x1) + a * math.pow(np.sin(x2), 2) + b * math.pow(x3, 4) * np.sin(x1)
     return f
+
+def ishigami_func(coordinates, a_model_param=7, b_model_param=0.1):
+    x1, x2, x3 = coordinates
+    return math.sin(x1) + a_model_param * (math.sin(x2)) ** 2 + b_model_param * x3 ** 4 * math.sin(x1)
 
 
 class IshigamiModelSetUp():
@@ -26,17 +31,18 @@ class IshigamiModelSetUp():
         pass
 
 
-class IshigamiModel(object):
-    def __init__(self, configurationObject,  *args, **kwargs):
+class IshigamiModel(TimeDependentModel):
+    def __init__(self, configurationObject, inputModelDir, workingDir=None, *args, **kwargs):
         # Model.__init__(self)
+        super().__init__(configurationObject, inputModelDir, workingDir, *args, **kwargs)
 
+        # if isinstance(configurationObject, dict) or configurationObject is None:
+        #     self.configurationObject = configurationObject
+        # else:
+        #     with open(configurationObject) as f:
+        #         self.configurationObject = json.load(f)
 
-        if isinstance(configurationObject, dict) or configurationObject is None:
-            self.configurationObject = configurationObject
-        else:
-            with open(configurationObject) as f:
-                self.configurationObject = json.load(f)
-
+    def _setup_model_related(self, **kwargs):
         if "a" in kwargs:
             self.a = kwargs['a']
         else:
@@ -53,44 +59,89 @@ class IshigamiModel(object):
             except KeyError:
                 self.b = 0.1
 
-        self.t = [0, ]
-        self.t_interest = 0.0
+    def _timespan_setup(self, **kwargs):
+        self.t = self.t_sol = [0.0, ]
+        self.t_starting = self.t_final = self.t_interest = 0.0
 
-    def prepare(self, *args, **kwargs):
+    # def timesteps(self):
+    #     return self.t
+
+    # def prepare(self, *args, **kwargs):
+    #     pass
+
+    # def assertParameter(self, parameter):
+    #     pass
+
+    # def normaliseParameter(self, parameter):
+    #     return parameter
+
+    def run(
+        self, i_s: Optional[List[int]] = [0, ], 
+        parameters: Optional[Union[Dict[str, Any], List[Any]]] = None,
+        raise_exception_on_model_break: Optional[Union[bool, Any]] = None, *args, **kwargs
+        ):
+        results_array = super().run(i_s=i_s, parameters=parameters, raise_exception_on_model_break=raise_exception_on_model_break, *args, **kwargs)
+        return results_array
+
+    # def run(self, i_s, parameters, *args, **kwargs):
+
+    #     # print(f"[Ishigami Model] {i_s}: paramater: {parameters}")
+
+    #     results = []
+
+    #     for ip in range(0, len(i_s)):
+    #         start = time.time()
+    #         i = i_s[ip]
+    #         parameter = parameters[ip]
+
+    #         args = self.a, self.b
+    #         x = parameter[0], parameter[1], parameter[2]
+    #         f_result = model(args, x)
+
+    #         end = time.time()
+    #         runtime = end - start
+
+    #         results.append((f_result, runtime))
+
+    #     return results
+
+    def _parameters_configuration(self, parameters, take_direct_value, *args, **kwargs):
+        """
+        This function should return a dictionary of parameters to be used in the model.
+        This is the first argument of the model_run function.
+
+        Note: it should contain only uncertain parameters.
+        """
+        parameters_dict = {}
+        parameters_dict["x1"] = parameters[0]
+        parameters_dict["x2"] = parameters[1]
+        parameters_dict["x3"] = parameters[2]
+        return parameters_dict
+
+    def _model_run(self, parameters_dict, *args, **kwargs):
+        temp_results = math.sin(parameters_dict["x1"]) + \
+            self.a * math.pow(math.sin(parameters_dict["x2"]), 2) + \
+                self.b * math.pow(parameters_dict["x3"], 4) * math.sin(parameters_dict["x1"])
+        return temp_results
+        # pass
+
+    def _process_model_output(self, model_output, unique_run_index, *args, **kwargs):
+        result_dict_inner = {self.time_column_name: self.t_sol, self.index_column_name: unique_run_index, self.qoi_column: model_output} 
+        result_df = pd.DataFrame(result_dict_inner)
+        # print(f"DEBUGGIN result_df = {result_df}")
+        return result_df
+    
+    def _transform_model_output(self, model_output_df, *args, **kwargs):
         pass
 
-    def assertParameter(self, parameter):
-        pass
-
-    def normaliseParameter(self, parameter):
-        return parameter
-
-    def run(self, i_s, parameters, *args, **kwargs):
-
-        # print(f"[Ishigami Model] {i_s}: paramater: {parameters}")
-
-        results = []
-
-        for ip in range(0, len(i_s)):
-            start = time.time()
-            i = i_s[ip]
-            parameter = parameters[ip]
-
-            args = self.a, self.b
-            x = parameter[0], parameter[1], parameter[2]
-            f_result = model(args, x)
-
-            end = time.time()
-            runtime = end - start
-
-            results.append((f_result, runtime))
-
-        return results
-
-    def timesteps(self):
-        return self.t
-
-    def get_analytical_sobol_indices(self):
+    def get_analytical_sobol_indices(self, type="both"):
+        """
+        Returns the analytical Sobol indices for the Ishigami function.
+        :param type: str, optional
+            The type of Sobol indices to return. Options are "both", "main", "total".
+        :return: np.array or tuple of two np.arrays where the first entry are main indices and the second entry are
+        total Sobol indices.
+        """
         vm1 = 0.5*(1+(self.b*np.pi**4)/5)**2
         vm1 = (self.b*np.pi**4)/5 + ((self.b**2)*np.pi**8)/50 + 0.5  # Sudret!
         vm2 = self.a**2/8
@@ -105,21 +156,32 @@ class IshigamiModel(object):
         v = vm1 + vm2 + vm13
         assert np.abs(v - (vm1 + vm2 + vm13)) < 0.001
 
-        sm1 = vm1/v
-        sm2 = vm2/v
-        sm3 = 0.0  # vm3/v
+        if type=="both":
+            sm1 = vm1/v
+            sm2 = vm2/v
+            sm3 = 0.0  # vm3/v
 
-        st1 = (vm1 + vm13)/v
-        st2 = vm2/v
-        st3 = vm13/v
+            st1 = (vm1 + vm13)/v
+            st2 = vm2/v
+            st3 = vm13/v
+            # Sobol_m_analytical = np.array([0.3138/0.3139, 0.4424/0.4424, 0.0/0.0000], dtype=np.float64)
+            sobol_m_analytical = np.array([sm1, sm2, sm3], dtype=np.float64)
 
-        # Sobol_m_analytical = np.array([0.3138/0.3139, 0.4424/0.4424, 0.0/0.0000], dtype=np.float64)
-        sobol_m_analytical = np.array([sm1, sm2, sm3], dtype=np.float64)
-
-        # Sobol_t_analytical = np.array([0.5574/0.5576, 0.4424/0.4424, 0.2436/0.2437], dtype=np.float64)
-        sobol_t_analytical = np.array([st1, st2, st3], dtype=np.float64)
-
-        return sobol_m_analytical, sobol_t_analytical
+            # Sobol_t_analytical = np.array([0.5574/0.5576, 0.4424/0.4424, 0.2436/0.2437], dtype=np.float64)
+            sobol_t_analytical = np.array([st1, st2, st3], dtype=np.float64)
+            return sobol_m_analytical, sobol_t_analytical
+        elif type=="main" or type=="m":
+            sm1 = vm1/v
+            sm2 = vm2/v
+            sm3 = 0.0
+            return np.array([sm1, sm2, sm3], dtype=np.float64)
+        elif type=="total" or type=="t":
+            st1 = (vm1 + vm13)/v
+            st2 = vm2/v
+            st3 = vm13/v
+            return np.array([st1, st2, st3], dtype=np.float64)
+        else:
+            raise ValueError(f"Unknown type {type}.")
 
 
 # Ravi's code
