@@ -714,6 +714,7 @@ def update_output_file_paths_based_on_workingDir(workingDir):
 def parse_datetime_configuration(time_settings_config):
     """
     Reads configuration dictionary and determines the start end end date of the simulation
+    Returns a list with two datetime objects
     """
     if time_settings_config is None or not time_settings_config:
         time_settings_config = dict()
@@ -928,7 +929,7 @@ def read_simulation_settings_from_configuration_object_refactored(configurationO
     if "qoi" in kwargs:
         qoi = kwargs['qoi']
     else:
-        qoi = dict_config_simulation_settings.get("qoi", "Q")
+        qoi = dict_config_simulation_settings.get("qoi", "model_output")
     result_dict["qoi"] = qoi
 
     if "qoi_column" in kwargs:
@@ -975,12 +976,15 @@ def read_simulation_settings_from_configuration_object(configurationObject: dict
             Exception: If 'mode' is not one of 'continuous', 'sliding_window', 'resampling'.
             Exception: If 'center' is not one of 'center', 'left', 'right'.
             Exception: If 'method' is not one of 'avrg', 'max', 'min'.
+        In case configurationObject does not exist or is not in the right format it will return an empty dictionary.
     """
     # TODO Refactor this long function into smaller functions.
     result_dict = dict()
 
     configurationObject = check_if_configurationObject_is_in_right_format_and_return(configurationObject,
                                                                                      raise_error=False)
+    
+    # TODO Hmm, should this indeed stand here; or do I want to populte the result_dict with the default values?
     if configurationObject is None:
         return result_dict
 
