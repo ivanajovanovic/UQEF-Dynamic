@@ -34,6 +34,7 @@ cd ../
 ##git checkout master
 ##git pull
 ##$(which python) setup.py install
+##$(which pip) install -e .
 ##cd ../
 
 cd Larsim_Utility_Set/
