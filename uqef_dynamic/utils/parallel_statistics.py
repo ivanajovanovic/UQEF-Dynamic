@@ -3,13 +3,27 @@ import numpy as np
 import scipy
 import time
 
-# from sensIndicesSamplingBasedHelpers import *
-from uqef_dynamic.utils import sensIndicesSamplingBasedHelpers
+# from sens_indices_sampling_based_utils import *
+from uqef_dynamic.utils import sens_indices_sampling_based_utils
 from uqef_dynamic.utils import utility
 
 def parallel_calc_stats_for_MC(
         keyIter_chunk, qoi_values_chunk, numEvaluations, dim, compute_Sobol_t=False, store_qoi_data_in_stat_dict=False,
         compute_sobol_total_indices_with_samples=False, samples=None):
+    """
+    Calculate statistics for Monte Carlo simulations
+    :param keyIter_chunk: list of keys
+    :param qoi_values_chunk: list of qoi values
+    :param numEvaluations: number of evaluations
+    :param dim: dimension
+    :param compute_Sobol_t: compute total Sobol indices
+    :param store_qoi_data_in_stat_dict: store qoi data in statistics dictionary
+    :param compute_sobol_total_indices_with_samples: compute total Sobol indices with samples
+    :param samples: samples
+    :return: results list, where each of the element is yet another list
+    with key/timestep and statistics dictionary
+    - statistics dictionary contains qoi_values[optional], E, Var, StdDev, Skew, Kurt, P10, P90, Sobol_t[optional]
+    """
     results = []
     # for timestamp, qoi_values in zip(keyIter_chunk, qoi_values_chunk):
     for ip in range(0, len(keyIter_chunk)):  # for each peace of work
@@ -60,7 +74,7 @@ def parallel_calc_stats_for_MC(
         #         pickle.dump(local_result_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
         if compute_Sobol_t and compute_sobol_total_indices_with_samples and samples is not None:
-            local_result_dict["Sobol_t"] = sensIndicesSamplingBasedHelpers.compute_sens_indices_based_on_samples_rank_based(
+            local_result_dict["Sobol_t"] = sens_indices_sampling_based_utils.compute_sens_indices_based_on_samples_rank_based(
                 samples=samples, Y=qoi_values[:numEvaluations, np.newaxis], D=dim, N=numEvaluations)
 
         results.append([timestamp, local_result_dict])
@@ -75,6 +89,11 @@ def parallel_calc_stats_for_SC(keyIter_chunk, qoi_values_chunk, dist, polynomial
 def parallel_calc_stats_for_KL(
         keyIter_chunk, qoi_values_chunk, weights=None,
         regression=False, store_qoi_data_in_stat_dict=False):
+    """
+    :return: results list, where each of the element is yet another list
+    with key/timestep and statistics dictionary
+    - statistics dictionary contains qoi_values[optional], E
+    """
     results = []
     for ip in range(0, len(keyIter_chunk)):  # for each piece of work
         key = keyIter_chunk[ip]
@@ -95,6 +114,16 @@ def parallel_calc_stats_for_gPCE(keyIter_chunk, qoi_values_chunk, dist, polynomi
                                   store_qoi_data_in_stat_dict=False, store_gpce_surrogate_in_stat_dict=False,
                                   save_gpce_surrogate=False, compute_other_stat_besides_pce_surrogate=True,
                                   always_compute_mean=False):
+    """
+    :return: results list, where each of the element is yet another list
+    with key/timestep and statistics dictionary
+    - statistics dictionary contains 
+        qoi_values[optional], gPCE[optional]
+        gpce_coeff
+        E, 
+        if compute_other_stat_besides_pce_surrogate is True:
+            Var, StdDev, Skew, Kurt, P10, P90, Sobol_t[optional], Sobol_m[optional], Sobol_m2[optional]
+    """
     results = []
     for ip in range(0, len(keyIter_chunk)):  # for each piece of work
         key = keyIter_chunk[ip]
@@ -204,6 +233,14 @@ def parallel_calc_stats_for_mc_saltelli(
         keyIter_chunk, qoi_values_chunk, numEvaluations, dim, compute_Sobol_t=False,
         compute_Sobol_m=False, store_qoi_data_in_stat_dict=False, compute_sobol_total_indices_with_samples=False,
         samples=None):
+    """
+    :return: results list, where each of the element is yet another list
+    with key/timestep and statistics dictionary
+    - statistics dictionary contains 
+    qoi_values[optional], gPCE[optional]
+    gpce_coeff
+    E, Var, StdDev, Skew, Kurt, P10, P90, Sobol_t[optional], Sobol_m[optional]
+    """
     results = []
     for ip in range(0, len(keyIter_chunk)):  # for each peace of work
         key = keyIter_chunk[ip]
@@ -250,11 +287,11 @@ def parallel_calc_stats_for_mc_saltelli(
                 # print(f"DEBUGGING - standard_qoi_values.shape - {standard_qoi_values.shape}")
                 # print(f"DEBUGGING - qoi_values_saltelli.shape - {qoi_values_saltelli.shape}")
                 # print(f"DEBUGGING - samples.shape - {samples.shape}")
-                local_result_dict["Sobol_t"] = sensIndicesSamplingBasedHelpers.compute_sens_indices_based_on_samples_rank_based(
+                local_result_dict["Sobol_t"] = sens_indices_sampling_based_utils.compute_sens_indices_based_on_samples_rank_based(
                     samples=samples, Y=qoi_values_saltelli[:numEvaluations,:], D=dim, N=numEvaluations)
         else:
             if compute_Sobol_t or compute_Sobol_m:
-                s_i, s_t = sensIndicesSamplingBasedHelpers.compute_first_and_total_order_sens_indices_based_on_samples_pick_freeze(
+                s_i, s_t = sens_indices_sampling_based_utils.compute_first_and_total_order_sens_indices_based_on_samples_pick_freeze(
                     qoi_values_saltelli, dim, numEvaluations, compute_first=compute_Sobol_m, 
                     compute_total=compute_Sobol_t, code_first=3, code_total=4,
                     do_printing=False

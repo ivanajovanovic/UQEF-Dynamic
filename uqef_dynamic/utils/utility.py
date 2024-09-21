@@ -42,7 +42,7 @@ from tabulate import tabulate
 # for parallel computing
 import multiprocessing
 
-from uqef_dynamic.utils import sensIndicesSamplingBasedHelpers
+from uqef_dynamic.utils import sens_indices_sampling_based_utils
 
 DEFAULT_DICT_WHAT_TO_PLOT = {
     "E_minus_std": False, "E_plus_std": False, "P10": False, "P90": False,
@@ -2367,7 +2367,7 @@ def computing_mc_statistics_single_date(
 
     if compute_Sobol_t and samples is not None:
         dim = samples.shape[1]
-        result_dict["Sobol_t"] = sensIndicesSamplingBasedHelpers.compute_sens_indices_based_on_samples_rank_based(
+        result_dict["Sobol_t"] = sens_indices_sampling_based_utils.compute_sens_indices_based_on_samples_rank_based(
                 samples=samples, Y=qoi_values[:numEvaluations, np.newaxis], D=dim, N=numEvaluations)
 
     return time_stamp, result_dict
