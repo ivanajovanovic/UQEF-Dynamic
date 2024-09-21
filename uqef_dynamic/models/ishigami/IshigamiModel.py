@@ -1,6 +1,7 @@
 import math
 import json
 import numpy as np
+import pandas as pd
 import time
 from typing import List, Optional, Dict, Any, Union
  
@@ -32,7 +33,7 @@ class IshigamiModelSetUp():
 
 
 class IshigamiModel(TimeDependentModel):
-    def __init__(self, configurationObject, inputModelDir, workingDir=None, *args, **kwargs):
+    def __init__(self, configurationObject, inputModelDir=None, workingDir=None, *args, **kwargs):
         # Model.__init__(self)
         super().__init__(configurationObject, inputModelDir, workingDir, *args, **kwargs)
 

@@ -233,9 +233,9 @@ class HBVSASKStatistics(time_dependent_statistics.TimeDependentStatistics):
 
         timestepRange = (min(self.pdTimesteps), max(self.pdTimesteps))
 
-        plot_measured_timeseries = kwargs.get('plot_measured_timeseries', False)
+        plot_measured_timeseries = kwargs.get('plot_measured_timeseries', True)
         plot_unaltered_timeseries = kwargs.get('plot_unaltered_timeseries', False)
-        plot_forcing_timeseries = kwargs.get('plot_forcing_timeseries', False)
+        plot_forcing_timeseries = kwargs.get('plot_forcing_timeseries', True)
         time_column_name = kwargs.get('time_column_name', self.time_column_name)
 
         if plot_measured_timeseries and (not self.measured_fetched or self.df_measured is None or self.df_measured.empty):
@@ -496,9 +496,9 @@ class HBVSASKStatistics(time_dependent_statistics.TimeDependentStatistics):
                     fileNameIdentIsFullName=False, safe=True, **kwargs):
         timestepRange = (min(self.pdTimesteps), max(self.pdTimesteps))
 
-        plot_measured_timeseries = kwargs.get('plot_measured_timeseries', False)
+        plot_measured_timeseries = kwargs.get('plot_measured_timeseries', True)
         plot_unaltered_timeseries = kwargs.get('plot_unaltered_timeseries', False)
-        plot_forcing_timeseries = kwargs.get('plot_forcing_timeseries', False)
+        plot_forcing_timeseries = kwargs.get('plot_forcing_timeseries', True)
         time_column_name = kwargs.get('time_column_name', self.time_column_name)
 
         if plot_measured_timeseries and (not self.measured_fetched or self.df_measured is None or self.df_measured.empty):

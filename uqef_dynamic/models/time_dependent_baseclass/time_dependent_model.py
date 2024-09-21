@@ -109,8 +109,11 @@ class TimeDependentModelConfig(object):
         if "corrupt_forcing_data" in kwargs:
             self.corrupt_forcing_data = kwargs['corrupt_forcing_data']
         else:
-            self.corrupt_forcing_data = strtobool(self.configurationObject["model_settings"].get(
-                "corrupt_forcing_data", "False"))
+            if "model_settings" in self.configurationObject:
+                self.corrupt_forcing_data = strtobool(self.configurationObject["model_settings"].get(
+                    "corrupt_forcing_data", "False"))
+            else:
+                self.corrupt_forcing_data = False 
         #####################################
         # TODO maybe this is not necessary here...
         self.calculate_GoF = strtobool(dict_config_output_settings.get("calculate_GoF", "True"))
@@ -157,12 +160,20 @@ class TimeDependentModel(ABC, Model):
             setattr(self, attr, value)
         # self.configurationObject = self.timeDependentModelConfig.configurationObject  # TODO - remove this eventually
         
-        self.inputModelDir = Path(inputModelDir)
+        if inputModelDir is not None:
+            self.inputModelDir = Path(inputModelDir)
+        else:
+            self.inputModelDir = None
 
         if workingDir is None:
-            workingDir = self.inputModelDir
-        self.workingDir = Path(workingDir)
-        self.workingDir.mkdir(parents=True, exist_ok=True)
+            if self.inputModelDir is not None:
+                self.workingDir = self.inputModelDir
+            else:
+                self.workingDir = None #Path.cwd()  
+        else:
+            self.workingDir = Path(workingDir)
+        if self.workingDir is not None:
+            self.workingDir.mkdir(parents=True, exist_ok=True)
 
         #####################################
         # these set of control variables are for UQEF & UQEF-Dynamic framework...
@@ -334,11 +345,14 @@ class TimeDependentModel(ABC, Model):
             print(f"{unique_run_index} parameters_dict - {parameters_dict} \n")
 
             # create local directory for this particular run
-            if createNewFolder:
-                curr_working_dir = self.workingDir / f"run_{unique_run_index}"
-                curr_working_dir.mkdir(parents=True, exist_ok=True)
+            if self.workingDir is not None:
+                if createNewFolder:
+                    curr_working_dir = self.workingDir / f"run_{unique_run_index}"
+                    curr_working_dir.mkdir(parents=True, exist_ok=True)
+                else:
+                    curr_working_dir = self.workingDir
             else:
-                curr_working_dir = self.workingDir
+                curr_working_dir = None
 
             try:
                 model_output = self._model_run(parameters_dict=parameters_dict)
@@ -357,7 +371,7 @@ class TimeDependentModel(ABC, Model):
                 if self.time_column_name not in result_df.columns:
                     result_df[self.time_column_name] = self.timesteps()
                 
-                if plotting:
+                if plotting and curr_working_dir is not None:
                     self._plotting(result_df, unique_run_index, curr_working_dir)
             
             end = time.time()
@@ -483,11 +497,14 @@ class TimeDependentModel(ABC, Model):
             start = time.time()
 
             # create local directory for this particular run
-            if createNewFolder:
-                curr_working_dir = self.workingDir / f"run_{i}"
-                curr_working_dir.mkdir(parents=True, exist_ok=True)
+            if self.workingDir is not None:
+                if createNewFolder:
+                    curr_working_dir = self.workingDir / f"run_{i}"
+                    curr_working_dir.mkdir(parents=True, exist_ok=True)
+                else:
+                    curr_working_dir = self.workingDir
             else:
-                curr_working_dir = self.workingDir
+                curr_working_dir = None
 
             # Running the model
             model_output, state = self._model_run(

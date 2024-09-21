@@ -21,8 +21,8 @@ import time
 
 from uqef.stat import Statistics
 
-from uqef_dynamic.utils import sensIndicesSamplingBasedHelpers
-from uqef_dynamic.utils import parallelStatistics
+from uqef_dynamic.utils import sens_indices_sampling_based_utils
+from uqef_dynamic.utils import parallel_statistics
 # from uqef_dynamic.utils import uqPostprocessing
 from uqef_dynamic.utils import utility
 from uqef_dynamic.utils import colors
@@ -769,14 +769,16 @@ class TimeDependentStatistics(ABC, Statistics):
         if self.timesteps is not None:
             self._set_pdTimesteps_based_on_timesteps_and_resolution()
             self.numTimesteps = self.N_quad = len(self.timesteps)
-
-            # for now uniform weight in time are default
-            h = 1/(self.N_quad-1) #(t_final - t_starting)/(N_quad-1)
-            self.weights_time = [h for i in range(self.N_quad)]
+            if self.N_quad > 1:
+                # for now uniform weight in time are default
+                h = 1/(self.N_quad-1) #(t_final - t_starting)/(N_quad-1)
+                self.weights_time = [h for i in range(self.N_quad)]
+                self.weights_time[0] /= 2
+                self.weights_time[-1] /= 2
+                self.weights_time = np.asfarray(self.weights_time)
+            else:
+                self.weights_time = np.asfarray([1.0])
             assert len(self.timesteps)==len(self.weights_time)
-            self.weights_time[0] /= 2
-            self.weights_time[-1] /= 2
-            self.weights_time = np.asfarray(self.weights_time)
         else:
             self.numTimesteps = self.N_quad = None  
             self.weights_time = None
@@ -796,8 +798,7 @@ class TimeDependentStatistics(ABC, Statistics):
 
         self._set_timestep_qoi()
 
-        self.prepare_for_plotting(
-            plot_measured_timeseries=True, plot_forcing_timeseries=True, plot_unaltered_timeseries=False)
+        self.prepare_for_plotting(**kwargs)
 
     # =================================================================================================
 
@@ -898,12 +899,15 @@ class TimeDependentStatistics(ABC, Statistics):
             self.N_quad = len(self.weights_time)
         elif self.timesteps is not None:
             self.N_quad = len(self.timesteps)
-            h = 1/(self.N_quad-1) #(self.timesteps_max - self.timesteps_max)/(N_quad-1)
-            self.weights_time = [h for i in range(self.N_quad)]
+            if self.N_quad > 1:
+                h = 1/(self.N_quad-1) #(self.timesteps_max - self.timesteps_max)/(N_quad-1)
+                self.weights_time = [h for i in range(self.N_quad)]
+                self.weights_time[0] /= 2
+                self.weights_time[-1] /= 2
+                self.weights_time = np.asfarray(self.weights_time)
+            else:
+                self.weights_time = np.asfarray([1.0])
             assert len(self.timesteps)==len(self.weights_time)
-            self.weights_time[0] /= 2
-            self.weights_time[-1] /= 2
-            self.weights_time = np.asfarray(self.weights_time)
         else:
             self.weights_time = None
 
@@ -955,13 +959,18 @@ class TimeDependentStatistics(ABC, Statistics):
                 os.path.abspath(os.path.join(file_path, "df_time_aggregated_grad_analysis.pkl")), compression="gzip")
     
     # =================================================================================================
-
-    def prepareForMcStatistics(self, simulationNodes, numEvaluations, regression=None, order=None,
-                              poly_normed=None, poly_rule=None, *args, **kwargs):
-        self.numEvaluations = self.N = numEvaluations
+    def prepareForMcStatistics(self, simulationNodes, numEvaluations, regression=False, order=None,
+                              poly_normed=None, poly_rule=None, cross_truncation=1.0, *args, **kwargs):
+        self.numEvaluations = self.N = numEvaluations  # one can probably as well refer this from simulationNodes
         # TODO Think about this, tricky for saltelli, makes sense for mc
         # self.numEvaluations = self.number_of_unique_index_runs
-        if regression:
+        self.regression = regression
+        if self.regression:
+            self.order = order
+            self.poly_normed = poly_normed
+            self.poly_rule = poly_rule
+            self.cross_truncation = cross_truncation
+
             self.nodes = simulationNodes.distNodes
             self.dim = self.nodes.shape[1]
             self.weights = None
@@ -969,10 +978,10 @@ class TimeDependentStatistics(ABC, Statistics):
                 self.dist = simulationNodes.joinedStandardDists
             else:
                 self.dist = simulationNodes.joinedDists
-            cross_truncation = kwargs.get("cross_truncation", 1.0)
+            #cross_truncation = kwargs.get("cross_truncation", 1.0)
             self.polynomial_expansion, self.polynomial_norms = cp.generate_expansion(
-                order, self.dist, rule=poly_rule, normed=poly_normed,
-                graded=True, reverse=True, cross_truncation=cross_truncation, retall=True)
+                self.order, self.dist, rule=self.poly_rule, normed=self.poly_normed,
+                graded=True, reverse=True, cross_truncation=self.cross_truncation, retall=True)
         
         if self.compute_sobol_total_indices_with_samples:
             if simulationNodes is not None:
@@ -985,9 +994,15 @@ class TimeDependentStatistics(ABC, Statistics):
             if self.uqef_simulationNodes is None:
                 raise Exception
 
-    def prepareForScStatistics(self, simulationNodes, order, poly_normed, poly_rule, *args, **kwargs):
+    def prepareForScStatistics(self, simulationNodes, order, poly_normed, poly_rule, regression=False, cross_truncation=1.0, *args, **kwargs):
         # TODO Check if self.list_of_unsuccessful_runs is empty; if not
         # the program should not proceed with the analysis; or when regression (uq_method=) should update the self.nodes; self.N = self.numEvaluations
+        self.order = order
+        self.poly_normed = poly_normed
+        self.poly_rule = poly_rule
+        self.regression = regression
+        self.cross_truncation = cross_truncation
+    
         self.nodes = simulationNodes.distNodes
         self.N = self.numEvaluations = self.nodes.shape[1]  # should be equal to self.number_of_unique_index_runs
         self.dim = self.nodes.shape[1]
@@ -996,16 +1011,17 @@ class TimeDependentStatistics(ABC, Statistics):
         else:
             self.dist = simulationNodes.joinedDists
         self.weights = simulationNodes.weights
-        cross_truncation = kwargs.get("cross_truncation", 1.0)
+        #cross_truncation = kwargs.get("cross_truncation", 1.0)
         self.polynomial_expansion, self.polynomial_norms = cp.generate_expansion(
-            order, self.dist, rule=poly_rule, normed=poly_normed,
-            graded=True, reverse=True, cross_truncation=cross_truncation, retall=True)
+            self.order, self.dist, rule=self.poly_rule, normed=self.poly_normed,
+            graded=True, reverse=True, cross_truncation=self.cross_truncation, retall=True)
     
-    def prepareForMcSaltelliStatistics(self, simulationNodes, numEvaluations=None, regression=None, order=None,
-                                    poly_normed=None, poly_rule=None, *args, **kwargs):
-        self.prepareForMcStatistics(simulationNodes, numEvaluations, regression, order, poly_normed, poly_rule,
-                                   *args, **kwargs)
-
+    def prepareForMcSaltelliStatistics(self, simulationNodes, numEvaluations=None, regression=False, order=None,
+                                    poly_normed=None, poly_rule=None, cross_truncation=1.0, *args, **kwargs):
+        self.prepareForMcStatistics(
+            simulationNodes=simulationNodes, numEvaluations=numEvaluations, 
+            regression=regression, order=order, poly_normed=poly_normed, poly_rule=poly_rule, cross_truncation=cross_truncation,
+            *args, **kwargs)
     # =================================================================================================
 
     def _get_measured_qoi_at_previous_timestamp_if_autoregressive_module_first_order(self, single_qoi_column, timestamp):
@@ -1096,7 +1112,7 @@ class TimeDependentStatistics(ABC, Statistics):
             if "gpce_coeff" in result_dict:
                 utility.save_gpce_coeffs(workingDir=self.workingDir, coeff=result_dict["gpce_coeff"], qoi=single_qoi_column, timestamp=timestamp)
 
-    def _save_plot_and_clear_result_dict_single_qoi(self, single_qoi_column):
+    def save_print_plot_and_clear_result_dict_single_qoi(self, single_qoi_column):
         if self.instantly_save_results_for_each_time_step:
             # In this case self.result_dict has already been emptied
             return
@@ -1107,7 +1123,7 @@ class TimeDependentStatistics(ABC, Statistics):
 
         # In this case the results where collected in the self.result_dict dict and can be saved and plotted
         # Saving Stat Dict for a single qoi as soon as it is computed/ all time steps are processed
-        fileName = "statistics_dictionary_qoi_" + single_qoi_column + ".pkl"
+        fileName = f"statistics_dictionary_qoi_{single_qoi_column}.pkl" #+ single_qoi_column + ""
         fullFileName = os.path.abspath(os.path.join(str(self.workingDir), fileName))
         with open(fullFileName, 'wb') as handle:
             pickle.dump(self.result_dict[single_qoi_column], handle, protocol=pickle.HIGHEST_PROTOCOL)
@@ -1118,6 +1134,11 @@ class TimeDependentStatistics(ABC, Statistics):
             dict_what_to_plot=self.dict_what_to_plot,
             directory=self.workingDir
         )
+
+        self.printResults_single_qoi(
+            single_qoi_column=single_qoi_column, 
+            dict_time_vs_qoi_stat=self.result_dict[single_qoi_column]
+            )
 
         # Freeing up the memory
         # del self.result_dict[single_qoi_column]
@@ -1131,16 +1152,13 @@ class TimeDependentStatistics(ABC, Statistics):
 
     # =================================================================================================
 
-    def calcStatisticsForMcParallel(self, chunksize=1, regression=False, *args, **kwargs):
+    def calcStatisticsForMcParallel(self, chunksize=1, *args, **kwargs):
         self.result_dict = defaultdict(dict)
 
         if self.rank == 0:
-            self._groupby_df_simulation_results()
+            self._groupby_df_simulation_results(columns_to_group_by=self.time_column_name)
             keyIter = list(self.groups.keys())
             # print(f"DEBUGGING - keyIter - {keyIter}")
- 
-        # TODO Move this line to the prepare method
-        self.regression = regression
 
         compute_other_stat_besides_pce_surrogate = kwargs.get("compute_other_stat_besides_pce_surrogate", self.compute_other_stat_besides_pce_surrogate)
 
@@ -1177,7 +1195,7 @@ class TimeDependentStatistics(ABC, Statistics):
                 #     for key in keyIter
                 # )
 
-                if regression:
+                if self.regression:
                     nodesChunks = [self.nodes] * len(keyIter_chunk)
                     weightsChunks = [self.weights] * len(keyIter_chunk)
                     distChunks = [self.dist] * len(keyIter_chunk)
@@ -1185,7 +1203,7 @@ class TimeDependentStatistics(ABC, Statistics):
 
                 # TODO Probably all processes already have these data -
                 #  I would not have to propagate those if parallel_calc_stats_for_gPCE would be a class method
-                regressionChunks = [regression] * len(keyIter_chunk)
+                regressionChunks = [self.regression] * len(keyIter_chunk)
                 dimChunks = [self.dim] * len(keyIter_chunk)
                 compute_Sobol_t_Chunks = [self.compute_Sobol_t] * len(keyIter_chunk)
                 compute_Sobol_m_Chunks = [self.compute_Sobol_m] * len(keyIter_chunk)
@@ -1210,7 +1228,7 @@ class TimeDependentStatistics(ABC, Statistics):
                     solver_time_start = time.time()
                     if regression:
                         chunk_results_it = executor.map(
-                            parallelStatistics.parallel_calc_stats_for_gPCE,
+                            parallel_statistics.parallel_calc_stats_for_gPCE,
                             keyIter_chunk,
                             list_of_qoi_values_chunk,
                             distChunks,
@@ -1229,7 +1247,7 @@ class TimeDependentStatistics(ABC, Statistics):
                         )
                     else:
                         chunk_results_it = executor.map(
-                            parallelStatistics.parallel_calc_stats_for_MC,
+                            parallel_statistics.parallel_calc_stats_for_MC,
                             keyIter_chunk,
                             list_of_qoi_values_chunk, #generator_of_simulations_df
                             numEvaluations_chunk,
@@ -1242,7 +1260,7 @@ class TimeDependentStatistics(ABC, Statistics):
                             unordered=self.unordered
                         )
                         # chunk_results_it = executor.map(
-                        #     parallelStatistics.parallel_calc_stats_for_MC,
+                        #     parallel_statistics.parallel_calc_stats_for_MC,
                         #     keyIter,
                         #     generator_of_simulations_df,
                         #     self.numEvaluations,
@@ -1276,22 +1294,19 @@ class TimeDependentStatistics(ABC, Statistics):
                         utility.save_covariance_matrix(covariance_matrix_loc, self.workingDir, single_qoi_column)
                         utility.plot_covariance_matrix(covariance_matrix_loc, self.workingDir, filname=f"covariance_matrix_{single_qoi_column}.png")
                         print(f"covariance_matrix for {single_qoi_column} is computed: {covariance_matrix_loc}")
-                    self._save_plot_and_clear_result_dict_single_qoi(single_qoi_column)
+                    self.save_print_plot_and_clear_result_dict_single_qoi(single_qoi_column)
                     del chunk_results_it
                     del chunk_results
 
-    def calcStatisticsForEnsembleParallel(self, chunksize=1, regression=False, *args, **kwargs):
-        self.calcStatisticsForMcParallel(chunksize=chunksize, regression=False, *args, **kwargs)
+    def calcStatisticsForEnsembleParallel(self, chunksize=1, *args, **kwargs):
+        self.calcStatisticsForMcParallel(chunksize=chunksize, *args, **kwargs)
 
-    def calcStatisticsForMcSaltelliParallel(self, chunksize=1, regression=False, *args, **kwargs):
+    def calcStatisticsForMcSaltelliParallel(self, chunksize=1, *args, **kwargs):
         self.result_dict = defaultdict(dict)
 
         if self.rank == 0:
-            self._groupby_df_simulation_results()
+            self._groupby_df_simulation_results(columns_to_group_by=self.time_column_name)
             keyIter = list(self.groups.keys())
-
-        # TODO Move this line to the prepare method
-        self.regression = regression
 
         for single_qoi_column in self.list_qoi_column:
             if self.rank == 0:
@@ -1324,7 +1339,7 @@ class TimeDependentStatistics(ABC, Statistics):
                     solver_time_start = time.time()
                     # TODO in case is compute_sobol_total_indices_with_samples True propagate UQEF.Samples.parameters
                     chunk_results_it = executor.map(
-                        parallelStatistics.parallel_calc_stats_for_mc_saltelli,
+                        parallel_statistics.parallel_calc_stats_for_mc_saltelli,
                         keyIter_chunk,
                         list_of_qoi_values_chunk,
                         numEvaluations_chunk,
@@ -1354,16 +1369,16 @@ class TimeDependentStatistics(ABC, Statistics):
                                 single_qoi_column, timestamp=result[0], result_dict=result[1])
                             if self.instantly_save_results_for_each_time_step:
                                 del result[1]
-                    self._save_plot_and_clear_result_dict_single_qoi(single_qoi_column)
+                    self.save_print_plot_and_clear_result_dict_single_qoi(single_qoi_column)
                     del chunk_results_it
                     del chunk_results
 
 
-    def calcStatisticsForScParallel(self, chunksize=1, regression=False, *args, **kwargs):
+    def calcStatisticsForScParallel(self, chunksize=1, *args, **kwargs):
         self.result_dict = defaultdict(dict)
 
         if self.rank == 0:
-            self._groupby_df_simulation_results()
+            self._groupby_df_simulation_results(columns_to_group_by=self.time_column_name)
             keyIter = list(self.groups.keys())
 
         # TODO Move this line to the prepare method
@@ -1394,7 +1409,7 @@ class TimeDependentStatistics(ABC, Statistics):
                 weightsChunks = [self.weights] * len(keyIter_chunk)
                 polynomial_expansionChunks = [self.polynomial_expansion] * len(keyIter_chunk)
 
-                regressionChunks = [regression] * len(keyIter_chunk)
+                regressionChunks = [self.regression] * len(keyIter_chunk)
                 compute_Sobol_t_Chunks = [self.compute_Sobol_t] * len(keyIter_chunk)
                 compute_Sobol_m_Chunks = [self.compute_Sobol_m] * len(keyIter_chunk)
                 store_qoi_data_in_stat_dict_Chunks = [self.store_qoi_data_in_stat_dict] * len(keyIter_chunk)
@@ -1408,7 +1423,7 @@ class TimeDependentStatistics(ABC, Statistics):
                     solver_time_start = time.time()
                     if self.compute_kl_expansion_of_qoi and not self.compute_timewise_gpce_next_to_kl_expansion:
                         chunk_results_it = executor.map(
-                            parallelStatistics.parallel_calc_stats_for_KL,
+                            parallel_statistics.parallel_calc_stats_for_KL,
                             keyIter_chunk,
                             list_of_qoi_values_chunk,
                             weightsChunks,
@@ -1417,7 +1432,7 @@ class TimeDependentStatistics(ABC, Statistics):
                         )
                     else:
                         chunk_results_it = executor.map(
-                            parallelStatistics.parallel_calc_stats_for_gPCE,
+                            parallel_statistics.parallel_calc_stats_for_gPCE,
                             keyIter_chunk,
                             list_of_qoi_values_chunk, #generator_of_simulations_df,
                             distChunks,
@@ -1435,7 +1450,7 @@ class TimeDependentStatistics(ABC, Statistics):
                             unordered=self.unordered
                         )
                         # chunk_results_it = executor.map(
-                        #     parallelStatistics.parallel_calc_stats_for_gPCE,
+                        #     parallel_statistics.parallel_calc_stats_for_gPCE,
                         #     keyIter_chunk,
                         #     generator_of_simulations_df,
                         #     self.dist,
@@ -1503,18 +1518,28 @@ class TimeDependentStatistics(ABC, Statistics):
                             utility.save_covariance_matrix(covariance_matrix_loc, self.workingDir, single_qoi_column)
                             utility.plot_covariance_matrix(covariance_matrix_loc, self.workingDir, filname=f"covariance_matrix_{single_qoi_column}.png")
                             print(f"covariance_matrix for {single_qoi_column} is computed: {covariance_matrix_loc}")
-                    self._save_plot_and_clear_result_dict_single_qoi(single_qoi_column)
+                    self.save_print_plot_and_clear_result_dict_single_qoi(single_qoi_column)
                     del chunk_results_it
                     del chunk_results
 
     # =================================================================================================
 
-    def calcStatisticsForMc(self, regression=False, *args, **kwargs):
+    def calcStatisticsForMc(self, rawSamples=None, timesteps=None,
+                            simulationNodes=None, numEvaluations=None, order=None, regression=None, solverTimes=None,
+                            work_package_indexes=None, original_runtime_estimator=None, 
+                            poly_normed=None, poly_rule=None, cross_truncation=1.0,
+                            *args, **kwargs):
+        """
+        This function groups results by time column and then iterates over all the qois of interest columns
+        and updates the self.result_dict by adding the following entries:
+        for each [single_qoi_column][key/single time step]
+              qoi_values[optional], gPCE[optional]
+              gpce_coeff[optional]
+              E, Var, StdDev, Skew, Kurt, P10, P90, Sobol_t[optional]
+        """
         self.result_dict = dict()
-        self._groupby_df_simulation_results()
+        self._groupby_df_simulation_results(columns_to_group_by=self.time_column_name)
         # keyIter = list(self.groups.keys())
-
-        self.regression = regression
 
         compute_other_stat_besides_pce_surrogate = kwargs.get("compute_other_stat_besides_pce_surrogate", self.compute_other_stat_besides_pce_surrogate)
 
@@ -1534,16 +1559,19 @@ class TimeDependentStatistics(ABC, Statistics):
 
                 if self.store_qoi_data_in_stat_dict:
                     self.result_dict[single_qoi_column][key]["qoi_values"] = qoi_values
-                if regression:
+                
+                if self.regression:
                     qoi_gPCE, qoi_coeff = cp.fit_regression(self.polynomial_expansion, self.nodes, qoi_values, retall=True)
                     self.result_dict[single_qoi_column][key]['gpce_coeff'] = qoi_coeff
-                    self._calc_stats_for_gPCE_single_qoi(self.dist, single_qoi_column, key, qoi_gPCE, compute_other_stat_besides_pce_surrogate)
+                    self._calc_stats_for_gPCE_single_qoi(
+                        single_qoi_column, key, self.dist, qoi_gPCE, compute_other_stat_besides_pce_surrogate)
                 else:
                     self.numEvaluations = len(qoi_values)
                     # local_result_dict["E"] = np.sum(qoi_values, axis=0, dtype=np.float64) / self.numEvaluations
                     self.result_dict[single_qoi_column][key]["E"] = np.mean(qoi_values, 0)
-                    self.result_dict[single_qoi_column][key]["Var"] = np.sum((qoi_values - self.result_dict[single_qoi_column][key]["E"]) ** 2, axis=0,
-                                                      dtype=np.float64) / (self.numEvaluations - 1)
+                    self.result_dict[single_qoi_column][key]["Var"] = np.var(qoi_values, ddof=1)
+                    # self.result_dict[single_qoi_column][key]["Var"] = np.sum((qoi_values - self.result_dict[single_qoi_column][key]["E"]) ** 2, axis=0,
+                    #                                   dtype=np.float64) / (self.numEvaluations - 1)
                     # local_result_dict["StdDev"] = np.sqrt(local_result_dict["Var"], dtype=np.float64)
                     self.result_dict[single_qoi_column][key]["StdDev"] = np.std(qoi_values, 0, ddof=1)
                     self.result_dict[single_qoi_column][key]["Skew"] = scipy.stats.skew(qoi_values, axis=0, bias=True)
@@ -1556,8 +1584,8 @@ class TimeDependentStatistics(ABC, Statistics):
                         self.result_dict[single_qoi_column][key]["P90"] = self.result_dict[single_qoi_column][key]["P90"][0]
                     if self.compute_Sobol_t and self.compute_sobol_total_indices_with_samples \
                             and self.uqef_simulationNodes is not None:
-                            self.result_dict[key]["Sobol_t"] = \
-                                sensIndicesSamplingBasedHelpers.compute_sens_indices_based_on_samples_rank_based(
+                            self.result_dict[single_qoi_column][key]["Sobol_t"] = \
+                                sens_indices_sampling_based_utils.compute_sens_indices_based_on_samples_rank_based(
                                     samples=self.uqef_simulationNodes.parameters.T[:self.numEvaluations],
                                     Y=qoi_values[:self.numEvaluations, np.newaxis], D=self.dim, N=self.numEvaluations)
                 if self.instantly_save_results_for_each_time_step:
@@ -1570,14 +1598,25 @@ class TimeDependentStatistics(ABC, Statistics):
             solver_time = solver_time_end - solver_time_start
             print(f"solver_time for qoi {single_qoi_column}: {solver_time}")
 
-            self._save_plot_and_clear_result_dict_single_qoi(single_qoi_column)
+            self.save_print_plot_and_clear_result_dict_single_qoi(single_qoi_column)
 
-    def calcStatisticsForMcSaltelli(self, regression=False, *args, **kwargs):
+    def calcStatisticsForMcSaltelli(self, rawSamples=None, timesteps=None,
+                                    simulationNodes=None, numEvaluations=None, order=None, regression=None, solverTimes=None,
+                                    work_package_indexes=None, original_runtime_estimator=None, 
+                                    poly_normed=None, poly_rule=None, cross_truncation=1.0,
+                                    *args, **kwargs):
+        """
+        This function groups resutl by time column and then iterates over all the qois of interest columns
+        and updates the self.result_dict by adding the following entries:
+        for each [single_qoi_column][key/single time step]
+              qoi_values[optional],
+              E, Var, StdDev, Skew, Kurt, P10, P90, Sobol_t[optional], Sobol_m[optional]
+
+        Note: regression is still not implemented for Saltelli
+        """
         self.result_dict = dict()
-        self._groupby_df_simulation_results()
+        self._groupby_df_simulation_results(columns_to_group_by=self.time_column_name)
         # keyIter = list(self.groups.keys())
-
-        self.regression = regression
 
         for single_qoi_column in self.list_qoi_column:
             self.result_dict[single_qoi_column] = defaultdict(dict)
@@ -1601,11 +1640,13 @@ class TimeDependentStatistics(ABC, Statistics):
                 if self.store_qoi_data_in_stat_dict:
                     self.result_dict[single_qoi_column][key]["qoi_values"] = qoi_values # for Saltelli this is N(d+2)xt
                     # self.result_dict[single_qoi_column][key]["qoi_values"] = standard_qoi_values # for Saltelli this is Nxt
+                
                 # local_result_dict["E"] = np.sum(qoi_values, axis=0, dtype=np.float64) / self.numEvaluations
                 self.result_dict[single_qoi_column][key]["E"] = np.mean(standard_qoi_values, 0)
-                self.result_dict[single_qoi_column][key]["Var"] = np.sum(
-                    (standard_qoi_values - self.result_dict[single_qoi_column][key]["E"]) ** 2, axis=0,
-                    dtype=np.float64) / (self.numEvaluations - 1)
+                self.result_dict[single_qoi_column][key]["Var"] = np.var(standard_qoi_values, ddof=1)
+                # self.result_dict[single_qoi_column][key]["Var"] = np.sum(
+                #     (standard_qoi_values - self.result_dict[single_qoi_column][key]["E"]) ** 2, axis=0,
+                #     dtype=np.float64) / (self.numEvaluations - 1)
                 # local_result_dict["StdDev"] = np.sqrt(local_result_dict["Var"], dtype=np.float64)
                 self.result_dict[single_qoi_column][key]["StdDev"] = np.std(standard_qoi_values, 0, ddof=1)
                 self.result_dict[single_qoi_column][key]["Skew"] = scipy.stats.skew(standard_qoi_values, axis=0,
@@ -1623,21 +1664,21 @@ class TimeDependentStatistics(ABC, Statistics):
 
                 if self.compute_sobol_total_indices_with_samples and self.uqef_simulationNodes is not None:
                     if self.compute_Sobol_t:
-                        self.result_dict[key]["Sobol_t"] = \
-                            sensIndicesSamplingBasedHelpers.compute_sens_indices_based_on_samples_rank_based(
+                        self.result_dict[single_qoi_column][key]["Sobol_t"] = \
+                            sens_indices_sampling_based_utils.compute_sens_indices_based_on_samples_rank_based(
                                 samples=self.uqef_simulationNodes.parameters.T[:self.numEvaluations],
                                 Y=qoi_values_saltelli[:self.numEvaluations, :], D=self.dim, N=self.numEvaluations)
                 else:
                     if self.compute_Sobol_t or self.compute_Sobol_m:
-                        s_i, s_t = sensIndicesSamplingBasedHelpers.compute_first_and_total_order_sens_indices_based_on_samples_pick_freeze(
+                        s_i, s_t = sens_indices_sampling_based_utils.compute_first_and_total_order_sens_indices_based_on_samples_pick_freeze(
                             qoi_values_saltelli, self.dim, self.numEvaluations, compute_first=self.compute_Sobol_m, 
                             compute_total=self.compute_Sobol_t, code_first=3, code_total=4,
                             do_printing=False
                             )
                         if self.compute_Sobol_t:
-                            self.result_dict[key]["Sobol_t"] = s_t
+                            self.result_dict[single_qoi_column][key]["Sobol_t"] = s_t
                         if self.compute_Sobol_m:
-                            self.result_dict[key]["Sobol_m"] = s_i
+                            self.result_dict[single_qoi_column][key]["Sobol_m"] = s_i
 
                 if self.instantly_save_results_for_each_time_step:
                     self._save_statistics_dictionary_single_qoi_single_timestamp(
@@ -1649,14 +1690,29 @@ class TimeDependentStatistics(ABC, Statistics):
             solver_time = solver_time_end - solver_time_start
             print(f"solver_time for qoi {single_qoi_column}: {solver_time}")
 
-            self._save_plot_and_clear_result_dict_single_qoi(single_qoi_column)
+            self.save_print_plot_and_clear_result_dict_single_qoi(single_qoi_column)
 
-    def calcStatisticsForSc(self, regression=False, *args, **kwargs):
+    def calcStatisticsForSc(self, rawSamples=None, timesteps=None,
+                            simulationNodes=None, order=None, regression=None, solverTimes=None,
+                            work_package_indexes=None, original_runtime_estimator=None, 
+                            poly_normed=None, poly_rule=None, cross_truncation=1.0,
+                            *args, **kwargs):
+        """
+        This function groups resutl by time column and then iterates over all the qois of interest columns
+        and updates the self.result_dict by adding the following entries:
+        for each [single_qoi_column][key/single time step]
+        if self.compute_kl_expansion_of_qoi is False or self.compute_timewise_gpce_next_to_kl_expansion is True:
+            qoi_values[optional], gPCE[optional]
+            gpce_coeff[optional]
+            E
+            if compute_other_stat_besides_pce_surrogate is True:
+                Var, StdDev, Skew, Kurt, P10, P90, Sobol_t[optional], Sobol_m[optional], Sobol_m2[optional]
+        if self.compute_kl_expansion_of_qoi is True:
+            qoi_values[optional], E
+        """
         self.result_dict = dict()
-        self._groupby_df_simulation_results()
+        self._groupby_df_simulation_results(columns_to_group_by=self.time_column_name)
         # keyIter = list(self.groups.keys())
-
-        self.regression = regression
 
         compute_other_stat_besides_pce_surrogate = kwargs.get("compute_other_stat_besides_pce_surrogate", self.compute_other_stat_besides_pce_surrogate)
 
@@ -1677,17 +1733,20 @@ class TimeDependentStatistics(ABC, Statistics):
                     self.result_dict[single_qoi_column][key]["qoi_values"] = qoi_values
 
                 if self.compute_kl_expansion_of_qoi and not self.compute_timewise_gpce_next_to_kl_expansion:
-                    if self.weights is None or regression:
+                    if self.weights is None or self.regression:
                         self.result_dict[single_qoi_column][key]["E"] = np.mean(qoi_values, 0)
                     else:
                         self.result_dict[single_qoi_column][key]["E"] = np.dot(qoi_values, self.weights)
                 else:
-                    if regression:
+                    if self.regression:
                         qoi_gPCE, qoi_coeff = cp.fit_regression(self.polynomial_expansion, self.nodes, qoi_values, retall=True)
                     else:
                         qoi_gPCE, qoi_coeff = cp.fit_quadrature(self.polynomial_expansion, self.nodes, self.weights, qoi_values, retall=True)
                     self.result_dict[single_qoi_column][key]['gpce_coeff'] = qoi_coeff
-                    self._calc_stats_for_gPCE_single_qoi(self.dist, single_qoi_column, key, qoi_gPCE, compute_other_stat_besides_pce_surrogate)
+                    
+                    self._calc_stats_for_gPCE_single_qoi(
+                        single_qoi_column, key, self.dist, qoi_gPCE, compute_other_stat_besides_pce_surrogate)
+
                     if self.instantly_save_results_for_each_time_step:
                         self._save_statistics_dictionary_single_qoi_single_timestamp(
                             single_qoi_column=single_qoi_column, timestamp=key,
@@ -1732,9 +1791,9 @@ class TimeDependentStatistics(ABC, Statistics):
                     utility.plot_covariance_matrix(covariance_matrix_loc, self.workingDir, filname=f"covariance_matrix_{single_qoi_column}.png")
                     print(f"covariance_matrix for {single_qoi_column} is computed: {covariance_matrix_loc}")
 
-            self._save_plot_and_clear_result_dict_single_qoi(single_qoi_column)
+            self.save_print_plot_and_clear_result_dict_single_qoi(single_qoi_column)
 
-    def _calc_stats_for_gPCE_single_qoi(self, single_qoi_column, dist, key, qoi_gPCE, compute_other_stat_besides_pce_surrogate=True):
+    def _calc_stats_for_gPCE_single_qoi(self, single_qoi_column, key, dist, qoi_gPCE, compute_other_stat_besides_pce_surrogate=True):
         if qoi_gPCE is None:
             qoi_gPCE = self.qoi_gPCE
 
@@ -1764,7 +1823,7 @@ class TimeDependentStatistics(ABC, Statistics):
             # pdf_samples = qoi_dist.pdf(dist_sampling_values)
 
             self.result_dict[single_qoi_column][key]["P10"] = float(cp.Perc(qoi_gPCE, 10, dist, numPercSamples))
-            self.result_dict[key]["P90"] = float(cp.Perc(qoi_gPCE, 90, dist, numPercSamples))
+            self.result_dict[single_qoi_column][key]["P90"] = float(cp.Perc(qoi_gPCE, 90, dist, numPercSamples))
             if isinstance(self.result_dict[single_qoi_column][key]["P10"], list) and len(self.result_dict[single_qoi_column][key]["P10"]) == 1:
                 self.result_dict[single_qoi_column][key]["P10"]= self.result_dict[single_qoi_column][key]["P10"][0]
                 self.result_dict[single_qoi_column][key]["P90"] = self.result_dict[single_qoi_column][key]["P90"][0]
@@ -1857,7 +1916,7 @@ class TimeDependentStatistics(ABC, Statistics):
         Note: this is similar function to utility.add_centered_qoi_column_to_df_simulation_result
         """
         if self.groups is None:
-            self._groupby_df_simulation_results(self.time_column_name)
+            self._groupby_df_simulation_results(columns_to_group_by=self.time_column_name)
         keyIter = list(self.groups.keys())  # list of all the dates
         # adding cantered data of the QoI
         single_qoi_column_centered = single_qoi_column + "_centered"
@@ -2070,13 +2129,17 @@ class TimeDependentStatistics(ABC, Statistics):
 
     # =================================================================================================
 
-    @abstractmethod
+    def printResults(self, timestep=-1, **kwargs):
+        pass    
+
+    def printResults_single_qoi(self, single_qoi_column, dict_time_vs_qoi_stat=None, timestep=-1, **kwargs):
+        pass  
+    
     def prepare_for_plotting(self, timestep=-1, display=False,
                     fileName="", fileNameIdent="", directory="./",
                     fileNameIdentIsFullName=False, safe=True, **kwargs):
-        raise NotImplementedError
+        pass
 
-    @abstractmethod
     def plotResults_single_qoi(self, single_qoi_column, dict_time_vs_qoi_stat=None, timestep=-1, display=False, fileName="",
                                fileNameIdent="", directory="./", fileNameIdentIsFullName=False, safe=True,
                                dict_what_to_plot=None, **kwargs):
@@ -2084,7 +2147,7 @@ class TimeDependentStatistics(ABC, Statistics):
         This function plots the statistics of a single QoI.
         It is more relevant that the plotResults function, which plots all the QoIs.
         """
-        raise NotImplementedError
+        pass
 
     def _plotStatisticsDict_plotly_single_qoi(self, single_qoi_column, dict_time_vs_qoi_stat=None, unalatered=False,
                                               measured=False, forcing=False, recalculateTimesteps=False,
@@ -2094,21 +2157,20 @@ class TimeDependentStatistics(ABC, Statistics):
         This function plots the statistics of a single QoI.
         It should implement the plotting based on plotly library, and present a background engine for the plotResults_single_qoi function.
         """
-        raise NotImplementedError
+        pass
 
-    @abstractmethod
     def plotResults(self, timestep=-1, display=False, fileName="", fileNameIdent="", directory="./",
                     fileNameIdentIsFullName=False, safe=True, dict_what_to_plot=None, **kwargs):
         """
         This function plots the statistics of a single, or multiple, QoI.
         Thake a look at the plotResults_single_qoi function for more details.
         """
-        raise NotImplementedError
+        pass
 
     def _plotStatisticsDict_plotly(self, unalatered=False, measured=False, forcing=False, recalculateTimesteps=False,
                                    window_title='Forward UQ & SA', filename="sim-plotly.html", display=False,
                                    dict_what_to_plot=None, **kwargs):
-        raise NotImplementedError
+        pass
 
     def _compute_number_of_rows_for_plotting(self, dict_what_to_plot=None, forcing=False,
                                              list_qoi_column_to_plot=None, result_dict=None, **kwargs):

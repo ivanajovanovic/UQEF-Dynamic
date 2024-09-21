@@ -27,7 +27,7 @@ from LarsimUtilityFunctions import larsimPaths as paths
 import sys
 sys.path.insert(1, '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic')
 
-from uqef_dynamic.utils import saltelliSobolIndicesHelpingFunctions
+from uqef_dynamic.utils import sens_indices_sampling_based_utils
 from uqef_dynamic.utils import utility
 
 # from larsim import LarsimModel

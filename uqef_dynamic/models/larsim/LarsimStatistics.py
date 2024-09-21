@@ -28,9 +28,8 @@ from LarsimUtilityFunctions import larsimConfig
 import LarsimUtilityFunctions.larsimPaths as paths
 from LarsimUtilityFunctions.larsimModel import LarsimConfigurations
 
-#from UQEFPP.common import sensIndicesSamplingBasedHelpers
-from uqef_dynamic.utils import sensIndicesSamplingBasedHelpers
-from uqef_dynamic.utils import parallelStatistics
+from uqef_dynamic.utils import sens_indices_sampling_based_utils
+from uqef_dynamic.utils import parallel_statistics
 from uqef_dynamic.utils import colors
 
 # from numba import jit, prange
@@ -465,7 +464,7 @@ class LarsimStatistics(Statistics):
             if executor is not None:  # master process
                 solver_time_start = time.time()
                 if regression:
-                    chunk_results_it = executor.map(parallelStatistics.parallel_calc_stats_for_gPCE,
+                    chunk_results_it = executor.map(parallel_statistics.parallel_calc_stats_for_gPCE,
                                                     keyIter_chunk,
                                                     list_of_simulations_df_chunk,
                                                     distChunks,
@@ -479,7 +478,7 @@ class LarsimStatistics(Statistics):
                                                     chunksize=self.mpi_chunksize,
                                                     unordered=self.unordered)
                 else:
-                    chunk_results_it = executor.map(parallelStatistics.parallel_calc_stats_for_MC,
+                    chunk_results_it = executor.map(parallel_statistics.parallel_calc_stats_for_MC,
                                                     keyIter_chunk,
                                                     list_of_simulations_df_chunk,
                                                     numEvaluations_chunk,
@@ -534,7 +533,7 @@ class LarsimStatistics(Statistics):
         with futures.MPICommExecutor(MPI.COMM_WORLD, root=0) as executor:
             if executor is not None:  # master process
                 solver_time_start = time.time()
-                chunk_results_it = executor.map(parallelStatistics.parallel_calc_stats_for_gPCE,
+                chunk_results_it = executor.map(parallel_statistics.parallel_calc_stats_for_gPCE,
                                                 keyIter_chunk,
                                                 list_of_simulations_df_chunk,
                                                 distChunks,
@@ -589,7 +588,7 @@ class LarsimStatistics(Statistics):
         with futures.MPICommExecutor(MPI.COMM_WORLD, root=0) as executor:
             if executor is not None:  # master process
                 solver_time_start = time.time()
-                chunk_results_it = executor.map(parallelStatistics.parallel_calc_stats_for_mc_saltelli,
+                chunk_results_it = executor.map(parallel_statistics.parallel_calc_stats_for_mc_saltelli,
                                                 keyIter_chunk,
                                                 list_of_simulations_df_chunk,
                                                 numEvaluations_chunk,
@@ -855,7 +854,7 @@ class LarsimStatistics(Statistics):
                 self.result_dict[key]["P90"] = self.result_dict[key]["P90"][0]
 
             if self._compute_Sobol_t or self._compute_Sobol_m:
-                s_i, s_t = sensIndicesSamplingBasedHelpers.compute_first_and_total_order_sens_indices_based_on_samples_pick_freeze(
+                s_i, s_t = sens_indices_sampling_based_utils.compute_first_and_total_order_sens_indices_based_on_samples_pick_freeze(
                     qoi_values_saltelli, self.dim, numEvaluations, compute_first=self._compute_Sobol_m, 
                     compute_total=self._compute_Sobol_t, code_first=3, code_total=4,
                     do_printing=False
