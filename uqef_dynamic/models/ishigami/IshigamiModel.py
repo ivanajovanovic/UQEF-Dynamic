@@ -226,3 +226,61 @@ class IshigamiModel(TimeDependentModel):
 #         local_sobol = [D1/D, D2/D, 0.]
 #         global_sobol = [(D1+D13)/D, D2/D, D13/D]
 #         return mean, D, local_sobol, global_sobol
+
+
+def ishigami_func_vec(coordinates, a_model_param=7, b_model_param=0.1):
+    x1, x2, x3 = coordinates
+    x1_is_array = isinstance(x1, list) or isinstance(x1, np.ndarray)
+    x2_is_array = isinstance(x2, list) or isinstance(x2, np.ndarray)
+    x3_is_array = isinstance(x3, list) or isinstance(x3, np.ndarray)
+
+    if x1_is_array and x2_is_array and x3_is_array:
+        x1_array = np.array(x1)
+        x2_array = np.array(x2)
+        x3_array = np.array(x3)
+        result_vec = np.empty_like(x1_array)
+        i=0
+        for x1_loc, x2_loc, x3_loc in zip(x1_array, x2_array, x3_array):
+            result_vec[i] = ishigami_func((x1_loc, x2_loc, x3_loc), a_model_param=a_model_param, b_model_param=b_model_param)
+            i+=1
+    elif x1_is_array and x2_is_array and isinstance(x3, (int, float)):
+        x1_array = np.array(x1)
+        x2_array = np.array(x2)
+        result_vec = np.empty_like(x1_array)
+        i=0
+        for x1_loc, x2_loc in zip(x1_array, x2_array):
+            result_vec[i] = ishigami_func((x1_loc, x2_loc, x3), a_model_param=a_model_param, b_model_param=b_model_param)
+            i+=1
+    elif x1_is_array and isinstance(x2, (int, float)) and x3_array:
+        x1_array = np.array(x1)
+        x3_array = np.array(x3)
+        result_vec = np.empty_like(x1_array)
+        i=0
+        for x1_loc, x3_loc in zip(x1_array, x3_array):
+            result_vec[i] = ishigami_func((x1_loc, x2, x3_loc), a_model_param=a_model_param, b_model_param=b_model_param)
+            i+=1
+    elif isinstance(x1, (int, float)) and x2_is_array and x3_is_array:
+        x2_array = np.array(x2)
+        x3_array = np.array(x3)
+        result_vec = np.empty_like(x2_array)
+        i=0
+        for x2_loc, x3_loc in zip(x2_array, x3_array):
+            result_vec[i] = ishigami_func((x1, x2_loc, x3_loc), a_model_param=a_model_param, b_model_param=b_model_param)
+            i+=1
+    elif isinstance(x1, (int, float)) and x2_is_array and isinstance(x3, (int, float)):
+        x2_array = np.array(x2)
+        result_vec = np.empty_like(x2_array)
+        i=0
+        for x2_loc in x2_array:
+            result_vec[i] = ishigami_func((x1, x2_loc, x3), a_model_param=a_model_param, b_model_param=b_model_param)
+            i+=1
+    elif isinstance(x1, (int, float)) and isinstance(x2, (int, float)) and x3_is_array:
+        x3_array = np.array(x3)
+        result_vec = np.empty_like(x3_array)
+        i=0
+        for x3_loc in x3_array:
+            result_vec[i] = ishigami_func((x1, x2, x3_loc), a_model_param=a_model_param, b_model_param=b_model_param)
+            i+=1
+    elif isinstance(x1, (int, float)) and isinstance(x2, (int, float)) and isinstance(x3, (int, float)):
+        result_vec = ishigami_func((x1, x2, x3), a_model_param=a_model_param, b_model_param=b_model_param)
+    return result_vec

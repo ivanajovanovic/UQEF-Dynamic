@@ -21,7 +21,7 @@ pd.options.mode.chained_assignment = None
 
 # sys.path.insert(0, os.getcwd())
 # sys.path.insert(0, '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic')
-sys.path.insert(0, '/work/ga45met/Backup/UQEF-Dynamic')
+sys.path.insert(0, '/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic')
 
 from uqef_dynamic.utils import utility
 
@@ -62,13 +62,13 @@ if local_debugging:
     uqsim.args.uncertain = "all"
     uqsim.args.chunksize = 1
 
-    uqsim.args.uq_method = "sc"  # "sc" | "saltelli" | "mc" | "ensemble"
+    uqsim.args.uq_method = "saltelli"  # "sc" | "saltelli" | "mc" | "ensemble"
     
-    uqsim.args.mc_numevaluations = 10000
+    uqsim.args.mc_numevaluations = 1000
     uqsim.args.sampling_rule = "random"  # "random" | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
     
-    uqsim.args.sc_q_order = 8  # 7 8 8 #10 3
-    uqsim.args.sc_p_order = 4  # 3, 3, 4 5, 6, 8
+    uqsim.args.sc_q_order = 14  # 7 8 8 #10 3
+    uqsim.args.sc_p_order = 7  # 3, 3, 4 5, 6, 8
     uqsim.args.sc_quadrature_rule = "g"  # "p" "genz_keister_24" "leja" "clenshaw_curtis"
 
     uqsim.args.read_nodes_from_file = False
@@ -83,7 +83,7 @@ if local_debugging:
     uqsim.args.sc_poly_normed = True  # True
     uqsim.args.sc_sparse_quadrature = False  # False
     uqsim.args.regression = False
-    uqsim.args.cross_truncation = 0.7
+    uqsim.args.cross_truncation = 1.0
 
     # uqsim.args.inputModelDir = os.path.abspath(os.path.join('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2','Larsim-data'))
     uqsim.args.inputModelDir = pathlib.Path("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/HBV-SASK-data")
@@ -106,7 +106,7 @@ if local_debugging:
     uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "simple_oscilator_model", 'sc_kl10_l7_p3_generalized'))  # mc_10000 mc_10000_terminal_voltage
     uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "battery_model", 'mc_10000_19_09'))  # sc_kl10_p3_l7_battery_terminal_vol mc_10000 mc_10000_terminal_voltage 'mc_1000_battery_uq_env'
     
-    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/work/ga45met", "ishigami_runs", 'sc_full_p4_l8_ct07_19_09'))
+    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/work/ga45met", "ishigami_runs", "simulations_sep_2024", 'saltelli_1000_random_refactored'))
 
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
 
@@ -122,7 +122,7 @@ if local_debugging:
     uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/configuration_battery.json'
     # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/configuration_simple_oscilator.json'
 
-    uqsim.args.config_file = '/work/ga45met/Backup/UQEF-Dynamic/data/configurations/configuration_ishigami.json'
+    uqsim.args.config_file = '/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic/data/configurations/configuration_ishigami.json'
 
     uqsim.args.sampleFromStandardDist = True  # False
 
@@ -141,7 +141,7 @@ if local_debugging:
 
     uqsim.args.num_cores = 1
 
-    uqsim.args.save_all_simulations = True  # True for sc
+    uqsim.args.save_all_simulations = False  # True for sc
     uqsim.args.store_qoi_data_in_stat_dict = False  # if set to True, the qoi_values entry is stored in the stat_dict 
     uqsim.args.store_gpce_surrogate_in_stat_dict = True
     uqsim.args.collect_and_save_state_data = False # False 
@@ -154,11 +154,11 @@ utility.DEFAULT_DICT_WHAT_TO_PLOT = {
     "E_minus_std": False, "E_plus_std": False, "P10": True, "P90": True,
     "StdDev": True, "Skew": False, "Kurt": False, "Sobol_m": False, "Sobol_m2": False, "Sobol_t": True
 }
-compute_sobol_total_indices_with_samples = True  # This is only relevant in the mc-saltelli's approach
-if uqsim.args.uq_method == "mc" and uqsim.args.compute_Sobol_t:
-    compute_sobol_total_indices_with_samples = True
-# if compute_sobol_total_indices_with_samples and uqsim.args.uq_method == "saltelli" and uqsim.args.compute_Sobol_m:
-#     print(f"Sorry, the Sobol_m is not computed for the saltelli method when compute_sobol_total_indices_with_samples. The compute_Sobol_m is set to False.")
+compute_sobol_indices_with_samples = False  # This is only relevant in the mc-saltelli's approach
+if uqsim.args.uq_method == "mc" and uqsim.args.compute_Sobol_m:
+    compute_sobol_indices_with_samples = True
+# if compute_sobol_indices_with_samples and uqsim.args.uq_method == "saltelli" and uqsim.args.compute_Sobol_m:
+#     print(f"Sorry, the Sobol_m is not computed for the saltelli method when compute_sobol_indices_with_samples. The compute_Sobol_m is set to False.")
 #     uqsim.args.compute_Sobol_m = False
 
 save_gpce_surrogate = True  # if True a gpce surrogate for each QoI for each time step is saved in a separate file
@@ -267,7 +267,7 @@ uqsim.statistics.update({"ishigami"       : (lambda: IshigamiStatistics.Ishigami
     store_qoi_data_in_stat_dict=uqsim.args.store_qoi_data_in_stat_dict,
     store_gpce_surrogate_in_stat_dict=uqsim.args.store_gpce_surrogate_in_stat_dict,
     instantly_save_results_for_each_time_step=uqsim.args.instantly_save_results_for_each_time_step,
-    compute_sobol_total_indices_with_samples=compute_sobol_total_indices_with_samples,
+    compute_sobol_indices_with_samples=compute_sobol_indices_with_samples,
     save_gpce_surrogate=save_gpce_surrogate
 ))})
 uqsim.statistics.update({"productFunction": (lambda: ProductFunctionStatistics.ProductFunctionStatistics(uqsim.configuration_object))})
@@ -289,7 +289,7 @@ uqsim.statistics.update({"hbvsask"         : (lambda: HBVSASKStatistics.HBVSASKS
     store_gpce_surrogate_in_stat_dict=uqsim.args.store_gpce_surrogate_in_stat_dict,
     instantly_save_results_for_each_time_step=uqsim.args.instantly_save_results_for_each_time_step,
     dict_what_to_plot=utility.DEFAULT_DICT_WHAT_TO_PLOT,
-    compute_sobol_total_indices_with_samples=compute_sobol_total_indices_with_samples,
+    compute_sobol_indices_with_samples=compute_sobol_indices_with_samples,
     save_gpce_surrogate=save_gpce_surrogate,
     compute_other_stat_besides_pce_surrogate=compute_other_stat_besides_pce_surrogate,
     compute_kl_expansion_of_qoi = compute_kl_expansion_of_qoi,
@@ -317,7 +317,7 @@ uqsim.statistics.update({"battery"         : (lambda: pybammStatistics.pybammSta
     store_gpce_surrogate_in_stat_dict=uqsim.args.store_gpce_surrogate_in_stat_dict,
     instantly_save_results_for_each_time_step=uqsim.args.instantly_save_results_for_each_time_step,
     dict_what_to_plot=utility.DEFAULT_DICT_WHAT_TO_PLOT,
-    compute_sobol_total_indices_with_samples=compute_sobol_total_indices_with_samples,
+    compute_sobol_indices_with_samples=compute_sobol_indices_with_samples,
     save_gpce_surrogate=save_gpce_surrogate,
     compute_other_stat_besides_pce_surrogate=compute_other_stat_besides_pce_surrogate,
     compute_kl_expansion_of_qoi = compute_kl_expansion_of_qoi,
@@ -345,7 +345,7 @@ uqsim.statistics.update({"simple_oscilator"         : (lambda: simpleOscilatorSt
     store_gpce_surrogate_in_stat_dict=uqsim.args.store_gpce_surrogate_in_stat_dict,
     instantly_save_results_for_each_time_step=uqsim.args.instantly_save_results_for_each_time_step,
     dict_what_to_plot=utility.DEFAULT_DICT_WHAT_TO_PLOT,
-    compute_sobol_total_indices_with_samples=compute_sobol_total_indices_with_samples,
+    compute_sobol_indices_with_samples=compute_sobol_indices_with_samples,
     save_gpce_surrogate=save_gpce_surrogate,
     compute_other_stat_besides_pce_surrogate=compute_other_stat_besides_pce_surrogate,
     compute_kl_expansion_of_qoi = compute_kl_expansion_of_qoi,
@@ -389,6 +389,7 @@ uqsim.simulate()
 end_time_model_simulations = time.time()
 time_model_simulations = end_time_model_simulations - start_time_model_simulations
 
+uqsim.save_simulation_parameters()
 #####################################
 # re-save uqsim.configurationObject
 #####################################

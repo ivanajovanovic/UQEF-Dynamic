@@ -149,8 +149,8 @@ class IshigamiStatistics(TimeDependentStatistics):
 
         Sobol_m_analytical = Sobol_t_analytical = None
         Sobol_m_analytical, Sobol_t_analytical = self.get_analytical_sobol_indices()
-        print("Sobol_m_analytical: {}".format(Sobol_m_analytical, ".6f"))
-        print("Sobol_t_analytical: {}".format(Sobol_t_analytical, ".6f"))
+        print("Sobol_m_analytical: {}".format(Sobol_m_analytical, ".4f"))
+        print("Sobol_t_analytical: {}".format(Sobol_t_analytical, ".4f"))
         Sobol_t_error = np.empty(len(self.labels), dtype=np.float64)
         Sobol_m_error = np.empty(len(self.labels), dtype=np.float64)
 
@@ -181,15 +181,15 @@ class IshigamiStatistics(TimeDependentStatistics):
 
         print("STATISTICS INFO: Sobol' Indices (Error)")
         if self._is_Sobol_t_computed:
-            print("Sobol_t: {}".format(local_result_dict["Sobol_t"], ".6f"))
+            print("Sobol_t: {}".format(local_result_dict["Sobol_t"], ".4f"))
             if Sobol_t_analytical is not None:
-                print("Sobol_t_analytical: {}".format(Sobol_t_analytical, ".6f"))
-                print("Sobol_t_error: {}".format(Sobol_t_error, ".6f"))
+                print("Sobol_t_analytical: {}".format(Sobol_t_analytical, ".4f"))
+                print("Sobol_t_error: {}".format(Sobol_t_error, ".4f"))
         if self._is_Sobol_m_computed:
-            print("Sobol_m: {}".format(local_result_dict["Sobol_m"], ".6f"))
+            print("Sobol_m: {}".format(local_result_dict["Sobol_m"], ".4f"))
             if Sobol_m_analytical is not None:
-                print("Sobol_m_analytical: {}".format(Sobol_m_analytical, ".6f"))
-                print("Sobol_m_error: {}".format(Sobol_m_error, ".6f"))
+                print("Sobol_m_analytical: {}".format(Sobol_m_analytical, ".4f"))
+                print("Sobol_m_error: {}".format(Sobol_m_error, ".4f"))
         
         if self._is_Sobol_m2_computed:
             print(f"Sobol_m2_qoi: {local_result_dict['Sobol_m2']}")

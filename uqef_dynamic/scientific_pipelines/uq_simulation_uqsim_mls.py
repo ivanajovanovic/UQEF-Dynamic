@@ -120,9 +120,9 @@ utility.DEFAULT_DICT_WHAT_TO_PLOT = {
     "E_minus_std": False, "E_plus_std": False, "P10": True, "P90": True,
     "StdDev": True, "Skew": False, "Kurt": False, "Sobol_m": False, "Sobol_m2": False, "Sobol_t": True
 }
-compute_sobol_total_indices_with_samples = True  # This is only relevant in the mc-saltelli's approach
-if uqsim.args.uq_method == "mc" and uqsim.args.compute_Sobol_t:
-    compute_sobol_total_indices_with_samples = True
+compute_sobol_indices_with_samples = True  # This is only relevant in the mc-saltelli's approach
+if uqsim.args.uq_method == "mc" and uqsim.args.compute_Sobol_m:
+    compute_sobol_indices_with_samples = True
 
 save_gpce_surrogate = True  # if True a gpce surrogate for each QoI for each time step is saved in a separate file
 compute_other_stat_besides_pce_surrogate = True  # This is relevant only when uq_method == "sc" 
@@ -234,7 +234,7 @@ uqsim.statistics.update({"hbvsask"         : (lambda: HBVSASKStatistics.HBVSASKS
     store_gpce_surrogate_in_stat_dict=uqsim.args.store_gpce_surrogate_in_stat_dict,
     instantly_save_results_for_each_time_step=uqsim.args.instantly_save_results_for_each_time_step,
     dict_what_to_plot=utility.DEFAULT_DICT_WHAT_TO_PLOT,
-    compute_sobol_total_indices_with_samples=compute_sobol_total_indices_with_samples,
+    compute_sobol_indices_with_samples=compute_sobol_indices_with_samples,
     save_gpce_surrogate=save_gpce_surrogate,
     compute_other_stat_besides_pce_surrogate=compute_other_stat_besides_pce_surrogate,
 ))})
@@ -256,7 +256,7 @@ uqsim.statistics.update({"battery"         : (lambda: pybammStatistics.pybammSta
     store_gpce_surrogate_in_stat_dict=uqsim.args.store_gpce_surrogate_in_stat_dict,
     instantly_save_results_for_each_time_step=uqsim.args.instantly_save_results_for_each_time_step,
     dict_what_to_plot=utility.DEFAULT_DICT_WHAT_TO_PLOT,
-    compute_sobol_total_indices_with_samples=compute_sobol_total_indices_with_samples,
+    compute_sobol_indices_with_samples=compute_sobol_indices_with_samples,
     save_gpce_surrogate=save_gpce_surrogate,
     compute_other_stat_besides_pce_surrogate=compute_other_stat_besides_pce_surrogate,
     compute_kl_expansion_of_qoi = compute_kl_expansion_of_qoi,
