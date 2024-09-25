@@ -9,16 +9,16 @@ from uqef_dynamic.utils import utility
 
 def parallel_calc_stats_for_MC(
         keyIter_chunk, qoi_values_chunk, numEvaluations, dim, compute_Sobol_t=False, store_qoi_data_in_stat_dict=False,
-        compute_sobol_total_indices_with_samples=False, samples=None):
+        compute_sobol_indices_with_samples=False, samples=None):
     """
     Calculate statistics for Monte Carlo simulations
     :param keyIter_chunk: list of keys
     :param qoi_values_chunk: list of qoi values
     :param numEvaluations: number of evaluations
     :param dim: dimension
-    :param compute_Sobol_t: compute total Sobol indices
+    :param compute_Sobol_m: compute (main/first) Sobol indices
     :param store_qoi_data_in_stat_dict: store qoi data in statistics dictionary
-    :param compute_sobol_total_indices_with_samples: compute total Sobol indices with samples
+    :param compute_sobol_indices_with_samples: compute (main/first) Sobol indices with samples
     :param samples: samples
     :return: results list, where each of the element is yet another list
     with key/timestep and statistics dictionary
@@ -35,12 +35,12 @@ def parallel_calc_stats_for_MC(
         numEvaluations = len(qoi_values)
         if isinstance(dim, list):
             dim = dim[ip]
-        if isinstance(compute_Sobol_t, list):
-            compute_Sobol_t = compute_Sobol_t[ip]
+        if isinstance(compute_Sobol_m, list):
+            compute_Sobol_m = compute_Sobol_m[ip]
         if isinstance(store_qoi_data_in_stat_dict, list):
             store_qoi_data_in_stat_dict = store_qoi_data_in_stat_dict[ip]
-        if isinstance(compute_sobol_total_indices_with_samples, list):
-            compute_sobol_total_indices_with_samples = compute_sobol_total_indices_with_samples[ip]
+        if isinstance(compute_sobol_indices_with_samples, list):
+            compute_sobol_indices_with_samples = compute_sobol_indices_with_samples[ip]
         if isinstance(samples, list):
             samples = samples[ip]
 
@@ -73,8 +73,8 @@ def parallel_calc_stats_for_MC(
         #     with open(fullFileName, 'wb') as handle:
         #         pickle.dump(local_result_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-        if compute_Sobol_t and compute_sobol_total_indices_with_samples and samples is not None:
-            local_result_dict["Sobol_t"] = sens_indices_sampling_based_utils.compute_sens_indices_based_on_samples_rank_based(
+        if compute_Sobol_m and compute_sobol_indices_with_samples and samples is not None:
+            local_result_dict["Sobol_m"] = sens_indices_sampling_based_utils.compute_sens_indices_based_on_samples_rank_based(
                 samples=samples, Y=qoi_values[:numEvaluations, np.newaxis], D=dim, N=numEvaluations)
 
         results.append([timestamp, local_result_dict])
@@ -140,7 +140,7 @@ def parallel_calc_stats_for_gPCE(keyIter_chunk, qoi_values_chunk, dist, polynomi
             local_result_dict["gPCE"] = qoi_gPCE
         local_result_dict['gpce_coeff'] = goi_coeff
 
-        if save_gpce_surrogate and "gPCE" in local_result_dict:
+        if save_gpce_surrogate: # and "gPCE" in local_result_dict:
             # # TODO - propagate workingDir and single_qoi_column
             # utility.save_gpce_surrogate_model(workingDir=workingDir, gpce=qoi_gPCE, qoi=single_qoi_column, timestamp=key)
             # if "gpce_coeff" in local_result_dict:
@@ -231,7 +231,7 @@ def calculate_stats_gpce(
 
 def parallel_calc_stats_for_mc_saltelli(
         keyIter_chunk, qoi_values_chunk, numEvaluations, dim, compute_Sobol_t=False,
-        compute_Sobol_m=False, store_qoi_data_in_stat_dict=False, compute_sobol_total_indices_with_samples=False,
+        compute_Sobol_m=False, store_qoi_data_in_stat_dict=False, compute_sobol_indices_with_samples=False,
         samples=None):
     """
     :return: results list, where each of the element is yet another list
@@ -282,12 +282,12 @@ def parallel_calc_stats_for_mc_saltelli(
             local_result_dict["P10"] = local_result_dict["P10"][0]
             local_result_dict["P90"] = local_result_dict["P90"][0]
 
-        if compute_sobol_total_indices_with_samples and samples is not None:
-            if compute_Sobol_t:
+        if compute_sobol_indices_with_samples and samples is not None:
+            if compute_Sobol_m:
                 # print(f"DEBUGGING - standard_qoi_values.shape - {standard_qoi_values.shape}")
                 # print(f"DEBUGGING - qoi_values_saltelli.shape - {qoi_values_saltelli.shape}")
                 # print(f"DEBUGGING - samples.shape - {samples.shape}")
-                local_result_dict["Sobol_t"] = sens_indices_sampling_based_utils.compute_sens_indices_based_on_samples_rank_based(
+                local_result_dict["Sobol_m"] = sens_indices_sampling_based_utils.compute_sens_indices_based_on_samples_rank_based(
                     samples=samples, Y=qoi_values_saltelli[:numEvaluations,:], D=dim, N=numEvaluations)
         else:
             if compute_Sobol_t or compute_Sobol_m:

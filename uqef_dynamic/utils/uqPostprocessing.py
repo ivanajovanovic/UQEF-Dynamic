@@ -3,6 +3,8 @@ Set of utility functions for postprocessing data for UQ runs of different models
 Many of these functions exist as well as part of time_dependent_statistics.TimeDependentStatistics or in utilty module
 but here we are trying to provide a more general set of functions that can be used for postprocessing data from different UQ and SA runs
 
+In general ulity functions present hir fit the way the data is saved in UQEF-Dynamic
+and time_dependent_model and time_dependent_statistics modules!
 
 @author: Ivana Jovanovic Buha
 """
@@ -11,9 +13,13 @@ import dill
 import pickle
 import os
 import numpy as np
+import math
 import pathlib
 import pandas as pd
 import pickle
+import scipy
+import time
+from typing import List, Optional, Dict, Any, Union, Tuple
 
 # importing modules/libs for plotting
 from plotly.subplots import make_subplots
@@ -25,13 +31,412 @@ import matplotlib.pyplot as plt
 pd.options.plotting.backend = "plotly"
 
 import sys
-sys.path.insert(0, '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic')
+#sys.path.insert(0, '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic')
 
 import chaospy as cp
 
 from uqef_dynamic.utils import colors
 from uqef_dynamic.utils import utility
 from uqef_dynamic.utils import create_stat_object
+from uqef_dynamic.utils import sens_indices_sampling_based_utils
+
+# ============================================================================================
+# Whole pipeline for reading the output saved by UQEF-Dynamic simulation and producing dict of interes
+# ============================================================================================
+
+
+def read_all_saved_uqef_dynamic_results_and_produce_dict_of_interest_single_qoi_single_timestemp(workingDir, 
+timestemp, qoi_column_name=None, time_column_name=utility.TIME_COLUMN_NAME, plotting=False, model=None, **kwargs):
+    """
+    TODO This function eventaully should be refactored to be more general and to be able to read all the files for all the timesteps
+    For not this functions greatly fits the needs of the Ishigami model
+    This function is a whole pipeline for reading the output saved by UQEF-Dynamic simulation and producing dict of interest
+    :param workingDir:
+    :param timestemp: 
+    :param qoi_column_name: In case it is None, it will get the value based on simulation_settings_dict["list_qoi_column"]
+    """
+
+    if not workingDir.is_dir():
+        raise Exception(f"Directory {workingDir} does not exist!")
+
+    dict_with_results_of_interest = defaultdict()
+    dict_with_results_of_interest["outputModelDir"] = workingDir
+
+    dict_output_file_paths = utility.get_dict_with_output_file_paths_based_on_workingDir(workingDir)
+    args_file = dict_output_file_paths.get("args_file")
+    configuration_object_file = dict_output_file_paths.get("configuration_object_file")
+    nodes_file = dict_output_file_paths.get("nodes_file")
+    simulation_parameters_file = dict_output_file_paths.get("simulation_parameters_file")
+    df_all_index_parameter_file = dict_output_file_paths.get("df_all_index_parameter_file")
+    df_all_simulations_file = dict_output_file_paths.get("df_all_simulations_file")
+    time_info_file = dict_output_file_paths.get("time_info_file")
+
+    # Reading UQEF-Dynamic Output files
+    with open(args_file, 'rb') as f:
+        uqsim_args = pickle.load(f)
+    uqsim_args_dict = vars(uqsim_args)
+    #uqsim_args_dict = utility.load_uqsim_args_dict(args_file)
+
+    with open(configuration_object_file, 'rb') as f:
+        configurationObject = dill.load(f)
+    #configurationObject = utility.load_configuration_object(configuration_object_file)
+
+    update_dict_with_results_of_interest_based_on_uqsim_args_dict(dict_with_results_of_interest, uqsim_args_dict)
+    
+    ########################################################
+    with open(time_info_file) as f:
+        lines = f.readlines()
+        for line in lines:
+            print(line)
+            if line.startswith("time_model_simulations"):
+                dict_with_results_of_interest["time_model_simulations"] = line.split(':')[1].strip()
+            elif line.startswith("time_computing_statistics"):
+                dict_with_results_of_interest["time_computing_statistics"] = line.split(':')[1].strip()
+
+    ########################################################
+    # Specific part for a single QoI and timestep, this should be refactored to be more general
+    simulation_settings_dict = utility.read_simulation_settings_from_configuration_object(configurationObject)
+    qoi_column = simulation_settings_dict["qoi_column"]
+    list_qoi_column = simulation_settings_dict["list_qoi_column"] 
+    if qoi_column_name is None:
+        #qoi_column_name = qoi_column
+        qoi_column_name = list_qoi_column[0]  # qoi_column_name should be the same as qoi_column
+    else:
+        if qoi_column_name not in list_qoi_column:
+            raise ValueError(f"QoI column name {qoi_column_name} is not in the list of QoI columns {list_qoi_column}")
+    dict_with_results_of_interest["qoi_column_name"] = qoi_column_name
+    # TODO extraxt somehow info about timestemps
+    if timestemp is None:
+        raise NotImplementedError
+    if isinstance(timestemp, (int, float)):
+        convert_to_pd_timestamp = False
+    dict_with_results_of_interest["timestemp"] = timestemp
+
+    ########################################################
+    # Reading Simulation Nodes / Parameters
+    with open(nodes_file, 'rb') as f:
+        simulationNodes = pickle.load(f)
+    
+    # Reading/Creating DataFrame based on Simulation Nodes / Parameters
+    # maybe this is not alway necessary
+    if df_all_index_parameter_file.is_file():
+        df_index_parameter = pd.read_pickle(df_all_index_parameter_file, compression="gzip")
+    else:
+        df_index_parameter = None
+    if df_index_parameter is not None:
+        params_list = utility._get_parameter_columns_df_index_parameter_gof(
+            df_index_parameter)
+    else:
+        params_list = []
+        for single_param in configurationObject["parameters"]:
+            params_list.append(single_param["name"])
+
+    # whatch-out this might be tricky when not all params are regarded as uncertain!
+    param_labeles = utility.get_list_of_uncertain_parameters_from_configuration_dict(
+        configurationObject, raise_error=True, uq_method=uqsim_args_dict["uq_method"])
+    print(f"Debugging - params_list: {params_list}; simulationNodes.nodeNames: {simulationNodes.nodeNames}; param_labeles: {param_labeles}")    
+    dict_with_results_of_interest["parameterNames"] = params_list  #not simulationNodes.nodeNames, instead better simulationNodes.orderdDistsNames
+    dict_with_results_of_interest["stochasticParameterNames"] = param_labeles
+    dim = simulationNodes.distNodes.shape[0] #len(param_labeles)  # this should represent a stochastic dimensionality
+
+    # updating dict_with_results_of_interest
+    # TODO This does not work for Saltelli!!!
+    dict_with_results_of_interest["number_full_model_evaluations"] = simulationNodes.nodes.shape[1]
+    if uqsim_args_dict["uq_method"]=="saltelli":
+        dict_with_results_of_interest["number_full_model_evaluations"] = (uqsim_args_dict["mc_numevaluations"]) * (2 + dim)
+        # dict_with_results_of_interest["number_full_model_evaluations"] = (simulationNodes.nodes.shape[1]/2) * (2 + dim)
+    
+    # Reading parameters which were saved to run/stimulate the model
+    if simulation_parameters_file.is_file():
+        simulation_parameters = np.load(simulation_parameters_file,  allow_pickle=True)
+        print(f"Debugging - simulation_parameters.shape: {simulation_parameters.shape}")
+        #dict_with_results_of_interest["number_full_model_evaluations"] = simulation_parameters.shape[0]
+
+
+    if dict_with_results_of_interest["variant"] in ["m4", "m5", "m6", "m7"]:
+        dict_with_results_of_interest["full_number_quadrature_points"] = \
+        (dict_with_results_of_interest["q_order"] + 1) ** dim
+
+    ########################################################
+    df_nodes = utility.get_df_from_simulationNodes(simulationNodes, nodes_or_paramters="nodes", params_list=params_list)
+    df_nodes_params = utility.get_df_from_simulationNodes(simulationNodes, nodes_or_paramters="parameters",  params_list=params_list)
+
+    if plotting:
+        fig = utility.plot_subplot_params_hist_from_df(df_index_parameter)
+        fig.update_layout(title="Prior Distribution of the Parameters",)
+        fig.show()
+        utility.plot_2d_matrix_static(df_nodes, nodes_or_paramters="nodes")
+        utility.plot_2d_matrix_static(df_nodes_params, nodes_or_paramters="parameters")
+
+    ########################################################
+    # Reading all the simulations
+    # maybe this is not alway necessary
+    read_all_saved_simulations_file = True
+    if read_all_saved_simulations_file and df_all_simulations_file.is_file():
+        # Reading Saved Simulations - Note: This migh be a huge file,
+        # especially for MC/Saltelli kind of simulations
+        df_simulation_result = pd.read_pickle(df_all_simulations_file, compression="gzip")
+        dict_with_results_of_interest["number_full_model_evaluations"] = len(df_simulation_result)
+    else:
+        df_simulation_result = None
+
+    # Reading UQEF-Dynamic Output files specific for some QoI and timestep
+    # dict_output_file_paths_qoi = utility.get_dict_with_qoi_name_specific_output_file_paths_based_on_workingDir(workingDir, qoi_column_name)
+    # statistics_dictionary_file = dict_output_file_paths_qoi.get("statistics_dictionary_file")
+    # Read a Dictionary Containing Statistics Data
+    single_timestamp_single_file = uqsim_args_dict.get("instantly_save_results_for_each_time_step", False)
+    statistics_dictionary = read_all_saved_statistics_dict(\
+        workingDir, list_qoi_column, single_timestamp_single_file, throw_error=True, convert_to_pd_timestamp=convert_to_pd_timestamp)
+    statistics_dictionary  = statistics_dictionary[qoi_column_name]
+    # extract only stat dict for a particula timestamp
+    if pd.Timestamp(timestemp) in statistics_dictionary:
+        statistics_dictionary = statistics_dictionary[pd.Timestamp(timestemp)]
+    elif timestemp in statistics_dictionary:
+        statistics_dictionary = statistics_dictionary[timestemp]
+    else:
+        print(f"Debugging - I was not able to read statistics_dictionary")
+        raise ValueError(f"Time-stamp {timestemp} is not in the statistics dictionary")
+
+    ########################################################
+    # Compare analytical values with the computed ones
+    analytical_E = kwargs.get('analytical_E', None)
+    analytical_Var = kwargs.get('analytical_Var', None)
+    analytical_Sobol_t = kwargs.get('analytical_Sobol_t', None)
+    analytical_Sobol_m = kwargs.get('analytical_Sobol_m', None)
+    # TODO add options for reading additiona analyitical stat values!
+
+     # TODO eventually extend this such that these qunatitieis can be read from the saved files or computed based on mc simulations
+    if analytical_E is None:
+        raise Exception("Analytical values for E are not provided!")
+    if analytical_Var is None:
+        raise Exception("Analytical values for Var are not provided!")
+    if analytical_Sobol_t is None:
+        raise Exception("Analytical values for Sobol total indices are not provided!")
+        # TODO Think about how to code this in a more general way!
+        # Read from additional files being saved, e.g. Sobol indices etc.
+        # sobol_m_error_file = workingDir / "sobol_m_error.npy"
+        # sobol_m_qoi_file = workingDir / "sobol_m_qoi_file.npy"
+    if analytical_Sobol_m is None:
+        raise Exception("Analytical values for Sobol total indices are not provided!")
+        # TODO Think about how to code this in a more general way!
+        # Read from additional files being saved, e.g. Sobol indices etc.
+        # sobol_t_error_file = workingDir / "sobol_t_error.npy"
+        # sobol_t_qoi_file = workingDir / "sobol_t_qoi_file.npy"
+
+    dict_with_results_of_interest["error_mean"] = abs(analytical_E - statistics_dictionary['E'])
+    dict_with_results_of_interest["error_var"] = abs(analytical_Var - statistics_dictionary['Var'])
+
+    if "Sobol_m" in statistics_dictionary and analytical_Sobol_m is not None:
+        Sobol_m = statistics_dictionary['Sobol_m'] 
+        Sobol_m_error = abs(Sobol_m - analytical_Sobol_m)
+        dict_with_results_of_interest["sobol_m"] = Sobol_m
+        dict_with_results_of_interest["sobol_m_error"] = Sobol_m_error
+    if "Sobol_t" in statistics_dictionary and analytical_Sobol_t is not None:
+        Sobol_t = statistics_dictionary['Sobol_t'] 
+        Sobol_t_error = abs(Sobol_t - analytical_Sobol_t)
+        dict_with_results_of_interest["sobol_t"] = Sobol_t
+        dict_with_results_of_interest["sobol_t_error"] = Sobol_t_error
+        
+    ########################################################
+    # gPCE Surrogate
+    # dict_output_file_paths_qoi_time = utility.get_dict_with_qoi_name_timestemp_specific_output_file_paths_based_on_workingDir(workingDir, qoi_column_name, timestemp)
+    # gpce_surrogate_file = dict_output_file_paths_qoi_time.get("gpce_surrogate_file")
+    # gpce_coeffs_file = dict_output_file_paths_qoi_time.get("gpce_coeffs_file")
+
+    if dict_with_results_of_interest["variant"] in ["m4", "m5", "m6", "m7"]:  # TODO or m1 m2 with regression
+        gpce_surrogate_dictionary = read_all_saved_gpce_surrogate_models(workingDir, list_qoi_column, throw_error=False, convert_to_pd_timestamp=convert_to_pd_timestamp)
+        gpce_coeff_dictionary = read_all_saved_gpce_coeffs(workingDir, list_qoi_column, throw_error=False, convert_to_pd_timestamp=convert_to_pd_timestamp)
+        if gpce_surrogate_dictionary is not None:
+            gpce_surrogate_dictionary = gpce_surrogate_dictionary[qoi_column_name]
+            if pd.Timestamp(timestemp) in gpce_surrogate_dictionary:
+                gpce_surrogate = gpce_surrogate_dictionary[pd.Timestamp(timestemp)]
+            elif timestemp in gpce_surrogate_dictionary:
+                gpce_surrogate = gpce_surrogate_dictionary[timestemp]
+            else:
+                gpce_surrogate = None
+                print(f"Debugging - I was not able to read gpce_surrogate_dictionary")
+        elif 'gPCE' in statistics_dictionary:
+            gpce_surrogate = statistics_dictionary['gPCE']
+        else:
+            print(f"Sorry you did not save gPCE surrogate")
+
+        if gpce_coeff_dictionary is not None:
+            gpce_coeff_dictionary = gpce_coeff_dictionary[qoi_column_name]
+            if pd.Timestamp(timestemp) in gpce_coeff_dictionary:
+                gpce_coeffs = gpce_coeff_dictionary[pd.Timestamp(timestemp)]
+            elif timestemp in gpce_coeff_dictionary:
+                gpce_coeffs = gpce_coeff_dictionary[timestemp]
+            else:
+                gpce_coeffs = None
+                print(f"Debugging - I was not able to read gpce_coeff_dictionary")
+        elif 'gpce_coeff' in statistics_dictionary:
+            gpce_coeffs = statistics_dictionary['gpce_coeff']
+        else:
+            print(f"Sorry you did not save coeff of the gpce surrogate (gpce_coeff)")
+
+        if gpce_surrogate is not None:
+            dict_with_results_of_interest["max_p_order"] = max(np.linalg.norm(vector, ord=1) for vector in gpce_surrogate.exponents)
+            dict_with_results_of_interest["gPCE_num_coeffs"] = gpce_surrogate.exponents.shape[0]
+            
+            compare_surrogate_and_original_model = kwargs.get('compare_surrogate_and_original_model', False)
+            if compare_surrogate_and_original_model and model is not None:
+                # 5**dim
+                numSamples = kwargs.get('comparison_surrogate_vs_model_numSamples', 1000)
+                rule = kwargs.get('comparison_surrogate_vs_model_mc_rule', "R")
+                evaluateSurrogateAtStandardDist = kwargs.get('evaluateSurrogateAtStandardDist', True)
+                dict_result_comparison_model_and_surrogate = compare_surrogate_and_full_model_for_single_qoi_single_timestamp(
+                    model, gpce_surrogate, qoi_column_name,  timestemp,
+                    jointDists=simulationNodes.joinedDists, 
+                    jointStandard=simulationNodes.joinedStandardDists, 
+                    numSamples=numSamples, rule=rule,
+                    sampleFromStandardDist=False,
+                    evaluateSurrogateAtStandardDist=evaluateSurrogateAtStandardDist,
+                    read_nodes_from_file=False, 
+                    rounding=False, round_dec=4,
+                    compute_error=True, return_evaluations=False
+                    )
+                dict_with_results_of_interest["comparison_surrogate_vs_model_numSamples"] = numSamples
+                dict_with_results_of_interest["comparison_surrogate_vs_model_mc_rule"] = rule
+                dict_with_results_of_interest.update(dict_result_comparison_model_and_surrogate)
+            if plotting:
+                indices = gpce_surrogate.exponents
+                dimensionality = indices.shape[1]
+                number_of_terms = indices.shape[0]
+                dict_for_plotting = {f"q_{i+1}":indices[:, i] for i in range(dimensionality)}
+                df_nodes_weights = pd.DataFrame(dict_for_plotting)
+                sns.set(style="ticks", color_codes=True)
+                g = sns.pairplot(df_nodes_weights, vars = list(dict_for_plotting.keys()), corner=True)
+                # plt.title(title, loc='left')
+                plt.show()
+    ########################################################
+
+    return dict_with_results_of_interest
+
+
+def update_dict_with_results_of_interest_based_on_uqsim_args_dict(dict_with_results_of_interest, uqsim_args_dict):
+    variant = None
+    # TODO add additional arguments when mc/saltelli but with regression option 
+    if uqsim_args_dict["uq_method"]== "mc":
+        variant = "m1"
+        dict_with_results_of_interest["mc_numevaluations"] = uqsim_args_dict["mc_numevaluations"]
+        dict_with_results_of_interest["sampling_rule"] = uqsim_args_dict["sampling_rule"]
+    elif uqsim_args_dict["uq_method"]=="saltelli":
+        variant = "m2"
+        dict_with_results_of_interest["mc_numevaluations"] = uqsim_args_dict["mc_numevaluations"]
+        dict_with_results_of_interest["sampling_rule"] = uqsim_args_dict["sampling_rule"]
+    elif uqsim_args_dict["uq_method"]=="sc" and uqsim_args_dict["regression"]:
+        variant = "m3"
+        dict_with_results_of_interest["q_order"] = uqsim_args_dict["sc_q_order"]
+        dict_with_results_of_interest["q_order"] = uqsim_args_dict["sc_p_order"]
+    elif uqsim_args_dict["uq_method"]=="sc" and not uqsim_args_dict["regression"]:
+        """
+        [m4] gPCE+PSP with a full grid and polynomials of total-order
+        [m5] gPCE+PSP with sparse grid and polynomials of total-order
+        [m6] gPCE+PSP with a full grid and sparse polynomials (hyperbolic truncation)
+        [m7] gPCE+PSP with sparse grid and sparse polynomials (hyperbolic truncation)
+        """
+        dict_with_results_of_interest["q_order"] = uqsim_args_dict["sc_q_order"]
+        dict_with_results_of_interest["p_order"] = uqsim_args_dict["sc_p_order"]
+        dict_with_results_of_interest["read_nodes_from_file"] = uqsim_args_dict["read_nodes_from_file"]
+        dict_with_results_of_interest["sc_quadrature_rule"] = uqsim_args_dict["sc_quadrature_rule"]
+
+        if (not uqsim_args_dict["sc_sparse_quadrature"] and not uqsim_args_dict["read_nodes_from_file"]) and uqsim_args_dict["cross_truncation"]==1.0:
+            variant = "m4"
+        elif (uqsim_args_dict["sc_sparse_quadrature"] or uqsim_args_dict["read_nodes_from_file"]) and uqsim_args_dict["cross_truncation"]==1.0:
+            variant = "m5"
+        elif (not uqsim_args_dict["sc_sparse_quadrature"] and not uqsim_args_dict["read_nodes_from_file"]) and uqsim_args_dict["cross_truncation"]<1.0:
+            dict_with_results_of_interest["cross_truncation"] = uqsim_args_dict["cross_truncation"]
+            variant = "m6"
+        elif (uqsim_args_dict["sc_sparse_quadrature"] or uqsim_args_dict["read_nodes_from_file"]) and uqsim_args_dict["cross_truncation"]<1.0:
+            dict_with_results_of_interest["cross_truncation"] = uqsim_args_dict["cross_truncation"]
+            variant = "m7"
+            
+    dict_with_results_of_interest["variant"] = variant
+
+# ===================================================================================================================
+# Comparing surrogate (i.e., gPCE model) and full model
+# ===================================================================================================================
+
+
+def compare_surrogate_and_full_model_for_single_qoi_single_timestamp(
+    model, surrogate_model, qoi_column_name,  timestemp,
+    jointDists, jointStandard=None, numSamples=1000, rule="R",
+    sampleFromStandardDist=False,
+    evaluateSurrogateAtStandardDist=False,
+    read_nodes_from_file=False, 
+    rounding=False, round_dec=4,
+    compute_error=True, return_evaluations=False, **kwargs):
+    """
+    This function is used to compare the surrogate model (e.g., gPCE model) and the full model
+    for a single QoI and a single timestep
+
+    For a general comparison one should rely on code in scinetifc_pipelines/compare_surrogate_model_pipeline.py module!
+    surrogate_model: gPCE model built for a particular QoI and a particular timestep
+
+    Note: idea - if jointStandard is provided, then one expect that the surrogate model has to be evaluated at the set of nodes
+    which come from 'standard' distribution; evaluateSurrogateAtStandardDist should be set to True in this case
+    """
+    parameters = generate_parameters_for_mc_simulation(
+        jointDists, jointStandard=jointStandard, numSamples=numSamples, rule=rule,
+        sampleFromStandardDist=sampleFromStandardDist, read_nodes_from_file=read_nodes_from_file, rounding=rounding, round_dec=round_dec,
+        **kwargs
+    )
+    if evaluateSurrogateAtStandardDist and jointStandard is not None:
+        nodes = utility.transformation_of_parameters(
+            parameters, jointDists, jointStandard)
+    else:
+        nodes = parameters
+    
+    start = time.time()
+    surrogate_model_evaluations= surrogate_model(*nodes)
+    end = time.time()
+    reevaluation_surrogate_model_time = end - start
+    print(f"Time needed for evaluating {nodes.shape[1]} \
+    gPCE model is: {reevaluation_surrogate_model_time}")
+
+    start = time.time()
+    model_runs, _ = run_uqef_dynamic_model_over_parameters_and_process_result(
+        model, parameters, qoi_column_name, return_dict_over_timestamps=True)
+    original_model_evaluations = model_runs[timestemp]
+    end = time.time()
+    reevaluation_model_time = end - start
+    print(f"Time needed for evaluating {parameters.shape[1]} \
+    of the original model is: {reevaluation_model_time}")
+
+    dict_result = {}
+
+    if return_evaluations:
+        dict_result["original_model_evaluations"] = original_model_evaluations
+        dict_result["surrogate_model_evaluations"] = surrogate_model_evaluations
+
+    dict_result["reevaluation_surrogate_model_duration"] = reevaluation_surrogate_model_time
+    dict_result["reevaluation_model_duration"] = reevaluation_model_time
+
+    if compute_error:
+        error_linf, error_l2, error_l2_scaled = compute_error_bewteen_surrogate_and_full_model_for_single_qoi_single_timestamp(
+            original_model_evaluations, surrogate_model_evaluations)
+        dict_result["error_model_linf"] = error_linf
+        dict_result["error_model_l2"] = error_l2
+        dict_result["error_model_l2_scaled"] = error_l2_scaled
+
+    return dict_result
+
+
+def compute_error_bewteen_surrogate_and_full_model_for_single_qoi_single_timestamp(
+    original_model_evaluations, surrogate_model_evaluations):
+    error_linf = np.max(np.abs(original_model_evaluations - surrogate_model_evaluations))
+    # error_linf_np = np.linalg.norm(original_model_evaluations - surrogate_model_evaluations, ord=np.inf)
+    error_l2 = np.sqrt(np.sum((original_model_evaluations - surrogate_model_evaluations)**2))
+    # error_l2_np = np.linalg.norm(original_model_evaluations - surrogate_model_evaluations, ord=2)
+    numSamples = len(original_model_evaluations)
+    error_l2_scaled = np.sqrt(np.sum((original_model_evaluations - surrogate_model_evaluations)**2)) / math.sqrt(numSamples)
+    print(f"Linf Error = {error_linf};")
+    print(f"L2 Error = {error_l2}; L2 Error scaled = {error_l2_scaled}")
+    return error_linf, error_l2, error_l2_scaled
+
+# ===================================================================================================================
+# Utility functions for working with the statistics object / statistics dictionary
+# ===================================================================================================================
 
 
 def extend_statistics_object(statisticsObject, statistics_dictionary, df_simulation_result=None,
@@ -77,11 +482,11 @@ def get_number_of_unique_runs(df, index_run_column_name=utility.INDEX_COLUMN_NAM
     return df[index_run_column_name].nunique()
 
 
-def extracting_statistics_df_for_single_qoi(statisticsObject, qoi="Q_cms"):
+def extracting_statistics_df_for_single_qoi(statisticsObject, qoi=utility.QOI_COLUMN_NAME):
     pass
 
 
-def get_all_timesteps_from_saved_files(workingDir, first_part_of_the_file = "statistics"):
+def get_all_timesteps_from_saved_files(workingDir, first_part_of_the_file="statistics"):
     all_files = os.listdir(workingDir)
     list_TimeStamp = set() # []
     for filename in all_files:
@@ -92,7 +497,7 @@ def get_all_timesteps_from_saved_files(workingDir, first_part_of_the_file = "sta
     return list_TimeStamp
 
     
-def read_all_saved_statistics_dict(workingDir, list_qoi_column, single_timestamp_single_file=False, throw_error=True):
+def read_all_saved_statistics_dict(workingDir, list_qoi_column, single_timestamp_single_file=False, throw_error=True, convert_to_pd_timestamp=True):
     if single_timestamp_single_file:
         list_TimeStamp = get_all_timesteps_from_saved_files(workingDir, first_part_of_the_file = "statistics")
     statistics_dictionary = defaultdict(dict)
@@ -105,13 +510,20 @@ def read_all_saved_statistics_dict(workingDir, list_qoi_column, single_timestamp
                     if throw_error:
                         raise FileNotFoundError(f"The statistics file for qoi-{single_qoi} and time-stamp-{single_timestep} does not exist")
                     else:
-                        statistics_dictionary[single_qoi][pd.Timestamp(single_timestep)] = None
+                        if convert_to_pd_timestamp:
+                            statistics_dictionary[single_qoi][pd.Timestamp(single_timestep)] = None
+                        else:
+                            statistics_dictionary[single_qoi][single_timestep] = None
                         continue
                 # assert statistics_dictionary_file_temp.is_file(), \
                 #     f"The statistics file for qoi-{single_qoi} and time-stamp-{single_timestep} does not exist"
                 with open(statistics_dictionary_file_temp, 'rb') as f:
                     statistics_dictionary_temp = pickle.load(f)
-                statistics_dictionary[single_qoi][pd.Timestamp(single_timestep)] = statistics_dictionary_temp
+                if convert_to_pd_timestamp:
+                    statistics_dictionary[single_qoi][pd.Timestamp(single_timestep)] = statistics_dictionary_temp
+                else:
+                    statistics_dictionary[single_qoi][single_timestep] = statistics_dictionary_temp
+                # statistics_dictionary[single_qoi][pd.Timestamp(single_timestep)] = statistics_dictionary_temp
         else:
             statistics_dictionary_file_temp = workingDir / f"statistics_dictionary_qoi_{single_qoi}.pkl"
             if not statistics_dictionary_file_temp.is_file():
@@ -131,6 +543,10 @@ def read_all_saved_statistics_dict(workingDir, list_qoi_column, single_timestamp
         else:
             return None
     return statistics_dictionary
+
+# ===================================================================================================================
+# Functions for saving/reading the GPCE surrogate model
+# ===================================================================================================================
 
 
 def save_gpce_surrogate_model(workingDir, gpce, qoi, timestamp):
@@ -175,7 +591,9 @@ def save_all_gpce_coeffs(workingDir, gpce_coeff_dictionary, list_qoi_column=None
             save_gpce_coeffs(workingDir, gpce_coeff_dictionary[single_qoi][single_timestep], single_qoi, single_timestep)
 
 
-def read_all_saved_gpce_surrogate_models(workingDir, list_qoi_column, single_timestamp_single_file=False, throw_error=True):
+def read_all_saved_gpce_surrogate_models(workingDir, list_qoi_column, single_timestamp_single_file=False, throw_error=True, 
+convert_to_pd_timestamp=True):
+    # TODO it seems as single_timestamp_single_file is not relevant here!
     list_TimeStamp = get_all_timesteps_from_saved_files(workingDir, first_part_of_the_file = "gpce")
     gpce_surrogate_dictionary = dict()  # defaultdict(dict)
     for single_qoi in list_qoi_column:
@@ -186,13 +604,19 @@ def read_all_saved_gpce_surrogate_models(workingDir, list_qoi_column, single_tim
                 if throw_error:
                     raise FileNotFoundError(f"The gpce surrogate file for qoi-{single_qoi} and time-stamp-{single_timestep} does not exist")
                 else:
-                    gpce_surrogate_dictionary[single_qoi][pd.Timestamp(single_timestep)] = None
+                    if convert_to_pd_timestamp:
+                        gpce_surrogate_dictionary[single_qoi][pd.Timestamp(single_timestep)] = None
+                    else:
+                        gpce_surrogate_dictionary[single_qoi][single_timestep] = None
                     continue
             # assert gpce_surrogate_file_temp.is_file(), \
             # f"The gpce surrogate file for qoi-{single_qoi} and time-stamp-{single_timestep} does not exist"
             with open(gpce_surrogate_file_temp, 'rb') as f:
                 gpce_surrogate_temp = pickle.load(f)
-            gpce_surrogate_dictionary[single_qoi][pd.Timestamp(single_timestep)] = gpce_surrogate_temp
+            if convert_to_pd_timestamp:
+                gpce_surrogate_dictionary[single_qoi][pd.Timestamp(single_timestep)] = gpce_surrogate_temp
+            else:
+                gpce_surrogate_dictionary[single_qoi][single_timestep] = gpce_surrogate_temp
     if utility.is_nested_dict_empty_or_none(gpce_surrogate_dictionary):
         if throw_error:
             raise FileNotFoundError(f"No gpce surrogate files found in the working directory")
@@ -214,7 +638,9 @@ def read_single_gpce_surrogate_models(workingDir, single_qoi, single_timestep, t
             return None
 
 
-def read_all_saved_gpce_coeffs(workingDir, list_qoi_column, single_timestamp_single_file=False, throw_error=True):
+def read_all_saved_gpce_coeffs(workingDir, list_qoi_column, single_timestamp_single_file=False, throw_error=True,
+convert_to_pd_timestamp=True):
+    # TODO it seems as single_timestamp_single_file is not relevant here!
     list_TimeStamp = get_all_timesteps_from_saved_files(workingDir, first_part_of_the_file = "gpce")
     gpce_coeff_dictionary = dict()  # defaultdict(dict)
     for single_qoi in list_qoi_column:
@@ -225,11 +651,17 @@ def read_all_saved_gpce_coeffs(workingDir, list_qoi_column, single_timestamp_sin
                 if throw_error:
                     raise FileNotFoundError(f"The gpce coefficients file for qoi-{single_qoi} and time-stamp-{single_timestep} does not exist")
                 else:
-                    gpce_coeff_dictionary[single_qoi][pd.Timestamp(single_timestep)] = None
+                    if convert_to_pd_timestamp:
+                        gpce_coeff_dictionary[single_qoi][pd.Timestamp(single_timestep)] = None
+                    else:
+                        gpce_coeff_dictionary[single_qoi][single_timestep] = None
                     continue
             # assert gpce_coeffs_file_temp.is_file(), \
             # f"The gpce coefficients file for qoi-{single_qoi} and time-stamp-{single_timestep} does not exist"
-            gpce_coeff_dictionary[single_qoi][pd.Timestamp(single_timestep)] = np.load(gpce_coeffs_file_temp)
+            if convert_to_pd_timestamp:
+                gpce_coeff_dictionary[single_qoi][pd.Timestamp(single_timestep)] = np.load(gpce_coeffs_file_temp,  allow_pickle=True)
+            else:
+                gpce_coeff_dictionary[single_qoi][single_timestep] = np.load(gpce_coeffs_file_temp,  allow_pickle=True)
     if utility.is_nested_dict_empty_or_none(gpce_coeff_dictionary):
         if throw_error:
             raise FileNotFoundError(f"No gpce coefficinets files found in the working directory")
@@ -241,7 +673,7 @@ def read_all_saved_gpce_coeffs(workingDir, list_qoi_column, single_timestamp_sin
 def read_single_gpce_coeffs(workingDir, single_qoi, single_timestep, throw_error=True):
     gpce_coeffs_file_temp = workingDir / f"gpce_coeffs_{single_qoi}_{single_timestep}.npy"
     if gpce_coeffs_file_temp.is_file():
-        return np.load(gpce_coeffs_file_temp)
+        return np.load(gpce_coeffs_file_temp, allow_pickle=True)
     else:
         if throw_error:
             raise FileNotFoundError(f"The gpce coefficients file for qoi-{single_qoi} and time-stamp-{single_timestep} does not exist")
@@ -251,6 +683,8 @@ def read_single_gpce_coeffs(workingDir, single_qoi, single_timestep, throw_error
 # ==============================================================================================================
 # Functions for reading all saved output files from UQ and SA simulations and creating a DataFrame
 # ==============================================================================================================
+
+
 def get_df_statistics_and_df_si_from_saved_files(workingDir, inputModelDir=None):
     """
     Retrieves the statistics and sensitivity indices data from saved files.
@@ -363,12 +797,620 @@ def get_df_statistics_and_df_si_from_saved_files(workingDir, inputModelDir=None)
     df_statistics_and_measured['P10'] = df_statistics_and_measured['P10'].apply(lambda x: max(0, x))
 
     si_t_df = statisticsObject.create_df_from_sensitivity_indices(si_type="Sobol_t")
+    si_m_df = statisticsObject.create_df_from_sensitivity_indices(si_type="Sobol_m")
 
-    return statisticsObject, df_statistics_and_measured, si_t_df
+    return statisticsObject, df_statistics_and_measured, si_t_df, si_m_df
+
+
+###################################################################################################################
+# Running UQEF-Dynamic model
+###################################################################################################################
+# Note: think about moving these functions to UQEF-Dynamic/uqef_dynamic/utils/uqPostProcessing.py
+
+
+def run_uqef_dynamic_model_over_parameters(model, parameters: np.ndarray, raise_exception_on_model_break: Optional[Union[bool, Any]] = None, *args, **kwargs) -> List[Tuple[Dict[str, Any], float]]:
+    """
+    This function runs the model over parameters
+    :model: an instance of UQEF-Dynamic Model - time_dependent_model, with a __call__ method being a wrapper for the model.run method
+    :parameters: np.ndarray
+        Parameters for the model dimension (dim, number_of_nodes)
+    :raise_exception_on_model_break: bool
+        If True, the function will raise an exception if the model breaks
+    :args: tuple
+
+    :kwargs: dict
+        Additional keyword arguments for the model 
+
+    Returns: 
+    List[Tuple[Dict[str, Any], float]]: A list of tuples for each model run; each tuple is in the form (result_dict, runtime); 
+    - result_dict is a dictionary that might contain the following key-value entries (depending on the configuration file):
+    - ("result_time_series", flux_df): a dataframe containing the model output for the time period specified in the configuration file.
+    - ("state_df", state_df): a dataframe containing the model state for the time period specified in the configuration file.
+    - ("gof_df", index_parameter_gof_DF): a dataframe containing the goodness-of-fit values for the time period specified in the configuration file.
+    - ("parameters_dict", index_run_and_parameters_dict): a dictionary containing the parameter values for the time period specified in the configuration file.
+    - ("run_time", runtime): the runtime of a single model run; should have the same value as runtime variable
+    - ("grad_matrix", gradient_matrix_dict): a dictionary containing the gradient vectors for the time period specified in the configuration file.
+    """
+    i_s = np.arange(parameters.shape[1])
+    results_array = model(i_s ,parameters.T, raise_exception_on_model_break, *args, **kwargs)    
+    return results_array
+
+
+def uqef_dynamic_model_run_results_array_to_dataframe(results_array,
+    extract_only_qoi_columns=False, qoi_columns=[utility.QOI_COLUMN_NAME], time_column_name: str = utility.TIME_COLUMN_NAME, index_column_name: str = utility.INDEX_COLUMN_NAME):
+    """
+    This function converts the results array to a DataFrame
+    :results_array: List[Tuple[Dict[str, Any], float]]: A list of tuples for each model run; each tuple is in the form (result_dict, runtime); 
+    Take a look at the description of the function run_uqef_dynamic_model_over_parameters for more information.
+    :extract_only_qoi_columns: bool
+        If True, only the columns specified in qoi_columns + time_column_name + INDEX_COLUMN_NAME will be extracted from the result DataFrame
+    return: 
+        - df_simulation_result: pd.DataFrame
+        DataFrame containing the simulation results; 
+        if "result_time_series" is not in the result_dict, the DataFrame will be None
+        - df_index_parameter_values: pd.DataFrame
+        DataFrame containing the parameter values
+        if "parameters_dict" is not in the result_dict, the DataFrame will be None
+        - df_index_parameter_gof_values: pd.DataFrame
+        DataFrame containing the goodness-of-fit values and parameter values
+        if "gof_df" is not in the result_dict, the DataFrame will be None
+        - dict_of_approx_matrix_c: dict
+        Dictionary containing the approximated gradient matrix C
+        - dict_of_matrix_c_eigen_decomposition: dict
+        Dictionary containing the eigenvalues and eigenvectors of the gradient matrix C
+        if "grad_matrix" is not in the result_dict, both dictionaries will be None
+        - df_state_results: pd.DataFrame
+        DataFrame containing the state results
+        if "state_df" is not in the result_dict, the DataFrame will be None
+    """
+    qoi_columns = qoi_columns + [time_column_name, index_column_name]
+    list_of_single_df = []
+    list_index_parameters_dict = []
+    list_of_single_index_parameter_gof_df = []
+    list_of_gradient_matrix_dict = []
+    list_of_single_state_df = []
+    for index_run, single_result_tuple in enumerate(results_array, ):        
+        result_dict = single_result_tuple[0]
+        runtime = single_result_tuple[1]
+        
+        if "result_time_series" in result_dict:
+            df_result = result_dict["result_time_series"]
+            df_result = process_df_simulation_result(df_result, extract_only_qoi_columns, qoi_columns, time_column_name)
+            list_of_single_df.append(df_result)
+        if "parameters_dict" in result_dict:
+            parameters_dict = result_dict["parameters_dict"]
+            list_index_parameters_dict.append(parameters_dict)
+        if "gof_df" in result_dict:
+            gof_df = result_dict["gof_df"]
+            list_of_single_index_parameter_gof_df.append(gof_df)
+        if "grad_matrix" in result_dict:
+            gradient_matrix_dict = result_dict["grad_matrix"]
+            list_of_gradient_matrix_dict.append(gradient_matrix_dict)
+        if "state_df" in result_dict:
+            state_df = result_dict["state_df"]
+            state_df = process_df_simulation_result(state_df, time_column_name=time_column_name)
+            list_of_single_state_df.append(state_df)
+
+    if list_of_single_df:
+        df_simulation_result = pd.concat(list_of_single_df, ignore_index=True, sort=False, axis=0)
+    else:
+        df_simulation_result = None
+
+    if list_index_parameters_dict:
+        df_index_parameter_values = pd.DataFrame(list_index_parameters_dict)
+    else:
+        df_index_parameter_values = None
+
+    if list_of_single_index_parameter_gof_df:
+        df_index_parameter_gof_values = pd.concat(list_of_single_index_parameter_gof_df,
+                                                       ignore_index=True, sort=False, axis=0)
+    else:
+        df_index_parameter_gof_values = None
+
+    if list_of_gradient_matrix_dict:
+        dict_of_approx_matrix_c, dict_of_matrix_c_eigen_decomposition = process_list_of_gradient_matrix_dict(list_of_gradient_matrix_dict)
+    else:
+        dict_of_approx_matrix_c = None
+        dict_of_matrix_c_eigen_decomposition = None
+
+    if list_of_single_state_df:
+        df_state_results = pd.concat(list_of_single_state_df, ignore_index=True, sort=False, axis=0)
+    else:
+        df_state_results = None
+    return df_simulation_result, df_index_parameter_values, df_index_parameter_gof_values, \
+    dict_of_approx_matrix_c, dict_of_matrix_c_eigen_decomposition, df_state_results
+
+
+def process_df_simulation_result(
+    df_result, extract_only_qoi_columns=False, qoi_columns=[utility.QOI_COLUMN_NAME,], time_column_name: str = utility.TIME_COLUMN_NAME):
+    if isinstance(df_result, pd.DataFrame) and df_result.index.name == time_column_name:
+        df_result = df_result.reset_index()
+        df_result.rename(columns={df_result.index.name: time_column_name}, inplace=True)
+    if time_column_name not in list(df_result.columns):
+        raise Exception(f"Error in Samples class - {time_column_name} is not in the "
+                        f"columns of the DataFrame")
+    if extract_only_qoi_columns:
+        df_result = df_result[qoi_columns]
+    return df_result
+
+
+def process_list_of_gradient_matrix_dict(list_of_gradient_matrix_dict) -> Tuple[Dict[Any, Any], Dict[Any, Any]]:
+    """ 
+    This function is used to process the list of gradient matrix dictionaries
+    and compute the average gradient matrix and its eigen decomposition.
+    return: dict_of_approx_matrix_c, dict_of_matrix_c_eigen_decomposition
+
+    """
+    gradient_matrix_dict = defaultdict(list)
+    dict_of_approx_matrix_c = defaultdict(list)
+    dict_of_matrix_c_eigen_decomposition = defaultdict(list)
+
+    for single_gradient_matrix_dict in list_of_gradient_matrix_dict:
+        for key, value in single_gradient_matrix_dict.items():
+            gradient_matrix_dict[key].append(np.array(value))
+
+    for key in gradient_matrix_dict.keys():
+        dict_of_approx_matrix_c[key] = \
+            sum(gradient_matrix_dict[key]) / len(gradient_matrix_dict[key])
+        dict_of_matrix_c_eigen_decomposition[key] = np.linalg.eigh(dict_of_approx_matrix_c[key])
+        # np.linalg.eig(dict_of_approx_matrix_c[key])
+    return dict_of_approx_matrix_c, dict_of_matrix_c_eigen_decomposition
+
+
+def run_uqef_dynamic_model_over_parameters_and_process_result(
+    model, parameters: np.ndarray, 
+    qoi_column_name: str = utility.QOI_COLUMN_NAME, time_column_name: str = utility.TIME_COLUMN_NAME, index_column_name: str = utility.INDEX_COLUMN_NAME,
+    return_dict_over_timestamps=False
+    ):
+    """
+    This function runs the model over parameters
+    :model: an instance of UQEF-Dynamic
+    :parameters: np.ndarray
+        Parameters for the model dimension (dim, number_of_nodes)
+    :return_dict_over_timestamps: bool
+        If True, the function will return a dictionary with keys being the timestamps and values list of model run over different parameter values
+    return:
+    List[List[float]]: A list of values of model runs (for different parameter values) over different time steps
+    or a dictionary with keys being the timestamps and values being the list of model runs over different parameter
+    """
+    results_array = run_uqef_dynamic_model_over_parameters(
+        model, parameters, raise_exception_on_model_break=True)
+    df_simulation_result, _, _, _, _, _ = uqef_dynamic_model_run_results_array_to_dataframe(
+        results_array,  extract_only_qoi_columns=True, qoi_columns=[qoi_column_name,], 
+        time_column_name=time_column_name, index_column_name=index_column_name)
+    df_simulation_result.sort_values(
+        by=[index_column_name, time_column_name], ascending=[True, True], inplace=True, kind='quicksort',
+        na_position='last'
+        )
+    groups = groupby_df_simulation_results(df_simulation_result, columns_to_group_by=[time_column_name,])
+    t = list(groups.keys())
+
+    if return_dict_over_timestamps:
+        model_runs = {}
+    else:
+        model_runs = np.empty((len(t),), dtype=object)
+
+    for idx, key in enumerate(t):
+        if return_dict_over_timestamps:
+            model_runs[key]= df_simulation_result.loc[groups[key].values][qoi_column_name].values
+        else:
+            model_runs[idx] = df_simulation_result.loc[groups[key].values][qoi_column_name].values
+    return model_runs, t
+
+# =================================================================================================
+# Functions for computing PCE - but based on UQEF-Dynamic model and data structure
+# =================================================================================================
+# Note: think about moving these functions to UQEF-Dynamic/uqef_dynamic/utils/uqPostProcessing.py
+
+
+def groupby_df_simulation_results(df_simulation_result, columns_to_group_by: list=[]):
+    if not columns_to_group_by:
+        columns_to_group_by = [utility.TIME_COLUMN_NAME,]
+    grouped = df_simulation_result.groupby(columns_to_group_by)
+    return grouped.groups
+
+
+def compute_gPCE_for_uqef_dynamic_model(model, expansion_order: int, joint_dist, \
+    parameters: np.ndarray, nodes: np.ndarray, regression: bool = False, \
+    weights_quad: np.ndarray = None, poly_rule: str = 'three_terms_recurrence', poly_normed: bool = True, \
+    qoi_column_name: str = utility.QOI_COLUMN_NAME, time_column_name: str = utility.TIME_COLUMN_NAME, index_column_name: str = utility.INDEX_COLUMN_NAME,
+    return_dict_over_timestamps=False
+    ):
+    """
+    This function computes the generalized Polynomial Chaos Expansion (gPCE)
+    This happens in time_dependent_statistics, however, there the computations are executed in parallel
+    model: function
+       This function relys on the UQEF-Dynamice kind of model!
+    expansion_order: int
+        Order of the polynomial expansion
+    joint_dist: chaospy.distributions
+        Joint distribution of with respect to which the polynomial expansion will be build
+    parameters: np.ndarray 
+        Parameters for the model dimension (dim, number_of_nodes)
+    nodes: np.ndarray 
+        Quadrature nodes dimension (dim, number_of_nodes)
+        This might be the same as parameters
+    regression: bool, optional
+    weights_quad: np.ndarray 
+        Quadrature weights dimension (dim, number_of_nodes)
+    poly_rule: str, optional
+    poly_normed: bool, optional
+    return_dict_over_timestamps: bool
+        If True, the function will return a dictionary with keys being the timestamps and values being the computed statistics
+    return: np.ndarray
+        gPCE over time dimension (len(t), )
+    """
+    dim = parameters.shape[0]
+    number_expansion_coefficients = int(scipy.special.binom(dim+expansion_order, dim))  # cp.dimensions(polynomial_expansion)
+    print(f"Total number of expansion coefficients in {dim}D space: {int(number_expansion_coefficients)}")
+
+    polynomial_expansion, norms = cp.generate_expansion(
+        expansion_order, joint_dist, rule=poly_rule, normed=poly_normed, retall=True)
+    
+    model_runs, timestamps = run_uqef_dynamic_model_over_parameters_and_process_result(model, parameters, qoi_column_name, time_column_name, index_column_name)
+    # results_array = run_uqef_dynamic_model_over_parameters(
+    #     model, parameters, raise_exception_on_model_break=True)
+    # df_simulation_result, _, _, _, _, _ = uqef_dynamic_model_run_results_array_to_dataframe(
+    #     results_array,  extract_only_qoi_columns=True, qoi_columns=[qoi_column_name,], 
+    #     time_column_name=time_column_name, index_column_name=index_column_name)
+    # df_simulation_result.sort_values(
+    #     by=[index_column_name, time_column_name], ascending=[True, True], inplace=True, kind='quicksort',
+    #     na_position='last'
+    #     )
+    # groups = groupby_df_simulation_results(df_simulation_result, columns_to_group_by=[time_column_name,])
+    # t = list(groups.keys())
+    # model_runs = [
+    #     df_simulation_result.loc[groups[key].values][qoi_column_name].values for key in t
+    #     ]
+
+    if return_dict_over_timestamps:
+        # if return_dict_over_timestamps is True, return results in a form of a dictionary over time (timestamps)
+        gPCE_over_time = {} 
+        coeff =  {}
+    else:
+        # otherwise return results in a form of numpy arrays over time (consecutive timestamps)
+        gPCE_over_time =  np.empty((len(model_runs),), dtype=object) # np.empty((len(t), number_expansion_coefficients))
+        coeff = np.empty((len(model_runs),), dtype=object)
+
+    for idx, _ in enumerate(model_runs):  # for element in t:
+        if regression:
+            if return_dict_over_timestamps:
+                gPCE_over_time[timestamps[idx]] = cp.fit_regression(polynomial_expansion, nodes, model_runs[idx])
+            else:
+                gPCE_over_time[idx] = cp.fit_regression(polynomial_expansion, nodes, model_runs[idx])
+        else:
+            if return_dict_over_timestamps:
+                gPCE_over_time[timestamps[idx]], coeff[timestamps[idx]] = cp.fit_quadrature(polynomial_expansion, nodes, weights_quad, model_runs[idx], retall=True)
+            else:
+                gPCE_over_time[idx], coeff[idx] = cp.fit_quadrature(polynomial_expansion, nodes, weights_quad, model_runs[idx], retall=True)
+    return gPCE_over_time, polynomial_expansion, np.asfarray(norms), coeff
+
+
+def compute_PSP_for_uqef_dynamic_model(model, joint_dist, \
+    quadrature_order: int, expansion_order: int, 
+    sampleFromStandardDist: bool = False, joint_dist_standard=None,
+    rule_quadrature: str = 'g', growth: bool = False, sparse: bool = False, \
+    poly_rule: str = 'three_terms_recurrence', poly_normed: bool = True, \
+    qoi_column_name: str = utility.QOI_COLUMN_NAME, time_column_name: str = utility.TIME_COLUMN_NAME, index_column_name: str = utility.INDEX_COLUMN_NAME, 
+    return_dict_over_timestamps=False
+    ):
+    """
+    This function computes the Pseudo-Spectra Projection (PSP)
+    This happens in time_dependent_statistics, however, there the computations are executed in parallel
+    Take a look at the definition of the function compute_gPCE_for_uqef_dynamic_model since the arguments are the same
+    """
+    
+    if sampleFromStandardDist:
+        if joint_dist_standard is None:
+            raise Exception("joint_dist_standard should be provided if sampleFromStandardDist is True")
+        nodes_quad, weights_quad = utility.generate_quadrature_nodes_and_weights(joint_dist_standard, quadrature_order, rule_quadrature, growth, sparse)
+        parameters_quad = utility.generate_parameters_from_nodes(nodes_quad, joint_dist_standard, joint_dist)
+        polynomial_expansion, norms = utility.generate_polynomial_expansion(joint_dist_standard, expansion_order, poly_rule, poly_normed)
+    else:
+        nodes_quad, weights_quad = utility.generate_quadrature_nodes_and_weights(joint_dist, quadrature_order, rule_quadrature, growth, sparse)
+        parameters_quad = nodes_quad
+        polynomial_expansion, norms = utility.generate_polynomial_expansion(joint_dist, expansion_order, poly_rule, poly_normed)
+    
+    model_runs, timestamps = run_uqef_dynamic_model_over_parameters_and_process_result(model, parameters_quad, qoi_column_name, time_column_name, index_column_name)
+    # results_array = run_uqef_dynamic_model_over_parameters(
+    #     model, parameters_quad, raise_exception_on_model_break=True)
+    # df_simulation_result, _, _, _, _, _ = uqef_dynamic_model_run_results_array_to_dataframe(
+    #     results_array,  extract_only_qoi_columns=True, qoi_columns=[qoi_column_name,], 
+    #     time_column_name=time_column_name, index_column_name=index_column_name)
+    # df_simulation_result.sort_values(
+    #     by=[index_column_name, time_column_name], ascending=[True, True], inplace=True, kind='quicksort',
+    #     na_position='last'
+    #     )
+    # groups = groupby_df_simulation_results(df_simulation_result, columns_to_group_by=[time_column_name,])
+    # t = list(groups.keys())
+    # model_runs = [
+    #     df_simulation_result.loc[groups[key].values][qoi_column_name].values for key in t
+    #     ]
+    
+    #print(f"Debugging model_runs - {model_runs}")
+    #print(f"Debugging len(model_runs) - {len(model_runs)}")
+
+    if return_dict_over_timestamps:
+        # if return_dict_over_timestamps is True, return results in a form of a dictionary over time (timestamps)
+        gPCE_over_time = {} 
+        coeff =  {}
+    else:
+        # otherwise return results in a form of numpy arrays over time (consecutive timestamps)
+        gPCE_over_time =  np.empty((len(model_runs),), dtype=object) # np.empty((len(t), number_expansion_coefficients))
+        coeff = np.empty((len(model_runs),), dtype=object)
+    for idx, _ in enumerate(model_runs):  # for element in t:
+        if return_dict_over_timestamps:
+            gPCE_over_time[timestamps[idx]], coeff[timestamps[idx]] = cp.fit_quadrature(polynomial_expansion, nodes_quad, weights_quad, model_runs[idx], retall=True)
+        else:
+            gPCE_over_time[idx], coeff[idx] = cp.fit_quadrature(polynomial_expansion, nodes_quad, weights_quad, model_runs[idx], retall=True)
+    # return gPCE_over_time, polynomial_expansion, np.asfarray(norms), np.asfarray(coeff)
+    return gPCE_over_time, polynomial_expansion, np.asfarray(norms), coeff
+
+
+def compute_PSP_for_uqef_dynamic_model_ionuts_approach(model, joint_dist, joint_dist_standard,\
+    quadrature_order: int, expansion_order: int, 
+    rule_quadrature: str = 'g', growth: bool = False, sparse: bool = False, \
+    poly_rule: str = 'three_terms_recurrence', poly_normed: bool = True, \
+    qoi_column_name: str = utility.QOI_COLUMN_NAME, time_column_name: str = utility.TIME_COLUMN_NAME, index_column_name: str = utility.INDEX_COLUMN_NAME,
+    return_dict_over_timestamps=False
+    ):
+    """
+    Whatchout this is only for experimenting; it is not proven to provide valid results!
+    """
+    nodes_quad, weights_quad = utility.generate_quadrature_nodes_and_weights(joint_dist_standard, quadrature_order, rule_quadrature, growth, sparse)
+    parameters_quad = utility.generate_parameters_from_nodes(nodes_quad, joint_dist_standard, joint_dist)
+    polynomial_expansion, norms = utility.generate_polynomial_expansion(joint_dist, expansion_order, poly_rule, poly_normed) # this is the difference
+
+    model_runs, timestamps = run_uqef_dynamic_model_over_parameters_and_process_result(model, parameters_quad, qoi_column_name, time_column_name, index_column_name)
+    # results_array = run_uqef_dynamic_model_over_parameters(
+    #     model, parameters_quad, raise_exception_on_model_break=True)
+    # df_simulation_result, _, _, _, _, _ = uqef_dynamic_model_run_results_array_to_dataframe(
+    #     results_array,  extract_only_qoi_columns=True, qoi_columns=[qoi_column_name,], 
+    #     time_column_name=time_column_name, index_column_name=index_column_name)
+    # df_simulation_result.sort_values(
+    #     by=[index_column_name, time_column_name], ascending=[True, True], inplace=True, kind='quicksort',
+    #     na_position='last'
+    #     )
+    # groups = groupby_df_simulation_results(df_simulation_result, columns_to_group_by=[time_column_name,])
+    # t = list(groups.keys())
+    # model_runs = [
+    #     df_simulation_result.loc[groups[key].values][qoi_column_name].values for key in t
+    #     ]
+    
+    #print(f"Debugging model_runs - {model_runs}")
+    #print(f"Debugging len(model_runs) - {len(model_runs)}")
+
+    if return_dict_over_timestamps:
+        # if return_dict_over_timestamps is True, return results in a form of a dictionary over time (timestamps)
+        gPCE_over_time = {} 
+        coeff =  {}
+    else:
+        # otherwise return results in a form of numpy arrays over time (consecutive timestamps)
+        gPCE_over_time =  np.empty((len(model_runs),), dtype=object) # np.empty((len(t), number_expansion_coefficients))
+        coeff = np.empty((len(model_runs),), dtype=object)
+    for idx, _ in enumerate(model_runs):  # for element in t:
+        if return_dict_over_timestamps:
+            gPCE_over_time[timestamps[idx]], coeff[timestamps[idx]]= cp.fit_quadrature(polynomial_expansion, nodes_quad, weights_quad, model_runs[idx], retall=True)
+        else:
+            gPCE_over_time[idx], coeff[idx] = cp.fit_quadrature(polynomial_expansion, nodes_quad, weights_quad, model_runs[idx], retall=True)
+    # return gPCE_over_time, polynomial_expansion, np.asfarray(norms), np.asfarray(coeff)
+    return gPCE_over_time, polynomial_expansion, np.asfarray(norms), coeff
+
+
+# ==============================================================================================================
+# Function for computing MC-based and PCE based statistics
+#  by running the model over parameters and timesteps and processing the results
+# For simple functions refer to utility module
+# ==============================================================================================================
+
+def run_uq_mc_sim_and_compute_mc_stat_for_uqef_dynamic_model(
+    model, jointDists, 
+    jointStandard=None, numSamples=1000, rule="R",
+    sampleFromStandardDist=False,
+    read_nodes_from_file=False, 
+    rounding=False, round_dec=4,
+    qoi_column_name: str = utility.QOI_COLUMN_NAME, time_column_name: str = utility.TIME_COLUMN_NAME, index_column_name: str = utility.INDEX_COLUMN_NAME,
+    return_dict_over_timestamps=False,
+    **kwargs
+    ):
+    """     
+    return_dict_over_timestamps: bool
+        If True, the function will return a dictionary with keys being the timestamps and values being the computed statistics
+    Possible additional arguments:
+        - parameters_file_name (str): The name of the file containing the parameters.
+        - optional argumetns in the compute_mc_stat_for_uqef_dynamic_model function
+            - compute_mean: bool
+            - compute_var: bool
+            - compute_std: bool
+            - compute_skew: bool
+            - compute_kurt: bool
+            - compute_p10: bool
+            - compute_p90: bool
+            - compute_Sobol_m: bool
+    Take a look at compute_mc_stat_for_uqef_dynamic_model function for a description of a return tuple
+    """
+    parameters = generate_parameters_for_mc_simulation(\
+    jointDists, jointStandard, numSamples, rule, \
+    sampleFromStandardDist, read_nodes_from_file, rounding, round_dec, **kwargs)
+    return compute_mc_stat_for_uqef_dynamic_model(model, parameters, qoi_column_name, time_column_name, index_column_name, return_dict_over_timestamps, **kwargs)
+
+
+def generate_parameters_for_mc_simulation(jointDists, jointStandard=None, numSamples=1000, rule="R",
+    sampleFromStandardDist=False, read_nodes_from_file=False, rounding=False, round_dec=4,
+    **kwargs):
+    """
+    This function generates the parameters for the Monte Carlo simulation
+    return: np.ndarray
+        Parameters for the model dimension (dim, number_of_nodes)
+    """
+    if sampleFromStandardDist and jointStandard is not None:
+        dist = jointStandard
+    else:
+        dist = jointDists
+
+    if read_nodes_from_file:
+        parameters_file_name = kwargs.get('parameters_file_name', None)
+        if parameters_file_name is None:
+            raise
+        nodes_and_weights_array = np.loadtxt(parameters_file_name, delimiter=',')
+        # TODO what if nodes_and_weights_array do not correspond to dist! However, this is not important for MC
+        #labels = [param_name.strip() for param_name in param_names]
+        stochastic_dim = len(jointDists) #len(param_names)
+        nodes = nodes_and_weights_array[:, :stochastic_dim].T
+        sampleFromStandardDist = False
+        # TODO Be carefule, for now there is no transformation of parameters if they are read from some file
+    else:
+        if rounding:
+            nodes = dist.sample(size=numSamples, rule=rule).round(round_dec)
+        else:
+            nodes = dist.sample(size=numSamples, rule=rule)
+    nodes = np.array(nodes)
+
+    if sampleFromStandardDist and jointStandard is not None:
+        parameters = utility.transformation_of_parameters(
+            nodes, jointStandard, jointDists)
+    else:
+        parameters = nodes
+    return parameters
+
+
+def compute_mc_stat_for_uqef_dynamic_model(model, parameters: np.ndarray,
+    qoi_column_name: str = utility.QOI_COLUMN_NAME, time_column_name: str = utility.TIME_COLUMN_NAME, index_column_name: str = utility.INDEX_COLUMN_NAME,
+    return_dict_over_timestamps=False,
+    **kwargs
+    ):
+    """
+    This function computes the MC statistics for a UQEF-Dynamic model type, based on already generated parameters
+
+    This happens in time_dependent_statistics, however, there the computations are executed in parallel
+    model: function
+       This function relys on the UQEF-Dynamice kind of model!
+    parameters: np.ndarray 
+        Parameters for the model dimension (dim, number_of_nodes)
+    qoi_column_name: str
+        The name of the column containing the quantity of interest
+    time_column_name: str
+        The name of the column containing the time
+    index_column_name: str
+        The name of the column containing the index
+    return_dict_over_timestamps: bool
+        If True, the function will return a dictionary with keys being the timestamps and values being the computed statistics
+    :kwargs: dict
+        Additional keyword arguments for
+        - compute_mean: bool
+        - compute_var: bool
+        - compute_std: bool
+        - compute_skew: bool
+        - compute_kurt: bool
+        - compute_p10: bool
+        - compute_p90: bool
+        - compute_Sobol_m: bool
+    return: list of numpy arrays, which are either populated with statistcs over time, or are mepty
+     E_over_time, Var_over_time, StdDev_over_time, Skew_over_time, Kurt_over_time, P10_over_time, P90_over_time, sobol_m_over_time
+    """
+    dim = parameters.shape[0]
+    numEvaluations = parameters.shape[1] #len(parameters.T)
+
+    model_runs, timestamps = run_uqef_dynamic_model_over_parameters_and_process_result(
+        model, parameters, qoi_column_name, time_column_name, index_column_name, return_dict_over_timestamps=False)
+    number_of_time_steps = len(model_runs)
+    compute_mean = kwargs.get('compute_mean', True)
+    compute_var = kwargs.get('compute_var', True)
+    compute_std = kwargs.get('compute_std', True)
+    compute_skew = kwargs.get('compute_skew', True)
+    compute_kurt = kwargs.get('compute_kurt', True)
+    compute_p10 = kwargs.get('compute_p10', True)
+    compute_p90 = kwargs.get('compute_p90', True)
+    compute_Sobol_m = kwargs.get('compute_Sobol_m', False)
+
+    if return_dict_over_timestamps:
+        # if return_dict_over_timestamps is True, return results in a form of a dictionary over time (timestamps)
+        E_over_time = {}
+        Var_over_time = {}
+        StdDev_over_time = {}
+        Skew_over_time = {}
+        Kurt_over_time = {}
+        P10_over_time = {}
+        P90_over_time = {}
+        sobol_m_over_time = {}
+    else:
+        # otherwise return results in a form of numpy arrays over time (consecutive timestamps)
+        E_over_time =  np.empty((number_of_time_steps,), dtype=object)
+        Var_over_time =  np.empty((number_of_time_steps,), dtype=object)
+        StdDev_over_time =  np.empty((number_of_time_steps,), dtype=object)
+        Skew_over_time =  np.empty((number_of_time_steps,), dtype=object)
+        Kurt_over_time =  np.empty((number_of_time_steps,), dtype=object)
+        P10_over_time =  np.empty((number_of_time_steps,), dtype=object)
+        P90_over_time =  np.empty((number_of_time_steps,), dtype=object)
+        sobol_m_over_time =  np.empty((number_of_time_steps,), dtype=object)
+
+    start_time_computing_statistics = time.time()
+    for idx, _ in enumerate(model_runs):  # for element in t:
+        qoi_values = model_runs[idx]
+        if compute_mean:
+            E = np.mean(qoi_values, 0)
+            if return_dict_over_timestamps:
+                E_over_time[timestamps[idx]] = E
+            else:
+                E_over_time[idx] = E
+        if compute_var:
+            if return_dict_over_timestamps:
+                temp_values = qoi_values - E_over_time[timestamps[idx]]
+                Var_over_time[timestamps[idx]] = np.var(temp_values, ddof=1)
+            else:
+                temp_values = qoi_values - E_over_time[idx]
+                Var_over_time[idx] = np.var(temp_values, ddof=1)
+                # Var_over_time[idx] = np.var(qoi_values, ddof=1)
+        if compute_std:
+            if return_dict_over_timestamps:
+                StdDev_over_time[timestamps[idx]] = np.std(qoi_values, 0, ddof=1)
+            else:
+                StdDev_over_time[idx] = np.std(qoi_values, 0, ddof=1)
+        if compute_skew:
+            if return_dict_over_timestamps:
+                Skew_over_time[timestamps[idx]] = scipy.stats.skew(qoi_values, axis=0, bias=True)
+            else:
+                Skew_over_time[idx] = scipy.stats.skew(qoi_values, axis=0, bias=True)
+        if compute_kurt:
+            if return_dict_over_timestamps:
+                Kurt_over_time[timestamps[idx]] = scipy.stats.kurtosis(qoi_values, axis=0, bias=True)
+            else:
+                Kurt_over_time[idx] = scipy.stats.kurtosis(qoi_values, axis=0, bias=True)
+        if compute_p10:
+            if return_dict_over_timestamps:
+                P10_over_time[timestamps[idx]] = np.percentile(qoi_values, 10, axis=0)
+                if isinstance(P10_over_time[timestamps[idx]], list) and len(P10_over_time[timestamps[idx]]) == 1:
+                    P10_over_time[timestamps[idx]] = P10_over_time[timestamps[idx]][0]
+            else:
+                P10_over_time[idx] = np.percentile(qoi_values, 10, axis=0)
+                if isinstance(P10_over_time[idx], list) and len(P10_over_time[idx]) == 1:
+                    P10_over_time[idx] = P10_over_time[idx][0]
+        if compute_p90:
+            if return_dict_over_timestamps:
+                P90_over_time[timestamps[idx]] = np.percentile(qoi_values, 90, axis=0)
+                if isinstance(P90_over_time[timestamps[idx]], list) and len(P90_over_time[timestamps[idx]]) == 1:
+                    P90_over_time[timestamps[idx]] = P90_over_time[timestamps[idx]][0]
+            else:
+                P90_over_time[idx] = np.percentile(qoi_values, 90, axis=0)
+                if isinstance(P90_over_time[idx], list) and len(P90_over_time[idx]) == 1:
+                    P90_over_time[idx] = P90_over_time[idx][0]
+        if compute_Sobol_m and parameters is not None:
+            if return_dict_over_timestamps:
+                sobol_m_over_time[timestamps[idx]]= sens_indices_sampling_based_utils.compute_sens_indices_based_on_samples_rank_based(
+                    samples=parameters.T, Y=qoi_values[:numEvaluations, np.newaxis], D=dim, N=numEvaluations)
+            else:
+                sobol_m_over_time[idx] = sens_indices_sampling_based_utils.compute_sens_indices_based_on_samples_rank_based(
+                    samples=parameters.T, Y=qoi_values[:numEvaluations, np.newaxis], D=dim, N=numEvaluations)
+        end_time_computing_statistics = time.time()
+        time_computing_statistics = end_time_computing_statistics - start_time_computing_statistics
+        print(f"Needed time for computing statistics is: {time_computing_statistics};\n")
+
+    return E_over_time, Var_over_time, StdDev_over_time, Skew_over_time, Kurt_over_time, P10_over_time, P90_over_time, sobol_m_over_time
 
 # ==============================================================================================================
 # Functions for computing goodness-of-fit functions for different statistics time-signals produced by UQ and SA simulations
 # ==============================================================================================================
+
 
 def compute_gof_over_different_time_series(df_statistics, objective_function="MAE", qoi_column="Q",
                                            measuredDF_column_names="measured"):
@@ -553,10 +1595,12 @@ def compute_df_statistics_columns_correlation(
 # Set of functions for plotting and or computing (KDE-based) CDFs and PDFs - these function may go to utility as well?
 ###################################################################################################################
 
+
 def plot_parameters_sensitivity_indices_vs_temp_prec_measured(
         df_statistics, single_qoi, param_names, si_type="Sobol_t", list_of_columns_to_keep=["measured", "precipitation", "temperature"]):
     """
     Note: important assumption is that the df_statistics DataFrame has columns with names like: "measured", "precipitation", "temperature"
+    This is a specific function tailored for the HBV model and other environmental models/hydrologic models
     :param df_statistics:
     :param single_qoi:
     :param param_names:
@@ -749,10 +1793,11 @@ def plot_si_and_normalized_measured_time_signal_single_qoi(
     #     pass
     return fig
 
-
 # ============================================================================================
 # plotting functions for HBV model
 # ============================================================================================
+# TODO Think about moving this to some model specific utility module
+
 
 def plot_forcing_mean_predicted_and_observed_all_qoi(statisticsObject, directory="./", fileName="simulation_big_plot.html"):
     """

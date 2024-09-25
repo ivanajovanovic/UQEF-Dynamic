@@ -1,3 +1,9 @@
+"""
+This is just a simple specific example of comparing the gPCE surrogate and real model
+This is still work in progress...
+
+author: Ivana Jovanovic Buha
+"""
 # read the assumed prior distribution over parameters
 import chaospy as cp
 from collections import defaultdict
