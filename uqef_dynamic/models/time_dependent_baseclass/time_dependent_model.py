@@ -106,6 +106,15 @@ class TimeDependentModelConfig(object):
             else:
                 self.plotting = False 
 
+        if "printing" in kwargs:
+            self.printing = kwargs['printing']
+        else:
+            if "model_settings" in self.configurationObject:
+                self.printing = strtobool(self.configurationObject["model_settings"].get(
+                    "printing", "True"))
+            else:
+                self.printing = False 
+
         if "corrupt_forcing_data" in kwargs:
             self.corrupt_forcing_data = kwargs['corrupt_forcing_data']
         else:
@@ -303,6 +312,10 @@ class TimeDependentModel(ABC, Model):
         else:
             return None
 
+    def __call__(self, i_s: Optional[List[int]] = [0, ], parameters: Optional[Union[Dict[str, Any], List[Any]]] = None, 
+    raise_exception_on_model_break: Optional[Union[bool, Any]] = None, *args, **kwargs):
+        return self.run(i_s=i_s, parameters=parameters, raise_exception_on_model_break=raise_exception_on_model_break, *args, **kwargs)
+
     def run(
             self, i_s: Optional[List[int]] = [0, ], 
             parameters: Optional[Union[Dict[str, Any], List[Any]]] = None,
@@ -316,6 +329,7 @@ class TimeDependentModel(ABC, Model):
         createNewFolder = kwargs.get("createNewFolder", False)
         deleteFolderAfterwards = kwargs.get("deleteFolderAfterwards", True)
         writing_results_to_a_file = kwargs.get("writing_results_to_a_file", self.writing_results_to_a_file)
+        printing = kwargs.get("printing", self.printing)
         plotting = kwargs.get("plotting", self.plotting)
 
         results_array = []
@@ -330,7 +344,7 @@ class TimeDependentModel(ABC, Model):
             else:
                 parameter = None  # an unaltered run will be executed
 
-            id_dict = {"index_run": unique_run_index}
+            id_dict = {self.index_column_name: unique_run_index}
 
             # this indeed represents the number of parameters considered to be uncertain, later on parameters_dict might
             # be extanded with fixed parameters that occure in configurationObject
@@ -342,7 +356,9 @@ class TimeDependentModel(ABC, Model):
                 number_of_uncertain_params = len(parameter)
 
             parameters_dict = self._parameters_configuration(parameters=parameter, take_direct_value=take_direct_value)
-            print(f"{unique_run_index} parameters_dict - {parameters_dict} \n")
+            
+            if printing:
+                print(f"{unique_run_index} parameters_dict - {parameters_dict} \n")
 
             # create local directory for this particular run
             if self.workingDir is not None:

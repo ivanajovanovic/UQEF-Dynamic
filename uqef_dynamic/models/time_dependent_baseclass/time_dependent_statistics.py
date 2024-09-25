@@ -376,10 +376,10 @@ class TimeDependentStatistics(ABC, Statistics):
         self.instantly_save_results_for_each_time_step = kwargs.get(
             'instantly_save_results_for_each_time_step', False)
 
-        self.compute_sobol_total_indices_with_samples = kwargs.get(
-            'compute_sobol_total_indices_with_samples', False)
+        self.compute_sobol_indices_with_samples = kwargs.get(
+            'compute_sobol_indices_with_samples', False)
         if self.uq_method == "mc" and self.compute_Sobol_t:
-            self.compute_sobol_total_indices_with_samples = True
+            self.compute_sobol_indices_with_samples = True
         self.nodes_file = kwargs.get(
             'nodes_file', "nodes.simnodes.zip")
         self.nodes_file = self.workingDir / self.nodes_file
@@ -422,7 +422,7 @@ class TimeDependentStatistics(ABC, Statistics):
         #####################################
         # Parameters related set-up part
         #####################################
-        self.nodeNames = []
+        self.nodeNames = [] # list of uncertain parameter names
         try:
             list_of_parameters = self.configurationObject["parameters"]
         except KeyError as e:
@@ -432,7 +432,7 @@ class TimeDependentStatistics(ABC, Statistics):
         for i in list_of_parameters:
             if self.uq_method == "ensemble" or i["distribution"] != "None":
                 self.nodeNames.append(i["name"])
-        self.dim = len(self.nodeNames)
+        self.dim = len(self.nodeNames)  # this should be equal to number of uncertain parameters and dim = simulationNodes.distNodes.shape[0]
         self.labels = [nodeName.strip() for nodeName in self.nodeNames]
 
         #####################################
@@ -972,7 +972,7 @@ class TimeDependentStatistics(ABC, Statistics):
             self.cross_truncation = cross_truncation
 
             self.nodes = simulationNodes.distNodes
-            self.dim = self.nodes.shape[1]
+            self.dim = self.nodes.shape[0] # this is a stochastic dimensionality
             self.weights = None
             if self.sampleFromStandardDist:
                 self.dist = simulationNodes.joinedStandardDists
@@ -983,7 +983,7 @@ class TimeDependentStatistics(ABC, Statistics):
                 self.order, self.dist, rule=self.poly_rule, normed=self.poly_normed,
                 graded=True, reverse=True, cross_truncation=self.cross_truncation, retall=True)
         
-        if self.compute_sobol_total_indices_with_samples:
+        if self.compute_sobol_indices_with_samples:
             if simulationNodes is not None:
                 self.uqef_simulationNodes = simulationNodes
             else:
@@ -1005,7 +1005,7 @@ class TimeDependentStatistics(ABC, Statistics):
     
         self.nodes = simulationNodes.distNodes
         self.N = self.numEvaluations = self.nodes.shape[1]  # should be equal to self.number_of_unique_index_runs
-        self.dim = self.nodes.shape[1]
+        self.dim = self.nodes.shape[0] # this is a stochastic dimensionality
         if self.sampleFromStandardDist:
             self.dist = simulationNodes.joinedStandardDists
         else:
@@ -1156,7 +1156,7 @@ class TimeDependentStatistics(ABC, Statistics):
         self.result_dict = defaultdict(dict)
 
         if self.rank == 0:
-            self._groupby_df_simulation_results(columns_to_group_by=self.time_column_name)
+            self._groupby_df_simulation_results(columns_to_group_by=[self.time_column_name,])
             keyIter = list(self.groups.keys())
             # print(f"DEBUGGING - keyIter - {keyIter}")
 
@@ -1212,15 +1212,16 @@ class TimeDependentStatistics(ABC, Statistics):
                 save_gpce_surrogate_Chunks = [self.save_gpce_surrogate] * len(keyIter_chunk)
                 compute_other_stat_besides_pce_surrogate_Chunks = [compute_other_stat_besides_pce_surrogate] * len(keyIter_chunk)
 
-                compute_sobol_total_indices_with_samples_chunks = [self.compute_sobol_total_indices_with_samples] * len(
+                compute_sobol_indices_with_samples_chunks = [self.compute_sobol_indices_with_samples] * len(
                     keyIter_chunk)
-                if self.compute_sobol_total_indices_with_samples and \
-                        self.compute_Sobol_t and self.uqef_simulationNodes is not None:
-                    samples_chunks = [self.uqef_simulationNodes.parameters.T[:self.numEvaluations]] * len(keyIter_chunk)
-                    samples = self.uqef_simulationNodes.parameters.T[:self.numEvaluations]
+                if self.compute_sobol_indices_with_samples and \
+                        self.compute_Sobol_m and self.uqef_simulationNodes is not None:
+                    samples_chunks = [self.uqef_simulationNodes.distNodes.T[:self.numEvaluations]] * len(keyIter_chunk)
+                    # samples_chunks = [self.uqef_simulationNodes.parameters.T[:self.numEvaluations]] * len(keyIter_chunk)
+                    # samples = self.uqef_simulationNodes.parameters.T[:self.numEvaluations]
                 else:
                     samples_chunks = [None] * len(keyIter_chunk)
-                    samples = None
+                    # samples = None
 
             with futures.MPICommExecutor(MPI.COMM_WORLD, root=0) as executor:
                 if executor is not None:  # master proces; or .\executor.mpi_comm.rank == 0
@@ -1254,7 +1255,7 @@ class TimeDependentStatistics(ABC, Statistics):
                             dimChunks,
                             compute_Sobol_t_Chunks,
                             store_qoi_data_in_stat_dict_Chunks,
-                            compute_sobol_total_indices_with_samples_chunks,
+                            compute_sobol_indices_with_samples_chunks,
                             samples_chunks,
                             chunksize=self.mpi_chunksize,
                             unordered=self.unordered
@@ -1267,7 +1268,7 @@ class TimeDependentStatistics(ABC, Statistics):
                         #     self.dim,
                         #     self.compute_Sobol_t,
                         #     self.store_qoi_data_in_stat_dict,
-                        #     self.compute_sobol_total_indices_with_samples,
+                        #     self.compute_sobol_indices_with_samples,
                         #     samples,
                         #     chunksize=self.mpi_chunksize,
                         #     unordered=self.unordered
@@ -1305,7 +1306,7 @@ class TimeDependentStatistics(ABC, Statistics):
         self.result_dict = defaultdict(dict)
 
         if self.rank == 0:
-            self._groupby_df_simulation_results(columns_to_group_by=self.time_column_name)
+            self._groupby_df_simulation_results(columns_to_group_by=[self.time_column_name,])
             keyIter = list(self.groups.keys())
 
         for single_qoi_column in self.list_qoi_column:
@@ -1325,11 +1326,12 @@ class TimeDependentStatistics(ABC, Statistics):
                 compute_Sobol_m_Chunks = [self.compute_Sobol_m] * len(keyIter_chunk)
                 store_qoi_data_in_stat_dict_Chunks = [self.store_qoi_data_in_stat_dict] * len(keyIter_chunk)
 
-                compute_sobol_total_indices_with_samples_chunks = [self.compute_sobol_total_indices_with_samples] * len(
+                compute_sobol_indices_with_samples_chunks = [self.compute_sobol_indices_with_samples] * len(
                     keyIter_chunk)
-                if self.compute_sobol_total_indices_with_samples and \
-                        self.compute_Sobol_t and self.uqef_simulationNodes is not None:
-                    samples_chunks = [self.uqef_simulationNodes.parameters.T[:self.numEvaluations]] * len(keyIter_chunk)
+                if self.compute_sobol_indices_with_samples and \
+                        self.compute_Sobol_m and self.uqef_simulationNodes is not None:
+                    samples_chunks = [self.uqef_simulationNodes.distNodes.T[:self.numEvaluations]] * len(keyIter_chunk)
+                    # samples_chunks = [self.uqef_simulationNodes.parameters.T[:self.numEvaluations]] * len(keyIter_chunk)
                 else:
                     samples_chunks = [None] * len(keyIter_chunk)
 
@@ -1337,7 +1339,7 @@ class TimeDependentStatistics(ABC, Statistics):
                 if executor is not None:  # master process
                     print(f"{self.rank}: computation of statistics for qoi {single_qoi_column} started...")
                     solver_time_start = time.time()
-                    # TODO in case is compute_sobol_total_indices_with_samples True propagate UQEF.Samples.parameters
+                    # TODO in case is compute_sobol_indices_with_samples True propagate UQEF.Samples.parameters
                     chunk_results_it = executor.map(
                         parallel_statistics.parallel_calc_stats_for_mc_saltelli,
                         keyIter_chunk,
@@ -1347,7 +1349,7 @@ class TimeDependentStatistics(ABC, Statistics):
                         compute_Sobol_t_Chunks,
                         compute_Sobol_m_Chunks,
                         store_qoi_data_in_stat_dict_Chunks,
-                        compute_sobol_total_indices_with_samples_chunks,
+                        compute_sobol_indices_with_samples_chunks,
                         samples_chunks,
                         chunksize=self.mpi_chunksize,
                         unordered=self.unordered
@@ -1378,7 +1380,7 @@ class TimeDependentStatistics(ABC, Statistics):
         self.result_dict = defaultdict(dict)
 
         if self.rank == 0:
-            self._groupby_df_simulation_results(columns_to_group_by=self.time_column_name)
+            self._groupby_df_simulation_results(columns_to_group_by=[self.time_column_name,])
             keyIter = list(self.groups.keys())
 
         # TODO Move this line to the prepare method
@@ -1538,7 +1540,7 @@ class TimeDependentStatistics(ABC, Statistics):
               E, Var, StdDev, Skew, Kurt, P10, P90, Sobol_t[optional]
         """
         self.result_dict = dict()
-        self._groupby_df_simulation_results(columns_to_group_by=self.time_column_name)
+        self._groupby_df_simulation_results(columns_to_group_by=[self.time_column_name,])
         # keyIter = list(self.groups.keys())
 
         compute_other_stat_besides_pce_surrogate = kwargs.get("compute_other_stat_besides_pce_surrogate", self.compute_other_stat_besides_pce_surrogate)
@@ -1582,12 +1584,16 @@ class TimeDependentStatistics(ABC, Statistics):
                     if isinstance(self.result_dict[single_qoi_column][key]["P10"], list) and len(self.result_dict[single_qoi_column][key]["P10"]) == 1:
                         self.result_dict[single_qoi_column][key]["P10"] = self.result_dict[single_qoi_column][key]["P10"][0]
                         self.result_dict[single_qoi_column][key]["P90"] = self.result_dict[single_qoi_column][key]["P90"][0]
-                    if self.compute_Sobol_t and self.compute_sobol_total_indices_with_samples \
+                    if self.compute_Sobol_m and self.compute_sobol_indices_with_samples \
                             and self.uqef_simulationNodes is not None:
-                            self.result_dict[single_qoi_column][key]["Sobol_t"] = \
+                            self.result_dict[single_qoi_column][key]["Sobol_m"] = \
                                 sens_indices_sampling_based_utils.compute_sens_indices_based_on_samples_rank_based(
-                                    samples=self.uqef_simulationNodes.parameters.T[:self.numEvaluations],
+                                    samples=self.uqef_simulationNodes.distNodes.T[:self.numEvaluations],
                                     Y=qoi_values[:self.numEvaluations, np.newaxis], D=self.dim, N=self.numEvaluations)
+                            # self.result_dict[single_qoi_column][key]["Sobol_m"] = \
+                            #     sens_indices_sampling_based_utils.compute_sens_indices_based_on_samples_rank_based(
+                            #         samples=self.uqef_simulationNodes.parameters.T[:self.numEvaluations],
+                            #         Y=qoi_values[:self.numEvaluations, np.newaxis], D=self.dim, N=self.numEvaluations)
                 if self.instantly_save_results_for_each_time_step:
                     self._save_statistics_dictionary_single_qoi_single_timestamp(
                         single_qoi_column=single_qoi_column, timestamp=key,
@@ -1615,7 +1621,7 @@ class TimeDependentStatistics(ABC, Statistics):
         Note: regression is still not implemented for Saltelli
         """
         self.result_dict = dict()
-        self._groupby_df_simulation_results(columns_to_group_by=self.time_column_name)
+        self._groupby_df_simulation_results(columns_to_group_by=[self.time_column_name,])
         # keyIter = list(self.groups.keys())
 
         for single_qoi_column in self.list_qoi_column:
@@ -1662,12 +1668,16 @@ class TimeDependentStatistics(ABC, Statistics):
                     self.result_dict[single_qoi_column][key]["P90"] = \
                     self.result_dict[single_qoi_column][key]["P90"][0]
 
-                if self.compute_sobol_total_indices_with_samples and self.uqef_simulationNodes is not None:
-                    if self.compute_Sobol_t:
-                        self.result_dict[single_qoi_column][key]["Sobol_t"] = \
-                            sens_indices_sampling_based_utils.compute_sens_indices_based_on_samples_rank_based(
-                                samples=self.uqef_simulationNodes.parameters.T[:self.numEvaluations],
-                                Y=qoi_values_saltelli[:self.numEvaluations, :], D=self.dim, N=self.numEvaluations)
+                if self.compute_sobol_indices_with_samples and self.uqef_simulationNodes is not None:
+                    if self.compute_Sobol_m:
+                        self.result_dict[single_qoi_column][key]["Sobol_m"] = \
+                                sens_indices_sampling_based_utils.compute_sens_indices_based_on_samples_rank_based(
+                                    samples=self.uqef_simulationNodes.distNodes.T[:self.numEvaluations],
+                                    Y=qoi_values[:self.numEvaluations, np.newaxis], D=self.dim, N=self.numEvaluations)
+                        # self.result_dict[single_qoi_column][key]["Sobol_m"] = \
+                        #     sens_indices_sampling_based_utils.compute_sens_indices_based_on_samples_rank_based(
+                        #         samples=self.uqef_simulationNodes.parameters.T[:self.numEvaluations],
+                        #         Y=qoi_values_saltelli[:self.numEvaluations, :], D=self.dim, N=self.numEvaluations)
                 else:
                     if self.compute_Sobol_t or self.compute_Sobol_m:
                         s_i, s_t = sens_indices_sampling_based_utils.compute_first_and_total_order_sens_indices_based_on_samples_pick_freeze(
@@ -1711,7 +1721,7 @@ class TimeDependentStatistics(ABC, Statistics):
             qoi_values[optional], E
         """
         self.result_dict = dict()
-        self._groupby_df_simulation_results(columns_to_group_by=self.time_column_name)
+        self._groupby_df_simulation_results(columns_to_group_by=[self.time_column_name,])
         # keyIter = list(self.groups.keys())
 
         compute_other_stat_besides_pce_surrogate = kwargs.get("compute_other_stat_besides_pce_surrogate", self.compute_other_stat_besides_pce_surrogate)
@@ -1801,12 +1811,12 @@ class TimeDependentStatistics(ABC, Statistics):
 
         if self.store_gpce_surrogate_in_stat_dict:
             self.result_dict[single_qoi_column][key]["gPCE"] = qoi_gPCE
-        if self.save_gpce_surrogate and "gPCE" in self.result_dict[single_qoi_column][key]:
+        if self.save_gpce_surrogate: # and "gPCE" in self.result_dict[single_qoi_column][key]:
             utility.save_gpce_surrogate_model(workingDir=self.workingDir, gpce=qoi_gPCE, qoi=single_qoi_column, timestamp=key)
             if "gpce_coeff" in self.result_dict[single_qoi_column][key]:
                 utility.save_gpce_coeffs(
                     workingDir=self.workingDir,
-                    coeff=self.result_dict[single_qoi_column]["gpce_coeff"], qoi=single_qoi_column, timestamp=key)
+                    coeff=self.result_dict[single_qoi_column][key]["gpce_coeff"], qoi=single_qoi_column, timestamp=key)
 
         self.result_dict[single_qoi_column][key]["E"] = float(cp.E(qoi_gPCE, dist))
 
@@ -1916,7 +1926,7 @@ class TimeDependentStatistics(ABC, Statistics):
         Note: this is similar function to utility.add_centered_qoi_column_to_df_simulation_result
         """
         if self.groups is None:
-            self._groupby_df_simulation_results(columns_to_group_by=self.time_column_name)
+            self._groupby_df_simulation_results(columns_to_group_by=[self.time_column_name,])
         keyIter = list(self.groups.keys())  # list of all the dates
         # adding cantered data of the QoI
         single_qoi_column_centered = single_qoi_column + "_centered"
@@ -2464,11 +2474,14 @@ class TimeDependentStatistics(ABC, Statistics):
         is_Sobol_m2_computed = "Sobol_m2" in self.result_dict[qoi_column][keyIter[0]]
 
         if si_type == "Sobol_t" and not is_Sobol_t_computed:
-            raise Exception("Sobol Total Order Indices are not computed")
+            #raise Exception("Sobol Total Order Indices are not computed")
+            return None
         elif si_type == "Sobol_m" and not is_Sobol_m_computed:
-            raise Exception("Sobol Main Order Indices are not computed")
+            #raise Exception("Sobol Main Order Indices are not computed")
+            return None
         elif si_type == "Sobol_m2" and not is_Sobol_m2_computed:
-            raise Exception("Sobol Second Order Indices are not computed")
+            #raise Exception("Sobol Second Order Indices are not computed")
+            return None
 
         list_of_df_over_parameters = []
         for i in range(len(self.labels)):
@@ -2514,6 +2527,10 @@ class TimeDependentStatistics(ABC, Statistics):
     def plot_heatmap_si_single_qoi(self, qoi_column, si_df=None, si_type="Sobol_t", uq_method="sc"):
         if si_df is None:
             si_df = self.create_df_from_sensitivity_indices_single_qoi(qoi_column, si_type, uq_method)
+
+        if si_df is None:
+            print(f"Error in plot_heatmap_si_single_qoi - {si_type} is probably not computed for {qoi_column}")
+            return None
 
         reset_index_at_the_end = False
         if si_df.index.name != self.time_column_name:
@@ -2638,6 +2655,10 @@ class TimeDependentStatistics(ABC, Statistics):
             si_df = self.create_df_from_sensitivity_indices_single_qoi(
                 qoi_column, si_type, uq_method, compute_measured_normalized_data=True
             )
+
+        if si_df is None:
+            print(f"Error in plot_heatmap_si_single_qoi - {si_type} is probably not computed for {qoi_column}")
+            return None
 
         if 'qoi' in si_df.columns.tolist():
             si_df = si_df.loc[si_df['qoi'] == qoi_column]
