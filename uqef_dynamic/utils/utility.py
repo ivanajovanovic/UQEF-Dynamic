@@ -151,7 +151,7 @@ def get_dict_with_qoi_name_specific_output_file_paths_based_on_workingDir(workin
     return {"statistics_dictionary_file": statistics_dictionary_file}
 
 
-def get_dict_with_qoi_name_timestemp_specific_output_file_paths_based_on_workingDir(workingDir, qoi_string="Value", timestamp=0.0):
+def get_dict_with_qoi_name_timestamp_specific_output_file_paths_based_on_workingDir(workingDir, qoi_string="Value", timestamp=0.0):
     gpce_surrogate_file = workingDir / f"gpce_surrogate_{qoi_string}_{timestamp}.pkl"
     gpce_coeffs_file = workingDir / f"gpce_coeffs_{qoi_string}_{timestamp}.npy"
     return {"gpce_surrogate_file":gpce_surrogate_file, "gpce_coeffs_file":gpce_coeffs_file}
@@ -1689,7 +1689,7 @@ def _get_parameter_columns_df_index_parameter_gof(df_index_parameter_gof):
         if isinstance(x, tuple):
             x = x[0]
         return x not in list(mapping_gof_names_to_functions.keys()) and not x.startswith("d_") and \
-               x not in ["index_run", "station", "successful_run", "success", "qoi"]
+               x.lower() not in ["index_run", "station", "successful_run", "success", "qoi"]
     return [x for x in df_index_parameter_gof.columns.tolist() if check_if_column_stores_parameter(x)]
 
 
@@ -1697,7 +1697,7 @@ def _get_gof_columns_df_index_parameter_gof(df_index_parameter_gof):
     def check_if_column_stores_gof(x):
         if isinstance(x, tuple):
             x = x[0]
-        return x in list(mapping_gof_names_to_functions.keys()) and x not in ["index_run", "station", "successful_run", "qoi"]
+        return x in list(mapping_gof_names_to_functions.keys()) and x.lower() not in ["index_run", "station", "successful_run", "qoi"]
     return [x for x in df_index_parameter_gof.columns.tolist() if check_if_column_stores_gof(x)]
 
 
@@ -1820,7 +1820,7 @@ def plot_subplot_params_hist_from_df_conditioned(df_index_parameter_gof, name_of
 
 
 def plot_scatter_matrix_params_vs_gof(df_index_parameter_gof, name_of_gof_column="NSE",
-                                      hover_name="index_run"):
+                                      hover_name="Index_run"):
     columns_with_parameters = _get_parameter_columns_df_index_parameter_gof(df_index_parameter_gof)
     fig = px.scatter_matrix(df_index_parameter_gof,
                             dimensions=columns_with_parameters,
@@ -1835,7 +1835,7 @@ def plot_scatter_matrix_params_vs_gof(df_index_parameter_gof, name_of_gof_column
 
 
 def scatter_3d_params_vs_gof(df_index_parameter_gof, param1, param2, param3, name_of_gof_column="NSE",
-                             name_of_index_run_column="index_run"):
+                             name_of_index_run_column="Index_run"):
     fig = px.scatter_3d(
         df_index_parameter_gof, x=param1, y=param2, z=param3, color=name_of_gof_column, opacity=0.7,
         hover_data=[name_of_gof_column, name_of_index_run_column]

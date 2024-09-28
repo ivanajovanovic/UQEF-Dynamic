@@ -45,15 +45,30 @@ from uqef_dynamic.utils import sens_indices_sampling_based_utils
 # ============================================================================================
 
 
-def read_all_saved_uqef_dynamic_results_and_produce_dict_of_interest_single_qoi_single_timestemp(workingDir, 
-timestemp, qoi_column_name=None, time_column_name=utility.TIME_COLUMN_NAME, plotting=False, model=None, **kwargs):
+def read_all_saved_uqef_dynamic_results_and_produce_dict_of_interest_single_qoi_single_timestamp(workingDir, 
+timestamp, qoi_column_name=None, time_column_name=utility.TIME_COLUMN_NAME, plotting=False, model=None, **kwargs):
     """
     TODO This function eventaully should be refactored to be more general and to be able to read all the files for all the timesteps
-    For not this functions greatly fits the needs of the Ishigami model
+    TODO Also options for reading analytical values should be added!
     This function is a whole pipeline for reading the output saved by UQEF-Dynamic simulation and producing dict of interest
-    :param workingDir:
-    :param timestemp: 
+    :param workingDir: in case it does not exist, the function raises an Exception
+    :param timestamp: in case it is None the function raises a NotImplementedError
     :param qoi_column_name: In case it is None, it will get the value based on simulation_settings_dict["list_qoi_column"]
+
+    :param plotting: if True, it will plot some of the results
+    :param model: if provided, it will be used to compare the surrogate model with the full model
+    :param kwargs: additional arguments that can be passed to the function
+        analytical_E - analytical value for the mean
+        analytical_Var - analytical value for the variance
+        analytical_Sobol_t - analytical value for the Sobol total indices
+        analytical_Sobol_m - analytical value for the Sobol main indices
+        compare_surrogate_and_original_model - if True, it will compare the surrogate model with the full model
+        comparison_surrogate_vs_model_numSamples - number of samples for the comparison
+        comparison_surrogate_vs_model_mc_rule - rule for the comparison
+        evaluateSurrogateAtStandardDist - if True, it will evaluate the surrogate model at the standard distribution
+
+    :return: dict_with_results_of_interest
+
     """
 
     if not workingDir.is_dir():
@@ -87,7 +102,7 @@ timestemp, qoi_column_name=None, time_column_name=utility.TIME_COLUMN_NAME, plot
     with open(time_info_file) as f:
         lines = f.readlines()
         for line in lines:
-            print(line)
+            #print(line)
             if line.startswith("time_model_simulations"):
                 dict_with_results_of_interest["time_model_simulations"] = line.split(':')[1].strip()
             elif line.startswith("time_computing_statistics"):
@@ -105,12 +120,16 @@ timestemp, qoi_column_name=None, time_column_name=utility.TIME_COLUMN_NAME, plot
         if qoi_column_name not in list_qoi_column:
             raise ValueError(f"QoI column name {qoi_column_name} is not in the list of QoI columns {list_qoi_column}")
     dict_with_results_of_interest["qoi_column_name"] = qoi_column_name
-    # TODO extraxt somehow info about timestemps
-    if timestemp is None:
+    # TODO extraxt somehow info about timestamp
+    if timestamp is None:
         raise NotImplementedError
-    if isinstance(timestemp, (int, float)):
+    if isinstance(timestamp, (int, float)) or isinstance(timestamp, str):
         convert_to_pd_timestamp = False
-    dict_with_results_of_interest["timestemp"] = timestemp
+    elif isinstance(timestamp, pd.Timestamp):
+        convert_to_pd_timestamp = True
+    else:
+        raise ValueError(f"Timestamp {timestamp} is not in the correct format")
+    dict_with_results_of_interest["timestamp"] = timestamp
 
     ########################################################
     # Reading Simulation Nodes / Parameters
@@ -134,13 +153,14 @@ timestemp, qoi_column_name=None, time_column_name=utility.TIME_COLUMN_NAME, plot
     # whatch-out this might be tricky when not all params are regarded as uncertain!
     param_labeles = utility.get_list_of_uncertain_parameters_from_configuration_dict(
         configurationObject, raise_error=True, uq_method=uqsim_args_dict["uq_method"])
-    print(f"Debugging - params_list: {params_list}; simulationNodes.nodeNames: {simulationNodes.nodeNames}; param_labeles: {param_labeles}")    
+    #print(f"Debugging - params_list: {params_list}; simulationNodes.nodeNames: {simulationNodes.nodeNames}; param_labeles: {param_labeles}")    
     dict_with_results_of_interest["parameterNames"] = params_list  #not simulationNodes.nodeNames, instead better simulationNodes.orderdDistsNames
     dict_with_results_of_interest["stochasticParameterNames"] = param_labeles
     dim = simulationNodes.distNodes.shape[0] #len(param_labeles)  # this should represent a stochastic dimensionality
 
     # updating dict_with_results_of_interest
-    # TODO This does not work for Saltelli!!!
+    # number_full_model_evaluations will be overwritten below in certain setups 
+    # (main issue is to fatch the correct number for the saltelli method)
     dict_with_results_of_interest["number_full_model_evaluations"] = simulationNodes.nodes.shape[1]
     if uqsim_args_dict["uq_method"]=="saltelli":
         dict_with_results_of_interest["number_full_model_evaluations"] = (uqsim_args_dict["mc_numevaluations"]) * (2 + dim)
@@ -149,9 +169,8 @@ timestemp, qoi_column_name=None, time_column_name=utility.TIME_COLUMN_NAME, plot
     # Reading parameters which were saved to run/stimulate the model
     if simulation_parameters_file.is_file():
         simulation_parameters = np.load(simulation_parameters_file,  allow_pickle=True)
-        print(f"Debugging - simulation_parameters.shape: {simulation_parameters.shape}")
-        #dict_with_results_of_interest["number_full_model_evaluations"] = simulation_parameters.shape[0]
-
+        #print(f"Debugging - simulation_parameters.shape: {simulation_parameters.shape}")
+        dict_with_results_of_interest["number_full_model_evaluations"] = simulation_parameters.shape[0]
 
     if dict_with_results_of_interest["variant"] in ["m4", "m5", "m6", "m7"]:
         dict_with_results_of_interest["full_number_quadrature_points"] = \
@@ -180,6 +199,8 @@ timestemp, qoi_column_name=None, time_column_name=utility.TIME_COLUMN_NAME, plot
     else:
         df_simulation_result = None
 
+    ########################################################
+    # Readinga d ictionary containing statistics data
     # Reading UQEF-Dynamic Output files specific for some QoI and timestep
     # dict_output_file_paths_qoi = utility.get_dict_with_qoi_name_specific_output_file_paths_based_on_workingDir(workingDir, qoi_column_name)
     # statistics_dictionary_file = dict_output_file_paths_qoi.get("statistics_dictionary_file")
@@ -189,13 +210,12 @@ timestemp, qoi_column_name=None, time_column_name=utility.TIME_COLUMN_NAME, plot
         workingDir, list_qoi_column, single_timestamp_single_file, throw_error=True, convert_to_pd_timestamp=convert_to_pd_timestamp)
     statistics_dictionary  = statistics_dictionary[qoi_column_name]
     # extract only stat dict for a particula timestamp
-    if pd.Timestamp(timestemp) in statistics_dictionary:
-        statistics_dictionary = statistics_dictionary[pd.Timestamp(timestemp)]
-    elif timestemp in statistics_dictionary:
-        statistics_dictionary = statistics_dictionary[timestemp]
+    if pd.Timestamp(timestamp) in statistics_dictionary:
+        statistics_dictionary = statistics_dictionary[pd.Timestamp(timestimestamptemp)]
+    elif timestamp in statistics_dictionary:
+        statistics_dictionary = statistics_dictionary[timestamp]
     else:
-        print(f"Debugging - I was not able to read statistics_dictionary")
-        raise ValueError(f"Time-stamp {timestemp} is not in the statistics dictionary")
+        raise ValueError(f"Time-stamp {timestamp} is not in the statistics dictionary")
 
     ########################################################
     # Compare analytical values with the computed ones
@@ -231,15 +251,23 @@ timestemp, qoi_column_name=None, time_column_name=utility.TIME_COLUMN_NAME, plot
         Sobol_m_error = abs(Sobol_m - analytical_Sobol_m)
         dict_with_results_of_interest["sobol_m"] = Sobol_m
         dict_with_results_of_interest["sobol_m_error"] = Sobol_m_error
+        if isinstance(Sobol_m_error, (list, np.ndarray)):
+            for index, single_stoch_param_name in enumerate(dict_with_results_of_interest["stochasticParameterNames"]):
+                dict_with_results_of_interest[f"sobol_m_{single_stoch_param_name}"] = Sobol_m[index].round(4)
+                dict_with_results_of_interest[f"sobol_m_{single_stoch_param_name}_error"] = Sobol_m_error[index].round(4)
     if "Sobol_t" in statistics_dictionary and analytical_Sobol_t is not None:
         Sobol_t = statistics_dictionary['Sobol_t'] 
         Sobol_t_error = abs(Sobol_t - analytical_Sobol_t)
         dict_with_results_of_interest["sobol_t"] = Sobol_t
         dict_with_results_of_interest["sobol_t_error"] = Sobol_t_error
+        if isinstance(Sobol_t_error, (list, np.ndarray)):
+            for index, single_stoch_param_name in enumerate(dict_with_results_of_interest["stochasticParameterNames"]):
+                dict_with_results_of_interest[f"sobol_t_{single_stoch_param_name}"] = Sobol_t[index].round(4)
+                dict_with_results_of_interest[f"sobol_t_{single_stoch_param_name}_error"] = Sobol_t_error[index].round(4)
         
     ########################################################
     # gPCE Surrogate
-    # dict_output_file_paths_qoi_time = utility.get_dict_with_qoi_name_timestemp_specific_output_file_paths_based_on_workingDir(workingDir, qoi_column_name, timestemp)
+    # dict_output_file_paths_qoi_time = utility.get_dict_with_qoi_name_timestamp_specific_output_file_paths_based_on_workingDir(workingDir, qoi_column_name, timestamp)
     # gpce_surrogate_file = dict_output_file_paths_qoi_time.get("gpce_surrogate_file")
     # gpce_coeffs_file = dict_output_file_paths_qoi_time.get("gpce_coeffs_file")
 
@@ -248,13 +276,13 @@ timestemp, qoi_column_name=None, time_column_name=utility.TIME_COLUMN_NAME, plot
         gpce_coeff_dictionary = read_all_saved_gpce_coeffs(workingDir, list_qoi_column, throw_error=False, convert_to_pd_timestamp=convert_to_pd_timestamp)
         if gpce_surrogate_dictionary is not None:
             gpce_surrogate_dictionary = gpce_surrogate_dictionary[qoi_column_name]
-            if pd.Timestamp(timestemp) in gpce_surrogate_dictionary:
-                gpce_surrogate = gpce_surrogate_dictionary[pd.Timestamp(timestemp)]
-            elif timestemp in gpce_surrogate_dictionary:
-                gpce_surrogate = gpce_surrogate_dictionary[timestemp]
+            if pd.Timestamp(timestamp) in gpce_surrogate_dictionary:
+                gpce_surrogate = gpce_surrogate_dictionary[pd.Timestamp(timestamp)]
+            elif timestamp in gpce_surrogate_dictionary:
+                gpce_surrogate = gpce_surrogate_dictionary[timestamp]
             else:
                 gpce_surrogate = None
-                print(f"Debugging - I was not able to read gpce_surrogate_dictionary")
+                print(f"Sorry there is not gpce_surrogate for timestamp - {timestamp}")
         elif 'gPCE' in statistics_dictionary:
             gpce_surrogate = statistics_dictionary['gPCE']
         else:
@@ -262,13 +290,13 @@ timestemp, qoi_column_name=None, time_column_name=utility.TIME_COLUMN_NAME, plot
 
         if gpce_coeff_dictionary is not None:
             gpce_coeff_dictionary = gpce_coeff_dictionary[qoi_column_name]
-            if pd.Timestamp(timestemp) in gpce_coeff_dictionary:
-                gpce_coeffs = gpce_coeff_dictionary[pd.Timestamp(timestemp)]
-            elif timestemp in gpce_coeff_dictionary:
-                gpce_coeffs = gpce_coeff_dictionary[timestemp]
+            if pd.Timestamp(timestamp) in gpce_coeff_dictionary:
+                gpce_coeffs = gpce_coeff_dictionary[pd.Timestamp(timestamp)]
+            elif timestamp in gpce_coeff_dictionary:
+                gpce_coeffs = gpce_coeff_dictionary[timestamp]
             else:
                 gpce_coeffs = None
-                print(f"Debugging - I was not able to read gpce_coeff_dictionary")
+                print(f"Sorry there is not gpce_coeff for timestamp - {timestamp}")
         elif 'gpce_coeff' in statistics_dictionary:
             gpce_coeffs = statistics_dictionary['gpce_coeff']
         else:
@@ -285,7 +313,7 @@ timestemp, qoi_column_name=None, time_column_name=utility.TIME_COLUMN_NAME, plot
                 rule = kwargs.get('comparison_surrogate_vs_model_mc_rule', "R")
                 evaluateSurrogateAtStandardDist = kwargs.get('evaluateSurrogateAtStandardDist', True)
                 dict_result_comparison_model_and_surrogate = compare_surrogate_and_full_model_for_single_qoi_single_timestamp(
-                    model, gpce_surrogate, qoi_column_name,  timestemp,
+                    model, gpce_surrogate, qoi_column_name,  timestamp,
                     jointDists=simulationNodes.joinedDists, 
                     jointStandard=simulationNodes.joinedStandardDists, 
                     numSamples=numSamples, rule=rule,
@@ -355,11 +383,13 @@ def update_dict_with_results_of_interest_based_on_uqsim_args_dict(dict_with_resu
 
 # ===================================================================================================================
 # Comparing surrogate (i.e., gPCE model) and full model
+# if you want to evaluate the surrogate model for multiple timesteps, in parallel, 
+# take a look at the code in scinetifc_pipelines/compare_model_and_surrogate.py
 # ===================================================================================================================
 
 
 def compare_surrogate_and_full_model_for_single_qoi_single_timestamp(
-    model, surrogate_model, qoi_column_name,  timestemp,
+    model, surrogate_model, qoi_column_name,  timestamp,
     jointDists, jointStandard=None, numSamples=1000, rule="R",
     sampleFromStandardDist=False,
     evaluateSurrogateAtStandardDist=False,
@@ -370,7 +400,7 @@ def compare_surrogate_and_full_model_for_single_qoi_single_timestamp(
     This function is used to compare the surrogate model (e.g., gPCE model) and the full model
     for a single QoI and a single timestep
 
-    For a general comparison one should rely on code in scinetifc_pipelines/compare_surrogate_model_pipeline.py module!
+    For a general comparison one should rely on code in scinetifc_pipelines/compare_model_and_surrogate.py module!
     surrogate_model: gPCE model built for a particular QoI and a particular timestep
 
     Note: idea - if jointStandard is provided, then one expect that the surrogate model has to be evaluated at the set of nodes
@@ -397,7 +427,7 @@ def compare_surrogate_and_full_model_for_single_qoi_single_timestamp(
     start = time.time()
     model_runs, _ = run_uqef_dynamic_model_over_parameters_and_process_result(
         model, parameters, qoi_column_name, return_dict_over_timestamps=True)
-    original_model_evaluations = model_runs[timestemp]
+    original_model_evaluations = model_runs[timestamp]
     end = time.time()
     reevaluation_model_time = end - start
     print(f"Time needed for evaluating {parameters.shape[1]} \
@@ -997,10 +1027,11 @@ def run_uqef_dynamic_model_over_parameters_and_process_result(
             model_runs[idx] = df_simulation_result.loc[groups[key].values][qoi_column_name].values
     return model_runs, t
 
-# =================================================================================================
-# Functions for computing PCE - but based on UQEF-Dynamic model and data structure
-# =================================================================================================
-# Note: think about moving these functions to UQEF-Dynamic/uqef_dynamic/utils/uqPostProcessing.py
+# ==============================================================================================================
+# Function for computing PCE and PCE-based statistics on UQEF-Dynamic model and data structure
+#  by running the model over parameters and timesteps and processing the results
+# For simple functions refer to utility module
+# ==============================================================================================================
 
 
 def groupby_df_simulation_results(df_simulation_result, columns_to_group_by: list=[]):
@@ -1198,9 +1229,8 @@ def compute_PSP_for_uqef_dynamic_model_ionuts_approach(model, joint_dist, joint_
 
 
 # ==============================================================================================================
-# Function for computing MC-based and PCE based statistics
+# Function for computing MC-based statistics
 #  by running the model over parameters and timesteps and processing the results
-# For simple functions refer to utility module
 # ==============================================================================================================
 
 def run_uq_mc_sim_and_compute_mc_stat_for_uqef_dynamic_model(
