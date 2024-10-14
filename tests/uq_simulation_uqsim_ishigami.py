@@ -25,26 +25,8 @@ sys.path.insert(0, '/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic')
 
 from uqef_dynamic.utils import utility
 
-from uqef_dynamic.models.larsim import LarsimModelUQ
-from uqef_dynamic.models.larsim import LarsimStatistics
-
-from uqef_dynamic.models.linearDampedOscillator import LinearDampedOscillatorModel
-from uqef_dynamic.models.linearDampedOscillator import LinearDampedOscillatorStatistics
-
 from uqef_dynamic.models.ishigami import IshigamiModel
 from uqef_dynamic.models.ishigami import IshigamiStatistics
-
-from uqef_dynamic.models.productFunction import ProductFunctionModel
-from uqef_dynamic.models.productFunction import ProductFunctionStatistics
-
-from uqef_dynamic.models.hbv_sask import HBVSASKModelUQ
-from uqef_dynamic.models.hbv_sask import HBVSASKStatistics
-
-from uqef_dynamic.models.pybamm import pybammModelUQ as pybammmodel
-from uqef_dynamic.models.pybamm import pybammStatistics
-
-from uqef_dynamic.models.simpleOscilator.simple_oscilator_model import simpleOscilatorUQ
-from uqef_dynamic.models.simpleOscilator.simple_oscilator_statistics import simpleOscilatorStatistics
 
 # instantiate UQsim
 uqsim = uqef.UQsim()
@@ -67,13 +49,13 @@ if local_debugging:
     uqsim.args.mc_numevaluations = 10
     uqsim.args.sampling_rule = "latin_hypercube"  # "random" | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
     
-    uqsim.args.sc_q_order = 10  # 7 8 8 #10 3
-    uqsim.args.sc_p_order = 5  # 3, 3, 4 5, 6, 8
+    uqsim.args.sc_q_order = 15  # 7 8 8 #10 3
+    uqsim.args.sc_p_order = 9  # 3, 3, 4 5, 6, 8
     uqsim.args.sc_quadrature_rule = "g"  # "p" "genz_keister_24" "leja" "clenshaw_curtis"
 
-    uqsim.args.read_nodes_from_file = False
-    l = 8  # 10
-    path_to_file = pathlib.Path("/work/ga45met/sparseSpACE/sparse_grid_nodes_weights")
+    uqsim.args.read_nodes_from_file = True
+    l = 15 # 10
+    path_to_file = pathlib.Path("/work/ga45met/UQ-SG-Analysis/sparse_grid_nodes_weights")
     uqsim.args.parameters_file = path_to_file / f"KPU_d3_l{l}.asc" # f"KPU_d7_l{l}.asc"
     uqsim.args.parameters_setup_file = None
 
@@ -81,11 +63,11 @@ if local_debugging:
     uqsim.args.sc_poly_normed = True  # True
     uqsim.args.sc_sparse_quadrature = False  # False
     uqsim.args.regression = False
-    uqsim.args.cross_truncation = 0.7
+    uqsim.args.cross_truncation = 1.0
 
     uqsim.args.inputModelDir = None
     uqsim.args.sourceDir = None
-    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/work/ga45met", "ishigami_runs", "simulations_sep_2024", 'sc_full_p5_q10_ct07'))
+    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/work/ga45met", "ishigami_runs", "simulations_sep_2024", 'sc_sg_p9_l15'))
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
     uqsim.args.config_file = '/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic/data/configurations/configuration_ishigami.json'
 
@@ -117,6 +99,11 @@ utility.DEFAULT_DICT_WHAT_TO_PLOT = {
     "E_minus_std": False, "E_plus_std": False, "P10": True, "P90": True,
     "StdDev": True, "Skew": False, "Kurt": False, "Sobol_m": False, "Sobol_m2": False, "Sobol_t": True
 }
+utility.DEFAULT_DICT_STAT_TO_COMPUTE = {
+    "Var": True, "StdDev": True, "P10": True, "P90": True,
+    "Skew": False, "Kurt": False, "Sobol_m": True, "Sobol_m2": False, "Sobol_t": True
+}
+dict_stat_to_compute = utility.DEFAULT_DICT_STAT_TO_COMPUTE
 compute_sobol_indices_with_samples = False  # This is only relevant in the mc-saltelli's approach
 if uqsim.args.uq_method == "mc" and uqsim.args.compute_Sobol_m:
     compute_sobol_indices_with_samples = True
@@ -185,7 +172,8 @@ uqsim.statistics.update({"ishigami"       : (lambda: IshigamiStatistics.Ishigami
     store_gpce_surrogate_in_stat_dict=uqsim.args.store_gpce_surrogate_in_stat_dict,
     instantly_save_results_for_each_time_step=uqsim.args.instantly_save_results_for_each_time_step,
     compute_sobol_indices_with_samples=compute_sobol_indices_with_samples,
-    save_gpce_surrogate=save_gpce_surrogate
+    save_gpce_surrogate=save_gpce_surrogate,
+    dict_stat_to_compute=dict_stat_to_compute,
 ))})
 
 #####################################
