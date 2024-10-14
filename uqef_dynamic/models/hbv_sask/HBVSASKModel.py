@@ -794,7 +794,7 @@ class HBVSASKModel(object):
             # Compute GoFs for the whole time-span in certain set-ups
             ######################################################################################################
 
-            index_run_and_parameters_dict = {**id_dict, **parameters_dict}
+            index_run_and_parameters_dict = {**id_dict, **parameters_dict, "successful_run": True}
 
             ######################################################################################################
 
@@ -918,8 +918,11 @@ class HBVSASKModel(object):
             # flux_df = flux_df.loc[simulation_range]
             flux_df = flux_df[flux_df.index.isin(simulation_range)]
 
-            if flux_df is None and raise_exception_on_model_break:
-                raise Exception(f"Model broke for unique_run_index {unique_run_index}")
+            if flux_df is None:
+                if raise_exception_on_model_break:
+                    raise Exception(f"Model broke for unique_run_index {unique_run_index}")
+                else:
+                    index_run_and_parameters_dict = {**id_dict, **parameters_dict, "successful_run": False}
 
             result_dict = {"run_time": runtime,
                            "result_time_series": flux_df,
