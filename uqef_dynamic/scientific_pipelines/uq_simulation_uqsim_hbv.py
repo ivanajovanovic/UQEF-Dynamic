@@ -67,6 +67,7 @@ if local_debugging:
     uqsim.args.sc_poly_normed = True  # True
     uqsim.args.sc_sparse_quadrature = False  # False
     uqsim.args.regression = False
+    uqsim.args.cross_truncation = 1.0
 
     uqsim.args.sampleFromStandardDist = True  # False
 
@@ -92,26 +93,30 @@ if local_debugging:
 
     uqsim.setup_configuration_object()
 
-
-# TODO - add these variables to uqef.args
+# TODO Eventually add these configurations to uqef.args
 utility.DEFAULT_DICT_WHAT_TO_PLOT = {
     "E_minus_std": False, "E_plus_std": False, "P10": True, "P90": True,
     "StdDev": True, "Skew": False, "Kurt": False, "Sobol_m": False, "Sobol_m2": False, "Sobol_t": True
 }
+utility.DEFAULT_DICT_STAT_TO_COMPUTE = {
+    "Var": True, "StdDev": False, "P10": True, "P90": True,
+    "Skew": False, "Kurt": False, "Sobol_m": True, "Sobol_m2": False, "Sobol_t": True
+}
+dict_stat_to_compute = utility.DEFAULT_DICT_STAT_TO_COMPUTE
 compute_sobol_indices_with_samples = True  # This is only relevant in the mc-saltelli's approach
 if uqsim.args.uq_method == "mc" and uqsim.args.compute_Sobol_m:
     compute_sobol_indices_with_samples = True
 
-save_gpce_surrogate = False  # if True a gpce surrogate for each QoI for each time step is saved in a separate file
+save_gpce_surrogate = True  # if True a gpce surrogate for each QoI for each time step is saved in a separate file
 compute_other_stat_besides_pce_surrogate = True  # This is relevant only when uq_method == "sc" 
 
-# TODO Eventually add these configurations to uqef.args
-compute_kl_expansion_of_qoi = True
+compute_kl_expansion_of_qoi = False
 compute_timewise_gpce_next_to_kl_expansion = False
 kl_expansion_order = 10
-compute_generalized_sobol_indices = True
+compute_generalized_sobol_indices = False
 compute_generalized_sobol_indices_over_time = False
 compute_covariance_matrix_in_time = True
+
 #####################################
 # additional path settings:
 #####################################
@@ -179,7 +184,8 @@ uqsim.statistics.update({"hbvsask"         : (lambda: HBVSASKStatistics.HBVSASKS
     kl_expansion_order = kl_expansion_order,
     compute_generalized_sobol_indices = compute_generalized_sobol_indices,
     compute_generalized_sobol_indices_over_time = compute_generalized_sobol_indices_over_time,
-    compute_covariance_matrix_in_time = compute_covariance_matrix_in_time
+    compute_covariance_matrix_in_time = compute_covariance_matrix_in_time,
+    dict_stat_to_compute=dict_stat_to_compute,
 ))})
 
 #####################################
@@ -214,6 +220,8 @@ start_time_model_simulations = time.time()
 uqsim.simulate()
 end_time_model_simulations = time.time()
 time_model_simulations = end_time_model_simulations - start_time_model_simulations
+
+#uqsim.save_simulation_parameters()
 
 #####################################
 # re-save uqsim.configurationObject

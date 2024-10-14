@@ -9,7 +9,7 @@
     "division_factor": 4,
     "current_ooi": "Current function [A]",
     "time_ooi": "Time [s]",
-    "voltage_ooi": "Battery voltage [V]"
+    "voltage_ooi": "Voltage [V]"
   },
   "model_paths": {
     "model_file": "US06.csv"

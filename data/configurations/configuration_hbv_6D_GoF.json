@@ -23,7 +23,7 @@
     },
   "model_settings": {
     "basis": "Oldman_Basin",
-    "plotting": "True",
+    "plotting": "False",
     "writing_results_to_a_file": "False",
     "corrupt_forcing_data": "False"
   },
@@ -31,14 +31,14 @@
     "hbv_model_path": "Hydro_Models/HBV-SASK-data"
   },
   "simulation_settings": {
-    "qoi":"GoF",
+    "qoi":"Q_cms",
     "qoi_column":"Q_cms",
     "autoregressive_model_first_order":"False",
     "transform_model_output":"None",
     "read_measured_data": "True",
     "qoi_column_measured":"streamflow",
     "objective_function_qoi":["RMSE", "LogNSE", "KGE"],
-    "calculate_GoF":"False",
+    "calculate_GoF":"True",
     "objective_function":["RMSE", "MAE", "MSE", "NRMSE", "NSE", "LogNSE", "KGE"],
     "mode":"continuous",
     "interval": 10,
@@ -92,7 +92,7 @@
       "name": "K2",
       "distribution": "Uniform",
       "lower": 0.0,
-      "upper": 0.1,
+      "upper": 0.05,
       "default": 0.025
     }
 
