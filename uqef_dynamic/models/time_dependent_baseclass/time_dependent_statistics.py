@@ -21,11 +21,11 @@ import time
 
 from uqef.stat import Statistics
 
-from uqef_dynamic.utils import sens_indices_sampling_based_utils
 from uqef_dynamic.utils import parallel_statistics
-# from uqef_dynamic.utils import uqPostprocessing
+from uqef_dynamic.utils import uqef_dynamic_utils
 from uqef_dynamic.utils import utility
 from uqef_dynamic.utils import colors
+from uqef_dynamic.utils import sens_indices_sampling_based_utils
 
 # DEFAULT_DICT_WHAT_TO_PLOT = {
 #     "E_minus_std": False, "E_plus_std": False, "P10": False, "P90": False,
@@ -418,6 +418,11 @@ class TimeDependentStatistics(ABC, Statistics):
                 self.corrupt_forcing_data = False
 
         self.dict_what_to_plot = kwargs.get("dict_what_to_plot", utility.DEFAULT_DICT_WHAT_TO_PLOT)
+        self.dict_stat_to_compute = kwargs.get("dict_stat_to_compute", utility.DEFAULT_DICT_STAT_TO_COMPUTE)
+
+        self.dict_stat_to_compute['Sobol_t'] = self.compute_Sobol_t
+        self.dict_stat_to_compute['Sobol_m'] = self.compute_Sobol_m
+        self.dict_stat_to_compute['Sobol_m2'] = self.compute_Sobol_m2
 
         #####################################
         # Parameters related set-up part
@@ -529,7 +534,7 @@ class TimeDependentStatistics(ABC, Statistics):
         :param kwargs:
         :return:
         """
-        # TODO Make one general function from this one in uqPostprocessing or utilities...
+        # TODO Make one general function from this one in uqef_dynamic_utils or utilities...
         # TODO Think if this function should be moved to the Model class or utility and then info propagated!?
         # TODO Is this redundant with self.store_qoi_data_in_stat_dict
         always_process_original_model_output = kwargs.get("always_process_original_model_output", False)
@@ -715,7 +720,13 @@ class TimeDependentStatistics(ABC, Statistics):
                 raise Exception(f"Error in Statistics class - file {df_all_simulations_file} does not exist!")
 
         if self.samples is not None:
+
+            # this is a list of indexes of runs which returned None
             self.list_of_unsuccessful_runs = self.samples.get_list_index_run_with_None()
+
+            if self.samples.df_index_parameter_gof_values is not None:
+                # maybe you want to extend self.list_of_unsuccessful_runs with indexes of runs which do not satisfy GoF criteria
+                pass
 
             if self.samples.df_simulation_result is not None:
                 self.samples.df_simulation_result.sort_values(
@@ -959,8 +970,11 @@ class TimeDependentStatistics(ABC, Statistics):
                 os.path.abspath(os.path.join(file_path, "df_time_aggregated_grad_analysis.pkl")), compression="gzip")
     
     # =================================================================================================
+    
     def prepareForMcStatistics(self, simulationNodes, numEvaluations, regression=False, order=None,
                               poly_normed=None, poly_rule=None, cross_truncation=1.0, *args, **kwargs):
+        # TODO Check if self.list_of_unsuccessful_runs is empty; if not
+        # the program should update the self.nodes; self.N = self.numEvaluations
         self.numEvaluations = self.N = numEvaluations  # one can probably as well refer this from simulationNodes
         # TODO Think about this, tricky for saltelli, makes sense for mc
         # self.numEvaluations = self.number_of_unique_index_runs
@@ -1207,10 +1221,12 @@ class TimeDependentStatistics(ABC, Statistics):
                 dimChunks = [self.dim] * len(keyIter_chunk)
                 compute_Sobol_t_Chunks = [self.compute_Sobol_t] * len(keyIter_chunk)
                 compute_Sobol_m_Chunks = [self.compute_Sobol_m] * len(keyIter_chunk)
+                compute_Sobol_m2_Chunks = [self.compute_Sobol_m2] * len(keyIter_chunk)
                 store_qoi_data_in_stat_dict_Chunks = [self.store_qoi_data_in_stat_dict] * len(keyIter_chunk)
                 store_gpce_surrogate_in_stat_dict_Chunks = [self.store_gpce_surrogate_in_stat_dict] * len(keyIter_chunk)
                 save_gpce_surrogate_Chunks = [self.save_gpce_surrogate] * len(keyIter_chunk)
                 compute_other_stat_besides_pce_surrogate_Chunks = [compute_other_stat_besides_pce_surrogate] * len(keyIter_chunk)
+                dict_stat_to_compute_Chunks = [self.dict_stat_to_compute] * len(keyIter_chunk)
 
                 compute_sobol_indices_with_samples_chunks = [self.compute_sobol_indices_with_samples] * len(
                     keyIter_chunk)
@@ -1239,10 +1255,12 @@ class TimeDependentStatistics(ABC, Statistics):
                             regressionChunks,
                             compute_Sobol_t_Chunks,
                             compute_Sobol_m_Chunks,
+                            compute_Sobol_m2_Chunks,
                             store_qoi_data_in_stat_dict_Chunks,
                             store_gpce_surrogate_in_stat_dict_Chunks,
                             save_gpce_surrogate_Chunks,
                             compute_other_stat_besides_pce_surrogate_Chunks,
+                            dict_stat_to_compute_Chunks,
                             chunksize=self.mpi_chunksize,
                             unordered=self.unordered
                         )
@@ -1253,10 +1271,11 @@ class TimeDependentStatistics(ABC, Statistics):
                             list_of_qoi_values_chunk, #generator_of_simulations_df
                             numEvaluations_chunk,
                             dimChunks,
-                            compute_Sobol_t_Chunks,
+                            compute_Sobol_m_Chunks,
                             store_qoi_data_in_stat_dict_Chunks,
                             compute_sobol_indices_with_samples_chunks,
                             samples_chunks,
+                            dict_stat_to_compute_Chunks,
                             chunksize=self.mpi_chunksize,
                             unordered=self.unordered
                         )
@@ -1266,10 +1285,11 @@ class TimeDependentStatistics(ABC, Statistics):
                         #     generator_of_simulations_df,
                         #     self.numEvaluations,
                         #     self.dim,
-                        #     self.compute_Sobol_t,
+                        #     self.compute_Sobol_m,
                         #     self.store_qoi_data_in_stat_dict,
                         #     self.compute_sobol_indices_with_samples,
                         #     samples,
+                        #      self.dict_stat_to_compute,
                         #     chunksize=self.mpi_chunksize,
                         #     unordered=self.unordered
                         # )
@@ -1325,6 +1345,7 @@ class TimeDependentStatistics(ABC, Statistics):
                 compute_Sobol_t_Chunks = [self.compute_Sobol_t] * len(keyIter_chunk)
                 compute_Sobol_m_Chunks = [self.compute_Sobol_m] * len(keyIter_chunk)
                 store_qoi_data_in_stat_dict_Chunks = [self.store_qoi_data_in_stat_dict] * len(keyIter_chunk)
+                dict_stat_to_compute_Chunks = [self.dict_stat_to_compute] * len(keyIter_chunk)
 
                 compute_sobol_indices_with_samples_chunks = [self.compute_sobol_indices_with_samples] * len(
                     keyIter_chunk)
@@ -1351,6 +1372,7 @@ class TimeDependentStatistics(ABC, Statistics):
                         store_qoi_data_in_stat_dict_Chunks,
                         compute_sobol_indices_with_samples_chunks,
                         samples_chunks,
+                        dict_stat_to_compute_Chunks,
                         chunksize=self.mpi_chunksize,
                         unordered=self.unordered
                     )
@@ -1382,9 +1404,6 @@ class TimeDependentStatistics(ABC, Statistics):
         if self.rank == 0:
             self._groupby_df_simulation_results(columns_to_group_by=[self.time_column_name,])
             keyIter = list(self.groups.keys())
-
-        # TODO Move this line to the prepare method
-        self.regression = regression
         
         compute_other_stat_besides_pce_surrogate = kwargs.get("compute_other_stat_besides_pce_surrogate", self.compute_other_stat_besides_pce_surrogate)
 
@@ -1414,10 +1433,12 @@ class TimeDependentStatistics(ABC, Statistics):
                 regressionChunks = [self.regression] * len(keyIter_chunk)
                 compute_Sobol_t_Chunks = [self.compute_Sobol_t] * len(keyIter_chunk)
                 compute_Sobol_m_Chunks = [self.compute_Sobol_m] * len(keyIter_chunk)
+                compute_Sobol_m2_Chunks = [self.compute_Sobol_m2] * len(keyIter_chunk)
                 store_qoi_data_in_stat_dict_Chunks = [self.store_qoi_data_in_stat_dict] * len(keyIter_chunk)
                 store_gpce_surrogate_in_stat_dict_Chunks = [self.store_gpce_surrogate_in_stat_dict] * len(keyIter_chunk)
                 save_gpce_surrogate_Chunks = [self.save_gpce_surrogate] * len(keyIter_chunk)
                 compute_other_stat_besides_pce_surrogate_Chunks = [compute_other_stat_besides_pce_surrogate] * len(keyIter_chunk)
+                dict_stat_to_compute_Chunks = [self.dict_stat_to_compute] * len(keyIter_chunk)
 
             with futures.MPICommExecutor(MPI.COMM_WORLD, root=0) as executor:
                 if executor is not None:  # master process
@@ -1444,10 +1465,12 @@ class TimeDependentStatistics(ABC, Statistics):
                             regressionChunks,
                             compute_Sobol_t_Chunks,
                             compute_Sobol_m_Chunks,
+                            compute_Sobol_m2_Chunks,
                             store_qoi_data_in_stat_dict_Chunks,
                             store_gpce_surrogate_in_stat_dict_Chunks,
                             save_gpce_surrogate_Chunks,
                             compute_other_stat_besides_pce_surrogate_Chunks,
+                            dict_stat_to_compute_Chunks,
                             chunksize=self.mpi_chunksize,
                             unordered=self.unordered
                         )
@@ -1465,6 +1488,8 @@ class TimeDependentStatistics(ABC, Statistics):
                         #     self.store_qoi_data_in_stat_dict,
                         #     self.store_gpce_surrogate_in_stat_dict,
                         #     self.save_gpce_surrogate,
+                        #     compute_other_stat_besides_pce_surrogate,
+                        #     self.dict_stat_to_compute,
                         #     chunksize=self.mpi_chunksize,
                         #     unordered=self.unordered
                         # )
@@ -1571,19 +1596,28 @@ class TimeDependentStatistics(ABC, Statistics):
                     self.numEvaluations = len(qoi_values)
                     # local_result_dict["E"] = np.sum(qoi_values, axis=0, dtype=np.float64) / self.numEvaluations
                     self.result_dict[single_qoi_column][key]["E"] = np.mean(qoi_values, 0)
-                    self.result_dict[single_qoi_column][key]["Var"] = np.var(qoi_values, ddof=1)
-                    # self.result_dict[single_qoi_column][key]["Var"] = np.sum((qoi_values - self.result_dict[single_qoi_column][key]["E"]) ** 2, axis=0,
-                    #                                   dtype=np.float64) / (self.numEvaluations - 1)
-                    # local_result_dict["StdDev"] = np.sqrt(local_result_dict["Var"], dtype=np.float64)
-                    self.result_dict[single_qoi_column][key]["StdDev"] = np.std(qoi_values, 0, ddof=1)
-                    self.result_dict[single_qoi_column][key]["Skew"] = scipy.stats.skew(qoi_values, axis=0, bias=True)
-                    self.result_dict[single_qoi_column][key]["Kurt"] = scipy.stats.kurtosis(qoi_values, axis=0, bias=True)
 
-                    self.result_dict[single_qoi_column][key]["P10"] = np.percentile(qoi_values, 10, axis=0)
-                    self.result_dict[single_qoi_column][key]["P90"] = np.percentile(qoi_values, 90, axis=0)
-                    if isinstance(self.result_dict[single_qoi_column][key]["P10"], list) and len(self.result_dict[single_qoi_column][key]["P10"]) == 1:
-                        self.result_dict[single_qoi_column][key]["P10"] = self.result_dict[single_qoi_column][key]["P10"][0]
-                        self.result_dict[single_qoi_column][key]["P90"] = self.result_dict[single_qoi_column][key]["P90"][0]
+                    if self.dict_stat_to_compute.get("Var", False):
+                        self.result_dict[single_qoi_column][key]["Var"] = np.var(qoi_values, ddof=1)
+                        # self.result_dict[single_qoi_column][key]["Var"] = np.sum((qoi_values - self.result_dict[single_qoi_column][key]["E"]) ** 2, axis=0,
+                        #                                   dtype=np.float64) / (self.numEvaluations - 1)
+                    if self.dict_stat_to_compute.get("StdDev", False):
+                        # local_result_dict["StdDev"] = np.sqrt(local_result_dict["Var"], dtype=np.float64)
+                        self.result_dict[single_qoi_column][key]["StdDev"] = np.std(qoi_values, 0, ddof=1)
+                    if self.dict_stat_to_compute.get("Skew", False):
+                        self.result_dict[single_qoi_column][key]["Skew"] = scipy.stats.skew(qoi_values, axis=0, bias=True)
+                    if self.dict_stat_to_compute.get("Kurt", False):
+                        self.result_dict[single_qoi_column][key]["Kurt"] = scipy.stats.kurtosis(qoi_values, axis=0, bias=True)
+                    
+                    if self.dict_stat_to_compute.get("P10", False):
+                        self.result_dict[single_qoi_column][key]["P10"] = np.percentile(qoi_values, 10, axis=0)
+                        if isinstance(self.result_dict[single_qoi_column][key]["P10"], list) and len(self.result_dict[single_qoi_column][key]["P10"]) == 1:
+                            self.result_dict[single_qoi_column][key]["P10"] = self.result_dict[single_qoi_column][key]["P10"][0]
+                    if self.dict_stat_to_compute.get("P90", False):
+                        self.result_dict[single_qoi_column][key]["P90"] = np.percentile(qoi_values, 90, axis=0)
+                        if isinstance(self.result_dict[single_qoi_column][key]["P90"], list) and len(self.result_dict[single_qoi_column][key]["P90"]) == 1:
+                            self.result_dict[single_qoi_column][key]["P90"] = self.result_dict[single_qoi_column][key]["P90"][0]
+
                     if self.compute_Sobol_m and self.compute_sobol_indices_with_samples \
                             and self.uqef_simulationNodes is not None:
                             self.result_dict[single_qoi_column][key]["Sobol_m"] = \
@@ -1649,24 +1683,34 @@ class TimeDependentStatistics(ABC, Statistics):
                 
                 # local_result_dict["E"] = np.sum(qoi_values, axis=0, dtype=np.float64) / self.numEvaluations
                 self.result_dict[single_qoi_column][key]["E"] = np.mean(standard_qoi_values, 0)
-                self.result_dict[single_qoi_column][key]["Var"] = np.var(standard_qoi_values, ddof=1)
-                # self.result_dict[single_qoi_column][key]["Var"] = np.sum(
-                #     (standard_qoi_values - self.result_dict[single_qoi_column][key]["E"]) ** 2, axis=0,
-                #     dtype=np.float64) / (self.numEvaluations - 1)
-                # local_result_dict["StdDev"] = np.sqrt(local_result_dict["Var"], dtype=np.float64)
-                self.result_dict[single_qoi_column][key]["StdDev"] = np.std(standard_qoi_values, 0, ddof=1)
-                self.result_dict[single_qoi_column][key]["Skew"] = scipy.stats.skew(standard_qoi_values, axis=0,
-                                                                                    bias=True)
-                self.result_dict[single_qoi_column][key]["Kurt"] = scipy.stats.kurtosis(standard_qoi_values, axis=0,
+
+                if self.dict_stat_to_compute.get("Var", False):
+                    self.result_dict[single_qoi_column][key]["Var"] = np.var(standard_qoi_values, ddof=1)
+                    # self.result_dict[single_qoi_column][key]["Var"] = np.sum(
+                    #     (standard_qoi_values - self.result_dict[single_qoi_column][key]["E"]) ** 2, axis=0,
+                    #     dtype=np.float64) / (self.numEvaluations - 1)
+                if self.dict_stat_to_compute.get("StdDev", False):
+                    # local_result_dict["StdDev"] = np.sqrt(local_result_dict["Var"], dtype=np.float64)
+                    self.result_dict[single_qoi_column][key]["StdDev"] = np.std(standard_qoi_values, 0, ddof=1)
+                if self.dict_stat_to_compute.get("Skew", False):
+                    self.result_dict[single_qoi_column][key]["Skew"] = scipy.stats.skew(standard_qoi_values, axis=0,
                                                                                         bias=True)
-                self.result_dict[single_qoi_column][key]["P10"] = np.percentile(standard_qoi_values, 10, axis=0)
-                self.result_dict[single_qoi_column][key]["P90"] = np.percentile(standard_qoi_values, 90, axis=0)
-                if isinstance(self.result_dict[single_qoi_column][key]["P10"], list) and len(
+                if self.dict_stat_to_compute.get("Kurt", False):
+                    self.result_dict[single_qoi_column][key]["Kurt"] = scipy.stats.kurtosis(standard_qoi_values, axis=0,
+                                                                                            bias=True)
+                if self.dict_stat_to_compute.get("P10", False):
+                    self.result_dict[single_qoi_column][key]["P10"] = np.percentile(standard_qoi_values, 10, axis=0)
+                    if isinstance(self.result_dict[single_qoi_column][key]["P10"], list) and len(
                         self.result_dict[single_qoi_column][key]["P10"]) == 1:
-                    self.result_dict[single_qoi_column][key]["P10"] = \
-                    self.result_dict[single_qoi_column][key]["P10"][0]
-                    self.result_dict[single_qoi_column][key]["P90"] = \
-                    self.result_dict[single_qoi_column][key]["P90"][0]
+                        self.result_dict[single_qoi_column][key]["P10"] = \
+                        self.result_dict[single_qoi_column][key]["P10"][0]
+
+                if self.dict_stat_to_compute.get("P90", False):
+                    self.result_dict[single_qoi_column][key]["P90"] = np.percentile(standard_qoi_values, 90, axis=0)
+                    if isinstance(self.result_dict[single_qoi_column][key]["P90"], list) and len(
+                        self.result_dict[single_qoi_column][key]["P90"]) == 1:
+                        self.result_dict[single_qoi_column][key]["P90"] = \
+                        self.result_dict[single_qoi_column][key]["P90"][0]
 
                 if self.compute_sobol_indices_with_samples and self.uqef_simulationNodes is not None:
                     if self.compute_Sobol_m:
@@ -1821,22 +1865,36 @@ class TimeDependentStatistics(ABC, Statistics):
         self.result_dict[single_qoi_column][key]["E"] = float(cp.E(qoi_gPCE, dist))
 
         if compute_other_stat_besides_pce_surrogate:
-            self.result_dict[single_qoi_column][key]["Var"] = float(cp.Var(qoi_gPCE, dist))
-            self.result_dict[single_qoi_column][key]["StdDev"] = float(cp.Std(qoi_gPCE, dist))
+
+            if self.dict_stat_to_compute.get("Var", False):
+                self.result_dict[single_qoi_column][key]["Var"] = float(cp.Var(qoi_gPCE, dist))
+            if self.dict_stat_to_compute.get("StdDev", False):
+                self.result_dict[single_qoi_column][key]["StdDev"] = float(cp.Std(qoi_gPCE, dist))
             #self.result_dict[single_qoi_column][key]["qoi_dist"] = cp.QoI_Dist(qoi_gPCE, dist) # not working!
 
-            # # generate QoI dist
-            # qoi_dist = cp.QoI_Dist(self.qoi_gPCE, dist)
-            # # generate sampling values for the qoi dist (you should know the min/max values for doing this)
-            # dist_sampling_values = np.linspace(min_value, max_value, 1e4, endpoint=True)
-            # # sample the QoI dist on the generated sampling values
-            # pdf_samples = qoi_dist.pdf(dist_sampling_values)
+            if self.dict_stat_to_compute.get("Skew", False):
+                self.result_dict[single_qoi_column][key]["Skew"] = cp.Skew(qoi_gPCE, dist).round(4)
+            if self.dict_stat_to_compute.get("Kurt", False):
+                self.result_dict[single_qoi_column][key]["Kurt"] = cp.Kurt(qoi_gPCE, dist)
 
-            self.result_dict[single_qoi_column][key]["P10"] = float(cp.Perc(qoi_gPCE, 10, dist, numPercSamples))
-            self.result_dict[single_qoi_column][key]["P90"] = float(cp.Perc(qoi_gPCE, 90, dist, numPercSamples))
-            if isinstance(self.result_dict[single_qoi_column][key]["P10"], list) and len(self.result_dict[single_qoi_column][key]["P10"]) == 1:
-                self.result_dict[single_qoi_column][key]["P10"]= self.result_dict[single_qoi_column][key]["P10"][0]
-                self.result_dict[single_qoi_column][key]["P90"] = self.result_dict[single_qoi_column][key]["P90"][0]
+            if self.dict_stat_to_compute.get("qoi_dist", False):
+                self.result_dict[single_qoi_column][key]["qoi_dist"] = cp.QoI_Dist(qoi_gPCE, dist)
+                # # An example from Chaospy - generate QoI dist
+                # qoi_dist = cp.QoI_Dist(qoi_gPCE, dist)
+                # # generate sampling values for the qoi dist (you should know the min/max values for doing this)
+                # dist_sampling_values = np.linspace(min_value, max_value, 1e4, endpoint=True)
+                # # sample the QoI dist on the generated sampling values
+                # pdf_samples = qoi_dist.pdf(dist_sampling_values)
+
+            if self.dict_stat_to_compute.get("P10", False):
+                self.result_dict[single_qoi_column][key]["P10"] = float(cp.Perc(qoi_gPCE, 10, dist, numPercSamples))
+                if isinstance(self.result_dict[single_qoi_column][key]["P10"], list) and len(self.result_dict[single_qoi_column][key]["P10"]) == 1:
+                    self.result_dict[single_qoi_column][key]["P10"]= self.result_dict[single_qoi_column][key]["P10"][0]
+
+            if self.dict_stat_to_compute.get("P90", False):
+                self.result_dict[single_qoi_column][key]["P90"] = float(cp.Perc(qoi_gPCE, 90, dist, numPercSamples))
+                if isinstance(self.result_dict[single_qoi_column][key]["P90"], list) and len(self.result_dict[single_qoi_column][key]["P90"]) == 1:
+                    self.result_dict[single_qoi_column][key]["P90"]= self.result_dict[single_qoi_column][key]["P90"][0]
 
             if self.compute_Sobol_t:
                 self.result_dict[single_qoi_column][key]["Sobol_t"] = cp.Sens_t(qoi_gPCE, dist)
@@ -1883,7 +1941,15 @@ class TimeDependentStatistics(ABC, Statistics):
     def saveToFile(self, fileName="statistics_dict", fileNameIdent="", directory="./",
                    fileNameIdentIsFullName=False, **kwargs):
 
+        #fileName = self.generateFileName(fileName, fileNameIdent, directory, fileNameIdentIsFullName)
+        #statFileName = fileName + '.stat'
+
         if self.result_dict is not None and self.result_dict:
+
+            # df_statistics = self.create_df_from_statistics_data()
+            # df_statistics.to_pickle(
+            #     os.path.abspath(os.path.join(str(self.workingDir), "df_statistics.pkl")), compression="gzip")
+
             for single_qoi_column in self.list_qoi_column:
                 try:
                     fileName = "statistics_dictionary_qoi_" + single_qoi_column + ".pkl"
@@ -1897,6 +1963,16 @@ class TimeDependentStatistics(ABC, Statistics):
                 except KeyError as e:
                     print(f"TimeDependentStatistics.saveToFile() - Entry {single_qoi_column} does not exist anymore in "
                           f"TimeDependentStatistics.result_dict, therefore will not be saved")
+
+        # else:
+        #     self.result_dict = uqef_dynamic_utils.read_all_saved_statistics_dict(
+        #         workingDir=self.workingDir, list_qoi_column=self.list_qoi_column, 
+        #         single_timestamp_single_file=self.instantly_save_results_for_each_time_step, 
+        #         throw_error=throw_error=True, convert_to_pd_timestamp=self.convert_to_pd_timestamp)
+        #     df_statistics = self.create_df_from_statistics_data()
+        #     df_statistics.to_pickle(
+        #         os.path.abspath(os.path.join(str(self.workingDir), "df_statistics.pkl")), compression="gzip")
+
 
         if self.active_scores_dict is not None:
             fileName = "active_scores_dict.pkl"
@@ -2051,7 +2127,8 @@ class TimeDependentStatistics(ABC, Statistics):
          :param timestepRange:
          :param time_column_name:
          :param qoi_column_name:
-         :param kwargs:
+         :param kwargs: transform_measured_data_as_original_model; if read measured data shold be transformed in the same way
+         as original data; default is True
          :return: set self.df_measured to be a pd.DataFrame with three columns "TimeStamp", "qoi", "measured"
 
          Note: this function rely on previously computed dict_qoi_column_and_measured_info 
@@ -2082,7 +2159,7 @@ class TimeDependentStatistics(ABC, Statistics):
                 if not is_single_qoi_column_in_measured_column_names:
                     continue
 
-            # finally, single_qoi_column should be one among the original model output columns
+            # finally, single_qoi_column should be among the original model output columns
             single_qoi_column_info = self.dict_qoi_column_and_measured_info[single_qoi_column]
             single_qoi_read_measured_data = single_qoi_column_info[0]
             single_qoi_column_measured = single_qoi_column_info[1]
@@ -2593,8 +2670,8 @@ class TimeDependentStatistics(ABC, Statistics):
         self._check_if_df_statistics_is_computed(recompute_if_not=True)
         if objective_function is None:
             objective_function = self.objective_function
-        # TODO move compute_gof_over_different_time_series to utility; when importing uqPostprocessing these is a circular import
-        # uqPostprocessing.compute_gof_over_different_time_series(df_statistics=self.df_statistics,
+        # TODO move compute_gof_over_different_time_series to utility; when importing uqef_dynamic_utils these is a circular import
+        # uqef_dynamic_utils.compute_gof_over_different_time_series(df_statistics=self.df_statistics,
         #                                                         objective_function=objective_function,
         #                                                         qoi_column=qoi_column,
         #                                                         measuredDF_column_names=measuredDF_column_names)
