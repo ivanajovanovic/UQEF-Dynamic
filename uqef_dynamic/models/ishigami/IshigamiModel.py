@@ -109,7 +109,7 @@ class IshigamiModel(TimeDependentModel):
     def _parameters_configuration(self, parameters, take_direct_value, *args, **kwargs):
         """
         This function should return a dictionary of parameters to be used in the model.
-        This is the first argument of the model_run function.
+        This is the first argument of the _model_run function.
 
         Note: it should contain only uncertain parameters.
         """
@@ -251,7 +251,7 @@ def ishigami_func_vec(coordinates, a_model_param=7, b_model_param=0.1):
         for x1_loc, x2_loc in zip(x1_array, x2_array):
             result_vec[i] = ishigami_func((x1_loc, x2_loc, x3), a_model_param=a_model_param, b_model_param=b_model_param)
             i+=1
-    elif x1_is_array and isinstance(x2, (int, float)) and x3_array:
+    elif x1_is_array and isinstance(x2, (int, float)) and x3_is_array:
         x1_array = np.array(x1)
         x3_array = np.array(x3)
         result_vec = np.empty_like(x1_array)
