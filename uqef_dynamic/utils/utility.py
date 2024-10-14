@@ -49,6 +49,11 @@ DEFAULT_DICT_WHAT_TO_PLOT = {
     "StdDev": False, "Skew": False, "Kurt": False, "Sobol_m": False, "Sobol_m2": False, "Sobol_t": False
 }
 
+DEFAULT_DICT_STAT_TO_COMPUTE = {
+    "Var": True, "StdDev": True, "P10": True, "P90": True,
+    "Skew": False, "Kurt": False, "Sobol_m": True, "Sobol_m2": False, "Sobol_t": True
+}
+
 # definition of some 'static' variables, names, etc.
 TIME_COLUMN_NAME="TimeStamp"
 INDEX_COLUMN_NAME = "Index_run"
@@ -161,7 +166,8 @@ def get_dict_with_output_file_paths_based_on_workingDir(workingDir, qoi_string="
     args_file, configuration_object_file, nodes_file, simulation_parameters_file, parameters_file, time_info_file, \
         df_all_index_parameter_file, df_all_index_parameter_gof_file, df_all_simulations_file, \
             df_state_results_file, df_time_varying_grad_analysis_file, df_time_aggregated_grad_analysis_file, \
-                statistics_dictionary_file, dict_of_approx_matrix_c_file, dict_of_matrix_c_eigen_decomposition_file = \
+                statistics_dictionary_file, dict_of_approx_matrix_c_file, dict_of_matrix_c_eigen_decomposition_file, \
+                df_uqsim_simulation_parameters, df_uqsim_simulation_nodes, df_uqsim_simulation_weights = \
                     update_output_file_paths_based_on_workingDir(workingDir, qoi_string=qoi_string)
     return {
         "args_file": args_file, 
@@ -178,7 +184,10 @@ def get_dict_with_output_file_paths_based_on_workingDir(workingDir, qoi_string="
         "df_time_aggregated_grad_analysis_file": df_time_aggregated_grad_analysis_file,
         "statistics_dictionary_file": statistics_dictionary_file,
         "dict_of_approx_matrix_c_file": dict_of_approx_matrix_c_file,
-        "dict_of_matrix_c_eigen_decomposition_file": dict_of_matrix_c_eigen_decomposition_file
+        "dict_of_matrix_c_eigen_decomposition_file": dict_of_matrix_c_eigen_decomposition_file,
+        "df_uqsim_simulation_parameters": df_uqsim_simulation_parameters,
+        "df_uqsim_simulation_nodes": df_uqsim_simulation_nodes,
+        "df_uqsim_simulation_weights": df_uqsim_simulation_weights
     }
 
 
@@ -206,10 +215,16 @@ def update_output_file_paths_based_on_workingDir(workingDir, qoi_string="Value")
     dict_of_approx_matrix_c_file = workingDir / "dict_of_approx_matrix_c.pkl"
     dict_of_matrix_c_eigen_decomposition_file = workingDir / "dict_of_matrix_c_eigen_decomposition.pkl"
 
+    # Optionally, one might save uqef.simulation parameters / nodes / weights
+    df_uqsim_simulation_parameters = workingDir / "df_uqsim_simulation_parameters.pkl"
+    df_uqsim_simulation_nodes = workingDir / "df_uqsim_simulation_nodes.pkl"
+    df_uqsim_simulation_weights = workingDir / "df_uqsim_simulation_weights.pkl"
+
     return args_file, configuration_object_file, nodes_file, simulation_parameters_file, parameters_file, time_info_file, \
         df_all_index_parameter_file, df_all_index_parameter_gof_file, df_all_simulations_file, \
             df_state_results_file, df_time_varying_grad_analysis_file, df_time_aggregated_grad_analysis_file, \
-                statistics_dictionary_file, dict_of_approx_matrix_c_file, dict_of_matrix_c_eigen_decomposition_file
+                statistics_dictionary_file, dict_of_approx_matrix_c_file, dict_of_matrix_c_eigen_decomposition_file, \
+                df_uqsim_simulation_parameters, df_uqsim_simulation_nodes, df_uqsim_simulation_weights
 
 
 # TODO Update this class with new changes
@@ -373,6 +388,116 @@ def plot_2d_matrix_static(simulationNodes, nodes_or_paramters="nodes"):
     g = sns.pairplot(dfsimulationNodes, vars=list(dfsimulationNodes.columns), corner=True)
     plt.title(f"Plot: {nodes_or_paramters}", loc='left')
     plt.show()
+
+
+def plot_2d_grids(grid_array, title=None, weights=None, 
+    xaxis_title="X_1", yaxis_title="X_2",
+    scale_factor = 2e3, plot_weights_with_sign=False,
+    sizemode='area', marker_symbol='circle'
+    ):
+    """
+    Function for plotting a grid of nodes from 2D distribution
+    parameters:
+    - grid_array - numpy array of dim Number_of_nodesxdim
+    - weights  - numpy array of dim Number_of_nodesx1
+    - sizemode, e.g., 'area' or 'diameter'
+    """
+    if weights is None:
+        size = 10
+    else:
+        weights = np.array(weights)
+        if np.any(weights<0) and not plot_weights_with_sign:
+            size = np.where(weights < 0, np.abs(weights) * scale_factor, weights * scale_factor)
+            #idx = weights > 0
+            #size = -weights[~idx]*scale_factor
+        else:
+            size = weights*scale_factor
+
+    if not plot_weights_with_sign:
+        fig = go.Figure(data=go.Scatter(
+        x=grid_array[:,0],
+        y=grid_array[:,1],
+        marker_symbol=marker_symbol,
+        mode='markers',  # 'markers' means it will plot points
+        marker=dict(
+            size=size,       # Adjust the marker size
+            color='blue',  # Color of the points
+            opacity=0.8,    # Transparency of the points
+            sizemode=sizemode  # Adjust how size is applied (default is 'area') 'diameter'
+        ),
+        text = weights
+        ))
+    else:
+        idx = weights >= 0
+        fig = go.Figure(data=go.Scatter(
+        x=grid_array[idx,0],
+        y=grid_array[idx,1],
+        mode='markers',  # 'markers' means it will plot points
+        marker=dict(
+            size=weights[idx]*scale_factor, # Adjust the marker size
+            color='blue',  # Color of the points
+            opacity=1.0,    # Transparency of the points
+            sizemode=sizemode  # Adjust how size is applied (default is 'area') 'diameter'
+        ),
+        name="positive weights",
+        text = weights[idx]
+        ))
+        
+        fig.add_trace(go.Scatter(
+        x=grid_array[~idx,0],
+        y=grid_array[~idx,1],
+        mode='markers',  # 'markers' means it will plot points
+        marker=dict(
+            size=np.abs(weights[~idx])*scale_factor, # Adjust the marker size
+            color='red',  # Color of the points
+            opacity=1.0,    # Transparency of the points
+            sizemode=sizemode  # Adjust how size is applied (default is 'area') 'diameter'
+        ),
+        name="negative weights",
+        text = weights[~idx]
+        ))
+    
+    # Add title and labels
+    if title is not None:
+        fig.update_layout(
+            title=title,
+            xaxis_title=xaxis_title,
+            yaxis_title=yaxis_title,
+            width=800,  # Set the width of the figure
+            height=600  # Set the height of the figure
+        )
+    else:
+        fig.update_layout(
+        xaxis_title=xaxis_title,
+        yaxis_title=yaxis_title,
+        width=800,  # Set the width of the figure
+        height=600  # Set the height of the figure
+        )
+
+    # Update layout for white background and black zero lines
+    # fig.update_layout(
+    #     plot_bgcolor='white',  # Set plot background color to white
+    #     paper_bgcolor='white',  # Set outer (paper) background color to white
+    #     xaxis=dict(
+    #         showgrid=False,      # Remove x-axis gridlines
+    #         # zeroline=True,       # Show x-axis zero line
+    #         showline=True,       # Show bottom x-axis line
+    #         # zerolinecolor='black',  # Set x-axis zero line color to black
+    #         # zerolinewidth=2      # Set the width of the x-axis zero line
+    #         linecolor='black',   # Set left x-axis line color to black
+    #         linewidth=2          # Set width of the left x-axis line
+    #     ),
+    #     yaxis=dict(
+    #         showgrid=False,      # Remove y-axis gridlines
+    #         # zeroline=True,       # Show y-axis zero line
+    #         showline=True,       # Show bottom y-axis line
+    #         # zerolinecolor='black',  # Set y-axis zero line color to black
+    #         # zerolinewidth=2      # Set the width of the y-axis zero line
+    #         linecolor='black',   # Set left y-axis line color to black
+    #         linewidth=2          # Set width of the left y-axis line
+    #     )
+    # )
+    return fig
 
 #####################################
 # Playing with transformations
