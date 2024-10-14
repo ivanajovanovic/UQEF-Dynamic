@@ -321,6 +321,35 @@ class TimeDependentModel(ABC, Model):
             parameters: Optional[Union[Dict[str, Any], List[Any]]] = None,
             raise_exception_on_model_break: Optional[Union[bool, Any]] = None, *args, **kwargs
             ):
+        """
+            This is the main function to run the time dependent  model.
+
+            Parameters:
+            :i_s (Optional[List[int]]): A list of unique model run ids. Default is [0].
+            :parameters (Optional[Union[Dict[str, Any], List[Any]]]): A dictionary of parameters to be used in the model;
+            or a list of values for the parameters specified in the configuration file. Default is None.
+            :raise_exception_on_model_break (Optional[Union[bool, Any]]): If True, the function will raise an exception when the model breaks.
+            Important when uq_method is gPCE. Default is None.
+            :*args: Variable length argument list.
+            :**kwargs (dict, optional): Additional keyword arguments.
+            Can include:
+                - take_direct_value (bool): 
+                    If True, the function will take the direct value of the parameter 
+                    (e.g., it is expeced that parameters[unique_run_index] is a dict with keys being paramter name and values being parameter values). 
+                    If take_direct_value is False then parameters[unique_run_index] should be a list of parameter values corresponding to the order of the parameters in the configuration file
+                    Default is False.
+                - createNewFolder (bool): If True, the function will create a new folder for the results. Default is False.
+                - deleteFolderAfterwards (bool): If True, the function will delete the folder after the results are retrieved. Default is True.
+                - writing_results_to_a_file (bool): If True, the function will write the results to a file. Default is self.writing_results_to_a_file.
+                - plotting (bool): If True, the function will plot the results. Default is self.plotting.
+                - printing (bool): If True, the function will plot the results. Default is self.printing.
+            Returns: 
+            List[Tuple[Dict[str, Any], float]]: A list of tuples for each model run; each tuple is in the form (result_dict, runtime); 
+            - result_dict is a dictionary that might contain the following key-value entries (depending on the configuration file):
+            - ("result_time_series", flux_df): a dataframe containing the model output for the time period specified in the configuration file.
+            - ("parameters_dict", index_run_and_parameters_dict): a dictionary containing the parameter values for the time period specified in the configuration file.
+            - ("run_time", runtime): the runtime of a single model run; should have the same value as runtime variable
+        """
         if raise_exception_on_model_break is None:
             raise_exception_on_model_break = self.raise_exception_on_model_break
         take_direct_value = kwargs.get("take_direct_value", False)
@@ -359,6 +388,8 @@ class TimeDependentModel(ABC, Model):
             
             if printing:
                 print(f"{unique_run_index} parameters_dict - {parameters_dict} \n")
+            else:
+                print(f"model execution run id - {unique_run_index}...")
 
             # create local directory for this particular run
             if self.workingDir is not None:
