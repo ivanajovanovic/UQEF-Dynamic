@@ -1,9 +1,9 @@
 """
-Set of utility functions for postprocessing data for UQ runs of different models.
+Set of utility functions for postprocessing data for UQ runs of different models which extend UQEF-Dynamic/time_dependent_model.
 Many of these functions exist as well as part of time_dependent_statistics.TimeDependentStatistics or in utilty module
 but here we are trying to provide a more general set of functions that can be used for postprocessing data from different UQ and SA runs
 
-In general ulity functions present hir fit the way the data is saved in UQEF-Dynamic
+In general ulity functions present here fit the way the data is saved in UQEF-Dynamic
 and time_dependent_model and time_dependent_statistics modules!
 
 @author: Ivana Jovanovic Buha
@@ -16,7 +16,6 @@ import numpy as np
 import math
 import pathlib
 import pandas as pd
-import pickle
 import scipy
 import time
 from typing import List, Optional, Dict, Any, Union, Tuple
@@ -37,7 +36,6 @@ import chaospy as cp
 
 from uqef_dynamic.utils import colors
 from uqef_dynamic.utils import utility
-from uqef_dynamic.utils import create_stat_object
 from uqef_dynamic.utils import sens_indices_sampling_based_utils
 
 # ============================================================================================
@@ -200,7 +198,7 @@ timestamp, qoi_column_name=None, time_column_name=utility.TIME_COLUMN_NAME, plot
         df_simulation_result = None
 
     ########################################################
-    # Readinga d ictionary containing statistics data
+    # Readinga dictionary containing statistics data
     # Reading UQEF-Dynamic Output files specific for some QoI and timestep
     # dict_output_file_paths_qoi = utility.get_dict_with_qoi_name_specific_output_file_paths_based_on_workingDir(workingDir, qoi_column_name)
     # statistics_dictionary_file = dict_output_file_paths_qoi.get("statistics_dictionary_file")
@@ -709,127 +707,6 @@ def read_single_gpce_coeffs(workingDir, single_qoi, single_timestep, throw_error
             raise FileNotFoundError(f"The gpce coefficients file for qoi-{single_qoi} and time-stamp-{single_timestep} does not exist")
         else:
             return None
-
-# ==============================================================================================================
-# Functions for reading all saved output files from UQ and SA simulations and creating a DataFrame
-# ==============================================================================================================
-
-
-def get_df_statistics_and_df_si_from_saved_files(workingDir, inputModelDir=None):
-    """
-    Retrieves the statistics and sensitivity indices data from saved files.
-
-    Args:
-        workingDir (str): The working directory where the saved files are located.
-        inputModelDir (str, optional): The input model directory. Defaults to None.
-
-    Returns:
-        tuple: A tuple containing the following:
-            - statisticsObject: The statistics object.
-            - df_statistics_and_measured: The DataFrame containing the statistics and measured data.
-            - si_t_df: The DataFrame containing the sensitivity indices.
-
-    Raises:
-        FileNotFoundError: If any of the required files are not found.
-    """
-    dict_output_file_paths = utility.get_dict_with_output_file_paths_based_on_workingDir(workingDir)
-    args_file = dict_output_file_paths.get("args_file")
-    configuration_object_file = dict_output_file_paths.get("configuration_object_file")
-    nodes_file = dict_output_file_paths.get("nodes_file")
-    df_all_index_parameter_file = dict_output_file_paths.get("df_all_index_parameter_file")
-    df_all_index_parameter_gof_file = dict_output_file_paths.get("df_all_index_parameter_gof_file")
-    df_all_simulations_file = dict_output_file_paths.get("df_all_simulations_file")
-    
-    with open(configuration_object_file, 'rb') as f:
-        configurationObject = dill.load(f)
-    simulation_settings_dict = utility.read_simulation_settings_from_configuration_object(configurationObject)
-    with open(args_file, 'rb') as f:
-        uqsim_args = pickle.load(f)
-    uqsim_args_dict = vars(uqsim_args)
-    model = uqsim_args_dict["model"]
-    if inputModelDir is None:
-        inputModelDir = pathlib.Path(uqsim_args_dict["inputModelDir"])
-    else:
-        inputModelDir = pathlib.Path(inputModelDir) 
-
-    # with open(nodes_file, 'rb') as f:
-    #     simulationNodes = pickle.load(f)
-        
-    if df_all_index_parameter_file.is_file():
-        df_index_parameter = pd.read_pickle(df_all_index_parameter_file, compression="gzip")
-    else:
-        df_index_parameter = None
-    if df_index_parameter is not None:
-        params_list = utility._get_parameter_columns_df_index_parameter_gof(
-            df_index_parameter)
-    else:
-        params_list = []
-        for single_param in configurationObject["parameters"]:
-            params_list.append(single_param["name"])
-    if df_all_index_parameter_gof_file.is_file():
-        df_index_parameter_gof = pd.read_pickle(df_all_index_parameter_gof_file, compression="gzip")
-        df_index_parameter_gof
-    else:
-        print(f"Be careful - {df_all_index_parameter_gof_file} does not exist!")
-        df_index_parameter_gof = None
-    if df_index_parameter_gof is not None:
-        gof_list = utility._get_gof_columns_df_index_parameter_gof(
-            df_index_parameter_gof)
-    else:
-        gof_list = None
-        print(f"Be careful - {df_all_index_parameter_gof_file} does not exist - therefore gof_list is not populated!")
-
-    # df_nodes = utility.get_df_from_simulationNodes(simulationNodes, nodes_or_paramters="nodes", params_list=params_list)
-    # df_nodes_params = utility.get_df_from_simulationNodes(simulationNodes, nodes_or_paramters="parameters",  params_list=params_list)
-
-    read_all_saved_simulations_file = False
-    if read_all_saved_simulations_file and df_all_simulations_file.is_file():
-        # Reading Saved Simulations - Note: This might be a huge file,
-        # especially for MC/Saltelli kind of simulations
-        df_simulation_result = pd.read_pickle(df_all_simulations_file, compression="gzip")
-    else:
-        df_simulation_result = None
-
-    statisticsObject = create_stat_object.create_statistics_object(
-        configurationObject, uqsim_args_dict, workingDir, model=model)
-    statistics_dictionary = read_all_saved_statistics_dict(\
-        workingDir, statisticsObject.list_qoi_column, uqsim_args_dict.get("instantly_save_results_for_each_time_step", False), throw_error=True)
-
-    extend_statistics_object(
-        statisticsObject=statisticsObject, 
-        statistics_dictionary=statistics_dictionary, 
-        df_simulation_result=df_simulation_result,  # df_simulation_result=None,
-        get_measured_data=False, 
-        get_unaltered_data=False
-    )
-
-    # Add measured Data
-    # This is hardcoded for HBV fro now
-    if model == "HBV" or model == "hbvsask" or model == "hbv" or model == "HBV-SASK" or model == "hbv-sask":
-        basis = configurationObject['model_settings']['basis']
-        statisticsObject.inputModelDir_basis = inputModelDir / basis
-        statisticsObject.get_measured_data(
-            timestepRange=(statisticsObject.timesteps_min, statisticsObject.timesteps_max), 
-            transforme_mesured_data_as_original_model="False")
-
-    # Create a Pandas.DataFrame
-    statisticsObject.create_df_from_statistics_data()
-
-    # Add forcing Data
-    statisticsObject.get_forcing_data(time_column_name="TimeStamp")
-
-    # Merge Everything
-    df_statistics_and_measured = pd.merge(
-        statisticsObject.df_statistics, 
-        statisticsObject.forcing_df, left_on=statisticsObject.time_column_name, right_index=True)
-
-    df_statistics_and_measured['E_minus_std'] = df_statistics_and_measured['E_minus_std'].apply(lambda x: max(0, x))
-    df_statistics_and_measured['P10'] = df_statistics_and_measured['P10'].apply(lambda x: max(0, x))
-
-    si_t_df = statisticsObject.create_df_from_sensitivity_indices(si_type="Sobol_t")
-    si_m_df = statisticsObject.create_df_from_sensitivity_indices(si_type="Sobol_m")
-
-    return statisticsObject, df_statistics_and_measured, si_t_df, si_m_df
 
 
 ###################################################################################################################
@@ -1930,11 +1807,11 @@ def plotting_function_single_qoi(
         starting_row_for_predicted_data = 4
         # subplot_titles = ("Precipitation", "Temperature", "Measured Streamflow", "Mean", "Skew", "Kurt")
 
-    if dict_what_to_plot.get("StdDev", False):
+    if dict_what_to_plot.get("StdDev", False) and 'StdDev' in df.columns:
         n_rows += 1
-    if dict_what_to_plot.get("Skew", False):
+    if dict_what_to_plot.get("Skew", False) and 'Skew' in df.columns:
         n_rows += 1
-    if dict_what_to_plot.get("Kurt", False):
+    if dict_what_to_plot.get("Kurt", False) and 'Kurt' in df.columns:
         n_rows += 1
 
     if subplot_titles is None:
@@ -1944,11 +1821,11 @@ def plotting_function_single_qoi(
             subplot_titles = subplot_titles + ("Predicted",)
         else:
             subplot_titles= subplot_titles + ("Measured and Predicted Data",)
-        if dict_what_to_plot.get("StdDev", False):
+        if dict_what_to_plot.get("StdDev", False) and 'StdDev' in df.columns:
             subplot_titles = subplot_titles + ("Standard Deviation",)
-        if dict_what_to_plot.get("Skew", False):
+        if dict_what_to_plot.get("Skew", False) and 'Skew' in df.columns:
             subplot_titles = subplot_titles + ("Skew",)
-        if dict_what_to_plot.get("Kurt", False):
+        if dict_what_to_plot.get("Kurt", False) and 'Kurt' in df.columns:
             subplot_titles = subplot_titles + ("Kurt",)
 
     fig = make_subplots(
@@ -2018,12 +1895,12 @@ def plotting_function_single_qoi(
             ),
             row=starting_row_for_predicted_data, col=1
         )
-    if dict_what_to_plot.get("P10", False):
+    if dict_what_to_plot.get("P10", False) and 'P10' in df.columns:
         fig.add_trace(go.Scatter(x=df['TimeStamp'], y=df["P10"],
                                  name=f'P10',
                                  line_color='yellow', mode='lines'),
                       row=starting_row_for_predicted_data, col=1)
-    if dict_what_to_plot.get("P90", False):
+    if dict_what_to_plot.get("P90", False) and 'P90' in df.columns:
         fig.add_trace(go.Scatter(x=df['TimeStamp'], y=df["P90"],
                                  name=f'P90',
                                  line_color='yellow', mode='lines', fill='tonexty'),
@@ -2031,13 +1908,13 @@ def plotting_function_single_qoi(
 
     starting_row_for_predicted_data += 1
 
-    if dict_what_to_plot.get("StdDev", False):
+    if dict_what_to_plot.get("StdDev", False) and 'StdDev' in df.columns:
         fig.add_trace(go.Scatter(x=df['TimeStamp'], y=df["StdDev"],
                                  name=f'std. dev of {single_qoi}', line_color='darkviolet', mode='lines'),
                       row=starting_row_for_predicted_data, col=1)
         starting_row_for_predicted_data += 1
 
-    if dict_what_to_plot.get("Skew", False):
+    if dict_what_to_plot.get("Skew", False) and 'Skew' in df.columns:
         fig.add_trace(
             go.Scatter(
                 x=df['TimeStamp'], y=df['Skew'],
@@ -2047,7 +1924,7 @@ def plotting_function_single_qoi(
         )
         starting_row_for_predicted_data += 1
 
-    if dict_what_to_plot.get("Kurt", False):
+    if dict_what_to_plot.get("Kurt", False) and 'Kurt' in df.columns:
         fig.add_trace(
             go.Scatter(
                 x=df['TimeStamp'], y=df['Kurt'],

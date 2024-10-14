@@ -15,7 +15,7 @@ import time
 sys.path.insert(0, '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic')
 
 from uqef_dynamic.utils import utility
-from uqef_dynamic.utils import uqPostprocessing
+from uqef_dynamic.utils import uqef_dynamic_utils
 from uqef_dynamic.utils import create_stat_object
 
 
@@ -70,7 +70,7 @@ def main(workingDir):
     # Load the statistics object
     statisticsObject = create_stat_object.create_statistics_object(
         configurationObject, uqsim_args_dict, workingDir, model=model)
-    statistics_dictionary = uqPostprocessing.read_all_saved_statistics_dict(\
+    statistics_dictionary = uqef_dynamic_utils.read_all_saved_statistics_dict(\
         workingDir, statisticsObject.list_qoi_column, uqsim_args_dict.get("instantly_save_results_for_each_time_step", False), throw_error=False)
     print(f"INFO: statistics_dictionary - {statistics_dictionary}")
 
@@ -97,8 +97,8 @@ def main(workingDir):
         df_state = pd.read_pickle(df_state_results_file, compression="gzip")
         print(f"INFO: df_state - {df_state}")
 
-    gpce_surrogate_dictionary = uqPostprocessing.read_all_saved_gpce_surrogate_models(workingDir, statisticsObject.list_qoi_column, throw_error=False)
-    gpce_coeff_dictionary = uqPostprocessing.read_all_saved_gpce_coeffs(workingDir, statisticsObject.list_qoi_column, throw_error=False)
+    gpce_surrogate_dictionary = uqef_dynamic_utils.read_all_saved_gpce_surrogate_models(workingDir, statisticsObject.list_qoi_column, throw_error=False)
+    gpce_coeff_dictionary = uqef_dynamic_utils.read_all_saved_gpce_coeffs(workingDir, statisticsObject.list_qoi_column, throw_error=False)
     if gpce_surrogate_dictionary is not None:
         print(f"INFO: gpce_surrogate_dictionary - {gpce_surrogate_dictionary}")
     if gpce_coeff_dictionary is not None:

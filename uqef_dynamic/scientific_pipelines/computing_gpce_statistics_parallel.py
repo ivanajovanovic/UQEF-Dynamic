@@ -36,7 +36,7 @@ sys.path.insert(0, '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic')
 
 from uqef_dynamic.utils import parallelStatistics
 from uqef_dynamic.utils import utility
-from uqef_dynamic.utils import uqPostprocessing
+from uqef_dynamic.utils import uqef_dynamic_utils
 from uqef_dynamic.utils import create_stat_object
 
 #####################################
@@ -132,7 +132,7 @@ def main():
             configurationObject, uqsim_args_dict, workingDir, model=model)
 
         # Recreate statisticsObject.result_dict
-        statistics_dictionary = uqPostprocessing.read_all_saved_statistics_dict(\
+        statistics_dictionary = uqef_dynamic_utils.read_all_saved_statistics_dict(\
             workingDir, statisticsObject.list_qoi_column, uqsim_args_dict.get("instantly_save_results_for_each_time_step", False))
 
         # print(f"DEBUGGING - statistics_dictionary.keys()={statistics_dictionary.keys()}")  # should be a list of list_qoi_column
@@ -140,7 +140,7 @@ def main():
             print(f"DEBUGGING - single_qoi={single_qoi}; statistics_dictionary[single_qoi].keys()={statistics_dictionary[single_qoi].keys()}")
 
         # Once you have satistics_dictionary extend StatisticsObject...
-        uqPostprocessing.extend_statistics_object(
+        uqef_dynamic_utils.extend_statistics_object(
             statisticsObject=statisticsObject, 
             statistics_dictionary=statistics_dictionary, 
             df_simulation_result=df_simulation_result,  # df_simulation_result=None,
@@ -178,10 +178,10 @@ def main():
         # In case gPCE surrogate and the coefficeints are not saved in the stat_dictionary but as a separate files
         try_reading_gPCE_from_statisticsObject = False
         try_reading_gPCE_coeff_from_statisticsObject = False
-        gpce_surrogate_dictionary = uqPostprocessing.read_all_saved_gpce_surrogate_models(workingDir, statisticsObject.list_qoi_column, throw_error=False)
+        gpce_surrogate_dictionary = uqef_dynamic_utils.read_all_saved_gpce_surrogate_models(workingDir, statisticsObject.list_qoi_column, throw_error=False)
         if gpce_surrogate_dictionary is None:
             try_reading_gPCE_from_statisticsObject = True
-        gpce_coeff_dictionary = uqPostprocessing.read_all_saved_gpce_coeffs(workingDir, statisticsObject.list_qoi_column, throw_error=False)
+        gpce_coeff_dictionary = uqef_dynamic_utils.read_all_saved_gpce_coeffs(workingDir, statisticsObject.list_qoi_column, throw_error=False)
         if gpce_coeff_dictionary is None:
             try_reading_gPCE_coeff_from_statisticsObject = True
 

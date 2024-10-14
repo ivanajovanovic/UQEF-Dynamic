@@ -11,7 +11,8 @@ from uqef_dynamic.utils import utility
 from uqef_dynamic.models.hbv_sask import hbvsask_utility as hbv
 from uqef_dynamic.models.hbv_sask import HBVSASKModel as hbvmodel
 from uqef_dynamic.models.hbv_sask import HBVSASKStatistics
-from uqef_dynamic.utils import uqPostprocessing
+from uqef_dynamic.utils import uqef_dynamic_utils
+from uqef_dynamic.utils import create_stat_object
 
 # Defining Paths
 # TODO - change these paths accordingly
@@ -144,17 +145,17 @@ df_nodes_params = utility.get_df_from_simulationNodes(simulationNodes, nodes_or_
 df_simulation_result = None
 
 # Re-create Statistics Object and DataFrame Object That contains all the Statistics Data
-statisticsObject = uqPostprocessing.create_statistics_object(
+statisticsObject = create_stat_object.create_statistics_object(
     configurationObject, uqsim_args_dict, workingDir, model="hbvsask")
 
 ### Way of doing thinks when instantly_save_results_for_each_time_step is False...
-statistics_dictionary = uqPostprocessing.read_all_saved_statistics_dict(
+statistics_dictionary = uqef_dynamic_utils.read_all_saved_statistics_dict(
     workingDir, statisticsObject.list_qoi_column)
 ### Way of doing thinks when instantly_save_results_for_each_time_step is True...
-statistics_dictionary = uqPostprocessing.read_all_saved_statistics_dict(
+statistics_dictionary = uqef_dynamic_utils.read_all_saved_statistics_dict(
     workingDir, [statisticsObject.list_qoi_column[0],], single_timestamp_single_file=True)
 
-uqPostprocessing.extend_statistics_object(
+uqef_dynamic_utils.extend_statistics_object(
     statisticsObject=statisticsObject,
     statistics_dictionary=statistics_dictionary,
     df_simulation_result=df_simulation_result,
@@ -203,11 +204,11 @@ directory_for_saving_plots = workingDir
 if not str(directory_for_saving_plots).endswith("/"):
     directory_for_saving_plots = str(directory_for_saving_plots) + "/"
 
-# Calling function(s) from uqPostprocessing module
+# Calling function(s) from uqef_dynamic_utils module
 for single_qoi in statisticsObject.list_qoi_column:
     df_statistics_and_measured_single_qoi_subset = df_statistics_and_measured.loc[
         df_statistics_and_measured['qoi'] == single_qoi]
-    fig = uqPostprocessing.plotting_function_single_qoi(
+    fig = uqef_dynamic_utils.plotting_function_single_qoi(
         df_statistics_and_measured_single_qoi_subset,
         single_qoi=single_qoi,
         qoi=statisticsObject.qoi,
@@ -217,7 +218,7 @@ for single_qoi in statisticsObject.list_qoi_column:
     )
     fig.show()
 
-fig, _ = uqPostprocessing.plot_forcing_mean_predicted_and_observed_all_qoi(
+fig, _ = uqef_dynamic_utils.plot_forcing_mean_predicted_and_observed_all_qoi(
     statisticsObject, directory=directory_for_saving_plots, fileName="Datailed_plot_all_qois.html")
 fig.show()
 
