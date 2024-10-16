@@ -27,11 +27,6 @@ from uqef_dynamic.utils import utility
 from uqef_dynamic.utils import colors
 from uqef_dynamic.utils import sens_indices_sampling_based_utils
 
-# DEFAULT_DICT_WHAT_TO_PLOT = {
-#     "E_minus_std": False, "E_plus_std": False, "P10": False, "P90": False,
-#     "StdDev": True, "Skew": False, "Kurt": False, "Sobol_m": True, "Sobol_m2": False, "Sobol_t": True
-# }
-
 # TODO two cases - time_column_name is or is not an index column in returned data!?
 # TODO Samples class - write in some log file runs which have returned None, in case of model break!
 # TODO Samples class - eventually, add a subroutine that will check some metric in gof_df and conditioned on that potentially disregard the run
@@ -332,8 +327,6 @@ class TimeDependentStatistics(ABC, Statistics):
         self.configurationObject = utility.check_if_configurationObject_is_in_right_format_and_return(
             configurationObject, raise_error=True)
 
-        # print(f"[DEBUGGING STAT INFO] - {self.configurationObject}")
-
         # in the statistics class specification of the workingDir is necessary
         self.workingDir = pathlib.Path(workingDir)
         self.dict_output_file_paths = utility.get_dict_with_output_file_paths_based_on_workingDir(self.workingDir)
@@ -426,12 +419,6 @@ class TimeDependentStatistics(ABC, Statistics):
             except KeyError as e:
                 self.corrupt_forcing_data = False
 
-        # self.condition_results_based_on_metric = kwargs.get(
-        #     'condition_results_based_on_metric', None)
-        # self.condition_results_based_on_metric_value = kwargs.get(
-        #     'condition_results_based_on_metric_value', None)
-        # self.condition_results_based_on_metric_sign = kwargs.get('condition_results_based_on_metric_sign', "smaller")
-
         self.dict_what_to_plot = kwargs.get("dict_what_to_plot", utility.DEFAULT_DICT_WHAT_TO_PLOT)
         self.dict_stat_to_compute = kwargs.get("dict_stat_to_compute", utility.DEFAULT_DICT_STAT_TO_COMPUTE)
 
@@ -464,8 +451,6 @@ class TimeDependentStatistics(ABC, Statistics):
         self.result_dict = None
         self.groups = None
 
-        # TODO - as of now, this variable is depticated, think of removing it
-        # self.uqef_simulationNodes = None
         self.nodes = None
 
         self.dist = None
@@ -671,7 +656,7 @@ class TimeDependentStatistics(ABC, Statistics):
         #       f"and additional QoI columns are { list_qoi_column_processed}. "
         #       f"Plus the following gradient columns exist in the result DF {self.list_grad_columns}")
 
-    ###################################################################################################################
+    # =================================================================================================
 
     # TODO Write version of the function which reads already self.samples.df_simulation_result
     # from some file and continues...
@@ -741,13 +726,14 @@ class TimeDependentStatistics(ABC, Statistics):
                 raise Exception(f"Error in Statistics class - file {df_all_simulations_file} does not exist!")
 
         if self.samples is not None:
-            # Here some functions are called to process the data from self.samples
+            # Here, some functions are called to process the data from self.samples
 
             # this is a list of indexes of runs which returned None
             self.list_of_unsuccessful_runs = self.samples.get_list_index_run_with_None()
 
             if self.samples.df_index_parameter_gof_values is not None:
-                # TODO maybe you want to extend self.list_of_unsuccessful_runs with indexes of runs which do not satisfy GoF criteria
+                # here, maybe you want to extend self.list_of_unsuccessful_runs with indexes of runs which do not satisfy GoF criteria
+                # this is done in prepared methods for different uq methods, e.g., prepareForMcStatistics
                 # or do this later in the prepare section!!!
                 pass
 
@@ -923,7 +909,7 @@ class TimeDependentStatistics(ABC, Statistics):
         #     self.numEvaluations = self.number_of_unique_index_runs
 
     def get_number_of_unique_index_runs(self):
-        return self.number_of_unique_index_runs
+        return self.number_unique_model_runs   # self.number_of_unique_index_runs
 
     def set_numTimesteps(self, numbTimesteps=None):
         if numbTimesteps is not None:
@@ -1021,12 +1007,6 @@ class TimeDependentStatistics(ABC, Statistics):
             raise Exception("[STAT ERROR] - Nodes are not provided and they can not be read from the file!")
      
     def handle_expansion_generation(self, simulationNodes=None):
-        # if simulationNodes is None:
-        #     raise Exception("[STAT ERROR] - simulationNodes is not provided!")
-        # if self.sampleFromStandardDist:
-        #     self.dist = simulationNodes.joinedStandardDists
-        # else:
-        #     self.dist = simulationNodes.joinedDists
         self.polynomial_expansion, self.polynomial_norms = cp.generate_expansion(
             self.order, self.dist, rule=self.poly_rule, normed=self.poly_normed,
             graded=True, reverse=True, cross_truncation=self.cross_truncation, retall=True)
@@ -1187,7 +1167,6 @@ class TimeDependentStatistics(ABC, Statistics):
             self._update_df_simulation_result_based_on_index_runs_to_keep(list_of_index_runs_to_keep)
         except ValueError as e:
             print(f"Caught an exception: {e}")
-            # Re-raise the exception to propagate it further
             raise
 
         try:
@@ -1216,10 +1195,6 @@ class TimeDependentStatistics(ABC, Statistics):
         Raises:
         Exception: If it is not possible to condition df_index_parameter_gof_values on the column.
         """
-        # kwargs["condition_results_based_on_metric"] = 'NSE' # TODO Hardcoded for now
-        # kwargs["condition_results_based_on_metric_value"] = 0.2 # TODO Hardcoded for now
-        # kwargs["condition_results_based_on_metric_sign"] = "greater_or_equal" # TODO Hardcoded for now
-
         condition_results_based_on_metric = kwargs.get("condition_results_based_on_metric", self.condition_results_based_on_metric)
         condition_results_based_on_metric_value = kwargs.get("condition_results_based_on_metric_value", self.condition_results_based_on_metric_value)
         condition_results_based_on_metric_sign = kwargs.get("condition_results_based_on_metric_sign", self.condition_results_based_on_metric_sign)
@@ -1240,7 +1215,7 @@ class TimeDependentStatistics(ABC, Statistics):
 
     def mc_set_initial_values(self, simulationNodes, numEvaluations, regression=False, order=None,
                               poly_normed=False, poly_rule='three_terms_recurrence', cross_truncation=1.0):
-        self.numEvaluations = self.N = numEvaluations  # one can probably as well refer this from simulationNodes
+        self.numEvaluations = self.N = numEvaluations
         # TODO Think about this, tricky for saltelli, makes sense for mc
         # self.numEvaluations = self.number_of_unique_index_runs
         if simulationNodes is not None and simulationNodes:
@@ -1254,7 +1229,7 @@ class TimeDependentStatistics(ABC, Statistics):
                 self.dist = simulationNodes.joinedDists
         else:
             self.nodes = None
-            self.dist = None # I am not sure this will not be needed even when it is allowed for nodes to be None
+            self.dist = None
         self.weights = None
         self.regression = regression
         if self.regression:
@@ -1277,7 +1252,7 @@ class TimeDependentStatistics(ABC, Statistics):
                 self.dist = simulationNodes.joinedDists
         else:
             self.ensure_nodes_are_loaded()
-            # what to do with self.dist in this case?
+            # TODO what to do with self.dist in this case? Read it from some file?
         self.order = order
         self.poly_normed = poly_normed
         self.poly_rule = poly_rule
@@ -1298,8 +1273,6 @@ class TimeDependentStatistics(ABC, Statistics):
         self.handle_conditioning_model_runs(kwargs)
 
     def prepareForScStatistics(self, simulationNodes, order, poly_normed=False, poly_rule='three_terms_recurrence', regression=False, cross_truncation=1.0, *args, **kwargs):
-        # TODO Check if self.list_of_unsuccessful_runs is empty; if not
-        # the program should not proceed with the analysis; or when regression (uq_method=) should update the self.nodes; self.N = self.numEvaluations
         self.pce_set_initial_values(simulationNodes, order, poly_normed, poly_rule, regression, cross_truncation)
         self.handle_expansion_generation()
         if self.regression:
@@ -1310,10 +1283,6 @@ class TimeDependentStatistics(ABC, Statistics):
 
     def prepareForMcSaltelliStatistics(self, simulationNodes, numEvaluations=None, regression=False, order=None,
                                     poly_normed=False, poly_rule='three_terms_recurrence', cross_truncation=1.0, *args, **kwargs):
-        # self.prepareForMcStatistics(
-        #     simulationNodes=simulationNodes, numEvaluations=numEvaluations, 
-        #     regression=regression, order=order, poly_normed=poly_normed, poly_rule=poly_rule, cross_truncation=cross_truncation,
-        #     *args, **kwargs)
         self.mc_set_initial_values(simulationNodes, numEvaluations, regression, order, poly_normed, poly_rule, cross_truncation)
         if self.regression:
             self.handle_expansion_generation()
@@ -1419,10 +1388,6 @@ class TimeDependentStatistics(ABC, Statistics):
             # In this case self.result_dict has already been emptied
             return
 
-        # print(f"DEBUGGING - self.result_dict[single_qoi_column] - {self.result_dict[single_qoi_column]}")
-        # print(f"DEBUGGING - self.dict_what_to_plot - {self.dict_what_to_plot}")
-        # print(f"DEBUGGING - self.pdTimesteps - {self.pdTimesteps}")
-
         # In this case the results where collected in the self.result_dict dict and can be saved and plotted
         # Saving Stat Dict for a single qoi as soon as it is computed/ all time steps are processed
         fileName = f"statistics_dictionary_qoi_{single_qoi_column}.pkl" #+ single_qoi_column + ""
@@ -1460,7 +1425,6 @@ class TimeDependentStatistics(ABC, Statistics):
         if self.rank == 0:
             self._groupby_df_simulation_results(columns_to_group_by=[self.time_column_name,])
             keyIter = list(self.groups.keys())
-            # print(f"DEBUGGING - keyIter - {keyIter}")
 
         compute_other_stat_besides_pce_surrogate = kwargs.get("compute_other_stat_besides_pce_surrogate", self.compute_other_stat_besides_pce_surrogate)
 
@@ -1521,8 +1485,6 @@ class TimeDependentStatistics(ABC, Statistics):
                 if self.compute_sobol_indices_with_samples and \
                         self.compute_Sobol_m and self.nodes is not None:
                     samples_chunks = [self.nodes.T[:self.numEvaluations]] * len(keyIter_chunk)
-                    # samples_chunks = [self.uqef_simulationNodes.distNodes.T[:self.numEvaluations]] * len(keyIter_chunk)
-                    # samples_chunks = [self.uqef_simulationNodes.parameters.T[:self.numEvaluations]] * len(keyIter_chunk)
                     # samples = self.uqef_simulationNodes.parameters.T[:self.numEvaluations]
                 else:
                     samples_chunks = [None] * len(keyIter_chunk)
@@ -1641,8 +1603,6 @@ class TimeDependentStatistics(ABC, Statistics):
                 if self.compute_sobol_indices_with_samples and \
                         self.compute_Sobol_m and self.nodes is not None:
                     samples_chunks = [self.nodes.T[:self.numEvaluations]] * len(keyIter_chunk)
-                    # samples_chunks = [self.uqef_simulationNodes.distNodes.T[:self.numEvaluations]] * len(keyIter_chunk)
-                    # samples_chunks = [self.uqef_simulationNodes.parameters.T[:self.numEvaluations]] * len(keyIter_chunk)
                 else:
                     samples_chunks = [None] * len(keyIter_chunk)
 
@@ -1914,14 +1874,6 @@ class TimeDependentStatistics(ABC, Statistics):
                                 sens_indices_sampling_based_utils.compute_sens_indices_based_on_samples_rank_based(
                                     samples=self.nodes.T[:self.numEvaluations],
                                     Y=qoi_values[:self.numEvaluations, np.newaxis], D=self.dim, N=self.numEvaluations)
-                            # self.result_dict[single_qoi_column][key]["Sobol_m"] = \
-                            #     sens_indices_sampling_based_utils.compute_sens_indices_based_on_samples_rank_based(
-                            #         samples=self.uqef_simulationNodes.distNodes.T[:self.numEvaluations],
-                            #         Y=qoi_values[:self.numEvaluations, np.newaxis], D=self.dim, N=self.numEvaluations)
-                            # self.result_dict[single_qoi_column][key]["Sobol_m"] = \
-                            #     sens_indices_sampling_based_utils.compute_sens_indices_based_on_samples_rank_based(
-                            #         samples=self.uqef_simulationNodes.parameters.T[:self.numEvaluations],
-                            #         Y=qoi_values[:self.numEvaluations, np.newaxis], D=self.dim, N=self.numEvaluations)
                 if self.instantly_save_results_for_each_time_step:
                     self._save_statistics_dictionary_single_qoi_single_timestamp(
                         single_qoi_column=single_qoi_column, timestamp=key,
@@ -2012,14 +1964,6 @@ class TimeDependentStatistics(ABC, Statistics):
                                 sens_indices_sampling_based_utils.compute_sens_indices_based_on_samples_rank_based(
                                     samples=self.nodes.T[:self.numEvaluations],
                                     Y=qoi_values[:self.numEvaluations, np.newaxis], D=self.dim, N=self.numEvaluations)
-                        # self.result_dict[single_qoi_column][key]["Sobol_m"] = \
-                        #         sens_indices_sampling_based_utils.compute_sens_indices_based_on_samples_rank_based(
-                        #             samples=self.uqef_simulationNodes.distNodes.T[:self.numEvaluations],
-                        #             Y=qoi_values[:self.numEvaluations, np.newaxis], D=self.dim, N=self.numEvaluations)
-                        # self.result_dict[single_qoi_column][key]["Sobol_m"] = \
-                        #     sens_indices_sampling_based_utils.compute_sens_indices_based_on_samples_rank_based(
-                        #         samples=self.uqef_simulationNodes.parameters.T[:self.numEvaluations],
-                        #         Y=qoi_values_saltelli[:self.numEvaluations, :], D=self.dim, N=self.numEvaluations)
                 else:
                     if self.compute_Sobol_t or self.compute_Sobol_m:
                         s_i, s_t = sens_indices_sampling_based_utils.compute_first_and_total_order_sens_indices_based_on_samples_pick_freeze(
