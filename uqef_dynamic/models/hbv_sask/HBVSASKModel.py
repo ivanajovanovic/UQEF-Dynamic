@@ -678,7 +678,7 @@ class HBVSASKModel(object):
             else:
                 parameter = None  # an unaltered run will be executed
 
-            id_dict = {"index_run": unique_run_index}
+            id_dict = {"Index_run": unique_run_index}
 
             # this indeed represents the number of parameters considered to be uncertain, later on parameters_dict might
             # be extanded with fixed parameters that occure in configurationObject
