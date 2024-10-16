@@ -1294,6 +1294,23 @@ def read_simulation_settings_from_configuration_object(configurationObject: dict
     result_dict["save_gradient_related_runs"] = save_gradient_related_runs
     result_dict["gradient_analysis"] = gradient_analysis
 
+    if "condition_results_based_on_metric" in kwargs:
+        condition_results_based_on_metric = kwargs['condition_results_based_on_metric']
+    else:
+        condition_results_based_on_metric = dict_config_simulation_settings.get("condition_results_based_on_metric", None)
+
+    if "condition_results_based_on_metric_value" in kwargs:
+        condition_results_based_on_metric_value = kwargs['condition_results_based_on_metric_value']
+    else:
+        condition_results_based_on_metric_value = dict_config_simulation_settings.get("condition_results_based_on_metric_value", None)
+    if "condition_results_based_on_metric_sign" in kwargs:
+        condition_results_based_on_metric_sign = kwargs['condition_results_based_on_metric_sign']
+    else:
+        condition_results_based_on_metric_sign = dict_config_simulation_settings.get("condition_results_based_on_metric_sign", "smaller")
+    result_dict["condition_results_based_on_metric"] = condition_results_based_on_metric
+    result_dict["condition_results_based_on_metric_value"] = condition_results_based_on_metric_value
+    result_dict["condition_results_based_on_metric_sign"] = condition_results_based_on_metric_sign
+
     return result_dict
 
 # def infer_qoi_column_names(dict_processed_simulation_settings_from_config_file, **kwargs):
@@ -1897,19 +1914,41 @@ def plot_subplot_params_hist_from_df(df_index_parameter_gof):
     return fig
 
 
+def generate_mask_based_on_column_comparison(df, column_name, threshold_value, comparison="smaller"):
+    """
+    comparison should be: "smaller", "greater", "equal", "not_equal", "smaller_or_equal",  "greater_or_equal"
+    '>', '<=', '=='
+    """
+    if comparison not in ["smaller", "greater", "equal", "not_equal", "smaller_or_equal", "greater_or_equal",
+    '==', '!=', '<', '>', '<=', '>=']:
+        raise Exception("Comparison should be: \"smaller\", \"greater\", \"equal\", \"not_equal\", \"smaller_or_equal\", \"greater_or_equal\" ")
+    if comparison == "smaller" or comparison == "<":
+        mask = df[column_name] < threshold_value
+    elif comparison == "greater" or comparison == ">":
+        mask = df[column_name] > threshold_value
+    elif comparison == "equal" or comparison == "==":
+        mask = df[column_name] == threshold_value
+    elif comparison == "not_equal" or comparison == "!=":
+        mask = df[column_name] != threshold_value
+    elif comparison == "smaller_or_equal" or comparison == "<=":
+        mask = df[column_name] <= threshold_value
+    elif comparison == "greater_or_equal" or comparison == ">=":
+        mask = df[column_name] >= threshold_value
+    else:
+        raise Exception(\
+        "Comparison should be: \"smaller\", \"greater\", \"equal\", \"not_equal\", \"smaller_or_equal\", \"greater_or_equal\" \
+        \"==\", \"!=\", \"<\", \">\", \"<=\", \">=\"")
+    return mask
+
+
 def plot_subplot_params_hist_from_df_conditioned(df_index_parameter_gof, name_of_gof_column="NSE",
                                                  threshold_gof_value=0, comparison="smaller"):
     """
-    comparison should be: "smaller", "greater", "equal"
+    comparison should be: "smaller", "greater", "equal", "not_equal", "smaller_or_equal",  "greater_or_equal"
     """
-    if comparison == "smaller":
-        mask = df_index_parameter_gof[name_of_gof_column] < threshold_gof_value
-    elif comparison == "greater":
-        mask = df_index_parameter_gof[name_of_gof_column] > threshold_gof_value
-    elif comparison == "equal":
-        mask = df_index_parameter_gof[name_of_gof_column] == threshold_gof_value
-    else:
-        raise Exception("Comparison should be: \"smaller\", \"greater\", \"equal\" ")
+    mask = generate_mask_based_on_column_comparison(
+        df=df_index_parameter_gof, column_name=name_of_gof_column, threshold_value=threshold_gof_value, comparison=comparison)
+
     columns_with_parameters = _get_parameter_columns_df_index_parameter_gof(df_index_parameter_gof)
     fig = make_subplots(rows=1, cols=len(columns_with_parameters))
     for i in range(len(columns_with_parameters)):

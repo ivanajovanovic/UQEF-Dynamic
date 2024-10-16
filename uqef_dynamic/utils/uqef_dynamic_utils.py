@@ -216,7 +216,40 @@ timestamp, qoi_column_name=None, time_column_name=utility.TIME_COLUMN_NAME, plot
         raise ValueError(f"Time-stamp {timestamp} is not in the statistics dictionary")
 
     ########################################################
-    # Compare analytical values with the computed ones
+
+    dict_with_results_of_interest.update(statistics_dictionary)
+
+    ########################################################
+    if "Sobol_m" in statistics_dictionary:
+        dict_with_results_of_interest['sobol_m'] = dict_with_results_of_interest.pop('Sobol_m')
+        if isinstance(dict_with_results_of_interest['sobol_m'], (list, np.ndarray)):
+            for index, single_stoch_param_name in enumerate(dict_with_results_of_interest["stochasticParameterNames"]):
+                if f"Sobol_m_{single_stoch_param_name}" in statistics_dictionary:
+                    dict_with_results_of_interest[f"sobol_m_{single_stoch_param_name}"] = statistics_dictionary[f"Sobol_m_{single_stoch_param_name}"]
+                else:
+                    dict_with_results_of_interest[f"sobol_m_{single_stoch_param_name}"] = statistics_dictionary['Sobol_m'][index].round(4)
+
+    if "Sobol_m2" in statistics_dictionary:
+        dict_with_results_of_interest['sobol_m2'] = dict_with_results_of_interest.pop('Sobol_m2')
+        if isinstance(dict_with_results_of_interest['sobol_m2'], (list, np.ndarray)):
+            for index, single_stoch_param_name in enumerate(dict_with_results_of_interest["stochasticParameterNames"]):
+                if f"Sobol_m2_{single_stoch_param_name}" in statistics_dictionary:
+                    dict_with_results_of_interest[f"sobol_m2_{single_stoch_param_name}"] = statistics_dictionary[f"Sobol_m2_{single_stoch_param_name}"]
+                else:
+                    dict_with_results_of_interest[f"sobol_m2_{single_stoch_param_name}"] = statistics_dictionary['Sobol_m2'][index].round(4)
+
+    if "Sobol_t" in statistics_dictionary:
+        dict_with_results_of_interest['sobol_t'] = dict_with_results_of_interest.pop('Sobol_t')
+        if isinstance(dict_with_results_of_interest['sobol_t'], (list, np.ndarray)):
+            for index, single_stoch_param_name in enumerate(dict_with_results_of_interest["stochasticParameterNames"]):
+                if f"Sobol_t_{single_stoch_param_name}" in statistics_dictionary:
+                    dict_with_results_of_interest[f"sobol_t_{single_stoch_param_name}"] = statistics_dictionary[f"Sobol_t_{single_stoch_param_name}"]
+                else:
+                    dict_with_results_of_interest[f"sobol_t_{single_stoch_param_name}"] = statistics_dictionary['Sobol_t'][index].round(4)
+    
+    ########################################################
+    # Compare analytical values with the computed ones (if analytical values are provided)
+
     analytical_E = kwargs.get('analytical_E', None)
     analytical_Var = kwargs.get('analytical_Var', None)
     analytical_Sobol_t = kwargs.get('analytical_Sobol_t', None)
@@ -224,44 +257,41 @@ timestamp, qoi_column_name=None, time_column_name=utility.TIME_COLUMN_NAME, plot
     # TODO add options for reading additiona analyitical stat values!
 
      # TODO eventually extend this such that these qunatitieis can be read from the saved files or computed based on mc simulations
-    if analytical_E is None:
-        raise Exception("Analytical values for E are not provided!")
-    if analytical_Var is None:
-        raise Exception("Analytical values for Var are not provided!")
-    if analytical_Sobol_t is None:
-        raise Exception("Analytical values for Sobol total indices are not provided!")
-        # TODO Think about how to code this in a more general way!
-        # Read from additional files being saved, e.g. Sobol indices etc.
-        # sobol_m_error_file = workingDir / "sobol_m_error.npy"
-        # sobol_m_qoi_file = workingDir / "sobol_m_qoi_file.npy"
-    if analytical_Sobol_m is None:
-        raise Exception("Analytical values for Sobol total indices are not provided!")
-        # TODO Think about how to code this in a more general way!
-        # Read from additional files being saved, e.g. Sobol indices etc.
-        # sobol_t_error_file = workingDir / "sobol_t_error.npy"
-        # sobol_t_qoi_file = workingDir / "sobol_t_qoi_file.npy"
+    if analytical_E is not None:
+        dict_with_results_of_interest["error_mean"] = abs(analytical_E - statistics_dictionary['E'])
+    else:
+        print("Analytical values for E are not provided!")
 
-    dict_with_results_of_interest["error_mean"] = abs(analytical_E - statistics_dictionary['E'])
-    dict_with_results_of_interest["error_var"] = abs(analytical_Var - statistics_dictionary['Var'])
+    if analytical_Var is not None:
+        dict_with_results_of_interest["error_var"] = abs(analytical_Var - statistics_dictionary['Var'])
+    else:    
+        ("Analytical values for Var are not provided!")
 
-    if "Sobol_m" in statistics_dictionary and analytical_Sobol_m is not None:
-        Sobol_m = statistics_dictionary['Sobol_m'] 
-        Sobol_m_error = abs(Sobol_m - analytical_Sobol_m)
-        dict_with_results_of_interest["sobol_m"] = Sobol_m
+    if analytical_Sobol_m is not None and "Sobol_m" in statistics_dictionary:
+        Sobol_m_error = abs(statistics_dictionary['Sobol_m'] - analytical_Sobol_m)
         dict_with_results_of_interest["sobol_m_error"] = Sobol_m_error
         if isinstance(Sobol_m_error, (list, np.ndarray)):
             for index, single_stoch_param_name in enumerate(dict_with_results_of_interest["stochasticParameterNames"]):
-                dict_with_results_of_interest[f"sobol_m_{single_stoch_param_name}"] = Sobol_m[index].round(4)
                 dict_with_results_of_interest[f"sobol_m_{single_stoch_param_name}_error"] = Sobol_m_error[index].round(4)
-    if "Sobol_t" in statistics_dictionary and analytical_Sobol_t is not None:
-        Sobol_t = statistics_dictionary['Sobol_t'] 
-        Sobol_t_error = abs(Sobol_t - analytical_Sobol_t)
-        dict_with_results_of_interest["sobol_t"] = Sobol_t
+    else:
+        print("Analytical values for Sobol first order indices are not provided!")
+        # TODO Think about how to code this in a more general way!
+        # Try to read from additional files being saved, e.g. Sobol indices etc.
+        # sobol_m_error_file = workingDir / "sobol_m_error.npy"
+        # sobol_m_qoi_file = workingDir / "sobol_m_qoi_file.npy"
+    
+    if analytical_Sobol_t is not None and "Sobol_t" in statistics_dictionary:
+        Sobol_t_error = abs(statistics_dictionary['Sobol_t'] - analytical_Sobol_t)
         dict_with_results_of_interest["sobol_t_error"] = Sobol_t_error
         if isinstance(Sobol_t_error, (list, np.ndarray)):
             for index, single_stoch_param_name in enumerate(dict_with_results_of_interest["stochasticParameterNames"]):
-                dict_with_results_of_interest[f"sobol_t_{single_stoch_param_name}"] = Sobol_t[index].round(4)
                 dict_with_results_of_interest[f"sobol_t_{single_stoch_param_name}_error"] = Sobol_t_error[index].round(4)
+    else:
+        print("Analytical values for Sobol total indices are not provided!")
+        # TODO Think about how to code this in a more general way!
+        # Try to read from additional files being saved, e.g. Sobol indices etc.
+        # sobol_t_error_file = workingDir / "sobol_t_error.npy"
+        # sobol_t_qoi_file = workingDir / "sobol_t_qoi_file.npy"
         
     ########################################################
     # gPCE Surrogate
@@ -270,42 +300,78 @@ timestamp, qoi_column_name=None, time_column_name=utility.TIME_COLUMN_NAME, plot
     # gpce_coeffs_file = dict_output_file_paths_qoi_time.get("gpce_coeffs_file")
 
     if dict_with_results_of_interest["variant"] in ["m4", "m5", "m6", "m7"]:  # TODO or m1 m2 with regression
-        gpce_surrogate_dictionary = read_all_saved_gpce_surrogate_models(workingDir, list_qoi_column, throw_error=False, convert_to_pd_timestamp=convert_to_pd_timestamp)
-        gpce_coeff_dictionary = read_all_saved_gpce_coeffs(workingDir, list_qoi_column, throw_error=False, convert_to_pd_timestamp=convert_to_pd_timestamp)
-        if gpce_surrogate_dictionary is not None:
-            gpce_surrogate_dictionary = gpce_surrogate_dictionary[qoi_column_name]
-            if pd.Timestamp(timestamp) in gpce_surrogate_dictionary:
-                gpce_surrogate = gpce_surrogate_dictionary[pd.Timestamp(timestamp)]
-            elif timestamp in gpce_surrogate_dictionary:
-                gpce_surrogate = gpce_surrogate_dictionary[timestamp]
-            else:
-                gpce_surrogate = None
-                print(f"Sorry there is not gpce_surrogate for timestamp - {timestamp}")
-        elif 'gPCE' in statistics_dictionary:
+        # gpce_surrogate_dictionary = read_all_saved_gpce_surrogate_models(workingDir, list_qoi_column, throw_error=False, convert_to_pd_timestamp=convert_to_pd_timestamp)
+        # gpce_coeff_dictionary = read_all_saved_gpce_coeffs(workingDir, list_qoi_column, throw_error=False, convert_to_pd_timestamp=convert_to_pd_timestamp)
+        # if gpce_surrogate_dictionary is not None:
+        #     gpce_surrogate_dictionary = gpce_surrogate_dictionary[qoi_column_name]
+        #     if pd.Timestamp(timestamp) in gpce_surrogate_dictionary:
+        #         gpce_surrogate = gpce_surrogate_dictionary[pd.Timestamp(timestamp)]
+        #     elif timestamp in gpce_surrogate_dictionary:
+        #         gpce_surrogate = gpce_surrogate_dictionary[timestamp]
+        #     else:
+        #         gpce_surrogate = None
+        #         print(f"Sorry there is not gpce_surrogate for timestamp - {timestamp}")
+        # elif 'gPCE' in statistics_dictionary:
+        #     gpce_surrogate = statistics_dictionary['gPCE']
+        # else:
+        #     print(f"Sorry you did not save gPCE surrogate")
+
+        # if gpce_coeff_dictionary is not None:
+        #     gpce_coeff_dictionary = gpce_coeff_dictionary[qoi_column_name]
+        #     if pd.Timestamp(timestamp) in gpce_coeff_dictionary:
+        #         gpce_coeffs = gpce_coeff_dictionary[pd.Timestamp(timestamp)]
+        #     elif timestamp in gpce_coeff_dictionary:
+        #         gpce_coeffs = gpce_coeff_dictionary[timestamp]
+        #     else:
+        #         gpce_coeffs = None
+        #         print(f"Sorry there is not gpce_coeff for timestamp - {timestamp}")
+        # elif 'gpce_coeff' in statistics_dictionary:
+        #     gpce_coeffs = statistics_dictionary['gpce_coeff']
+        # else:
+        #     print(f"Sorry you did not save coeff of the gpce surrogate (gpce_coeff)")
+
+        # TODO Check if file with data on comparison of surrogate and full model already exists
+
+        compare_surrogate_and_original_model = kwargs.get('compare_surrogate_and_original_model', False)
+
+        if 'gPCE' in statistics_dictionary:
             gpce_surrogate = statistics_dictionary['gPCE']
         else:
-            print(f"Sorry you did not save gPCE surrogate")
-
-        if gpce_coeff_dictionary is not None:
-            gpce_coeff_dictionary = gpce_coeff_dictionary[qoi_column_name]
-            if pd.Timestamp(timestamp) in gpce_coeff_dictionary:
-                gpce_coeffs = gpce_coeff_dictionary[pd.Timestamp(timestamp)]
-            elif timestamp in gpce_coeff_dictionary:
-                gpce_coeffs = gpce_coeff_dictionary[timestamp]
-            else:
-                gpce_coeffs = None
-                print(f"Sorry there is not gpce_coeff for timestamp - {timestamp}")
-        elif 'gpce_coeff' in statistics_dictionary:
+            gpce_surrogate = read_single_gpce_surrogate_models(workingDir, qoi_column_name, timestamp, throw_error=False)
+            if gpce_surrogate is None:
+                print(f"Sorry you did not save gPCE surrogate")
+        if 'gpce_coeff' in statistics_dictionary:
             gpce_coeffs = statistics_dictionary['gpce_coeff']
         else:
-            print(f"Sorry you did not save coeff of the gpce surrogate (gpce_coeff)")
+            gpce_coeffs = read_single_gpce_coeffs(workingDir, qoi_column_name, timestamp, throw_error=False)
+            if gpce_coeffs is None:
+                print(f"Sorry you did not save coeff of the gpce surrogate (gpce_coeff)")
 
         if gpce_surrogate is not None:
             dict_with_results_of_interest["max_p_order"] = max(np.linalg.norm(vector, ord=1) for vector in gpce_surrogate.exponents)
             dict_with_results_of_interest["gPCE_num_coeffs"] = gpce_surrogate.exponents.shape[0]
-            
-            compare_surrogate_and_original_model = kwargs.get('compare_surrogate_and_original_model', False)
-            if compare_surrogate_and_original_model and model is not None:
+            if plotting:
+                indices = gpce_surrogate.exponents
+                dimensionality = indices.shape[1]
+                number_of_terms = indices.shape[0]
+                dict_for_plotting = {f"q_{i+1}":indices[:, i] for i in range(dimensionality)}
+                df_nodes_weights = pd.DataFrame(dict_for_plotting)
+                sns.set(style="ticks", color_codes=True)
+                g = sns.pairplot(df_nodes_weights, vars = list(dict_for_plotting.keys()), corner=True)
+                # plt.title(title, loc='left')
+                plt.show()
+
+        comparison_surrogate_vs_model_file_name = workingDir / f"comparison_surrogate_vs_model_{qoi_column_name}_{timestamp}.pkl"
+        if comparison_surrogate_vs_model_file_name.is_file():
+            with open(comparison_surrogate_vs_model_file_name, 'rb') as f:
+                dict_result_comparison_model_and_surrogate = pickle.load(f)
+            dict_with_results_of_interest.update(dict_result_comparison_model_and_surrogate)
+            if 'numSamples' in dict_with_results_of_interest:
+                dict_with_results_of_interest['comparison_surrogate_vs_model_numSamples'] = dict_with_results_of_interest.pop('numSamples')
+            if 'rule' in dict_with_results_of_interest:
+                dict_with_results_of_interest['comparison_surrogate_vs_model_rule'] = dict_with_results_of_interest.pop('rule')
+        else:
+            if compare_surrogate_and_original_model and gpce_surrogate is not None and model is not None:
                 # 5**dim
                 numSamples = kwargs.get('comparison_surrogate_vs_model_numSamples', 1000)
                 rule = kwargs.get('comparison_surrogate_vs_model_mc_rule', "R")
@@ -319,21 +385,26 @@ timestamp, qoi_column_name=None, time_column_name=utility.TIME_COLUMN_NAME, plot
                     evaluateSurrogateAtStandardDist=evaluateSurrogateAtStandardDist,
                     read_nodes_from_file=False, 
                     rounding=False, round_dec=4,
-                    compute_error=True, return_evaluations=False
+                    compute_error=True, return_evaluations=False,
+                    write_to_a_file=True, workingDir=workingDir,
                     )
-                dict_with_results_of_interest["comparison_surrogate_vs_model_numSamples"] = numSamples
-                dict_with_results_of_interest["comparison_surrogate_vs_model_mc_rule"] = rule
+                # dict_with_results_of_interest["comparison_surrogate_vs_model_numSamples"] = numSamples
+                # dict_with_results_of_interest["comparison_surrogate_vs_model_mc_rule"] = rule
                 dict_with_results_of_interest.update(dict_result_comparison_model_and_surrogate)
-            if plotting:
-                indices = gpce_surrogate.exponents
-                dimensionality = indices.shape[1]
-                number_of_terms = indices.shape[0]
-                dict_for_plotting = {f"q_{i+1}":indices[:, i] for i in range(dimensionality)}
-                df_nodes_weights = pd.DataFrame(dict_for_plotting)
-                sns.set(style="ticks", color_codes=True)
-                g = sns.pairplot(df_nodes_weights, vars = list(dict_for_plotting.keys()), corner=True)
-                # plt.title(title, loc='left')
-                plt.show()
+                if not 'comparison_surrogate_vs_model_numSamples' in dict_with_results_of_interest:
+                    if 'numSamples' in dict_with_results_of_interest:
+                        dict_with_results_of_interest['comparison_surrogate_vs_model_numSamples'] = dict_with_results_of_interest.pop('numSamples')
+                    else:
+                        dict_with_results_of_interest['comparison_surrogate_vs_model_numSamples'] = numSamples
+                if not 'comparison_surrogate_vs_model_rule' in dict_with_results_of_interest:
+                    if 'rule' in dict_with_results_of_interest:
+                        dict_with_results_of_interest['comparison_surrogate_vs_model_rule'] = dict_with_results_of_interest.pop('rule')
+                    else:
+                        dict_with_results_of_interest['comparison_surrogate_vs_model_rule'] = rule
+            else:
+                print("Comparison of surrogate and full model is not performed becuase, either (an original) model is not provided or gpce_surrogate is None \
+                or compare_surrogate_and_original_model variable was set to False!")
+
     ########################################################
 
     return dict_with_results_of_interest
@@ -404,6 +475,13 @@ def compare_surrogate_and_full_model_for_single_qoi_single_timestamp(
     Note: idea - if jointStandard is provided, then one expect that the surrogate model has to be evaluated at the set of nodes
     which come from 'standard' distribution; evaluateSurrogateAtStandardDist should be set to True in this case
     """
+    write_to_a_file = kwargs.get('write_to_a_file', False)
+    if write_to_a_file:
+        workingDir = kwargs.get('workingDir', None)
+        if workingDir is None:
+            write_to_a_file = False
+            print("Warning: workingDir is not provided, so the results will not be saved to a file!")
+
     parameters = generate_parameters_for_mc_simulation(
         jointDists, jointStandard=jointStandard, numSamples=numSamples, rule=rule,
         sampleFromStandardDist=sampleFromStandardDist, read_nodes_from_file=read_nodes_from_file, rounding=rounding, round_dec=round_dec,
@@ -433,6 +511,9 @@ def compare_surrogate_and_full_model_for_single_qoi_single_timestamp(
 
     dict_result = {}
 
+    dict_result['numSamples'] = numSamples
+    dict_result['rule'] = rule
+
     if return_evaluations:
         dict_result["original_model_evaluations"] = original_model_evaluations
         dict_result["surrogate_model_evaluations"] = surrogate_model_evaluations
@@ -446,6 +527,13 @@ def compare_surrogate_and_full_model_for_single_qoi_single_timestamp(
         dict_result["error_model_linf"] = error_linf
         dict_result["error_model_l2"] = error_l2
         dict_result["error_model_l2_scaled"] = error_l2_scaled
+
+    if write_to_a_file:
+        file_name = workingDir / f"comparison_surrogate_vs_model_{qoi_column_name}_{timestamp}.pkl"
+        # save the results to a file
+        # Save dictionary as a binary file
+        with open(file_name, 'wb') as f:
+            pickle.dump(dict_result, f)
 
     return dict_result
 
