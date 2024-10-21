@@ -170,7 +170,7 @@ timestamp, qoi_column_name=None, time_column_name=utility.TIME_COLUMN_NAME, plot
         #print(f"Debugging - simulation_parameters.shape: {simulation_parameters.shape}")
         dict_with_results_of_interest["number_full_model_evaluations"] = simulation_parameters.shape[0]
 
-    if dict_with_results_of_interest["variant"] in ["m4", "m5", "m6", "m7"]:
+    if dict_with_results_of_interest["variant"] not in ["m1", "m2"]:
         dict_with_results_of_interest["full_number_quadrature_points"] = \
         (dict_with_results_of_interest["q_order"] + 1) ** dim
 
@@ -299,7 +299,7 @@ timestamp, qoi_column_name=None, time_column_name=utility.TIME_COLUMN_NAME, plot
     # gpce_surrogate_file = dict_output_file_paths_qoi_time.get("gpce_surrogate_file")
     # gpce_coeffs_file = dict_output_file_paths_qoi_time.get("gpce_coeffs_file")
 
-    if dict_with_results_of_interest["variant"] in ["m4", "m5", "m6", "m7"]:  # TODO or m1 m2 with regression
+    if dict_with_results_of_interest["variant"] not in ["m1", "m2"]:  # TODO or m1 m2 with regression
         # gpce_surrogate_dictionary = read_all_saved_gpce_surrogate_models(workingDir, list_qoi_column, throw_error=False, convert_to_pd_timestamp=convert_to_pd_timestamp)
         # gpce_coeff_dictionary = read_all_saved_gpce_coeffs(workingDir, list_qoi_column, throw_error=False, convert_to_pd_timestamp=convert_to_pd_timestamp)
         # if gpce_surrogate_dictionary is not None:
@@ -413,7 +413,19 @@ timestamp, qoi_column_name=None, time_column_name=utility.TIME_COLUMN_NAME, plot
 def update_dict_with_results_of_interest_based_on_uqsim_args_dict(dict_with_results_of_interest, uqsim_args_dict):
     variant = None
     # TODO add additional arguments when mc/saltelli but with regression option 
-    if uqsim_args_dict["uq_method"]== "mc":
+    if uqsim_args_dict["regression"]:
+        variant = "m3"
+        dict_with_results_of_interest["q_order"] = uqsim_args_dict["sc_q_order"]
+        dict_with_results_of_interest["p_order"] = uqsim_args_dict["sc_p_order"]
+        dict_with_results_of_interest["read_nodes_from_file"] = uqsim_args_dict["read_nodes_from_file"]
+        dict_with_results_of_interest["sc_quadrature_rule"] = uqsim_args_dict["sc_quadrature_rule"]
+        dict_with_results_of_interest["mc_numevaluations"] = uqsim_args_dict["mc_numevaluations"]
+        dict_with_results_of_interest["sampling_rule"] = uqsim_args_dict["sampling_rule"]
+        if uqsim_args_dict["uq_method"]== "mc" or uqsim_args_dict["uq_method"]== "saltelli":
+            variant = "m3-mc"
+        else:
+            variant = "m3-sc"
+    elif uqsim_args_dict["uq_method"]== "mc":
         variant = "m1"
         dict_with_results_of_interest["mc_numevaluations"] = uqsim_args_dict["mc_numevaluations"]
         dict_with_results_of_interest["sampling_rule"] = uqsim_args_dict["sampling_rule"]
@@ -421,11 +433,7 @@ def update_dict_with_results_of_interest_based_on_uqsim_args_dict(dict_with_resu
         variant = "m2"
         dict_with_results_of_interest["mc_numevaluations"] = uqsim_args_dict["mc_numevaluations"]
         dict_with_results_of_interest["sampling_rule"] = uqsim_args_dict["sampling_rule"]
-    elif uqsim_args_dict["uq_method"]=="sc" and uqsim_args_dict["regression"]:
-        variant = "m3"
-        dict_with_results_of_interest["q_order"] = uqsim_args_dict["sc_q_order"]
-        dict_with_results_of_interest["q_order"] = uqsim_args_dict["sc_p_order"]
-    elif uqsim_args_dict["uq_method"]=="sc" and not uqsim_args_dict["regression"]:
+    elif uqsim_args_dict["uq_method"]=="sc":
         """
         [m4] gPCE+PSP with a full grid and polynomials of total-order
         [m5] gPCE+PSP with sparse grid and polynomials of total-order
@@ -440,13 +448,27 @@ def update_dict_with_results_of_interest_based_on_uqsim_args_dict(dict_with_resu
         if (not uqsim_args_dict["sc_sparse_quadrature"] and not uqsim_args_dict["read_nodes_from_file"]) and uqsim_args_dict["cross_truncation"]==1.0:
             variant = "m4"
         elif (uqsim_args_dict["sc_sparse_quadrature"] or uqsim_args_dict["read_nodes_from_file"]) and uqsim_args_dict["cross_truncation"]==1.0:
-            variant = "m5"
+            parameters_file = uqsim_args_dict["parameters_file"].name
+            if uqsim_args_dict["sc_quadrature_rule"] == "KPU" or parameters_file.startswith('KPU'):
+                variant = "m5-kpu"
+            elif uqsim_args_dict["sc_quadrature_rule"] == "GQU" or parameters_file.startswith('GQU'):
+                variant = "m5-gqu"
+            else:
+                variant = "m5"
         elif (not uqsim_args_dict["sc_sparse_quadrature"] and not uqsim_args_dict["read_nodes_from_file"]) and uqsim_args_dict["cross_truncation"]<1.0:
             dict_with_results_of_interest["cross_truncation"] = uqsim_args_dict["cross_truncation"]
-            variant = "m6"
+            # ct = uqsim_args_dict["cross_truncation"]
+            # variant = f"m6-{ct}"
+            variant = f"m6"
         elif (uqsim_args_dict["sc_sparse_quadrature"] or uqsim_args_dict["read_nodes_from_file"]) and uqsim_args_dict["cross_truncation"]<1.0:
             dict_with_results_of_interest["cross_truncation"] = uqsim_args_dict["cross_truncation"]
-            variant = "m7"
+            parameters_file = uqsim_args_dict["parameters_file"].name
+            if uqsim_args_dict["sc_quadrature_rule"] == "KPU" or parameters_file.startswith('KPU'):
+                variant = "m7-kpu"
+            elif uqsim_args_dict["sc_quadrature_rule"] == "GQU" or parameters_file.startswith('GQU'):
+                variant = "m7-gqu"
+            else:
+                variant = "m7"
             
     dict_with_results_of_interest["variant"] = variant
 
