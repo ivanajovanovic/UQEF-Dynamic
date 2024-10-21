@@ -22,7 +22,7 @@
       "timestep": 5
     },
   "model_settings": {
-    "basis": "Oldman_Basin",
+    "basis": "Banff_Basin",
     "plotting": "False",
     "writing_results_to_a_file": "False",
     "corrupt_forcing_data": "False"

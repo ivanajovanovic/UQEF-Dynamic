@@ -88,7 +88,7 @@ if local_debugging:
     uqsim.args.sourceDir = pathlib.Path("/work/ga45met/Hydro_Models/HBV-SASK-data")
 
     uqsim.args.outputResultDir = os.path.abspath(os.path.join("/work/ga45met/battery_results", 'sc_p2_l5_ct07'))  # mc_10000 mc_10000_terminal_voltage
-    uqsim.args.outputResultDir = os.path.abspath(os.path.join('/work/ga45met/Hydro_Models/HBV-SASK-data', 'Oldman_Basin/model_runs', 'mc_10d_1000_short')) 
+    uqsim.args.outputResultDir = os.path.abspath(os.path.join('/work/ga45met/Hydro_Models/HBV-SASK-data', 'Oldman_Basin/model_runs', 'mc_10d_1000')) 
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
 
     uqsim.args.config_file = '/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic/data/configurations/configuration_hbv_6D_GoF.json'
@@ -100,14 +100,14 @@ if local_debugging:
     uqsim.args.mpi_method = "MpiPoolSolver"  # "LinearSolver"
 
     uqsim.args.disable_statistics = False
-    uqsim.args.disable_calc_statistics = True
+    uqsim.args.disable_calc_statistics = False
     uqsim.args.parallel_statistics = True  # False
 
     uqsim.args.instantly_save_results_for_each_time_step = False #False
     uqsim.args.uqsim_store_to_file = False
 
-    uqsim.args.compute_Sobol_t = True  # True False
-    uqsim.args.compute_Sobol_m = False  # True False
+    uqsim.args.compute_Sobol_m = True  # True False
+    uqsim.args.compute_Sobol_t = False  # True False
 
     uqsim.args.num_cores = 1
 
@@ -121,7 +121,7 @@ if local_debugging:
 # TODO Eventually add these configurations to uqef.args
 utility.DEFAULT_DICT_WHAT_TO_PLOT = {
     "E_minus_std": False, "E_plus_std": False, "P10": True, "P90": True,
-    "StdDev": True, "Skew": False, "Kurt": False, "Sobol_m": False, "Sobol_m2": False, "Sobol_t": True
+    "StdDev": True, "Skew": False, "Kurt": False, "Sobol_m": True, "Sobol_m2": False, "Sobol_t": True
 }
 utility.DEFAULT_DICT_STAT_TO_COMPUTE = {
     "Var": True, "StdDev": False, "P10": True, "P90": True,
@@ -142,6 +142,11 @@ compute_generalized_sobol_indices = False
 compute_generalized_sobol_indices_over_time = False
 compute_covariance_matrix_in_time = True
 
+allow_conditioning_results_based_on_metric = False
+
+condition_results_based_on_metric = 'NSE'
+condition_results_based_on_metric_value = 0.2
+condition_results_based_on_metric_sign = "greater_or_equal"
 #####################################
 # additional path settings:
 #####################################
@@ -259,6 +264,11 @@ uqsim.statistics.update({"hbvsask"         : (lambda: HBVSASKStatistics.HBVSASKS
     save_gpce_surrogate=save_gpce_surrogate,
     compute_other_stat_besides_pce_surrogate=compute_other_stat_besides_pce_surrogate,
     compute_kl_expansion_of_qoi = compute_kl_expansion_of_qoi,
+    index_column_name = "Index_run",
+    allow_conditioning_results_based_on_metric=allow_conditioning_results_based_on_metric,
+    condition_results_based_on_metric = 'NSE',
+    condition_results_based_on_metric_value = 0.2,
+    condition_results_based_on_metric_sign = "greater_or_equal",
     compute_timewise_gpce_next_to_kl_expansion=compute_timewise_gpce_next_to_kl_expansion,
     kl_expansion_order = kl_expansion_order,
     compute_generalized_sobol_indices = compute_generalized_sobol_indices,

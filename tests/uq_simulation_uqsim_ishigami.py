@@ -46,15 +46,15 @@ if local_debugging:
 
     uqsim.args.uq_method = "sc"  # "sc" | "saltelli" | "mc" | "ensemble"
     
-    uqsim.args.mc_numevaluations = 10
-    uqsim.args.sampling_rule = "latin_hypercube"  # "random" | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
+    uqsim.args.mc_numevaluations = 343
+    uqsim.args.sampling_rule = "halton"  # "random" | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
     
-    uqsim.args.sc_q_order = 15  # 7 8 8 #10 3
-    uqsim.args.sc_p_order = 9  # 3, 3, 4 5, 6, 8
+    uqsim.args.sc_q_order = 6 # 7 8 9 
+    uqsim.args.sc_p_order = 7  # 3, 3, 4 5, 6, 8
     uqsim.args.sc_quadrature_rule = "g"  # "p" "genz_keister_24" "leja" "clenshaw_curtis"
 
-    uqsim.args.read_nodes_from_file = True
-    l = 15 # 10
+    uqsim.args.read_nodes_from_file = False
+    l = 6 # 10
     path_to_file = pathlib.Path("/work/ga45met/UQ-SG-Analysis/sparse_grid_nodes_weights")
     uqsim.args.parameters_file = path_to_file / f"KPU_d3_l{l}.asc" # f"KPU_d7_l{l}.asc"
     uqsim.args.parameters_setup_file = None
@@ -63,11 +63,11 @@ if local_debugging:
     uqsim.args.sc_poly_normed = True  # True
     uqsim.args.sc_sparse_quadrature = False  # False
     uqsim.args.regression = False
-    uqsim.args.cross_truncation = 1.0
+    uqsim.args.cross_truncation = 0.7
 
     uqsim.args.inputModelDir = None
     uqsim.args.sourceDir = None
-    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/work/ga45met", "ishigami_runs", "simulations_sep_2024", 'sc_sg_p9_l15'))
+    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/work/ga45met", "ishigami_runs", "simulations_sep_2024", 'sc_full_p7_q6_ct07'))
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
     uqsim.args.config_file = '/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic/data/configurations/configuration_ishigami.json'
 
