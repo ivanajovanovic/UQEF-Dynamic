@@ -70,6 +70,9 @@ class HBVSASKModelConfigurations:
         streamflow_inp = kwargs.get("streamflow_inp", "streamflow.inp")
         factorSpace_txt = kwargs.get("factorSpace_txt", "factorSpace.txt")
 
+        self.time_column_name = kwargs.get('time_column_name', utility.TIME_COLUMN_NAME)
+        self.index_column_name = kwargs.get('index_column_name', utility.INDEX_COLUMN_NAME)
+
         self.simulation_config = utility.read_simulation_settings_from_configuration_object(self.configurationObject, **kwargs)
         self.assign_values(self.simulation_config)
 
@@ -170,6 +173,15 @@ class HBVSASKModel(object):
             else:
                 self.plotting = True    
 
+        if "printing" in kwargs:
+            self.printing = kwargs['printing']
+        else:
+            if "model_settings" in self.configurationObject:
+                self.printing = strtobool(self.configurationObject["model_settings"].get(
+                    "printing", "False"))
+            else:
+                self.printing = False 
+
         if "corrupt_forcing_data" in kwargs:
             self.corrupt_forcing_data = kwargs['corrupt_forcing_data']
         else:
@@ -208,7 +220,9 @@ class HBVSASKModel(object):
         self.streamflow_inp = self.inputModelDir_basis / streamflow_inp
         self.factorSpace_txt = self.inputModelDir / factorSpace_txt
 
-        self.time_column_name = kwargs.get("time_column_name", "TimeStamp")
+        self.time_column_name = kwargs.get('time_column_name', utility.TIME_COLUMN_NAME)
+        self.index_column_name = kwargs.get('index_column_name', utility.INDEX_COLUMN_NAME)
+
         self.streamflow_column_name = kwargs.get("streamflow_column_name", "streamflow")
         self.precipitation_column_name = kwargs.get("precipitation_column_name", "precipitation")
         self.temperature_column_name = kwargs.get("temperature_column_name", "temperature")
@@ -261,9 +275,9 @@ class HBVSASKModel(object):
     ##################################### 
     def _timespan_setup(self, **kwargs):
         self.get_start_end_dates()
-        self.get_resolution(kwargs)
-        self.get_spin_up_length(kwargs)
-        self.get_simulation_length(kwargs)
+        self.get_resolution(**kwargs)
+        self.get_spin_up_length(**kwargs)
+        self.set_simulation_length(simulation_length=None, **kwargs)
         self.set_date_ranges()
         
     def get_start_end_dates(self):
@@ -286,7 +300,7 @@ class HBVSASKModel(object):
             hour=self.configurationObject["time_settings"].get(f"{time_type}_hour", 0)
         )
 
-    def get_resolution(self, kwargs):
+    def get_resolution(self, **kwargs):
         if "resolution" in kwargs:
             self.resolution = kwargs["resolution"]
         else:
@@ -297,7 +311,7 @@ class HBVSASKModel(object):
         if self.resolution not in ["daily", "hourly", "minute"]:
             raise Exception(f"Error in Statistics class - resolution is not daily, hourly or minute")
 
-    def get_spin_up_length(self, kwargs):
+    def get_spin_up_length(self, **kwargs):
         if "spin_up_length" in kwargs:
             self.spin_up_length = kwargs["spin_up_length"]
         elif "warm_up_length" in kwargs:
@@ -312,19 +326,21 @@ class HBVSASKModel(object):
                     raise KeyError
             except KeyError:
                 self.spin_up_length = 0  # 365*3
-
-    def get_simulation_length(self, kwargs):
+    
+    def set_simulation_length(self, simulation_length: int=None, **kwargs):
         # note: one has to omit simulation_length both from kwargs and configurationObject
         # if you want that run_full_timespan has an effect
-        if "simulation_length" in kwargs:
+        if simulation_length is not None:
+            self.simulation_length = simulation_length
+        elif "simulation_length" in kwargs:
             self.simulation_length = kwargs["simulation_length"]
         else:
             try:
                 self.simulation_length = self.configurationObject["time_settings"]["simulation_length"]
             except KeyError:
                 self.simulation_length = (self.end_date - self.start_date).days - self.spin_up_length
-                if self.simulation_length <= 0:
-                    self.simulation_length = 365
+        if self.simulation_length <= 0:
+            self.simulation_length = 365
     
     def set_date_ranges(self):
         # note: self.simulation_length actually has power over previously set end_date
@@ -356,11 +372,6 @@ class HBVSASKModel(object):
         self.spin_up_length = spin_up_length
         if self.spin_up_length < 0 or self.spin_up_length > 365*3 or self.spin_up_length is None:
             self.spin_up_length = 0
-
-    def set_simulation_length(self, simulation_length: int):
-        self.simulation_length = simulation_length
-        if self.simulation_length <= 0:
-                    self.simulation_length = 365
 
     def set_start_date_predictions(self, start_date_predictions: pd.Timestamp):
         self.start_date_predictions = start_date_predictions
@@ -579,6 +590,7 @@ class HBVSASKModel(object):
                 - deleteFolderAfterwards (bool): If True, the function will delete the folder after the results are retrieved. Default is True.
                 - writing_results_to_a_file (bool): If True, the function will write the results to a file. Default is self.writing_results_to_a_file.
                 - plotting (bool): If True, the function will plot the results. Default is self.plotting.
+                - printing (bool): If True, the function will print the results. Default is self.printing.
                 - corrupt_forcing_data (bool): If True, the function will corrupt the forcing data. Default is self.corrupt_forcing_data.
                 - merge_output_with_measured_data (bool): If True, the function will merge the output with the measured data. Default is False.
                 - start_date (pd.Timestamp): The start date of the model run. Default is self.start_date.
@@ -609,6 +621,7 @@ class HBVSASKModel(object):
         deleteFolderAfterwards = kwargs.get("deleteFolderAfterwards", True)
         writing_results_to_a_file = kwargs.get("writing_results_to_a_file", self.writing_results_to_a_file)
         plotting = kwargs.get("plotting", self.plotting)
+        printing = kwargs.get("printing", self.printing)
         corrupt_forcing_data = kwargs.get("corrupt_forcing_data", self.corrupt_forcing_data)
 
         # TODO Think if merge_output_with_measured_data should always be True
@@ -678,7 +691,7 @@ class HBVSASKModel(object):
             else:
                 parameter = None  # an unaltered run will be executed
 
-            id_dict = {"Index_run": unique_run_index}
+            id_dict = {self.index_column_name: unique_run_index}
 
             # this indeed represents the number of parameters considered to be uncertain, later on parameters_dict might
             # be extanded with fixed parameters that occure in configurationObject
@@ -686,16 +699,24 @@ class HBVSASKModel(object):
                 number_of_uncertain_params = 0
             elif isinstance(parameter, dict):
                 number_of_uncertain_params = len(list(parameter.keys()))
-            else:
+            elif isinstance(parameter, list) or isinstance(parameter, np.ndarray) or isinstance(parameter, pd.DataFrame) or isinstance(parameter, pd.Series):
                 number_of_uncertain_params = len(parameter)
+            elif isinstance(parameter, (int, float, complex)):
+                number_of_uncertain_params = 1
+            else:
+                number_of_uncertain_params = 0
 
             parameters_dict = utility.configuring_parameter_values(
                 parameters=parameter,
-                configurationObject=self.configurationObject["parameters"],
+                configurationObject=self.configurationObject.get("parameters", None),
                 default_par_info_dict=hbv.DEFAULT_PAR_VALUES_DICT,
                 take_direct_value=take_direct_value
             )
-            # print(f"[HVBSASK INFO] {i_s} parameters_dict - {parameters_dict} \n")
+
+            if printing:
+                print(f"[HVBSASK INFO] {i_s} parameters_dict - {parameters_dict} \n")
+            else:
+                print(f"model execution run id - {unique_run_index}...")
 
             start = time.time()
 
@@ -707,19 +728,33 @@ class HBVSASKModel(object):
                 curr_working_dir = self.workingDir
 
             # Running the model
-            flux, state = hbv.HBV_SASK(
-                forcing=forcing,
-                long_term=long_term,
-                par_values_dict=parameters_dict,
-                initial_condition_df=initial_condition_df,
-                printing=False,
-                time_column_name=self.time_column_name,
-                precipitation_column_name=self.precipitation_column_name,
-                temperature_column_name=self.temperature_column_name,
-                long_term_precipitation_column_name=self.long_term_precipitation_column_name,
-                long_term_temperature_column_name=self.long_term_temperature_column_name,
-                corrupt_forcing_data=corrupt_forcing_data
-            )
+            try:
+                flux, state = hbv.HBV_SASK(
+                    forcing=forcing,
+                    long_term=long_term,
+                    par_values_dict=parameters_dict,
+                    initial_condition_df=initial_condition_df,
+                    printing=False,
+                    time_column_name=self.time_column_name,
+                    precipitation_column_name=self.precipitation_column_name,
+                    temperature_column_name=self.temperature_column_name,
+                    long_term_precipitation_column_name=self.long_term_precipitation_column_name,
+                    long_term_temperature_column_name=self.long_term_temperature_column_name,
+                    corrupt_forcing_data=corrupt_forcing_data
+                )
+            except:
+                if raise_exception_on_model_break:
+                    raise Exception(f"Model broke for unique_run_index {unique_run_index}")
+                else:
+                    index_run_and_parameters_dict = {**id_dict, **parameters_dict, "successful_run": False}
+                    end = time.time()
+                    runtime = end - start
+                    result_dict = {"run_time": runtime,
+                                "result_time_series": None,
+                                "parameters_dict": index_run_and_parameters_dict,
+                                "state_df": None, }
+                    results_array.append((result_dict, runtime))
+                    continue
 
             assert len(list(time_series_list)) == len(flux["Q_cms"]), "Error in HBVSASKModel - flux and time_series_list have different lengths"
             ######################################################################################################
@@ -728,6 +763,7 @@ class HBVSASKModel(object):
 
             # Create a final df - flux
             flux_df = self._create_flux_df(flux, time_series_list)
+
             if corrupt_forcing_data and "precipitation" in flux:
                 flux_df['precipitation'] = flux["precipitation"]
             flux_df['Index_run'] = unique_run_index
@@ -897,6 +933,10 @@ class HBVSASKModel(object):
             ######################################################################################################
 
             if self.compute_gradients or self.compute_active_subspaces:
+                if self.center == "center":
+                    center = True
+                else:
+                    center = False
                 flux_df, gradient_matrix_dict = self._compute_gradient_matrix(
                     unique_run_index=unique_run_index, 
                     flux_df=flux_df, 
@@ -917,12 +957,7 @@ class HBVSASKModel(object):
             simulation_range = self._dropna_from_df_and_update_simulation_range(flux_df, update_simulation_range=True)
             # flux_df = flux_df.loc[simulation_range]
             flux_df = flux_df[flux_df.index.isin(simulation_range)]
-
-            if flux_df is None:
-                if raise_exception_on_model_break:
-                    raise Exception(f"Model broke for unique_run_index {unique_run_index}")
-                else:
-                    index_run_and_parameters_dict = {**id_dict, **parameters_dict, "successful_run": False}
+            #state_df = state_df[state_df.index.isin(simulation_range)]
 
             result_dict = {"run_time": runtime,
                            "result_time_series": flux_df,
@@ -1078,6 +1113,20 @@ class HBVSASKModel(object):
             flux_df.rename(columns={"index": self.time_column_name}, inplace=True)
 
     def _calculate_GoF_on_data_subset(self, ser, df, qoi_column, qoi_column_idx, objective_function_name_qoi):
+        """
+        This function is used to calculate the GoF on a subset of data, i.e., on a sliding window.
+
+        Parameters:
+        :ser (pd.Series): A pandas series representing a subset of data.
+        :df (pd.DataFrame): A pandas dataframe representing the whole data.
+        :qoi_column (str): The name of the column in the dataframe df that is used for the GoF calculation.
+        :qoi_column_idx (int): The index of the column in the list of columns that is used for the GoF calculation.
+        :objective_function_name_qoi (str): The name of the objective function that is used for the GoF calculation.
+        
+        Returns:
+        float: The value of the GoF for the subset of data.
+        Important assumtion is that qoi_column represents a single column in the dataframe df.
+        """
         # df_subset = df.iloc[ser.index]
         df_subset = df.loc[ser.index].copy()
         gof_dict = self._calculate_GoF(
@@ -1133,7 +1182,8 @@ class HBVSASKModel(object):
                        simulatedDF_time_column_name=None, simulatedDF_column_name=None,
                        parameters_dict=None, return_dict=False):
         """
-        Assumption - that simulatedDF stores as well measured data
+        Important sssumption - that simulatedDF stores as well measured data; 
+        also qoi_column represents a SINGLE column in the dataframe df.
         """
         if gof_list is None:
             gof_list = self.objective_function
@@ -1175,6 +1225,7 @@ class HBVSASKModel(object):
     def _compute_gradient_matrix(
             self, unique_run_index, flux_df, parameters_dict, index_parameter_gof_DF,
             time_series_list, simulation_range, center=False, **kwargs):
+
         h_vector = []
         dict_of_grad_estimation_vector = defaultdict(list)
         # gradient_vectors_dict = defaultdict(list)
@@ -1191,8 +1242,8 @@ class HBVSASKModel(object):
         # dict_param_info_from_configurationObject = utility.get_param_info_dict_from_configurationObject(
         #     self.configurationObject)
         dict_param_info = utility.get_param_info_dict(
-            configurationObject=self.configurationObject["parameters"], 
-            default_par_info_dict=hbv.DEFAULT_PAR_INFO_DICT
+            default_par_info_dict=hbv.DEFAULT_PAR_INFO_DICT,
+            configurationObject=self.configurationObject['parameters'], 
             )
 
         # CD = 1 central differences; CD = 0 forward differences
@@ -1498,6 +1549,7 @@ class HBVSASKModel(object):
                             if self.list_read_measured_data[idx]:
                                 grad_estimation_vector = dict_of_grad_estimation_vector[
                                     (single_qoi_column, single_objective_function_qoi)]
+                                # TODO Check this!
                                 gradient_matrix_dict[(single_qoi_column, single_objective_function_qoi)] = \
                                     np.outer(grad_estimation_vector,grad_estimation_vector)
                     elif self.mode == "sliding_window":
@@ -1508,14 +1560,17 @@ class HBVSASKModel(object):
                 else:
                     gradient_matrix_dict[single_qoi_column] = []
                     # TODO Transform the long vector into the matrix such that time is a 2nd/3rd dimension
+                    print(f"[DEBUGGING] type(dict_of_grad_estimation_vector[single_qoi_column]) - {type(dict_of_grad_estimation_vector[single_qoi_column])}")
                     data = np.array(dict_of_grad_estimation_vector[single_qoi_column])
-                    data_in_matrix_form = data.reshape(
+                    print(f"[DEBUGGING] dict_of_grad_estimation_vector[single_qoi_column].shape - {data.shape}")
+                    gradient_data_in_matrix_form = data.reshape(
                         (parameter_index_to_perturb, len(simulation_range))).transpose()
+                    print(f"[DEBUGGING] gradient_data_in_matrix_form.shape - {gradient_data_in_matrix_form.shape}")
                     # TODO I am not sure about this!
                     for single_time_step in range(len(simulation_range)):
-                        gradient_matrix_dict_for_single_time_step = np.outer(
-                            data_in_matrix_form[single_time_step], data_in_matrix_form[single_time_step])
-                        gradient_matrix_dict[single_qoi_column].append(gradient_matrix_dict_for_single_time_step)
+                        gradient_matrix_for_single_time_step = np.outer(
+                            gradient_data_in_matrix_form[single_time_step], gradient_data_in_matrix_form[single_time_step])
+                        gradient_matrix_dict[single_qoi_column].append(gradient_matrix_for_single_time_step)
 
         # flux_df.reset_index(inplace=True)
         # flux_df.rename(columns={"index": self.time_column_name}, inplace=True)

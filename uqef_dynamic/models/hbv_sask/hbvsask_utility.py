@@ -466,7 +466,19 @@ def plot_input_output_state(modelObject, result_df, state_df):
         ), 
         row=6, col=1
     )
-    fig.update_layout(height=1000, width=800, title_text="Detailed plot of most important time-series")
+    fig.update_layout(
+        height=1000, 
+        width=800, 
+        title_text="Detailed plot of most important time-series"
+        )
+
+    fig.update_layout(
+        # legend=dict(yanchor="bottom", y=0.01, xanchor="right", x=0.99),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        title=f'HBV-SASK Model: Predicted vs. Observed Streamflow',
+        showlegend=True,
+        # template="plotly_white",
+    )
 
     # fig.update_layout(
     #     # legend=dict(yanchor="bottom", y=0.01, xanchor="right", x=0.99),

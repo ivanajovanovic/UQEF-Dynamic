@@ -19,7 +19,23 @@ from uqef_dynamic.utils import utility
 
 
 class TimeDependentModelConfig(object):
-    def __init__(self, configurationObject, deep_copy=False, *args, **kwargs):
+    """
+        This is the class for the Time Dependent model configurations.
+
+    """
+    WRITING_RESULTS_TO_A_FILE = "writing_results_to_a_file"
+    PLOTTING = "plotting"
+    TIME_SETTINGS = "time_settings"
+    MODEL_SETTINGS = "model_settings"
+    SIMULATION_SETTINGS = "simulation_settings"
+    UQ_METHOD = "uq_method"
+    RAISE_EXCEPTION_ON_MODEL_BREAK = "raise_exception_on_model_break"
+    DISABLE_STATISTICS = "disable_statistics"
+    INITIAL_CONDITION_FILE = "initial_condition_file"
+    #TIME_COLUMN_NAME = "time_column_name"
+    #INDEX_COLUMN_NAME = "index_column_name"
+
+    def __init__(self, configurationObject: dict, deep_copy=False, *args: Any, **kwargs: Any):
         if configurationObject is None:
             self.configurationObject = dict()
         elif not isinstance(configurationObject, dict):
@@ -131,6 +147,31 @@ class TimeDependentModelConfig(object):
             self.objective_function = utility.gof_list_to_function_names(self.objective_function)
 
         #####################################
+
+    def assign_values(self, config_dict):
+        for key, value in config_dict.items():
+            setattr(self, key, value)
+
+    def get_value(self, key: str, default: Optional[Any] = None):
+        return self.configurationObject.get(key, default)
+    
+    def get_value_from_kwargs_or_config_dict_bool(self, key: str, section: str, kwargs: dict, default: Optional[str] = "False"):
+        if key in kwargs:
+            return kwargs[key]
+        else:
+            try:
+                return strtobool(self.configurationObject[section].get(key, default))
+            except KeyError:
+                return default
+    
+    def get_value_from_kwargs_or_config_dict(self, key: str, section: str, kwargs: dict, default: Optional[Any] = None):
+        if key in kwargs:
+            return kwargs[key]
+        else:
+            try:
+                return self.configurationObject[section].get(key, default)
+            except KeyError:
+                return default
 
     def toJSON(self):
         def json_default(value):
@@ -381,8 +422,12 @@ class TimeDependentModel(ABC, Model):
                 number_of_uncertain_params = 0
             elif isinstance(parameter, dict):
                 number_of_uncertain_params = len(list(parameter.keys()))
-            else:
+            elif isinstance(parameter, list) or isinstance(parameter, np.ndarray) or isinstance(parameter, pd.DataFrame) or isinstance(parameter, pd.Series):
                 number_of_uncertain_params = len(parameter)
+            elif isinstance(parameter, (int, float, complex)):
+                number_of_uncertain_params = 1
+            else:
+                number_of_uncertain_params = 0
 
             parameters_dict = self._parameters_configuration(parameters=parameter, take_direct_value=take_direct_value)
             

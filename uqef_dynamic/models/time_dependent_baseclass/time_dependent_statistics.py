@@ -658,7 +658,7 @@ class TimeDependentStatistics(ABC, Statistics):
 
     # =================================================================================================
 
-    # TODO Write version of the function which reads already self.samples.df_simulation_result
+    # TODO Write version of the function which reads already saved self.samples.df_simulation_result
     # from some file and continues...
     def _get_list_of_columns_to_filter_from_results(self):
         list_of_columns_to_filter_from_results = self.list_qoi_column + list(

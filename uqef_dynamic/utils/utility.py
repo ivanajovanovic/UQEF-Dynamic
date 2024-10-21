@@ -921,7 +921,7 @@ def get_configuration_value(key: str, config_dict: dict, default_value: Any, **k
         return config_dict.get(key, default_value)
 
 
-def get_simulation_settings(configurationObject, key_from_configurationObject="simulation_settings"):
+def get_simulation_settings(configurationObject: Union[dict, pd.DataFrame, str, pathlib.PosixPath, Any], key_from_configurationObject="simulation_settings"):
     """
     Get the simulation settings from a configuration object.
 
@@ -1020,7 +1020,7 @@ def read_simulation_settings_from_configuration_object_refactored(configurationO
     return result_dict
 
 
-def read_simulation_settings_from_configuration_object(configurationObject: dict, **kwargs) -> dict:
+def read_simulation_settings_from_configuration_object(configurationObject: Union[dict, pd.DataFrame, str, pathlib.PosixPath, Any], **kwargs) -> dict:
     """
         Reads simulation settings from a configuration object and returns a dictionary of settings.
 
@@ -1412,7 +1412,7 @@ def read_simulation_settings_from_configuration_object(configurationObject: dict
 #####################################
 
 
-def get_list_of_uncertain_parameters_from_configuration_dict(configurationObject: Union[dict, List, Any], raise_error:Optional[bool]=False, uq_method: str="ensemble") -> List[str]:
+def get_list_of_uncertain_parameters_from_configuration_dict(configurationObject: Union[dict, pd.DataFrame, str, pathlib.PosixPath, Any], raise_error:Optional[bool]=False, uq_method: str="ensemble") -> List[str]:
     list_of_parameters = get_list_of_parameters_dicts_from_configuration_dict(configurationObject, raise_error=raise_error)
     nodeNames = []
     for i in list_of_parameters:
@@ -1422,7 +1422,7 @@ def get_list_of_uncertain_parameters_from_configuration_dict(configurationObject
     return nodeNames
 
 
-def get_list_of_parameters_dicts_from_configuration_dict(configurationObject: Union[dict, List, Any], raise_error:Optional[bool]=False) -> List[dict]:
+def get_list_of_parameters_dicts_from_configuration_dict(configurationObject: Union[dict, pd.DataFrame, str, pathlib.PosixPath, Any], raise_error:Optional[bool]=False) -> List[dict]:
     configurationObject = check_if_configurationObject_is_in_right_format_and_return(configurationObject,
                                                                                      raise_error=raise_error)
     result_list = []
@@ -1430,26 +1430,41 @@ def get_list_of_parameters_dicts_from_configuration_dict(configurationObject: Un
         return result_list
     elif configurationObject is None and raise_error:
         raise Exception("configurationObject is None!")
-    result_list = configurationObject["parameters"]
+    result_list = configurationObject.get("parameters", [])
+    if not result_list:
+        if raise_error:
+            raise Exception("Function get_list_of_parameters_dicts_from_configuration_dict could not get list of parameters from configurationObject!")
+        else:
+            print("Note that the function could not get list of parameters from configurationObject!")
     return result_list
 
 
-def get_param_info_dict_from_configurationObject(configurationObject: Union[dict, List, Any])-> Dict[str, dict]:
+def get_list_of_parameters_dicts_from_configurationObject(configurationObject: Union[dict, List, pd.DataFrame, str, pathlib.PosixPath, Any]) -> List[dict]:
+    """
+    This function is used to extract the list of parameters from a configuration object.
+    It differs from get_list_of_parameters_dicts_from_configuration_dict  and get_list_of_uncertain_parameters_from_configuration_dict 
+    in that it can handle a list of parameters as well
+    """
+    if isinstance(configurationObject, (dict, pd.DataFrame, str, pathlib.PosixPath)):
+        return get_list_of_parameters_dicts_from_configuration_dict(configurationObject, raise_error=False)
+    elif isinstance(configurationObject, list):
+        return configurationObject
+    return []
+
+
+def get_param_info_dict_from_configurationObject(configurationObject: Union[dict, List, pd.DataFrame, str, pathlib.PosixPath, Any])-> Dict[str, dict]:
     """
     :param configurationObject: dictionary storing information about parameters
     :return: dictionary storing just some information about parameters
     """
-    if isinstance(configurationObject, dict):
-        list_of_parameters = get_list_of_parameters_dicts_from_configuration_dict(configurationObject, raise_error=True)
-    elif isinstance(configurationObject, list):
-        list_of_parameters = configurationObject
+    list_of_parameters_dict = get_list_of_parameters_dicts_from_configurationObject(configurationObject)
     
     result_dict = dict()
 
-    if not list_of_parameters or list_of_parameters is None:
-        return result_dict
+    if not list_of_parameters_dict or list_of_parameters_dict is None:
+        raise Exception("Note that the function get_param_info_dict_from_configurationObject will return an empty dict for dict_param_info!")
 
-    for param_entry_dict in list_of_parameters:
+    for param_entry_dict in list_of_parameters_dict:
         param_name = param_entry_dict.get("name")
         distribution = param_entry_dict.get("distribution", None)
         if "lower_limit" in param_entry_dict:
@@ -1476,24 +1491,19 @@ def get_param_info_dict_from_configurationObject(configurationObject: Union[dict
     return result_dict
 
 
-def get_param_info_dict(default_par_info_dict: dict, configurationObject: Union[dict, List, Any]= None)-> Dict[str, dict]:
+def get_param_info_dict(default_par_info_dict: dict, configurationObject: Union[dict, List, pd.DataFrame, str, pathlib.PosixPath, Any]= None)-> Dict[str, dict]:
     """
     This function differs from get_param_info_dict_from_configurationObject in that it also fills in the missing paramter information from default_par_info_dict
     :param default_par_info_dict: dictionary storing information about parameters
     :param configurationObject: dictionary storing information about parameters
     :return: filtered dictionary storing information about parameters obtained both from default_par_info_dict and configurationObject
     """
-    configurationObject = check_if_configurationObject_is_in_right_format_and_return(
-        configurationObject, raise_error=False)
     result_dict = defaultdict(dict)
 
-    # list_of_params_names_from_configurationObject = []
-    if isinstance(configurationObject, dict):
-        list_of_parameters = get_list_of_parameters_dicts_from_configuration_dict(configurationObject, raise_error=False)
-    elif isinstance(configurationObject, list):
-        list_of_parameters = configurationObject
-    if list_of_parameters and list_of_parameters is not None:
-        for param_entry_dict in list_of_parameters:
+    list_of_parameters_dict = get_list_of_parameters_dicts_from_configurationObject(configurationObject)
+
+    if list_of_parameters_dict and list_of_parameters_dict is not None:
+        for param_entry_dict in list_of_parameters_dict:
             param_name = param_entry_dict.get("name")
             # list_of_params_names_from_configurationObject.append(param_name)
             distribution = param_entry_dict.get("distribution", None)
@@ -1546,14 +1556,100 @@ def get_param_info_dict(default_par_info_dict: dict, configurationObject: Union[
     return result_dict
 
 
-def parameters_configuration(parameters, configurationObject: Union[dict, List], default_par_info_dict, take_direct_value: bool = False) -> dict:
+def _get_default_value_from_default_par_info_dict(param_name, default_par_info_dict):
+    if isinstance(default_par_info_dict[param_name], dict):
+        return default_par_info_dict[param_name]["default"]
+    return default_par_info_dict[param_name]
+
+
+def get_list_of_parameters_dict_from_default_par_info_dict(default_par_info_dict):
+    return [{"name": name, **info} for name, info in default_par_info_dict.items()]
+
+
+def _extract_parameters_from_list_of_parameters_from_configurationObject(list_of_parameters_dict, default_par_info_dict):
+    """
+    Extracts parameters from a list of parameters obtained from a configuration object.
+
+    Args:
+        list_of_parameters_dict (list): A list of parameters obtained from a configuration object.
+        default_par_info_dict (dict): A dictionary containing default parameter information.
+
+    Returns:
+        dict: A dictionary containing the extracted parameters.
+
+    """
+    parameters_dict = {}
+    for single_param in list_of_parameters_dict:
+        if "value" in single_param:
+            parameters_dict[single_param['name']] = single_param["value"]
+        elif "default" in single_param:
+            parameters_dict[single_param['name']] = single_param["default"]
+        else:
+            parameters_dict[single_param['name']] = _get_default_value_from_default_par_info_dict(single_param['name'], default_par_info_dict)
+    return parameters_dict
+
+
+def _get_parameter_value(single_param, parameters, uncertain_param_counter, take_direct_value, default_par_info_dict):
+    if take_direct_value:
+        return parameters[uncertain_param_counter]
+    elif "value" in single_param:
+        return single_param["value"]
+    elif "default" in single_param:
+        return single_param["default"]
+    else:
+        return _get_default_value_from_default_par_info_dict(single_param['name'], default_par_info_dict)
+
+
+def _handle_no_parameters(configurationObject, default_par_info_dict):
+    if configurationObject is not None:
+        list_of_parameters_dict = get_list_of_parameters_dicts_from_configurationObject(configurationObject)
+        if list_of_parameters_dict:
+            return _extract_parameters_from_list_of_parameters_from_configurationObject(list_of_parameters_dict, default_par_info_dict)
+    if default_par_info_dict is not None:
+        return default_par_info_dict
+    else:
+        raise ValueError("No parameters and no default_par_info_dict provided. Returning an empty dictionary.")
+
+
+def _handle_parameters(parameters, configurationObject, default_par_info_dict, take_direct_value):
+    parameters_dict = {}
+
+    if isinstance(parameters, dict) and take_direct_value:
+        parameters_dict = parameters
+    else:   
+        uncertain_param_counter = 0
+        if configurationObject and configurationObject is not None:
+            list_of_parameters_dict = get_list_of_parameters_dicts_from_configurationObject(configurationObject)
+        elif default_par_info_dict is not None:
+            list_of_parameters_dict = get_list_of_parameters_dict_from_default_par_info_dict(default_par_info_dict)
+        else:
+            # raise ValueError("configurationObject is None and default_par_info_dict is None! Returning an empty dictionary.")
+            print("configurationObject is None and default_par_info_dict is None! Returning an empty dictionary.")
+            return parameters_dict
+
+        if not isinstance(parameters, list) and isinstance(parameters, (int, float, complex)):
+            parameters = [parameters]
+
+        for single_param in list_of_parameters_dict:
+            if 'distribution' in single_param and single_param['distribution'] != "None":
+                parameters_dict[single_param['name']] = parameters[uncertain_param_counter]
+                uncertain_param_counter += 1
+            else:
+                parameters_dict[single_param['name']] = _get_parameter_value(single_param, parameters, uncertain_param_counter, take_direct_value, default_par_info_dict)
+                if take_direct_value:
+                    uncertain_param_counter += 1
+
+    return parameters_dict
+
+
+def parameters_configuration(parameters, configurationObject: Union[dict, List, pd.DataFrame, str, pathlib.PosixPath, Any], default_par_info_dict, take_direct_value: bool = False) -> dict:
     """
     This function is only for legacy purposes. Use configuring_parameter_values instead
     """
     return configuring_parameter_values(parameters, configurationObject, default_par_info_dict, take_direct_value=take_direct_value)
 
 
-def configuring_parameter_values(parameters, configurationObject: Union[dict, List], default_par_info_dict, take_direct_value: bool = False) -> dict:
+def configuring_parameter_values(parameters, configurationObject: Union[dict, List, pd.DataFrame, str, pathlib.PosixPath, Any]=None, default_par_info_dict: dict=None, take_direct_value: bool = False) -> dict:
     """
     Note: If not take_direct_value and parameters!= None, parameters_dict will contain
     some value for every single parameter in configurationObject (e.g., it might at the end have more entries that the
@@ -1561,8 +1657,10 @@ def configuring_parameter_values(parameters, configurationObject: Union[dict, Li
     :param parameters:
     :type parameters: dictionary or array storing all uncertain parameters
        in the same order as parameters are listed in configurationObject
-    :param configurationObject (dict, List): dictionary storing information about parameters, 
-    or list dictionaries where each dictionary stores information about the particular parameter    
+    :param configurationObject (dict, List): dictionary/list/path to json dictionary storing information about parameters, 
+    or list dictionaries where each dictionary stores information about the particular parameter. If parameters is None, the function will try to extract the parameters from configurationObject!
+    :param default_par_info_dict: dictionary storing default information about parameters. If parameters is None, and the configurationObject is either None or does not contian parameter values, the
+    function will try to extract the parameters from default_par_info_dict!  
     :param take_direct_value: 
         take_direct_value should be True if parameter_value_dict is a dict with keys being paramter name and values being parameter values;
         if parameter_value_dict is a list of parameter values corresponding to the order of the parameters in the configuration file, then take_direct_value should be False
@@ -1571,39 +1669,10 @@ def configuring_parameter_values(parameters, configurationObject: Union[dict, Li
     parameters_dict = dict() #defaultdict()  # copy.deepcopy(DEFAULT_PAR_VALUES_DICT)
 
     if parameters is None:
-        return default_par_info_dict
-
-    if isinstance(parameters, dict) and take_direct_value:
-        parameters_dict = parameters
+        parameters_dict = _handle_no_parameters(configurationObject, default_par_info_dict)
     else:
-        uncertain_param_counter = 0
-        if isinstance(configurationObject, dict):
-            list_of_parameters = get_list_of_parameters_dicts_from_configuration_dict(configurationObject, raise_error=True)
-        elif isinstance(configurationObject, list):
-            list_of_parameters = configurationObject
-        else:
-            list_of_parameters = []
-            for single_param_name in default_par_info_dict.keys():
-                param_info_dict = default_par_info_dict[single_param_name]
-                list_of_parameters.append({"name":single_param_name, **param_info_dict})
-        for single_param in list_of_parameters:
-            if 'distribution' in single_param and single_param['distribution'] != "None":
-                # TODO Does it make sense to round the value of parameters?
-                parameters_dict[single_param['name']] = parameters[uncertain_param_counter]
-                uncertain_param_counter += 1
-            else:
-                if take_direct_value:
-                    parameters_dict[single_param['name']] = parameters[uncertain_param_counter]
-                    uncertain_param_counter += 1
-                elif "value" in single_param:
-                    parameters_dict[single_param['name']] = single_param["value"]
-                elif "default" in single_param:
-                    parameters_dict[single_param['name']] = single_param["default"]
-                else:
-                    if isinstance(default_par_info_dict[single_param['name']], dict):
-                        parameters_dict[single_param['name']] = default_par_info_dict[single_param['name']]["default"]
-                    else:
-                        parameters_dict[single_param['name']] = default_par_info_dict[single_param['name']]
+        parameters_dict = _handle_parameters(parameters, configurationObject, default_par_info_dict, take_direct_value)
+    
     return parameters_dict
 
 
