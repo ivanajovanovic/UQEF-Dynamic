@@ -246,41 +246,87 @@ class Samples(object):
     def set_df_simulation_result(self, df_simulation_result, extract_only_qoi_columns=False):
         self.df_simulation_result = self._process_df_simulation_result(df_simulation_result, extract_only_qoi_columns)
 
-    def save_all_simulations_to_file(self, file_path='./'):
+    def set_df_state_results(self, df_state_results):
+        self.df_state_results = df_state_results
+        self._process_state_df()
+
+    def set_df_index_parameter_values(self, df_index_parameter_values):
+        self.df_index_parameter_values = df_index_parameter_values
+
+    def set_df_index_parameter_gof_values(self, df_index_parameter_gof_values):
+        self.df_index_parameter_gof_values = df_index_parameter_gof_values
+
+    def set_list_of_gradient_matrix_dict(self, list_of_gradient_matrix_dict):
+        self._process_list_of_gradient_matrix_dict(list_of_gradient_matrix_dict)
+
+    def set_dict_of_approx_matrix_c(self, dict_of_approx_matrix_c):
+        self.dict_of_approx_matrix_c = dict_of_approx_matrix_c
+    
+    def set_dict_of_matrix_c_eigen_decomposition(self, dict_of_matrix_c_eigen_decomposition):
+        self.dict_of_matrix_c_eigen_decomposition = dict_of_matrix_c_eigen_decomposition
+
+    def set_list_index_run_with_None(self, list_index_run_with_None):
+        self.list_index_run_with_None = list_index_run_with_None
+
+    def get_df_simulation_result(self):
+        return self.df_simulation_result
+
+    def get_df_state_results(self):
+        return self.df_state_results
+
+    def get_df_index_parameter_values(self):
+        return self.df_index_parameter_values
+
+    def get_df_index_parameter_gof_values(self):
+        return self.df_index_parameter_gof_values
+
+    def get_dict_of_approx_matrix_c(self):
+        return self.dict_of_approx_matrix_c
+
+    def get_dict_of_matrix_c_eigen_decomposition(self):
+        return self.dict_of_matrix_c_eigen_decomposition
+
+    def get_list_index_run_with_None(self):
+        return self.list_index_run_with_None
+
+    def save_simulation_results_to_file(self, file_path='./', filename=utility.DF_SIMULATIONS_FILE):
         file_path = str(file_path)
         if self.df_simulation_result is not None:
             self.df_simulation_result.to_pickle(
-                os.path.abspath(os.path.join(file_path, "df_all_simulations.pkl")), compression="gzip")
+                os.path.abspath(os.path.join(file_path, filename)), compression="gzip")
+   
+    def save_all_simulations_to_file(self, file_path='./'):
+        self.save_simulation_results_to_file(file_path)
 
-    def save_states_to_file(self, file_path='./'):
+    def save_states_to_file(self, file_path='./', filename=utility.DF_STATE_FILE):
         file_path = str(file_path)
         if self.df_state_results is not None:
             self.df_state_results.to_pickle(
-                os.path.abspath(os.path.join(file_path, "df_state_results.pkl")), compression="gzip")
+                os.path.abspath(os.path.join(file_path, filename)), compression="gzip")
 
-    def save_index_parameter_values(self, file_path='./'):
+    def save_index_parameter_values(self, file_path='./', filename=utility.DF_INDEX_PARAMETER_FILE):
         file_path = str(file_path)
         if self.df_index_parameter_values is not None:
             self.df_index_parameter_values.to_pickle(
-                os.path.abspath(os.path.join(file_path, "df_all_index_parameter_values.pkl")), compression="gzip")
+                os.path.abspath(os.path.join(file_path, filename)), compression="gzip")
 
-    def save_index_parameter_gof_values(self, file_path='./'):
+    def save_index_parameter_gof_values(self, file_path='./', filename=utility.DF_INDEX_PARAMETER_GOF_FILE):
         file_path = str(file_path)
         if self.df_index_parameter_gof_values is not None:
             self.df_index_parameter_gof_values.to_pickle(
-                os.path.abspath(os.path.join(file_path, "df_all_index_parameter_gof_values.pkl")), compression="gzip")
+                os.path.abspath(os.path.join(file_path, filename)), compression="gzip")
 
-    def save_dict_of_approx_matrix_c(self, file_path='./'):
+    def save_dict_of_approx_matrix_c(self, file_path='./', filename=utility.DICT_APPROX_MATRIX_C_FILE):
         file_path = str(file_path)
         if self.dict_of_matrix_c_eigen_decomposition is not None:
-            fileName = os.path.abspath(os.path.join(file_path, "dict_of_approx_matrix_c.pkl"))
+            fileName = os.path.abspath(os.path.join(file_path, filename))
             with open(fileName, 'wb') as handle:
                 pickle.dump(self.dict_of_approx_matrix_c, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-    def save_dict_of_matrix_c_eigen_decomposition(self, file_path='./'):
+    def save_dict_of_matrix_c_eigen_decomposition(self, file_path='./', filename=utility.DICT_MATRIX_C_EIGEN_DECOMPOSITION_FILE):
         file_path = str(file_path)
         if self.dict_of_matrix_c_eigen_decomposition is not None:
-            fileName = os.path.abspath(os.path.join(file_path, "dict_of_matrix_c_eigen_decomposition.pkl"))
+            fileName = os.path.abspath(os.path.join(file_path, filename))
             with open(fileName, 'wb') as handle:
                 pickle.dump(self.dict_of_matrix_c_eigen_decomposition, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
@@ -379,9 +425,15 @@ class TimeDependentStatistics(ABC, Statistics):
             'compute_sobol_indices_with_samples', False)
         if self.uq_method == "mc" and self.compute_Sobol_t:
             self.compute_sobol_indices_with_samples = True
-        self.nodes_file = kwargs.get(
-            'nodes_file', "nodes.simnodes.zip")
-        self.nodes_file = self.workingDir / self.nodes_file
+
+        if 'nodes_file' in kwargs:
+            self.nodes_file = kwargs['nodes_file']
+        elif 'nodes_file' in self.dict_output_file_paths:
+            self.nodes_file = self.dict_output_file_paths['nodes_file']
+        else:
+            self.nodes_file  = utility.NODES_FILE
+        if not self.nodes_file.is_absolute():
+            self.nodes_file = self.workingDir / self.nodes_file
 
         self.allow_conditioning_results_based_on_metric = kwargs.get(
             'allow_conditioning_results_based_on_metric', False)
@@ -391,7 +443,10 @@ class TimeDependentStatistics(ABC, Statistics):
         self.compute_generalized_sobol_indices = kwargs.get('compute_generalized_sobol_indices', False)
         self.compute_generalized_sobol_indices_over_time = kwargs.get('compute_generalized_sobol_indices_over_time', False)
         self.compute_covariance_matrix_in_time = kwargs.get('compute_covariance_matrix_in_time', False)
-        if self.compute_generalized_sobol_indices or self.compute_kl_expansion_of_qoi or self.compute_covariance_matrix_in_time:
+        if self.compute_covariance_matrix_in_time and self.instantly_save_results_for_each_time_step:
+            print(f"[STAT INFO]: Covariance Matrix will not be computed since since the fleg \
+            instantly_save_results_for_each_time_step is set to True")
+        if self.compute_generalized_sobol_indices or self.compute_kl_expansion_of_qoi:
             self.instantly_save_results_for_each_time_step = False
 
         if self.compute_kl_expansion_of_qoi:
@@ -494,6 +549,9 @@ class TimeDependentStatistics(ABC, Statistics):
         self.df_time_aggregated_grad_analysis = None
         self.solverTimes = None
         self.work_package_indexes = None
+
+        self.polynomial_expansion = None
+        self.polynomial_norms = None
 
         self.dict_processed_simulation_settings_from_config_file = None
         self.set_attributes_based_on_dict_processed_simulation_settings_from_config_file(**kwargs)
@@ -718,12 +776,25 @@ class TimeDependentStatistics(ABC, Statistics):
             self.read_saved_simulations = True
 
         if self.read_saved_simulations:
-            df_all_simulations_file = self.dict_output_file_paths.get("df_all_simulations_file")
-            if df_all_simulations_file.is_file():
-                df_simulation_result = pd.read_pickle(df_all_simulations_file, compression="gzip")
+            # TODO Move to new function
+            df_simulations_file = self.dict_output_file_paths.get("df_simulations_file")
+            df_index_parameter_file = self.dict_output_file_paths.get("df_index_parameter_file")
+            df_index_parameter_gof_file = self.dict_output_file_paths.get("df_index_parameter_gof_file")
+            # df_uqsim_simulation_parameters_file = self.dict_output_file_paths.get("df_uqsim_simulation_parameters_file")
+            # df_uqsim_simulation_nodes_file = self.dict_output_file_paths.get("df_uqsim_simulation_nodes_file")
+            # df_uqsim_simulation_weights_file = self.dict_output_file_paths.get("df_uqsim_simulation_weights_file")
+            if df_simulations_file.is_file():
+                df_simulation_result = pd.read_pickle(df_simulations_file, compression="gzip")
                 self.samples.set_df_simulation_result(df_simulation_result, extract_only_qoi_columns=self.extract_only_qoi_columns)
             else:
-                raise Exception(f"Error in Statistics class - file {df_all_simulations_file} does not exist!")
+                raise Exception(f"Error in Statistics class - file {df_simulations_file} does not exist!")
+            # TODO read other files if they exist, e.g., state_df and gradient based data!
+            if df_index_parameter_file.is_file():
+                df_index_parameter = pd.read_pickle(df_index_parameter_file, compression="gzip")
+                self.samples.set_df_index_parameter_values(df_index_parameter)
+            if df_index_parameter_gof_file.is_file():
+                df_index_parameter_gof = pd.read_pickle(df_index_parameter_gof_file, compression="gzip")
+                self.samples.set_df_index_parameter_gof_values(df_index_parameter_gof)
 
         if self.samples is not None:
             # Here, some functions are called to process the data from self.samples
@@ -757,14 +828,13 @@ class TimeDependentStatistics(ABC, Statistics):
 
             # saving the results of the model runs
             if self.save_all_simulations:
-                self.samples.save_all_simulations_to_file(self.workingDir)
+                self.samples.save_simulation_results_to_file(self.workingDir)
             if self.collect_and_save_state_data:
                 self.samples.save_states_to_file(self.workingDir)
             # These other files should take much less memory, therefore, always save tham
             self.samples.save_index_parameter_values(self.workingDir)
             self.samples.save_index_parameter_gof_values(self.workingDir)
 
-            # TODO This should be removed (computation of these matrices) from here and put in a separate function
             if self.compute_gradients and self.compute_active_subspaces:
                 self.samples.save_dict_of_approx_matrix_c(self.workingDir)
                 self.samples.save_dict_of_matrix_c_eigen_decomposition(self.workingDir)
@@ -780,13 +850,6 @@ class TimeDependentStatistics(ABC, Statistics):
                 self.timesteps_min, resolution=self.resolution)
             self.timesteps_max = self.samples.get_timesteps_max()
             self.number_of_unique_index_runs = self.number_unique_model_runs = self.samples.get_number_of_runs()
-
-        # if self.resolution == "integer":
-        #     self.pdTimesteps = self.timesteps
-        # elif self.resolution == "daily" or self.resolution == "hourly" or self.resolution == "minute":
-        #     self.pdTimesteps = [pd.Timestamp(timestep) for timestep in self.timesteps]
-        # else:
-        #     self.pdTimesteps = self.timesteps
 
         if self.timesteps is not None:
             self._set_pdTimesteps_based_on_timesteps_and_resolution()
@@ -1001,6 +1064,10 @@ class TimeDependentStatistics(ABC, Statistics):
                     uqef_simulationNodes = pickle.load(f)
                     self.nodes = uqef_simulationNodes.distNodes
                     self.weights = uqef_simulationNodes.weights
+                    if self.sampleFromStandardDist:
+                        self.dist = uqef_simulationNodes.joinedStandardDists
+                    else:
+                        self.dist = uqef_simulationNodes.joinedDists
                     self.dim = self.nodes.shape[0]
                     self.N = self.numEvaluations = self.nodes.shape[1]
         if self.nodes.size == 0 or self.nodes is None:
@@ -1070,19 +1137,19 @@ class TimeDependentStatistics(ABC, Statistics):
 
     def _update_nodes_based_on_index_runs_to_keep(self, list_of_index_runs_to_keep):
         if self.nodes is not None:
-            print(f"[DEBUGGING] self.nodes.shape BEFORE: {self.nodes.shape}")
-            print(f"[DEBUGGING] self.numEvaluations BEFORE: {self.numEvaluations}")
+            # print(f"[DEBUGGING] self.nodes.shape BEFORE: {self.nodes.shape}")
+            # print(f"[DEBUGGING] self.numEvaluations BEFORE: {self.numEvaluations}")
             new_set_of_nodes = np.empty((0, self.dim))
             for single_index_run_to_keep in list_of_index_runs_to_keep:
                 row_to_add = np.array(self.nodes.T[single_index_run_to_keep])
                 new_set_of_nodes = np.vstack((new_set_of_nodes, row_to_add))
             self.nodes = new_set_of_nodes.T
             self.numEvaluations = self.N = self.nodes.shape[1]
-            print(f"[DEBUGGING] self.nodes.shape AFTER: {self.nodes.shape}")
-            print(f"[DEBUGGING] self.numEvaluations AFTER: {self.numEvaluations}")
+            # print(f"[DEBUGGING] self.nodes.shape AFTER: {self.nodes.shape}")
+            # print(f"[DEBUGGING] self.numEvaluations AFTER: {self.numEvaluations}")
 
-    def _update_df_simulation_result_based_on_index_runs_to_keep(self, list_of_index_runs_to_keep):
-        print(f"[DEBUGGING] len(self.samples.df_simulation_result) BEFORE: {len(self.samples.df_simulation_result)}")
+    def _update_df_simulations_based_on_index_runs_to_keep(self, list_of_index_runs_to_keep):
+        # print(f"[DEBUGGING] len(self.samples.df_simulation_result) BEFORE: {len(self.samples.df_simulation_result)}")
         if self.samples.df_simulation_result is not None:
             filtered_df = self.samples.df_simulation_result[\
             self.samples.df_simulation_result[self.index_column_name].isin(list_of_index_runs_to_keep)]
@@ -1097,10 +1164,10 @@ class TimeDependentStatistics(ABC, Statistics):
                 )
         else:
             raise ValueError("self.samples.df_simulation_result is None!")
-        print(f"[DEBUGGING] len(self.samples.df_simulation_result) AFTER: {len(self.samples.df_simulation_result)}")
+        # print(f"[DEBUGGING] len(self.samples.df_simulation_result) AFTER: {len(self.samples.df_simulation_result)}")
 
-    def _update_df_index_parameter_values_based_on_index_runs_to_keep(self, list_of_index_runs_to_keep):
-        print(f"[DEBUGGING] len(self.samples.df_index_parameter_values) BEFORE: {len(self.samples.df_index_parameter_values)}")
+    def _update_df_index_parameter_based_on_index_runs_to_keep(self, list_of_index_runs_to_keep):
+        # print(f"[DEBUGGING] len(self.samples.df_index_parameter_values) BEFORE: {len(self.samples.df_index_parameter_values)}")
         if  self.samples.df_index_parameter_values is not None:
             filtered_df = self.samples.df_index_parameter_values[\
         self.samples.df_index_parameter_values[self.index_column_name].isin(list_of_index_runs_to_keep)]
@@ -1111,7 +1178,7 @@ class TimeDependentStatistics(ABC, Statistics):
                 self.samples.df_index_parameter_values  = filtered_df
         else:
             raise ValueError(" self.samples.df_index_parameter_values is None!")
-        print(f"[DEBUGGING] len(self.samples.df_index_parameter_values) AFTER: {len(self.samples.df_index_parameter_values)}")
+        # print(f"[DEBUGGING] len(self.samples.df_index_parameter_values) AFTER: {len(self.samples.df_index_parameter_values)}")
 
     def _validate_condition(self, condition_results_based_on_metric, condition_results_based_on_metric_value):
         if self.samples.df_index_parameter_gof_values is None \
@@ -1159,26 +1226,26 @@ class TimeDependentStatistics(ABC, Statistics):
             print(f"Caught an exception: {e}; the execution will continue without any updated of nodes of dataframes \
             storing model runs!")
             return
-        print(f"[DEBUGGING] list_of_index_runs_to_keep: {list_of_index_runs_to_keep}")
+        # print(f"[DEBUGGING] list_of_index_runs_to_keep: {list_of_index_runs_to_keep}")
 
         self._update_nodes_based_on_index_runs_to_keep(list_of_index_runs_to_keep)
 
         try:
-            self._update_df_simulation_result_based_on_index_runs_to_keep(list_of_index_runs_to_keep)
+            self._update_df_simulations_based_on_index_runs_to_keep(list_of_index_runs_to_keep)
         except ValueError as e:
             print(f"Caught an exception: {e}")
             raise
 
         try:
-            self._update_df_index_parameter_values_based_on_index_runs_to_keep(list_of_index_runs_to_keep)
+            self._update_df_index_parameter_based_on_index_runs_to_keep(list_of_index_runs_to_keep)
         except ValueError as e:
             print(f"Caught an exception: {e}")
 
         # Save updated DataFrames
-        self.samples.save_index_parameter_values(self.workingDir)
-        self.samples.save_index_parameter_gof_values(self.workingDir)
+        self.samples.save_index_parameter_values(self.workingDir, filename="df_index_parameter_conditioned.pkl")
+        self.samples.save_index_parameter_gof_values(self.workingDir, filename="df_index_parameter_gof_conditioned.pkl")
         if self.save_all_simulations:
-            self.samples.save_all_simulations_to_file(self.workingDir)
+            self.samples.save_simulation_results_to_file(self.workingDir, filename="df_simulations_conditioned.pkl")
 
         self.set_number_of_unique_index_runs()
 
@@ -1270,26 +1337,29 @@ class TimeDependentStatistics(ABC, Statistics):
         if self.compute_sobol_indices_with_samples:
             self.ensure_nodes_are_loaded()
         self.handle_unsuccessful_runs()
-        self.handle_conditioning_model_runs(kwargs)
+        if self.allow_conditioning_results_based_on_metric:
+            self.handle_conditioning_model_runs(kwargs)
 
     def prepareForScStatistics(self, simulationNodes, order, poly_normed=False, poly_rule='three_terms_recurrence', regression=False, cross_truncation=1.0, *args, **kwargs):
         self.pce_set_initial_values(simulationNodes, order, poly_normed, poly_rule, regression, cross_truncation)
         self.handle_expansion_generation()
         if self.regression:
             self.handle_unsuccessful_runs()
-            self.handle_conditioning_model_runs(kwargs)
+            if self.allow_conditioning_results_based_on_metric:
+                self.handle_conditioning_model_runs(kwargs)
         else:
             self.handle_unsuccessful_runs_psp_saltelli()
 
     def prepareForMcSaltelliStatistics(self, simulationNodes, numEvaluations=None, regression=False, order=None,
                                     poly_normed=False, poly_rule='three_terms_recurrence', cross_truncation=1.0, *args, **kwargs):
         self.mc_set_initial_values(simulationNodes, numEvaluations, regression, order, poly_normed, poly_rule, cross_truncation)
-        if self.regression:
-            self.handle_expansion_generation()
+        # if self.regression:
+        #     self.handle_expansion_generation()
         if self.compute_sobol_indices_with_samples:
             self.ensure_nodes_are_loaded()
             self.handle_unsuccessful_runs()
-            self.handle_conditioning_model_runs(kwargs)
+            if self.allow_conditioning_results_based_on_metric:
+                self.handle_conditioning_model_runs(kwargs)
         else:
             self.handle_unsuccessful_runs_psp_saltelli()
             
@@ -1368,6 +1438,17 @@ class TimeDependentStatistics(ABC, Statistics):
             pickle.dump(result_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     def _process_chunk_result_single_qoi_single_time_step(self, single_qoi_column, timestamp, result_dict):
+        """
+        Process the result for a single quantity of interest (QoI) at a single time step.
+
+        Args:
+            single_qoi_column (str): The name of the quantity of interest.
+            timestamp (float /  pd.Timestamp): The timestamp of the result.
+            result_dict (dict): The dictionary containing the result for the QoI at the given timestamp.
+
+        Returns:
+            None
+        """
         result_dict.update({'qoi': single_qoi_column})
         if self.autoregressive_model_first_order:
             self._if_autoregressive_model_first_order_do_modification(
@@ -1419,6 +1500,39 @@ class TimeDependentStatistics(ABC, Statistics):
 
     # =================================================================================================
 
+    def _initialize_chunks(self, keyIter, single_qoi_column, chunksize):
+        """
+        # TODO Memory problem - I should not store all the simulations in the memory!
+        # TODO Should I as well transfer Index_run column
+        #  in order to be sure that right values were multiplied with right polynomials?
+        """
+        keyIter_chunk = list(more_itertools.chunked(keyIter, chunksize))
+        list_of_qoi_values = (
+            self.samples.df_simulation_result.loc[self.groups[key].values][single_qoi_column].values
+            for key in keyIter
+        )
+        list_of_qoi_values_chunk = list(more_itertools.chunked(list_of_qoi_values, chunksize))
+        # list_of_qoi_values = []
+        # for key in keyIter:
+        #     timestamp = self.groups[key].values
+        #     measured_qoi_at_previous_timestamp = self._get_measured_qoi_at_previous_timestamp_if_autoregressive_module_first_order(
+        #         single_qoi_column, timestamp=timestamp)
+        #     if measured_qoi_at_previous_timestamp is not None:
+        #         self.samples.df_simulation_result.loc[timestamp][single_qoi_column] = \
+        #             self.samples.df_simulation_result.loc[timestamp][single_qoi_column] + measured_qoi_at_previous_timestamp
+        #         if self.samples.df_simulation_result.loc[timestamp][single_qoi_column] < 1e-10:
+        #             self.samples.df_simulation_result.loc[timestamp][single_qoi_column] = 0.0
+        #     list_of_qoi_values.append(
+        #         self.samples.df_simulation_result.loc[timestamp][single_qoi_column].values
+        #     )
+        # generator_of_simulations_df = (
+        #     self.samples.df_simulation_result.loc[self.groups[key].values][single_qoi_column].values
+        #     for key in keyIter
+        # )
+        return keyIter_chunk, list_of_qoi_values_chunk
+
+    # =================================================================================================
+
     def calcStatisticsForMcParallel(self, chunksize=1, *args, **kwargs):
         self.result_dict = defaultdict(dict)
 
@@ -1429,38 +1543,10 @@ class TimeDependentStatistics(ABC, Statistics):
         compute_other_stat_besides_pce_surrogate = kwargs.get("compute_other_stat_besides_pce_surrogate", self.compute_other_stat_besides_pce_surrogate)
 
         for single_qoi_column in self.list_qoi_column:
-            
             if self.rank == 0:
-                keyIter_chunk = list(more_itertools.chunked(keyIter, chunksize))
+                keyIter_chunk, list_of_qoi_values_chunk = self._initialize_chunks(keyIter, single_qoi_column, chunksize)
+
                 numEvaluations_chunk = [self.numEvaluations] * len(keyIter_chunk)
-
-                # TODO Think about some more efficient way of doing this, e.g., generator or iterator
-                list_of_qoi_values = [
-                    self.samples.df_simulation_result.loc[self.groups[key].values][single_qoi_column].values
-                    for key in keyIter
-                ]
-
-                # list_of_qoi_values = []
-                # for key in keyIter:
-                #     timestamp = self.groups[key].values
-                #     measured_qoi_at_previous_timestamp = self._get_measured_qoi_at_previous_timestamp_if_autoregressive_module_first_order(
-                #         single_qoi_column, timestamp=timestamp)
-                #     if measured_qoi_at_previous_timestamp is not None:
-                #         self.samples.df_simulation_result.loc[timestamp][single_qoi_column] = \
-                #             self.samples.df_simulation_result.loc[timestamp][single_qoi_column] + measured_qoi_at_previous_timestamp
-                #         if self.samples.df_simulation_result.loc[timestamp][single_qoi_column] < 1e-10:
-                #             self.samples.df_simulation_result.loc[timestamp][single_qoi_column] = 0.0
-                #     list_of_qoi_values.append(
-                #         self.samples.df_simulation_result.loc[timestamp][single_qoi_column].values
-                #     )
-
-                list_of_qoi_values_chunk = list(more_itertools.chunked(list_of_qoi_values, chunksize))
-
-                # generator_of_simulations_df = (
-                #     self.samples.df_simulation_result.loc[self.groups[key].values][single_qoi_column].values
-                #     for key in keyIter
-                # )
-
                 if self.regression:
                     nodesChunks = [self.nodes] * len(keyIter_chunk)
                     weightsChunks = [self.weights] * len(keyIter_chunk)
@@ -1479,7 +1565,6 @@ class TimeDependentStatistics(ABC, Statistics):
                 save_gpce_surrogate_Chunks = [self.save_gpce_surrogate] * len(keyIter_chunk)
                 compute_other_stat_besides_pce_surrogate_Chunks = [compute_other_stat_besides_pce_surrogate] * len(keyIter_chunk)
                 dict_stat_to_compute_Chunks = [self.dict_stat_to_compute] * len(keyIter_chunk)
-
                 compute_sobol_indices_with_samples_chunks = [self.compute_sobol_indices_with_samples] * len(
                     keyIter_chunk)
                 if self.compute_sobol_indices_with_samples and \
@@ -1555,6 +1640,7 @@ class TimeDependentStatistics(ABC, Statistics):
                     print(f"solver_time for qoi {single_qoi_column}: {solver_time}")
 
                     chunk_results = list(chunk_results_it)
+
                     for chunk_result in chunk_results:
                         for result in chunk_result:
                             self._process_chunk_result_single_qoi_single_time_step(
@@ -1573,6 +1659,8 @@ class TimeDependentStatistics(ABC, Statistics):
     def calcStatisticsForEnsembleParallel(self, chunksize=1, *args, **kwargs):
         self.calcStatisticsForMcParallel(chunksize=chunksize, *args, **kwargs)
 
+    # =================================================================================================
+
     def calcStatisticsForMcSaltelliParallel(self, chunksize=1, *args, **kwargs):
         self.result_dict = defaultdict(dict)
 
@@ -1582,71 +1670,74 @@ class TimeDependentStatistics(ABC, Statistics):
 
         for single_qoi_column in self.list_qoi_column:
             if self.rank == 0:
-                list_of_qoi_values = [
-                    self.samples.df_simulation_result.loc[self.groups[key].values][single_qoi_column].values
-                    for key in keyIter
-                ]
-
-                keyIter_chunk = list(more_itertools.chunked(keyIter, chunksize))
-                list_of_qoi_values_chunk = list(more_itertools.chunked(list_of_qoi_values, chunksize))
-
-                numEvaluations_chunk = [self.numEvaluations] * len(keyIter_chunk)
-                dimChunks = [self.dim] * len(keyIter_chunk)
-
-                compute_Sobol_t_Chunks = [self.compute_Sobol_t] * len(keyIter_chunk)
-                compute_Sobol_m_Chunks = [self.compute_Sobol_m] * len(keyIter_chunk)
-                store_qoi_data_in_stat_dict_Chunks = [self.store_qoi_data_in_stat_dict] * len(keyIter_chunk)
-                dict_stat_to_compute_Chunks = [self.dict_stat_to_compute] * len(keyIter_chunk)
-
-                compute_sobol_indices_with_samples_chunks = [self.compute_sobol_indices_with_samples] * len(
-                    keyIter_chunk)
-                if self.compute_sobol_indices_with_samples and \
-                        self.compute_Sobol_m and self.nodes is not None:
-                    samples_chunks = [self.nodes.T[:self.numEvaluations]] * len(keyIter_chunk)
-                else:
-                    samples_chunks = [None] * len(keyIter_chunk)
+                keyIter_chunk, list_of_qoi_values_chunk = self._initialize_chunks(keyIter, single_qoi_column, chunksize)
+                chunks = self._prepare_chunks_saltelli(keyIter_chunk)
 
             with futures.MPICommExecutor(MPI.COMM_WORLD, root=0) as executor:
                 if executor is not None:  # master process
-                    print(f"{self.rank}: computation of statistics for qoi {single_qoi_column} started...")
-                    solver_time_start = time.time()
-                    # TODO in case is compute_sobol_indices_with_samples True propagate UQEF.Samples.parameters
-                    chunk_results_it = executor.map(
-                        parallel_statistics.parallel_calc_stats_for_mc_saltelli,
-                        keyIter_chunk,
-                        list_of_qoi_values_chunk,
-                        numEvaluations_chunk,
-                        dimChunks,
-                        compute_Sobol_t_Chunks,
-                        compute_Sobol_m_Chunks,
-                        store_qoi_data_in_stat_dict_Chunks,
-                        compute_sobol_indices_with_samples_chunks,
-                        samples_chunks,
-                        dict_stat_to_compute_Chunks,
-                        chunksize=self.mpi_chunksize,
-                        unordered=self.unordered
-                    )
-                    print(f"{self.rank}: computation for qoi {single_qoi_column} - waits for shutdown...")
-                    sys.stdout.flush()
-                    executor.shutdown(wait=True)
-                    print(f"{self.rank}: computation for qoi {single_qoi_column} - shut down...")
-                    sys.stdout.flush()
+                    self._compute_saltelli_statistic_single_qoi_parallel_in_time(
+                        executor, single_qoi_column, keyIter_chunk, list_of_qoi_values_chunk, chunks)
+                    self._process_saltelli_results_single_qoi(single_qoi_column)
 
-                    solver_time_end = time.time()
-                    solver_time = solver_time_end - solver_time_start
-                    print(f"solver_time for qoi {single_qoi_column}: {solver_time}")
+    def _prepare_chunks_saltelli(self, keyIter_chunk):
+        if self.compute_sobol_indices_with_samples and \
+                        self.compute_Sobol_m and self.nodes is not None:
+            samples_chunks = [self.nodes.T[:self.numEvaluations]] * len(keyIter_chunk)
+        else:
+            samples_chunks = [None] * len(keyIter_chunk)
+        chunks = {
+            'numEvaluations_chunk': [self.numEvaluations] * len(keyIter_chunk),
+            'dimChunks': [self.dim] * len(keyIter_chunk),
+            'compute_Sobol_t_Chunks': [self.compute_Sobol_t] * len(keyIter_chunk),
+            'compute_Sobol_m_Chunks': [self.compute_Sobol_m] * len(keyIter_chunk),
+            'store_qoi_data_in_stat_dict_Chunks': [self.store_qoi_data_in_stat_dict] * len(keyIter_chunk),
+            'compute_sobol_indices_with_samples_chunks': [self.compute_sobol_indices_with_samples] * len(keyIter_chunk),
+            'samples_chunks': samples_chunks,
+            'dict_stat_to_compute_Chunks': [self.dict_stat_to_compute] * len(keyIter_chunk),
+        }
+        return chunks
 
-                    chunk_results = list(chunk_results_it)
-                    for chunk_result in chunk_results:
-                        for result in chunk_result:
-                            self._process_chunk_result_single_qoi_single_time_step(
-                                single_qoi_column, timestamp=result[0], result_dict=result[1])
-                            if self.instantly_save_results_for_each_time_step:
-                                del result[1]
-                    self.save_print_plot_and_clear_result_dict_single_qoi(single_qoi_column)
-                    del chunk_results_it
-                    del chunk_results
+    def _compute_saltelli_statistic_single_qoi_parallel_in_time(self, executor, single_qoi_column, keyIter_chunk, list_of_qoi_values_chunk, chunks):
+        print(f"{self.rank}: computation of statistics for qoi {single_qoi_column} started...")
+        solver_time_start = time.time()
+        chunk_results_it = executor.map(
+            parallel_statistics.parallel_calc_stats_for_mc_saltelli,
+            keyIter_chunk,
+            list_of_qoi_values_chunk,
+            chunks['numEvaluations_chunk'],
+            chunks['dimChunks'],
+            chunks['compute_Sobol_t_Chunks'],
+            chunks['compute_Sobol_m_Chunks'],
+            chunks['store_qoi_data_in_stat_dict_Chunks'],
+            chunks['compute_sobol_indices_with_samples_chunks'],
+            chunks['samples_chunks'],
+            chunks['dict_stat_to_compute_Chunks'],
+            chunksize=self.mpi_chunksize,
+            unordered=self.unordered
+        )
+        print(f"{self.rank}: computation for qoi {single_qoi_column} - waits for shutdown...")
+        sys.stdout.flush()
+        executor.shutdown(wait=True)
+        print(f"{self.rank}: computation for qoi {single_qoi_column} - shut down...")
+        sys.stdout.flush()
 
+        solver_time_end = time.time()
+        solver_time = solver_time_end - solver_time_start
+        print(f"solver_time for qoi {single_qoi_column}: {solver_time}")
+
+        self.chunk_results = list(chunk_results_it)
+
+    def _process_saltelli_results_single_qoi(self, single_qoi_column):
+        for chunk_result in self.chunk_results:
+            for result in chunk_result:
+                self._process_chunk_result_single_qoi_single_time_step(
+                    single_qoi_column, timestamp=result[0], result_dict=result[1])
+                if self.instantly_save_results_for_each_time_step:
+                    del result[1]
+        self.save_print_plot_and_clear_result_dict_single_qoi(single_qoi_column)
+        del self.chunk_results
+
+# =================================================================================================
 
     def calcStatisticsForScParallel(self, chunksize=1, *args, **kwargs):
         self.result_dict = defaultdict(dict)
@@ -1658,37 +1749,9 @@ class TimeDependentStatistics(ABC, Statistics):
         compute_other_stat_besides_pce_surrogate = kwargs.get("compute_other_stat_besides_pce_surrogate", self.compute_other_stat_besides_pce_surrogate)
 
         for single_qoi_column in self.list_qoi_column:
-            if self.rank == 0:
-                keyIter_chunk = list(more_itertools.chunked(keyIter, chunksize))
-
-                # TODO Memory problem - I should not store all the simulations in the memory!
-                # TODO Should I as well transfer Index_run column
-                #  in order to be sure that right values were multiplied with right polynomials?
-                list_of_qoi_values = [
-                    self.samples.df_simulation_result.loc[self.groups[key].values][single_qoi_column].values
-                    for key in keyIter
-                ]
-                list_of_qoi_values_chunk = list(more_itertools.chunked(list_of_qoi_values, chunksize))
-
-                # generator_of_simulations_df = (
-                #     self.samples.df_simulation_result.loc[self.groups[key].values][single_qoi_column].values
-                #     for key in keyIter
-                # )
-
-                nodesChunks = [self.nodes] * len(keyIter_chunk)
-                distChunks = [self.dist] * len(keyIter_chunk)
-                weightsChunks = [self.weights] * len(keyIter_chunk)
-                polynomial_expansionChunks = [self.polynomial_expansion] * len(keyIter_chunk)
-
-                regressionChunks = [self.regression] * len(keyIter_chunk)
-                compute_Sobol_t_Chunks = [self.compute_Sobol_t] * len(keyIter_chunk)
-                compute_Sobol_m_Chunks = [self.compute_Sobol_m] * len(keyIter_chunk)
-                compute_Sobol_m2_Chunks = [self.compute_Sobol_m2] * len(keyIter_chunk)
-                store_qoi_data_in_stat_dict_Chunks = [self.store_qoi_data_in_stat_dict] * len(keyIter_chunk)
-                store_gpce_surrogate_in_stat_dict_Chunks = [self.store_gpce_surrogate_in_stat_dict] * len(keyIter_chunk)
-                save_gpce_surrogate_Chunks = [self.save_gpce_surrogate] * len(keyIter_chunk)
-                compute_other_stat_besides_pce_surrogate_Chunks = [compute_other_stat_besides_pce_surrogate] * len(keyIter_chunk)
-                dict_stat_to_compute_Chunks = [self.dict_stat_to_compute] * len(keyIter_chunk)
+            if self.rank == 0:                            
+                keyIter_chunk, list_of_qoi_values_chunk = self._initialize_chunks(keyIter, single_qoi_column, chunksize)
+                chunks = self._prepare_chunks_pce(keyIter_chunk, compute_other_stat_besides_pce_surrogate)
 
             with futures.MPICommExecutor(MPI.COMM_WORLD, root=0) as executor:
                 if executor is not None:  # master process
@@ -1699,50 +1762,32 @@ class TimeDependentStatistics(ABC, Statistics):
                             parallel_statistics.parallel_calc_stats_for_KL,
                             keyIter_chunk,
                             list_of_qoi_values_chunk,
-                            weightsChunks,
-                            regressionChunks,
-                            store_qoi_data_in_stat_dict_Chunks
+                            chunks['weightsChunks'],
+                            chunks['regressionChunks'],
+                            chunks['store_qoi_data_in_stat_dict_Chunks']
                         )
                     else:
                         chunk_results_it = executor.map(
                             parallel_statistics.parallel_calc_stats_for_gPCE,
                             keyIter_chunk,
-                            list_of_qoi_values_chunk, #generator_of_simulations_df,
-                            distChunks,
-                            polynomial_expansionChunks,
-                            nodesChunks,
-                            weightsChunks,
-                            regressionChunks,
-                            compute_Sobol_t_Chunks,
-                            compute_Sobol_m_Chunks,
-                            compute_Sobol_m2_Chunks,
-                            store_qoi_data_in_stat_dict_Chunks,
-                            store_gpce_surrogate_in_stat_dict_Chunks,
-                            save_gpce_surrogate_Chunks,
-                            compute_other_stat_besides_pce_surrogate_Chunks,
-                            dict_stat_to_compute_Chunks,
+                            list_of_qoi_values_chunk,
+                            chunks['distChunks'],
+                            chunks['polynomial_expansionChunks'],
+                            chunks['nodesChunks'],
+                            chunks['weightsChunks'],
+                            chunks['polynomial_norms_expansionChunks'],
+                            chunks['regressionChunks'],
+                            chunks['compute_Sobol_t_Chunks'],
+                            chunks['compute_Sobol_m_Chunks'],
+                            chunks['compute_Sobol_m2_Chunks'],
+                            chunks['store_qoi_data_in_stat_dict_Chunks'],
+                            chunks['store_gpce_surrogate_in_stat_dict_Chunks'],
+                            chunks['save_gpce_surrogate_Chunks'],
+                            chunks['compute_other_stat_besides_pce_surrogate_Chunks'],
+                            chunks['dict_stat_to_compute_Chunks'],
                             chunksize=self.mpi_chunksize,
                             unordered=self.unordered
                         )
-                        # chunk_results_it = executor.map(
-                        #     parallel_statistics.parallel_calc_stats_for_gPCE,
-                        #     keyIter_chunk,
-                        #     generator_of_simulations_df,
-                        #     self.dist,
-                        #     self.polynomial_expansion,
-                        #     self.nodes,
-                        #     self.weights,
-                        #     regression,
-                        #     self.compute_Sobol_t,
-                        #     self.compute_Sobol_m,
-                        #     self.store_qoi_data_in_stat_dict,
-                        #     self.store_gpce_surrogate_in_stat_dict,
-                        #     self.save_gpce_surrogate,
-                        #     compute_other_stat_besides_pce_surrogate,
-                        #     self.dict_stat_to_compute,
-                        #     chunksize=self.mpi_chunksize,
-                        #     unordered=self.unordered
-                        # )
                     print(f"{self.rank}: computation for qoi {single_qoi_column} - waits for shutdown...")
                     sys.stdout.flush()
                     executor.shutdown(wait=True)
@@ -1753,51 +1798,125 @@ class TimeDependentStatistics(ABC, Statistics):
                     solver_time = solver_time_end - solver_time_start
                     print(f"solver_time for qoi {single_qoi_column}: {solver_time}")
 
-                    chunk_results = list(chunk_results_it)
-                    for chunk_result in chunk_results:
-                        for result in chunk_result:
-                            self._process_chunk_result_single_qoi_single_time_step(
-                                single_qoi_column, timestamp=result[0], result_dict=result[1])
-                            if self.instantly_save_results_for_each_time_step:
-                                del result[1]
-                    if self.compute_kl_expansion_of_qoi and not self.instantly_save_results_for_each_time_step:
-                        # TODO  - think how to allow over time computation of KL surrogate and generalized Sobol indices
-                        eigenvalues, eigenvectors, f_kl_surrogate_dict, f_kl_surrogate_coefficients, Var_kl_approx \
-                            = self.compute_kl_expansion_single_qoi(single_qoi_column)
-                        # Generalized Sobol Indices
-                        if self.compute_generalized_sobol_indices:
-                            fileName = self.workingDir / f"generalized_sobol_indices_{single_qoi_column}.pkl"
-                            param_name_generalized_sobol_total_indices = utility.computing_generalized_sobol_total_indices_from_kl_expan(
-                                f_kl_surrogate_coefficients, self.polynomial_expansion, self.weights_time, self.labels, fileName, total_variance=Var_kl_approx)
-                            print(f"INFO: computation of generalized S.S.I based on KL+gPCE finished...")
-                            last_time_step = max(self.result_dict[single_qoi_column].keys())
-                            for param_name in self.labels:
-                                self.result_dict[single_qoi_column][last_time_step][f"generalized_sobol_total_index_{param_name}"] = \
-                                    param_name_generalized_sobol_total_indices[param_name]
-                    else:
-                        if self.compute_generalized_sobol_indices and not self.instantly_save_results_for_each_time_step:
-                            fileName = self.workingDir / f"generalized_sobol_indices_{single_qoi_column}.pkl"
-                            if self.compute_generalized_sobol_indices_over_time:
-                                utility.computing_generalized_sobol_total_indices_from_poly_expan_over_time(
-                                    self.result_dict[single_qoi_column], 
-                                    self.polynomial_expansion, self.weights_time, self.labels,
-                                    fileName)
-                                print(f"INFO: computation of (over time) generalized S.S.I based on PCE finished...")
-                            else:
-                                # the computation of the generalized Sobol indices is done only for the last time step
-                                utility.computing_generalized_sobol_total_indices_from_poly_expan(
-                                    self.result_dict[single_qoi_column], 
-                                    self.polynomial_expansion, self.weights_time, self.labels,
-                                    fileName)
-                                print(f"INFO: computation of (over time) generalized S.S.I based on PCE finished...")
-                        if self.compute_covariance_matrix_in_time and not self.instantly_save_results_for_each_time_step:
-                            covariance_matrix_loc = self.compute_covariance_matrix_in_time_single_qoi(single_qoi_column)
-                            utility.save_covariance_matrix(covariance_matrix_loc, self.workingDir, single_qoi_column)
-                            utility.plot_covariance_matrix(covariance_matrix_loc, self.workingDir, filname=f"covariance_matrix_{single_qoi_column}.png")
-                            print(f"covariance_matrix for {single_qoi_column} is computed: {covariance_matrix_loc}")
-                    self.save_print_plot_and_clear_result_dict_single_qoi(single_qoi_column)
-                    del chunk_results_it
-                    del chunk_results
+                    self.chunk_results = list(chunk_results_it)
+                    # self._compute_pce_statistic_single_qoi_parallel_in_time(executor, single_qoi_column, keyIter_chunk, list_of_qoi_values_chunk, chunks)
+                    self._postprocess_pce_results_single_qoi_after_parallel_in_time_analysis(single_qoi_column)
+
+    def _prepare_chunks_pce(self, keyIter_chunk, compute_other_stat_besides_pce_surrogate):
+        chunks = {
+            'nodesChunks': [self.nodes] * len(keyIter_chunk),
+            'distChunks': [self.dist] * len(keyIter_chunk),
+            'weightsChunks': [self.weights] * len(keyIter_chunk),
+            'polynomial_expansionChunks': [self.polynomial_expansion] * len(keyIter_chunk),
+            'polynomial_norms_expansionChunks': [self.polynomial_norms] * len(keyIter_chunk),
+            'regressionChunks': [self.regression] * len(keyIter_chunk),
+            'compute_Sobol_t_Chunks': [self.compute_Sobol_t] * len(keyIter_chunk),
+            'compute_Sobol_m_Chunks': [self.compute_Sobol_m] * len(keyIter_chunk),
+            'compute_Sobol_m2_Chunks': [self.compute_Sobol_m2] * len(keyIter_chunk),
+            'store_qoi_data_in_stat_dict_Chunks': [self.store_qoi_data_in_stat_dict] * len(keyIter_chunk),
+            'store_gpce_surrogate_in_stat_dict_Chunks': [self.store_gpce_surrogate_in_stat_dict] * len(keyIter_chunk),
+            'save_gpce_surrogate_Chunks': [self.save_gpce_surrogate] * len(keyIter_chunk),
+            'compute_other_stat_besides_pce_surrogate_Chunks': [compute_other_stat_besides_pce_surrogate] * len(keyIter_chunk),
+            'dict_stat_to_compute_Chunks': [self.dict_stat_to_compute] * len(keyIter_chunk)
+        }
+        return chunks
+
+    def _compute_pce_statistic_single_qoi_parallel_in_time(
+        self, executor, single_qoi_column, keyIter_chunk, list_of_qoi_values_chunk, chunks):
+        print(f"{self.rank}: computation of statistics for qoi {single_qoi_column} started...")
+        solver_time_start = time.time()
+        if self.compute_kl_expansion_of_qoi and not self.compute_timewise_gpce_next_to_kl_expansion:
+            chunk_results_it = executor.map(
+                parallel_statistics.parallel_calc_stats_for_KL,
+                keyIter_chunk,
+                list_of_qoi_values_chunk,
+                chunks['weightsChunks'],
+                chunks['regressionChunks'],
+                chunks['store_qoi_data_in_stat_dict_Chunks']
+            )
+        else:
+            chunk_results_it = executor.map(
+                parallel_statistics.parallel_calc_stats_for_gPCE,
+                keyIter_chunk,
+                list_of_qoi_values_chunk,
+                chunks['distChunks'],
+                chunks['polynomial_expansionChunks'],
+                chunks['nodesChunks'],
+                chunks['weightsChunks'],
+                chunks['polynomial_norms_expansionChunks'],
+                chunks['regressionChunks'],
+                chunks['compute_Sobol_t_Chunks'],
+                chunks['compute_Sobol_m_Chunks'],
+                chunks['compute_Sobol_m2_Chunks'],
+                chunks['store_qoi_data_in_stat_dict_Chunks'],
+                chunks['store_gpce_surrogate_in_stat_dict_Chunks'],
+                chunks['save_gpce_surrogate_Chunks'],
+                chunks['compute_other_stat_besides_pce_surrogate_Chunks'],
+                chunks['dict_stat_to_compute_Chunks'],
+                chunksize=self.mpi_chunksize,
+                unordered=self.unordered
+            )
+        print(f"{self.rank}: computation for qoi {single_qoi_column} - waits for shutdown...")
+        sys.stdout.flush()
+        executor.shutdown(wait=True)
+        print(f"{self.rank}: computation for qoi {single_qoi_column} - shut down...")
+        sys.stdout.flush()
+
+        solver_time_end = time.time()
+        solver_time = solver_time_end - solver_time_start
+        print(f"solver_time for qoi {single_qoi_column}: {solver_time}")
+
+        self.chunk_results = list(chunk_results_it)
+    
+    def _postprocess_pce_results_single_qoi_after_parallel_in_time_analysis(self, single_qoi_column):
+        for chunk_result in self.chunk_results:
+            for result in chunk_result:
+                self._process_chunk_result_single_qoi_single_time_step(
+                    single_qoi_column, timestamp=result[0], result_dict=result[1])
+                if self.instantly_save_results_for_each_time_step:
+                    del result[1]
+        self._postprocess_pce_results_single_qoi(single_qoi_column)
+        del self.chunk_results
+
+    def _postprocess_pce_results_single_qoi(self, single_qoi_column):
+        if self.compute_kl_expansion_of_qoi and not self.instantly_save_results_for_each_time_step:
+            # TODO  - think how to allow over time computation of KL surrogate and generalized Sobol indices
+            eigenvalues, eigenvectors, f_kl_surrogate_dict, f_kl_surrogate_coefficients, Var_kl_approx \
+            = self.compute_kl_expansion_single_qoi(single_qoi_column)
+            # Generalized Sobol Indices (for now just for the final time-stamp)
+            if self.compute_generalized_sobol_indices:
+                fileName = self.workingDir / f"generalized_sobol_indices_{single_qoi_column}.pkl"
+                param_name_generalized_sobol_total_indices = utility.computing_generalized_sobol_total_indices_from_kl_expan(
+                    f_kl_surrogate_coefficients, self.polynomial_expansion, self.weights_time, self.labels, fileName, total_variance=Var_kl_approx)
+                print(f"INFO: computation of generalized S.S.I based on KL+gPCE finished...")
+                last_time_step = max(self.result_dict[single_qoi_column].keys())  #last_time_step = list(self.result_dict[single_qoi_column].keys())[-1]
+                for param_name in self.labels:
+                    self.result_dict[single_qoi_column][last_time_step][f"generalized_sobol_total_index_{param_name}"] = \
+                        param_name_generalized_sobol_total_indices[param_name]
+        else:
+            if self.compute_generalized_sobol_indices and not self.instantly_save_results_for_each_time_step:
+                fileName = self.workingDir / f"generalized_sobol_indices_{single_qoi_column}.pkl"
+                if self.compute_generalized_sobol_indices_over_time:
+                    utility.computing_generalized_sobol_total_indices_from_poly_expan_over_time(
+                        self.result_dict[single_qoi_column], 
+                        self.polynomial_expansion, self.weights_time, self.labels,
+                        fileName)
+                    print(f"INFO: computation of (over time) generalized S.S.I based on PCE finished...")
+                else:
+                    # the computation of the generalized Sobol indices is done only for the last time step
+                    utility.computing_generalized_sobol_total_indices_from_poly_expan(
+                        result_dict_statistics=self.result_dict[single_qoi_column], 
+                        polynomial_expansion=self.polynomial_expansion, 
+                        weights=self.weights_time, 
+                        param_names=self.labels,
+                        fileName=fileName)
+                    print(f"INFO: computation of (over time) generalized S.S.I based on PCE finished...")
+            if self.compute_covariance_matrix_in_time and not self.instantly_save_results_for_each_time_step:
+                covariance_matrix_loc = self.compute_covariance_matrix_in_time_single_qoi(single_qoi_column)
+                utility.save_covariance_matrix(covariance_matrix_loc, self.workingDir, single_qoi_column)
+                utility.plot_covariance_matrix(covariance_matrix_loc, self.workingDir, filname=f"covariance_matrix_{single_qoi_column}.png")
+                print(f"covariance_matrix for {single_qoi_column} is computed: {covariance_matrix_loc}")
+        self.save_print_plot_and_clear_result_dict_single_qoi(single_qoi_column)
 
     # =================================================================================================
 
@@ -1838,7 +1957,10 @@ class TimeDependentStatistics(ABC, Statistics):
                     self.result_dict[single_qoi_column][key]["qoi_values"] = qoi_values
                 
                 if self.regression:
-                    qoi_gPCE, qoi_coeff = cp.fit_regression(self.polynomial_expansion, self.nodes, qoi_values, retall=True)
+                    qoi_gPCE, qoi_coeff = cp.fit_regression(
+                        polynomials=self.polynomial_expansion, abscissas=self.nodes, evals=qoi_values, retall=True, 
+                        model=None  # classical least-square; one can use as well sklearn.linear_model.LinearRegression(fit_intercept=False)
+                    )
                     self.result_dict[single_qoi_column][key]['gpce_coeff'] = qoi_coeff
                     self._calc_stats_for_gPCE_single_qoi(
                         single_qoi_column, key, self.dist, qoi_gPCE, compute_other_stat_besides_pce_surrogate)
@@ -1994,14 +2116,14 @@ class TimeDependentStatistics(ABC, Statistics):
                             poly_normed=None, poly_rule=None, cross_truncation=1.0,
                             *args, **kwargs):
         """
-        This function groups resutl by time column and then iterates over all the qois of interest columns
+        This function groups result by time column and then iterates over all the qois of interest columns
         and updates the self.result_dict by adding the following entries:
         for each [single_qoi_column][key/single time step]
         if self.compute_kl_expansion_of_qoi is False or self.compute_timewise_gpce_next_to_kl_expansion is True:
             qoi_values[optional], gPCE[optional]
             gpce_coeff[optional]
             E
-            if compute_other_stat_besides_pce_surrogate is True:
+            if compute_other_stat_besides_pce_surrogate is True and relevan entries in :
                 Var, StdDev, Skew, Kurt, P10, P90, Sobol_t[optional], Sobol_m[optional], Sobol_m2[optional]
         if self.compute_kl_expansion_of_qoi is True:
             qoi_values[optional], E
@@ -2035,9 +2157,14 @@ class TimeDependentStatistics(ABC, Statistics):
                         self.result_dict[single_qoi_column][key]["E"] = np.dot(qoi_values, self.weights)
                 else:
                     if self.regression:
-                        qoi_gPCE, qoi_coeff = cp.fit_regression(self.polynomial_expansion, self.nodes, qoi_values, retall=True)
+                        qoi_gPCE, qoi_coeff = cp.fit_regression(
+                            polynomials=self.polynomial_expansion, abscissas=self.nodes, evals=qoi_values, retall=True, 
+                            model=None  # classical least-square; one can use as well sklearn.linear_model.LinearRegression(fit_intercept=False)
+                        )
                     else:
-                        qoi_gPCE, qoi_coeff = cp.fit_quadrature(self.polynomial_expansion, self.nodes, self.weights, qoi_values, retall=True)
+                        #qoi_gPCE, qoi_coeff = cp.fit_quadrature(self.polynomial_expansion, self.nodes, self.weights, qoi_values, retall=True)
+                        qoi_gPCE, qoi_coeff = cp.fit_quadrature(
+                            orth=self.polynomial_expansion, nodes=self.nodes, weights=self.weights, solves=qoi_values, retall=True, norms=self.polynomial_norms)
                     self.result_dict[single_qoi_column][key]['gpce_coeff'] = qoi_coeff
                     
                     self._calc_stats_for_gPCE_single_qoi(
@@ -2052,44 +2179,22 @@ class TimeDependentStatistics(ABC, Statistics):
             solver_time = solver_time_end - solver_time_start
             print(f"solver_time for qoi {single_qoi_column}: {solver_time}")
 
-            if self.compute_kl_expansion_of_qoi and not self.instantly_save_results_for_each_time_step:
-                eigenvalues, eigenvectors, f_kl_surrogate_dict, f_kl_surrogate_coefficients, Var_kl_approx \
-                    = self.compute_kl_expansion_single_qoi(single_qoi_column)
-                # Generalized Sobol Indices
-                if self.compute_generalized_sobol_indices:
-                    fileName = self.workingDir / f"generalized_sobol_indices_{single_qoi_column}.pkl"
-                    param_name_generalized_sobol_total_indices = utility.computing_generalized_sobol_total_indices_from_kl_expan(
-                        f_kl_surrogate_coefficients, self.polynomial_expansion, self.weights_time, self.labels, fileName, total_variance=Var_kl_approx)
-                    print(f"INFO: computation of generalized S.S.I based on KL+gPCE finished...")
-                    last_time_step = list(self.result_dict[single_qoi_column].keys())[-1]
-                    for param_name in self.labels:
-                        self.result_dict[single_qoi_column][last_time_step][f"generalized_sobol_total_index_{param_name}"] = \
-                            param_name_generalized_sobol_total_indices[param_name]
-            else:
-                if self.compute_generalized_sobol_indices and not self.instantly_save_results_for_each_time_step:
-                    fileName = self.workingDir / f"generalized_sobol_indices_{single_qoi_column}.pkl"
-                    if self.compute_generalized_sobol_indices_over_time:
-                        utility.computing_generalized_sobol_total_indices_from_poly_expan_over_time(
-                            self.result_dict[single_qoi_column], 
-                            self.polynomial_expansion, self.weights_time, self.labels,
-                            fileName)
-                        print(f"INFO: computation of (over time) generalized S.S.I based on PCE finished...")
-                    else:
-                        # the computation of the generalized Sobol indices is done only for the last time step
-                        utility.computing_generalized_sobol_total_indices_from_poly_expan(
-                            self.result_dict[single_qoi_column], 
-                            self.polynomial_expansion, self.weights_time, self.labels,
-                            fileName)
-                        print(f"INFO: computation of (over time) generalized S.S.I based on PCE finished...")
-                if self.compute_covariance_matrix_in_time and not self.instantly_save_results_for_each_time_step:
-                    covariance_matrix_loc = self.compute_covariance_matrix_in_time_single_qoi(single_qoi_column)
-                    utility.save_covariance_matrix(covariance_matrix_loc, self.workingDir, single_qoi_column)
-                    utility.plot_covariance_matrix(covariance_matrix_loc, self.workingDir, filname=f"covariance_matrix_{single_qoi_column}.png")
-                    print(f"covariance_matrix for {single_qoi_column} is computed: {covariance_matrix_loc}")
-
-            self.save_print_plot_and_clear_result_dict_single_qoi(single_qoi_column)
+            self._postprocess_pce_results_single_qoi(single_qoi_column)
 
     def _calc_stats_for_gPCE_single_qoi(self, single_qoi_column, key, dist, qoi_gPCE, compute_other_stat_besides_pce_surrogate=True):
+        """
+        Calculate statistics for a single quantity of interest (qoi) using gPCE surrogate.
+
+        Args:
+            single_qoi_column (str): The name of the single qoi column.
+            key (str): The timestamp key.
+            dist (chaospy.Distribution): The distribution of the qoi.
+            qoi_gPCE (chaospy.Poly): The gPCE surrogate model for the qoi.
+            compute_other_stat_besides_pce_surrogate (bool, optional): Flag to compute other statistics besides the gPCE surrogate. Defaults to True.
+
+        Returns:
+            None
+        """
         if qoi_gPCE is None:
             qoi_gPCE = self.qoi_gPCE
 
@@ -2241,6 +2346,8 @@ class TimeDependentStatistics(ABC, Statistics):
         This method can be called only after the self.result_dict is computed.
         It will populate a new column in self.samples.df_simulation_result
 
+        Note: This method modifies self.samples.df_simulation_result!
+
         Note: this is similar function to utility.add_centered_qoi_column_to_df_simulation_result
         """
         if self.groups is None:
@@ -2253,13 +2360,22 @@ class TimeDependentStatistics(ABC, Statistics):
                 mean = self.result_dict[single_qoi_column][key]['E']
                 self.samples.df_simulation_result.loc[self.groups[key].values, single_qoi_column_centered] = \
                 self.samples.df_simulation_result.loc[self.groups[key].values, single_qoi_column] - mean
-                # re-save the df_simulation_result after the centered data is added
-                if self.save_all_simulations:
-                    self.samples.save_all_simulations_to_file(self.workingDir)
             else:
                 raise Exception("[STAT ERROR] - Trying to compute centered data of the QoI, however, result_dict is missing")
+        # re-save the df_simulation_result after the centered data is added
+        # if self.save_all_simulations:
+        #     self.samples.save_simulation_results_to_file(self.workingDir)
 
     def center_output_single_qoi(self, single_qoi_column):
+        """
+        Centers the output for a single quantity of interest (QoI).
+
+        Args:
+            single_qoi_column (str): The name of the column representing the single QoI.
+
+        Returns:
+            numpy.ndarray: An array containing the centered output for the single QoI.
+        """
         centered_output = np.empty((self.numEvaluations, self.N_quad))
 
         single_qoi_column_centered = single_qoi_column + "_centered"
@@ -2268,15 +2384,25 @@ class TimeDependentStatistics(ABC, Statistics):
 
         grouped_by_index = self.samples.df_simulation_result.groupby([self.index_column_name,])
         groups_by_index = grouped_by_index.groups
-        # keyIter = list(groups_by_index.keys())  # list of all the model index runs that were performed and kept in the df_simulation_result
         index = 0
         for key, val_indices in groups_by_index.items():
-            # centered_output[int(key), :] = self.samples.df_simulation_result.loc[val_indices, single_qoi_column_centered].values
             centered_output[index, :] = self.samples.df_simulation_result.loc[val_indices, single_qoi_column_centered].values
             index += 1
+        # print(f"[DEBUGGIN - center_output_single_qoi centered_output.shape] - {centered_output.shape}")
         return centered_output
 
     def compute_centered_output(self):
+        """
+        Computes the centered output for each QOI column.
+
+        This method iterates over each QOI column in the list_qoi_column attribute and
+        computes the centered output for that column using the center_output_single_qoi method.
+
+        Populats self.centered_output variable
+        
+        Returns:
+            None
+        """
         for single_qoi_column in self.list_qoi_column:
             self.centered_output[single_qoi_column] = self.center_output_single_qoi(single_qoi_column)
 
@@ -2295,6 +2421,8 @@ class TimeDependentStatistics(ABC, Statistics):
                     covariance_matrix[s, c] = np.dot(self.weights, centered_output[:, c]*centered_output[:,s])
                 else:
                     raise ValueError(f"[STAT ERROR] - Unknown algorithm - {self.uq_method}")
+        # print(f"[DEBUGGIN  \
+        # def compute_covariance_matrix_in_time_based_on_centered_output(self, centered_output): - covariance_matrix.shape] - {covariance_matrix.shape}")
         return covariance_matrix
     
     def compute_covariance_matrix_in_time_single_qoi(self, single_qoi_column):
@@ -2321,10 +2449,10 @@ class TimeDependentStatistics(ABC, Statistics):
         utility.plot_covariance_matrix(covariance_matrix_loc, self.workingDir, filname=f"covariance_matrix_{single_qoi_column}.png")
         # 3.3 Solve Discretized (generalized) Eigenvalue Problem
         eigenvalues, eigenvectors = utility.solve_eigenvalue_problem(covariance_matrix_loc, self.weights_time)
-        print("Eigenvalues:\n", eigenvalues)
-        print("Eigenvectors:\n", eigenvectors)
-        print(f"DEBUGGING eigenvalues.shape - {eigenvalues.shape}")
-        print(f"DEBUGGING eigenvectors.shape - {eigenvectors.shape}")
+        # print("Eigenvalues:\n", eigenvalues)
+        # print("Eigenvectors:\n", eigenvectors)
+        # print(f"[DEBUGGING compute_kl_expansion_single_qoi eigenvalues.shape] - {eigenvalues.shape}")
+        # print(f"[DEBUGGING compute_kl_expansion_single_qoi eigenvectors.shape] - {eigenvectors.shape}")
         # Save Eigenvalues and eigenvactors
         fileName = f"eigenvalues_{single_qoi_column}.npy"
         fullFileName = os.path.abspath(os.path.join(str(self.workingDir), fileName))
@@ -2341,7 +2469,13 @@ class TimeDependentStatistics(ABC, Statistics):
         print(f"DEBUGGING - f_kl_eval_at_params.shape {f_kl_eval_at_params.shape}")
         # 3.5 PCE of the KL Expansion
         f_kl_surrogate_dict, f_kl_surrogate_coefficients = utility.pce_of_kl_expansion(
-            self.kl_expansion_order, self.polynomial_expansion, self.nodes, self.weights, f_kl_eval_at_params, regression=self.regression)
+            N_kl=self.kl_expansion_order, 
+            polynomial_expansion=self.polynomial_expansion, 
+            nodes=self.nodes, weights=self.weights, 
+            f_kl_eval_at_params=f_kl_eval_at_params, 
+            regression=self.regression,
+            polynomial_norms=self.polynomial_norms
+            )
         # # 3.6 Generalized Sobol Indices
         # if self.compute_generalized_sobol_indices:
         #     fileName = self.workingDir / f"generalized_sobol_indices_{single_qoi_column}.pkl"
@@ -2356,7 +2490,7 @@ class TimeDependentStatistics(ABC, Statistics):
         np.save(fullFileName, f_kl_surrogate_coefficients)
         f_kl_surrogate_df = pd.DataFrame.from_dict(f_kl_surrogate_dict, orient='index')
         f_kl_surrogate_df.to_pickle(
-            os.path.abspath(os.path.join(str(self.workingDir), "f_kl_surrogate_df.pkl")), compression="gzip")
+            os.path.abspath(os.path.join(str(self.workingDir), f"f_kl_surrogate_df_{single_qoi_column}.pkl")), compression="gzip")
         return eigenvalues, eigenvectors, f_kl_surrogate_dict, f_kl_surrogate_coefficients, Var_kl_approx
 
     # =================================================================================================
@@ -2480,7 +2614,26 @@ class TimeDependentStatistics(ABC, Statistics):
         This function plots the statistics of a single QoI.
         It is more relevant that the plotResults function, which plots all the QoIs.
         """
-        pass
+        # TODO - This might be a memory problem, why not just self.result_dict[single_qoi_column]!
+        if dict_time_vs_qoi_stat is None:
+            dict_time_vs_qoi_stat = self.result_dict[single_qoi_column]
+
+        if fileName == "":
+            fileName = single_qoi_column
+
+        single_fileName = self.generateFileName(fileName=fileName, fileNameIdent=".html",
+                                                directory=directory, fileNameIdentIsFullName=fileNameIdentIsFullName)
+
+        fig = self._plotStatisticsDict_plotly_single_qoi(
+            single_qoi_column=single_qoi_column, 
+            dict_time_vs_qoi_stat=dict_time_vs_qoi_stat,
+            filename=single_fileName, display=display,
+            dict_what_to_plot=dict_what_to_plot, 
+            **kwargs
+        )
+        if display:
+            fig.show()
+        print(f"[STAT INFO] plotResults for QoI-{single_qoi_column} function is done!")
 
     def _plotStatisticsDict_plotly_single_qoi(self, single_qoi_column, dict_time_vs_qoi_stat=None, unalatered=False,
                                               measured=False, forcing=False, recalculateTimesteps=False,
@@ -2582,6 +2735,15 @@ class TimeDependentStatistics(ABC, Statistics):
     # =================================================================================================
 
     def extract_mean_time_series(self):
+        """
+        Extracts the mean time series for each quantity of interest (QoI).
+
+        Raises:
+            Exception: If self.result_dict is None, indicating that the statistics need to be calculated first.
+
+        Returns:
+            pd.DataFrame or None: A DataFrame containing the mean time series for each QoI, or None if no QoI is available.
+        """
         if self.result_dict is None:
             raise Exception('[STAT INFO] extract_mean_time_series - self.result_dict is None. '
                             'Calculate the statistics first!')
@@ -2603,6 +2765,17 @@ class TimeDependentStatistics(ABC, Statistics):
             self.qoi_mean_df = None
 
     def create_df_from_statistics_data(self, uq_method="sc", compute_measured_normalized_data=False):
+        """
+        Create a DataFrame from the statistics data.
+
+        Args:
+            uq_method (str, optional): The uncertainty quantification method. Defaults to "sc".
+            compute_measured_normalized_data (bool, optional): Flag to compute measured normalized data. Defaults to False.
+
+        Returns:
+            None
+
+        """
         list_of_single_qoi_dfs = []
         for single_qoi_column in self.list_qoi_column:
             df_statistics_single_qoi = self.create_df_from_statistics_data_single_qoi(
@@ -2629,6 +2802,15 @@ class TimeDependentStatistics(ABC, Statistics):
             return
 
     def merge_df_statistics_data_with_forcing_data(self, **kwargs):
+        """
+        Merges the statistics data with the forcing data based on the time column.
+
+        Args:
+            **kwargs: Additional keyword arguments to be passed to the `get_forcing_data` method.
+
+        Returns:
+            DataFrame: The merged DataFrame containing the statistics data and the measured forcing data.
+        """
         if not self.forcing_data_fetched or self.forcing_df is None or self.forcing_df.empty:
             self.get_forcing_data(time_column_name=self.time_column_name, **kwargs)
         if self.df_statistics is None or self.df_statistics.empty:
@@ -2639,21 +2821,37 @@ class TimeDependentStatistics(ABC, Statistics):
         return df_statistics_and_measured
 
     def describe_df_statistics(self):
-        self._check_if_df_statistics_is_computed(recompute_if_not=True)
-        for single_qoi in self.list_qoi_column:
-            df_statistics_single_qoi_subset = self.df_statistics.loc[
-                self.df_statistics['qoi'] == single_qoi]
-            print(f"{single_qoi}\n\n")
-            print(df_statistics_single_qoi_subset.describe(include=np.number))
+            """
+            Prints descriptive statistics for each QOI in the dataframe.
+
+            This method computes and prints descriptive statistics for each QOI (Quantity of Interest)
+            in the dataframe `df_statistics`. It first checks if the statistics have been computed,
+            and if not, it recomputes them. Then, it iterates over each QOI, subsets the dataframe
+            for that QOI, and prints the descriptive statistics using the `describe` method.
+
+            Note: This method assumes that the dataframe `df_statistics` has a column named 'qoi'
+            which contains the QOI values.
+
+            Returns:
+                None
+            """
+            self._check_if_df_statistics_is_computed(recompute_if_not=True)
+            for single_qoi in self.list_qoi_column:
+                df_statistics_single_qoi_subset = self.df_statistics.loc[
+                    self.df_statistics['qoi'] == single_qoi]
+                print(f"{single_qoi}\n\n")
+                print(df_statistics_single_qoi_subset.describe(include=np.number))
 
     def create_df_from_sensitivity_indices(self, si_type="Sobol_t", uq_method="sc",
                                            compute_measured_normalized_data=False):
         """
-        Creates one big Padans.DataFrame for all QoIs
-        :param compute_measured_normalized_data:
-        :param si_type:
-        :param uq_method:
-        :return:
+        Creates one big Pandas DataFrame for all QoIs.
+
+        :param si_type: The type of sensitivity indices to compute. 
+        Should be one of "Sobol_t", "Sobol_m", or "Sobol_m2". Defaults to "Sobol_t". (default: "Sobol_t").
+        :param uq_method: The uncertainty quantification method to use (default: "sc").
+        :param compute_measured_normalized_data: Whether to compute measured normalized data (default: False).
+        :return: The combined DataFrame containing sensitivity indices for all QoIs.
         """
         si_df = None
         list_of_single_qoi_dfs = []
@@ -2673,6 +2871,29 @@ class TimeDependentStatistics(ABC, Statistics):
 
     def create_df_from_statistics_data_single_qoi(self, qoi_column, uq_method="sc",
                                                   compute_measured_normalized_data=False):
+        """
+        Creates a pandas DataFrame from the statistics data for a single quantity of interest (qoi).
+
+        Args:
+            qoi_column (str): The column name of the quantity of interest.
+            uq_method (str, optional): The uncertainty quantification method. Defaults to "sc".
+            compute_measured_normalized_data (bool, optional): Flag indicating whether to compute normalized measured data. Defaults to False.
+
+        Returns:
+            pandas.DataFrame: The DataFrame containing the statistics data for the specified qoi.
+
+        Raises:
+
+        Note:
+            This method retrieves the statistics data from the result_dict attribute and constructs a DataFrame
+            with columns representing different statistical measures such as mean, standard deviation, percentiles, etc.
+            The DataFrame also includes the time column and the qoi column.
+
+            To be added - If measured data is available and compute_measured_normalized_data is True, the method computes
+            the normalized measured data and adds it as a column in the DataFrame.
+
+            If the unaltered_computed flag is True, the plan is to add it to the final df
+        """
         # try:
         #     self.result_dict[qoi_column]
         # except KeyError as e:
@@ -2698,6 +2919,10 @@ class TimeDependentStatistics(ABC, Statistics):
         if "gPCE" in self.result_dict[qoi_column][keyIter[0]]:
             list_of_columns.append([self.result_dict[qoi_column][key]["gPCE"] for key in keyIter])
             list_of_columns_names.append("gPCE")
+        if "Var" in self.result_dict[qoi_column][keyIter[0]]:
+            std_time_series = [self.result_dict[qoi_column][key]["Var"] for key in keyIter]
+            list_of_columns.append(std_time_series)
+            list_of_columns_names.append("Var")
         if "StdDev" in self.result_dict[qoi_column][keyIter[0]]:
             std_time_series = [self.result_dict[qoi_column][key]["StdDev"] for key in keyIter]
             list_of_columns.append(std_time_series)
@@ -2754,6 +2979,8 @@ class TimeDependentStatistics(ABC, Statistics):
         if 'E' in df_statistics_single_qoi.columns and 'StdDev' in df_statistics_single_qoi.columns:
             df_statistics_single_qoi["E_minus_std"] = df_statistics_single_qoi['E'] - df_statistics_single_qoi['StdDev']
             df_statistics_single_qoi["E_plus_std"] = df_statistics_single_qoi['E'] + df_statistics_single_qoi['StdDev']
+            df_statistics_single_qoi["E_minus_2std"] = df_statistics_single_qoi['E'] - 2*df_statistics_single_qoi['StdDev']
+            df_statistics_single_qoi["E_plus_2std"] = df_statistics_single_qoi['E'] + 2*df_statistics_single_qoi['StdDev']
 
         if self.measured_fetched and self.df_measured is not None:
             if qoi_column in list(self.df_measured["qoi"].unique()):
@@ -2783,8 +3010,27 @@ class TimeDependentStatistics(ABC, Statistics):
     def create_df_from_sensitivity_indices_single_qoi(self, qoi_column, si_type="Sobol_t", uq_method="sc",
                                                       compute_measured_normalized_data=False):
         """
-        si_type should be: Sobol_t, Sobol_m or Sobol_m2
-        :param compute_measured_normalized_data:
+        Creates a DataFrame from sensitivity indices for a single quantity of interest (QoI).
+
+        Args:
+            qoi_column (str): The column name of the quantity of interest.
+            si_type (str, optional): The type of sensitivity index to compute. 
+                Should be one of "Sobol_t", "Sobol_m", or "Sobol_m2". Defaults to "Sobol_t".
+            uq_method (str, optional): The uncertainty quantification method. Defaults to "sc".
+            compute_measured_normalized_data (bool, optional): Whether to compute normalized measured data. 
+                Defaults to False.
+
+        Returns:
+            pandas.DataFrame: The DataFrame containing the sensitivity indices.
+
+        Raises:
+
+        Note:
+            - The sensitivity indices are computed based on the result_dict, which should contain the necessary data.
+            - The result_dict should have the sensitivity indices computed for the specified qoi_column and si_type.
+            - If the sensitivity indices are not computed for the specified qoi_column and si_type, 
+              the method returns None.
+
         """
         # try:
         #     self.result_dict[qoi_column]
@@ -2850,6 +3096,23 @@ class TimeDependentStatistics(ABC, Statistics):
         return si_df
 
     def plot_heatmap_si_single_qoi(self, qoi_column, si_df=None, si_type="Sobol_t", uq_method="sc"):
+        """
+        Plots a heatmap of sensitivity indices for a single quantity of interest (QoI).
+
+        Args:
+            qoi_column (str): The column name of the quantity of interest.
+            si_df (pandas.DataFrame, optional): The sensitivity indices DataFrame. If not provided, it will be created using
+                the `create_df_from_sensitivity_indices_single_qoi` method.
+            si_type (str, optional): The type of sensitivity indices to use. Defaults to "Sobol_t".
+            uq_method (str, optional): The uncertainty quantification method. Defaults to "sc".
+
+        Returns:
+            plotly.graph_objects.Figure: The heatmap figure.
+
+        Raises:
+            None
+
+        """
         if si_df is None:
             si_df = self.create_df_from_sensitivity_indices_single_qoi(qoi_column, si_type, uq_method)
 
@@ -2861,8 +3124,6 @@ class TimeDependentStatistics(ABC, Statistics):
         if si_df.index.name != self.time_column_name:
             si_df.set_index(self.time_column_name, inplace=True)
             reset_index_at_the_end = True
-
-        # si_df_temp = si_df.loc[si_df['qoi'] == qoi_column]
 
         si_columns_to_plot = [x for x in si_df.columns.tolist() if x != 'measured' \
                               and x != 'measured_norm' and x != 'qoi']
@@ -2885,14 +3146,20 @@ class TimeDependentStatistics(ABC, Statistics):
         return fig
 
     def plot_si_indices_over_time_single_qoi(self, qoi_column, si_type="Sobol_t", uq_method="sc"):
+        """
+        Plots the sensitivity indices over time for a single quantity of interest (QoI).
+
+        Args:
+            qoi_column (str): The column name of the quantity of interest.
+            si_type (str, optional): The type of sensitivity index to plot. Defaults to "Sobol_t".
+            uq_method (str, optional): The uncertainty quantification method. Defaults to "sc".
+
+        Returns:
+            go.Figure: The plot figure object.
+        """
         fig = go.Figure()
         keyIter = list(self.pdTimesteps)  # self.timesteps (?)
         for i in range(len(self.labels)):
-            # if uq_method == "saltelli":
-            #     fig.add_trace(
-            #         go.Scatter(x=self.pdTimesteps, y=[self.result_dict[key][si_type][i][0] for key in keyIter],
-            #                    name=self.labels[i], legendgroup=self.labels[i], line_color=colors.COLORS[i]))
-            # else:
             try:
                 fig.add_trace(
                     go.Scatter(x=self.pdTimesteps, y=[self.result_dict[qoi_column][key][si_type][i] for key in keyIter],
