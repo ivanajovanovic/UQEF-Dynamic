@@ -6,48 +6,17 @@ from plotly.subplots import make_subplots
 from uqef_dynamic.utils import colors
 from uqef_dynamic.models.time_dependent_baseclass.time_dependent_statistics import TimeDependentStatistics
 
-class simpleOscilatorStatistics(TimeDependentStatistics):
+class simpleOscillatorStatistics(TimeDependentStatistics):
     def __init__(self, configurationObject, workingDir=None, *args, **kwargs):
         super().__init__(configurationObject, workingDir, *args, **kwargs)
-
-    def prepare_for_plotting(self, timestep=-1, display=False,
-                    fileName="", fileNameIdent="", directory="./",
-                    fileNameIdentIsFullName=False, safe=True, **kwargs):
-        pass
 
     def plotResults_single_qoi(self, single_qoi_column, dict_time_vs_qoi_stat=None, timestep=-1, display=False, fileName="",
                                fileNameIdent="", directory="./", fileNameIdentIsFullName=False, safe=True,
                                dict_what_to_plot=None, **kwargs):
-        """
-        This function plots the statistics of a single QoI.
-        It is more relevant that the plotResults function, which plots all the QoIs.
-        """
-        if dict_time_vs_qoi_stat is None:
-            dict_time_vs_qoi_stat = self.result_dict[single_qoi_column]
-
-        if fileName == "":
-            fileName = single_qoi_column
-
-        single_fileName = self.generateFileName(fileName=fileName, fileNameIdent=".html",
-                                                directory=directory, fileNameIdentIsFullName=fileNameIdentIsFullName)
-
-        fig = self._plotStatisticsDict_plotly_single_qoi(single_qoi_column=single_qoi_column,
-                                                         dict_time_vs_qoi_stat=dict_time_vs_qoi_stat,
-                                                         filename=single_fileName, display=display,
-                                                         dict_what_to_plot=dict_what_to_plot, **kwargs)
-        if display:
-            fig.show()
-        print(f"[STAT INFO] plotResults for QoI-{single_qoi_column} function is done!")
-
-
-    def plotResults(self, timestep=-1, display=False, fileName="", fileNameIdent="", directory="./",
-                    fileNameIdentIsFullName=False, safe=True, dict_what_to_plot=None, **kwargs):
-        """
-        This function plots the statistics of a single, or multiple, QoI.
-        Thake a look at the plotResults_single_qoi function for more details.
-        """
-        pass
-
+        super().plotResults_single_qoi(single_qoi_column, dict_time_vs_qoi_stat=dict_time_vs_qoi_stat, timestep=timestep,
+                                        display=display, fileName=fileName, fileNameIdent=fileNameIdent, directory=directory,
+                                        fileNameIdentIsFullName=fileNameIdentIsFullName, safe=safe, dict_what_to_plot=dict_what_to_plot, **kwargs)
+                                        
     def _plotStatisticsDict_plotly_single_qoi(self, single_qoi_column, dict_time_vs_qoi_stat=None, 
                                               window_title='Forward UQ & SA', filename="sim-plotly.html", display=False,
                                               dict_what_to_plot=None, **kwargs):
@@ -113,13 +82,6 @@ class simpleOscilatorStatistics(TimeDependentStatistics):
                           row=starting_row, col=1)
         dict_plot_rows["qoi"] = starting_row
         starting_row += 1
-
-        # fig.add_trace(go.Scatter(x=pdTimesteps,
-        #                          y=[dict_time_vs_qoi_stat[key]["StdDev"] for key in keyIter],
-        #                          name='std. dev', line_color='darkviolet', mode='lines'),
-        #               row=starting_row, col=1)
-        # dict_plot_rows["StdDev"] = starting_row
-        # starting_row += 1
 
         if "StdDev" in dict_time_vs_qoi_stat[keyIter[0]] and dict_what_to_plot.get("StdDev", False):
             fig.add_trace(go.Scatter(x=pdTimesteps,
@@ -228,7 +190,7 @@ class simpleOscilatorStatistics(TimeDependentStatistics):
         fig.update_layout(title_text=window_title)
         # fig.update_layout(xaxis=dict(type="date"))
 
-        print(f"[SIMPLE OSCILATOR STAT INFO] _plotStatisticsDict_plotly function for Qoi-{single_qoi_column} is almost over, just to save the plot!")
+        print(f"[Simple Oscillator STAT INFO] _plotStatisticsDict_plotly function for Qoi-{single_qoi_column} is almost over, just to save the plot!")
 
         # filename = pathlib.Path(filename)
         plot(fig, filename=filename, auto_open=display)

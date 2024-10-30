@@ -21,6 +21,10 @@ class pybammStatistics(time_dependent_statistics.TimeDependentStatistics):
     def plotResults_single_qoi(self, single_qoi_column, dict_time_vs_qoi_stat=None, timestep=-1, display=False, fileName="",
                                fileNameIdent="", directory="./", fileNameIdentIsFullName=False, safe=True,
                                dict_what_to_plot=None, **kwargs):
+        # super().plotResults_single_qoi(single_qoi_column, dict_time_vs_qoi_stat=dict_time_vs_qoi_stat, timestep=timestep,
+        #                             display=display, fileName=fileName, fileNameIdent=fileNameIdent, directory=directory,
+        #                             fileNameIdentIsFullName=fileNameIdentIsFullName, safe=safe, dict_what_to_plot=dict_what_to_plot, **kwargs)
+                    
         if dict_time_vs_qoi_stat is None:
             dict_time_vs_qoi_stat = self.result_dict[single_qoi_column]
 
@@ -107,13 +111,6 @@ class pybammStatistics(time_dependent_statistics.TimeDependentStatistics):
                           row=starting_row, col=1)
         dict_plot_rows["qoi"] = starting_row
         starting_row += 1
-
-        # fig.add_trace(go.Scatter(x=pdTimesteps,
-        #                          y=[dict_time_vs_qoi_stat[key]["StdDev"] for key in keyIter],
-        #                          name='std. dev', line_color='darkviolet', mode='lines'),
-        #               row=starting_row, col=1)
-        # dict_plot_rows["StdDev"] = starting_row
-        # starting_row += 1
 
         if "StdDev" in dict_time_vs_qoi_stat[keyIter[0]] and dict_what_to_plot.get("StdDev", False):
             fig.add_trace(go.Scatter(x=pdTimesteps,
