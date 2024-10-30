@@ -44,17 +44,17 @@ if local_debugging:
     uqsim.args.uncertain = "all"
     uqsim.args.chunksize = 1
 
-    uqsim.args.uq_method = "sc"  # "sc" | "saltelli" | "mc" | "ensemble"
+    uqsim.args.uq_method = "mc"  # "sc" | "saltelli" | "mc" | "ensemble"
     
-    uqsim.args.mc_numevaluations = 343
+    uqsim.args.mc_numevaluations = 291
     uqsim.args.sampling_rule = "halton"  # "random" | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
     
-    uqsim.args.sc_q_order = 6 # 7 8 9 
-    uqsim.args.sc_p_order = 7  # 3, 3, 4 5, 6, 8
+    uqsim.args.sc_q_order = 7 # 7 8 9 
+    uqsim.args.sc_p_order = 9  # 3, 3, 4 5, 6, 8
     uqsim.args.sc_quadrature_rule = "g"  # "p" "genz_keister_24" "leja" "clenshaw_curtis"
 
     uqsim.args.read_nodes_from_file = False
-    l = 6 # 10
+    l = 7 # 10
     path_to_file = pathlib.Path("/work/ga45met/UQ-SG-Analysis/sparse_grid_nodes_weights")
     uqsim.args.parameters_file = path_to_file / f"KPU_d3_l{l}.asc" # f"KPU_d7_l{l}.asc"
     uqsim.args.parameters_setup_file = None
@@ -62,12 +62,12 @@ if local_debugging:
     uqsim.args.sc_poly_rule = "three_terms_recurrence"  # "gram_schmidt" | "three_terms_recurrence" | "cholesky"
     uqsim.args.sc_poly_normed = True  # True
     uqsim.args.sc_sparse_quadrature = False  # False
-    uqsim.args.regression = False
-    uqsim.args.cross_truncation = 0.7
+    uqsim.args.regression = True
+    uqsim.args.cross_truncation = 1.0
 
     uqsim.args.inputModelDir = None
     uqsim.args.sourceDir = None
-    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/work/ga45met", "ishigami_runs", "simulations_sep_2024", 'sc_full_p7_q6_ct07'))
+    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/work/ga45met", "ishigami_runs", "simulations_sep_2024", 'sc_full_p9_291_regression'))
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
     uqsim.args.config_file = '/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic/data/configurations/configuration_ishigami.json'
 
@@ -191,13 +191,13 @@ if uqsim.is_master():
 
 # save the dictionary with the arguments - once before the simulation
 if uqsim.is_master():
-    argsFileName = os.path.abspath(os.path.join(uqsim.args.outputResultDir, "uqsim_args.pkl"))
+    argsFileName = os.path.abspath(os.path.join(uqsim.args.outputResultDir, utility.ARGS_FILE))
     with open(argsFileName, 'wb') as handle:
         pickle.dump(uqsim.args, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 # save initially configurationObject if program breaks during simulation
 if uqsim.is_master():
-    fileName = pathlib.Path(uqsim.args.outputResultDir) / "configurationObject"
+    fileName = pathlib.Path(uqsim.args.outputResultDir) / utility.CONFIGURATION_OBJECT_FILE
     with open(fileName, 'wb') as f:
         dill.dump(uqsim.configuration_object, f)
 
@@ -217,7 +217,7 @@ time_model_simulations = end_time_model_simulations - start_time_model_simulatio
 #####################################
 
 if uqsim.is_master():
-    fileName = pathlib.Path(uqsim.args.outputResultDir) / "configurationObject"
+    fileName = pathlib.Path(uqsim.args.outputResultDir) / utility.CONFIGURATION_OBJECT_FILE
     with open(fileName, 'wb') as f:
         dill.dump(uqsim.configuration_object, f)
 
@@ -237,7 +237,7 @@ uqsim.save_statistics()
 
 # save the dictionary with the arguments once again
 if uqsim.is_master():
-    time_infoFileName = os.path.abspath(os.path.join(uqsim.args.outputResultDir, f"time_info.txt"))
+    time_infoFileName = os.path.abspath(os.path.join(uqsim.args.outputResultDir,utility.TIME_INFO_FILE))
     with open(time_infoFileName, 'w') as fp:
         fp.write(f'number_full_model_runs: {number_full_model_evaluations}\n')
         fp.write(f'time_model_simulations: {time_model_simulations}\n')
