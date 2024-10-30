@@ -32,128 +32,107 @@ workingDir = pathlib.Path('/work/ga45met/mnt/linux_cluster_scratch_hbv_2/hbv_uq_
 # 6D gPCE l=, p=3 Q_cms 2006- 173
 workingDir = pathlib.Path('/work/ga45met/mnt/linux_cluster_scratch_hbv_2/hbv_uq_cm2.0173/')
 
-nodes_file = workingDir / "nodes.simnodes.zip"
-parameters_file = workingDir / "parameters.pkl"
-args_file = workingDir / 'uqsim_args.pkl'
-configuration_object_file = workingDir / "configurationObject"
-
+#
+dict_output_file_paths = utility.get_dict_with_output_file_paths_based_on_workingDir(workingDir)
+args_file = dict_output_file_paths.get("args_file")
+configuration_object_file = dict_output_file_paths.get("configuration_object_file")
+nodes_file = dict_output_file_paths.get("nodes_file")
+parameters_file = dict_output_file_paths.get("parameters_file")
+time_info_file = dict_output_file_paths.get("time_info_file")
+df_index_parameter_file = dict_output_file_paths.get("df_index_parameter_file")
+df_index_parameter_gof_file = dict_output_file_paths.get("df_index_parameter_gof_file")
+df_simulations_file = dict_output_file_paths.get("df_simulations_file")
+df_state_file = dict_output_file_paths.get("df_state_file")
 # Files produced by Samples class
-df_all_simulations_file = workingDir / "df_all_simulations.pkl"
-df_all_index_parameter_gof_file = workingDir / "df_all_index_parameter_gof_values.pkl"
-df_all_index_parameter_file = workingDir / "df_all_index_parameter_values.pkl"
-df_time_varying_grad_analysis_file = workingDir / "df_time_varying_grad_analysis.pkl"
-df_time_aggregated_grad_analysis_file = workingDir / "df_time_aggregated_grad_analysis.pkl"
-
+df_time_varying_grad_analysis_file = dict_output_file_paths.get("df_time_varying_grad_analysis_file")
+df_time_aggregated_grad_analysis_file = dict_output_file_paths.get("df_time_aggregated_grad_analysis_file")
 # Files produced by UQEF.Statistics and tatistics
-statistics_dictionary_file = workingDir / "statistics_dictionary_qoi_Value.pkl"
 
 # Active Subspaces related files
-dict_of_approx_matrix_c_file = workingDir / "dict_of_approx_matrix_c.pkl"
-dict_of_matrix_c_eigen_decomposition_file = workingDir / "dict_of_matrix_c_eigen_decomposition.pkl"
+dict_approx_matrix_c_file = dict_output_file_paths.get("dict_approx_matrix_c_file")
+dict_matrix_c_eigen_decomposition_file = dict_output_file_paths.get("dict_matrix_c_eigen_decomposition_file")
 
-output_stat_graph_filename = workingDir / "sim-plotly.html"
-output_stat_graph_filename = str(output_stat_graph_filename)
-
-# Sepcific run related files, might not exist, depending on the configuration
-flux_df_path = workingDir / 'flux_df_0.pkl'
-gof_df_path = workingDir / 'gof_0.pkl'
-parameters_dict_path = workingDir / 'parameters_HBVSASK_run_0.pkl'
-
-
-def update_output_file_paths_based_on_workingDir(workingDir):
-    global nodes_file, parameters_file, args_file, configuration_object_file, \
-        df_all_simulations_file, df_all_index_parameter_gof_file, df_all_index_parameter_file, \
-        df_time_varying_grad_analysis_file, df_time_aggregated_grad_analysis_file, \
-        statistics_dictionary_file, dict_of_approx_matrix_c_file, dict_of_matrix_c_eigen_decomposition_file, \
-        output_stat_graph_filename
-
-    nodes_file = workingDir / "nodes.simnodes.zip"
-    parameters_file = workingDir / "parameters.pkl"
-    args_file = workingDir / 'uqsim_args.pkl'
-    configuration_object_file = workingDir / "configurationObject"
-
-    # Files produced by Samples class
-    df_all_simulations_file = workingDir / "df_all_simulations.pkl"
-    df_all_index_parameter_gof_file = workingDir / "df_all_index_parameter_gof_values.pkl"
-    df_all_index_parameter_file = workingDir / "df_all_index_parameter_values.pkl"
-    df_time_varying_grad_analysis_file = workingDir / "df_time_varying_grad_analysis.pkl"
-    df_time_aggregated_grad_analysis_file = workingDir / "df_time_aggregated_grad_analysis.pkl"
-
-    # Files produced by UQEF.Statistics and tatistics
-    statistics_dictionary_file = workingDir / "statistics_dictionary_qoi_Value.pkl"
-
-    # Active Subspaces related files
-    dict_of_approx_matrix_c_file = workingDir / "dict_of_approx_matrix_c.pkl"
-    dict_of_matrix_c_eigen_decomposition_file = workingDir / "dict_of_matrix_c_eigen_decomposition.pkl"
-
-    output_stat_graph_filename = workingDir / "sim-plotly.html"
-    output_stat_graph_filename = str(output_stat_graph_filename)
-
-    # Sepcific run related files, might not exist, depending on the configuration
-    flux_df_path = workingDir / 'flux_df_0.pkl'
-    gof_df_path = workingDir / 'gof_0.pkl'
-    parameters_dict_path = workingDir / 'parameters_HBVSASK_run_0.pkl'
-
-
-def update_output_file_paths_for_specific_model_run(workingDir, index_run=0):
-    global flux_df_path, gof_df_path, parameters_dict_path
-    flux_df_path = workingDir / f'flux_df_{index_run}.pkl'
-    gof_df_path = workingDir / f'gof_{index_run}.pkl'
-    parameters_dict_path = workingDir / f'parameters_HBVSASK_run_{index_run}.pkl'
-
-
-update_output_file_paths_based_on_workingDir(workingDir)
-update_output_file_paths_for_specific_model_run(workingDir, index_run=0)
+# statistics_dictionary_file = utility.get_dict_with_qoi_name_specific_output_file_paths_based_on_workingDir(\
+    # workingDir, qoi_string=qoi_string)
+# flux_df_path = None
+# gof_df_path = None
+# parameters_dict_path = None
+# def update_output_file_paths_for_specific_model_run(workingDir, index_run=0):
+#     # Sepcific run related files, might not exist, depending on the configuration
+#     global flux_df_path, gof_df_path, parameters_dict_path
+#     flux_df_path = workingDir / f'flux_df_{index_run}.pkl'
+#     gof_df_path = workingDir / f'gof_{index_run}.pkl'
+#     parameters_dict_path = workingDir / f'parameters_HBVSASK_run_{index_run}.pkl'
+# update_output_file_paths_for_specific_model_run(workingDir, index_run=0)
 
 # Reading Save Data
-with open(configuration_object_file, 'rb') as f:
-    configurationObject = dill.load(f)
-# configurationObject
+# Load the configuration object
+configurationObject = utility.load_configuration_object(workingDir)
+print("configurationObject: ", configurationObject)
 simulation_settings_dict = utility.read_simulation_settings_from_configuration_object(configurationObject)
-# simulation_settings_dict
-with open(args_file, 'rb') as f:
-    uqsim_args = pickle.load(f)
-uqsim_args_dict = vars(uqsim_args)
+
+# Load the UQSim args dictionary
+uqsim_args_dict = utility.load_uqsim_args_dict(args_file)
+print("INFO: uqsim_args_dict: ", uqsim_args_dict)
+model = uqsim_args_dict["model"]
 
 # Reading Nodes and Parameters
 with open(nodes_file, 'rb') as f:
-#     simulationNodes = dill.load(f)
     simulationNodes = pickle.load(f)
-# simulationNodes
+print("INFO: simulationNodes: ", simulationNodes)
+dim = simulationNodes.nodes.shape[0]
+model_runs = simulationNodes.nodes.shape[1]
+distStandard = simulationNodes.joinedStandardDists
+dist = simulationNodes.joinedDists
+print(f"INFO: model-{model}; dim - {dim}; model_runs - {model_runs}")
 print(simulationNodes.nodes.shape)
 print(simulationNodes.parameters.shape)
 
 # Reading Prameters and GoF Computed Data
-df_index_parameter = pd.read_pickle(df_all_index_parameter_file, compression="gzip")
-# params_list = LarsimUQPostprocessing._get_parameter_columns_df_index_parameter_gof(
-#     df_index_parameter_gof)
-df_index_parameter_gof = pd.read_pickle(df_all_index_parameter_gof_file, compression="gzip")
-params_list = utility._get_parameter_columns_df_index_parameter_gof(
-    df_index_parameter_gof)
-gof_list = utility._get_gof_columns_df_index_parameter_gof(
-    df_index_parameter_gof)
+if df_index_parameter_file.is_file():
+    df_index_parameter = pd.read_pickle(df_index_parameter_file, compression="gzip")
+    params_list = utility._get_parameter_columns_df_index_parameter_gof(
+        df_index_parameter)
+    print(f"INFO: df_index_parameter - {df_index_parameter}")
+else:
+    params_list = []
+    for single_param in configurationObject["parameters"]:
+        params_list.append(single_param["name"])
+print(f"INFO: params_list - {params_list} (note - all the parameters)")
+
+if df_index_parameter_gof_file.is_file():
+    df_index_parameter_gof = pd.read_pickle(df_index_parameter_gof_file, compression="gzip")
+    gof_list = utility._get_gof_columns_df_index_parameter_gof(
+        df_index_parameter_gof)
+    print(f"INFO: df_index_parameter_gof - {df_index_parameter_gof}")
+    print(f"INFO: gof_list - {gof_list}")
+else:
+    gof_list = None
 
 ## Nodes & Parameter  in a DataFrame -  after transformation
 df_nodes = utility.get_df_from_simulationNodes(simulationNodes, nodes_or_paramters="nodes", params_list=params_list)
 df_nodes_params = utility.get_df_from_simulationNodes(simulationNodes, nodes_or_paramters="parameters",  params_list=params_list)
 
 # Reading Saved Simulations
-## Note: This migh be a huge file, especially for MC/Saltelli kind of simulations
-# df_simulation_result = pd.read_pickle(df_all_simulations_file, compression="gzip")
-# df_simulation_result
 # or in case of a big simulation, skip reading df_simulation_result
-df_simulation_result = None
+read_all_saved_simulations_file = False
+if read_all_saved_simulations_file and df_simulations_file.is_file():
+    # Reading Saved Simulations - Note: This migh be a huge file,
+    # especially for MC/Saltelli kind of simulations
+    df_simulation_result = pd.read_pickle(df_simulations_file, compression="gzip")
+else:
+    df_simulation_result = None
 
 # Re-create Statistics Object and DataFrame Object That contains all the Statistics Data
 statisticsObject = create_stat_object.create_statistics_object(
-    configurationObject, uqsim_args_dict, workingDir, model="hbvsask")
+    configuration_object=configurationObject, uqsim_args_dict=uqsim_args_dict, \
+    workingDir=workingDir, model=model)
 
-### Way of doing thinks when instantly_save_results_for_each_time_step is False...
-statistics_dictionary = uqef_dynamic_utils.read_all_saved_statistics_dict(
-    workingDir, statisticsObject.list_qoi_column)
-### Way of doing thinks when instantly_save_results_for_each_time_step is True...
-statistics_dictionary = uqef_dynamic_utils.read_all_saved_statistics_dict(
-    workingDir, [statisticsObject.list_qoi_column[0],], single_timestamp_single_file=True)
+statistics_dictionary = uqef_dynamic_utils.read_all_saved_statistics_dict(\
+    workingDir=workingDir, list_qoi_column=statisticsObject.list_qoi_column, 
+    single_timestamp_single_file=uqsim_args_dict.get("instantly_save_results_for_each_time_step", False), 
+    throw_error=False
+    )
 
 uqef_dynamic_utils.extend_statistics_object(
     statisticsObject=statisticsObject,
@@ -165,7 +144,6 @@ uqef_dynamic_utils.extend_statistics_object(
 
 # Add measured Data - This is hardcoded for HBV
 statisticsObject.inputModelDir_basis = hbv_model_data_path / basis
-statisticsObject.inputModelDir_basis
 statisticsObject.get_measured_data(
     timestepRange=(statisticsObject.timesteps_min, statisticsObject.timesteps_max),
     transforme_mesured_data_as_original_model="False")
@@ -182,8 +160,10 @@ df_statistics_and_measured = pd.merge(
 print(df_statistics_and_measured)
 
 # Sensitivity Analysis - Recomputing DataFrames
-si_m_df = statisticsObject.create_df_from_sensitivity_indices(si_type="Sobol_m",compute_measured_normalized_data=True)
-si_t_df = statisticsObject.create_df_from_sensitivity_indices(si_type="Sobol_t",compute_measured_normalized_data=True)
+si_m_df = statisticsObject.create_df_from_sensitivity_indices(
+    si_type="Sobol_m",compute_measured_normalized_data=True)
+si_t_df = statisticsObject.create_df_from_sensitivity_indices(
+    si_type="Sobol_t",compute_measured_normalized_data=True)
 
 # Describe - Statistics of Statistics DataFrame :-)
 print(statisticsObject.describe_df_statistics())
@@ -211,7 +191,7 @@ for single_qoi in statisticsObject.list_qoi_column:
     fig = uqef_dynamic_utils.plotting_function_single_qoi(
         df_statistics_and_measured_single_qoi_subset,
         single_qoi=single_qoi,
-        qoi=statisticsObject.qoi,
+        qoi=statisticsObject.qoi,  # this is relevan only when qoi is == "GoF"/"gof"
         dict_what_to_plot=dict_what_to_plot,
         directory=statisticsObject.workingDir,
         fileName=f"simulation_big_plot_{single_qoi}.html"
@@ -222,7 +202,7 @@ fig, _ = uqef_dynamic_utils.plot_forcing_mean_predicted_and_observed_all_qoi(
     statisticsObject, directory=directory_for_saving_plots, fileName="Datailed_plot_all_qois.html")
 fig.show()
 
-# Calling plotting method from HydroStatistics class
+# Calling plotting method from Statistics class
 dict_what_to_plot = {
             "E_minus_std": False, "E_plus_std": False, "P10": True, "P90": True,
             "StdDev": True, "Skew": False, "Kurt": False, "Sobol_m": True, "Sobol_m2": False, "Sobol_t": True
@@ -244,7 +224,6 @@ for single_qoi in statisticsObject.list_qoi_column:
         streamflow_df_timestamp_column="index",
         dict_what_to_plot=dict_what_to_plot
     )
-
 
 # Plotting - Sensitivity Analysis
 for single_qoi in statisticsObject.list_qoi_column:

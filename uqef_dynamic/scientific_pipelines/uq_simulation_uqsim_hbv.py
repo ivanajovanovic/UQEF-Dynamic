@@ -44,30 +44,32 @@ if local_debugging:
     uqsim.args.chunksize = 1
 
     uqsim.args.uq_method = "sc"  # "sc" | "saltelli" | "mc" | "ensemble"
+    
     uqsim.args.mc_numevaluations = 1000
     uqsim.args.sampling_rule = "latin_hypercube"  # "random" | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
+    
     uqsim.args.sc_q_order = 7  # 7 #10 3
     uqsim.args.sc_p_order = 3  # 4, 5, 6, 8
     uqsim.args.sc_quadrature_rule = "g"  # "p" "genz_keister_24" "leja" "clenshaw_curtis"
  
+    uqsim.args.read_nodes_from_file = True
+    l = 7  # 10
+    path_to_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/sparse_grid_nodes_weights")  # this a path to the file where the nodes and weights are stored
+    uqsim.args.parameters_file = path_to_file / f"KPU_d3_l{l}.asc" # f"KPU_d7_l{l}.asc"
+    uqsim.args.parameters_setup_file = None  #pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/KPU_HBV_d3.json")
+    
+    uqsim.args.sc_poly_rule = "three_terms_recurrence"  # "gram_schmidt" | "three_terms_recurrence" | "cholesky"
+    uqsim.args.sc_poly_normed = True  # True
+    uqsim.args.sc_sparse_quadrature = False  # False
+    uqsim.args.regression = False
+    uqsim.args.cross_truncation = 1.0
+
     # paths, if necessary change them
     uqsim.args.inputModelDir = pathlib.Path("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/HBV-SASK-data")
     uqsim.args.sourceDir = pathlib.Path("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/HBV-SASK-data")
     uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs", 'sc_kl10_p3_l7_generalized_60days_3d_oldman_experimental'))
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
     uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/configuration_hbv_3D_MC.json'
-
-    uqsim.args.read_nodes_from_file = True
-    l = 7  # 10
-    path_to_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/sparse_grid_nodes_weights")  # this a path to the file where the nodes and weights are stored
-    uqsim.args.parameters_file = path_to_file / f"KPU_d3_l{l}.asc" # f"KPU_d7_l{l}.asc"
-    uqsim.args.parameters_setup_file = None  #pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/KPU_HBV_d3.json")
-
-    uqsim.args.sc_poly_rule = "three_terms_recurrence"  # "gram_schmidt" | "three_terms_recurrence" | "cholesky"
-    uqsim.args.sc_poly_normed = True  # True
-    uqsim.args.sc_sparse_quadrature = False  # False
-    uqsim.args.regression = False
-    uqsim.args.cross_truncation = 1.0
 
     uqsim.args.sampleFromStandardDist = True  # False
 
@@ -117,6 +119,11 @@ compute_generalized_sobol_indices = False
 compute_generalized_sobol_indices_over_time = False
 compute_covariance_matrix_in_time = True
 
+allow_conditioning_results_based_on_metric = False
+
+condition_results_based_on_metric = 'NSE'
+condition_results_based_on_metric_value = 0.2
+condition_results_based_on_metric_sign = "greater_or_equal"
 #####################################
 # additional path settings:
 #####################################
@@ -154,6 +161,7 @@ uqsim.models.update({"hbvsask"         : (lambda: HBVSASKModelUQ.HBVSASKModelUQ(
     disable_statistics=uqsim.args.disable_statistics,
     uq_method=uqsim.args.uq_method
 ))})
+
 #####################################
 # register statistics
 #####################################
@@ -180,6 +188,11 @@ uqsim.statistics.update({"hbvsask"         : (lambda: HBVSASKStatistics.HBVSASKS
     save_gpce_surrogate=save_gpce_surrogate,
     compute_other_stat_besides_pce_surrogate=compute_other_stat_besides_pce_surrogate,
     compute_kl_expansion_of_qoi = compute_kl_expansion_of_qoi,
+    index_column_name = "Index_run",
+    allow_conditioning_results_based_on_metric=allow_conditioning_results_based_on_metric,
+    condition_results_based_on_metric = 'NSE',
+    condition_results_based_on_metric_value = 0.2,
+    condition_results_based_on_metric_sign = "greater_or_equal",
     compute_timewise_gpce_next_to_kl_expansion=compute_timewise_gpce_next_to_kl_expansion,
     kl_expansion_order = kl_expansion_order,
     compute_generalized_sobol_indices = compute_generalized_sobol_indices,
@@ -221,7 +234,19 @@ uqsim.simulate()
 end_time_model_simulations = time.time()
 time_model_simulations = end_time_model_simulations - start_time_model_simulations
 
+#####################################
 #uqsim.save_simulation_parameters()
+if hasattr(uqsim.simulation, 'parameters') and uqsim.simulation.parameters is not None:
+    df = pd.DataFrame({'parameters': [row for row in uqsim.simulation.parameters]})
+    df.to_pickle(os.path.abspath(os.path.join(uqsim.args.outputResultDir, "df_uqsim_simulation_parameters.pkl")), compression="gzip")
+
+if hasattr(uqsim.simulation, 'nodes') and uqsim.simulation.nodes is not None:
+    df = pd.DataFrame({'nodes': [row for row in uqsim.simulation.nodes]})
+    df.to_pickle(os.path.abspath(os.path.join(uqsim.args.outputResultDir, "df_uqsim_simulation_nodes.pkl")), compression="gzip")
+
+if hasattr(uqsim.simulation, 'weights') and uqsim.simulation.weights is not None:
+    df = pd.DataFrame({'weights': [row for row in uqsim.simulation.weights]})
+    df.to_pickle(os.path.abspath(os.path.join(uqsim.args.outputResultDir, "df_uqsim_simulation_weights.pkl")), compression="gzip")
 
 #####################################
 # re-save uqsim.configurationObject
