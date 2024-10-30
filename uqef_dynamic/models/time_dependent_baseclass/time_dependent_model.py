@@ -9,6 +9,7 @@ import datetime
 import dill
 from distutils.util import strtobool
 import json
+import numpy as np
 import pandas as pd
 from pathlib import Path
 import time
@@ -21,7 +22,6 @@ from uqef_dynamic.utils import utility
 class TimeDependentModelConfig(object):
     """
         This is the class for the Time Dependent model configurations.
-
     """
     WRITING_RESULTS_TO_A_FILE = "writing_results_to_a_file"
     PLOTTING = "plotting"
@@ -202,14 +202,16 @@ class TimeDependentModelConfig(object):
 
 class TimeDependentModel(ABC, Model):
     def __init__(self, configurationObject, inputModelDir, workingDir=None, *args, **kwargs):
+        # TODO How does inheritance work with this
         if isinstance(configurationObject, TimeDependentModelConfig):
-            self.timeDependentModelConfig = configurationObject
+            self.modelConfig = configurationObject
         else:
-            self.timeDependentModelConfig = TimeDependentModelConfig(configurationObject, deep_copy=False, *args, **kwargs)
-        for attr, value in self.timeDependentModelConfig.__dict__.items():
+            self.modelConfig = TimeDependentModelConfig(configurationObject, deep_copy=False, *args, **kwargs)
+        # TODO maybe to start using self.modelConfig from this point on...
+        for attr, value in self.modelConfig.__dict__.items():
             setattr(self, attr, value)
-        # self.configurationObject = self.timeDependentModelConfig.configurationObject  # TODO - remove this eventually
-        
+        # self.configurationObject = self.modelConfig.configurationObject  # TODO - remove this eventually
+
         if inputModelDir is not None:
             self.inputModelDir = Path(inputModelDir)
         else:
@@ -246,14 +248,30 @@ class TimeDependentModel(ABC, Model):
         self._setup(**kwargs)
 
     def _setup(self, **kwargs):
+        """
+        This function should be used to setup the model. It is called in the constructor.
+
+        """
         self.set_attributes_based_on_dict_processed_simulation_settings_from_config_file(**kwargs)
         self._setup_model_related(**kwargs)
         self._timespan_setup(**kwargs)
 
     def _setup_model_related(self, **kwargs):
+        """
+        This function should be used to setup the (general) model related parameters, e.g., those that are static 
+        or that are not dependent on the specific model run.
+
+        It is called in the _setup function. kwargs are the same as in the _setup function and constructor.
+        """
         pass
 
     def set_attributes_based_on_dict_processed_simulation_settings_from_config_file(self, **kwargs):
+        """
+        This function should be used to set the attributes based on the dictionary of processed simulation settings
+        from the configuration file.
+
+        It is called in the _setup function. kwargs are the same as in the _setup function and constructor.
+        """
         if self.dict_processed_simulation_settings_from_config_file is None:
             self.set_dict_processed_simulation_settings_from_config_file(**kwargs)
 
@@ -261,6 +279,11 @@ class TimeDependentModel(ABC, Model):
 
     def set_dict_processed_simulation_settings_from_config_file(
             self, dict_processed_simulation_settings_from_config_file=None, **kwargs):
+        """
+        This function should be used to set the dictionary of processed simulation settings from the configuration file.
+
+        kwargs are the same as in the set_attributes_based_on_dict_processed_simulation_settings_from_config_file, _setup function and constructor.
+        """
         if dict_processed_simulation_settings_from_config_file is None:
             self.dict_processed_simulation_settings_from_config_file = \
                 utility.read_simulation_settings_from_configuration_object(
@@ -269,11 +292,17 @@ class TimeDependentModel(ABC, Model):
             self.dict_processed_simulation_settings_from_config_file = dict_processed_simulation_settings_from_config_file
 
     def assign_values(self, config_dict):
+        """
+        This function should be used to assign values to the attributes of the class based on the dictionary
+        """
         for key, value in config_dict.items():
             setattr(self, key, value)
 
     def _timespan_setup(self, **kwargs):
         """
+        This function should be used to setup the time span of the model.
+
+        It is called in the _setup function. kwargs are the same as in the _setup function and constructor.
         TODO Rewrite this; this is too specific for HBV model
         TODO make sure it works both for hourly and daily resolution!
         :param kwargs:
@@ -324,6 +353,7 @@ class TimeDependentModel(ABC, Model):
         self.full_data_range = pd.date_range(start=self.start_date, end=self.end_date, freq="1D")
         self.simulation_range = pd.date_range(start=self.start_date_predictions, end=self.end_date, freq="1D")
 
+        # TODO Check if you want to do this conversion
         self.start_date = pd.Timestamp(self.start_date)
         self.end_date = pd.Timestamp(self.end_date)
         self.start_date_predictions = pd.Timestamp(self.start_date_predictions)
@@ -332,6 +362,11 @@ class TimeDependentModel(ABC, Model):
         raise NotImplementedError
 
     def prepare(self, *args, **kwargs):
+        """
+        This function should be used to prepare the model for the execution.
+        From the UQEF side it will be called inside the solver.prepare self.infoModel.prepare(infoModel=True), i.e.,
+        it is ment to be called by a single model instance to do a general preparation for the model run.
+        """
         pass
 
     def assertParameter(self, parameter):
@@ -483,27 +518,45 @@ class TimeDependentModel(ABC, Model):
 
         return results_array
 
-    @abstractmethod
+    # @abstractmethod
+    # def _parameters_configuration(self, parameters, take_direct_value, *args, **kwargs):
+    #     """
+    #     This function should return a dictionary of parameters to be used in the specific model run.
+    #     This is the first argument of the model_run function.
+
+    #     Note: it should contain only uncertain parameters!
+    #     """
+    #     raise NotImplementedError
+
     def _parameters_configuration(self, parameters, take_direct_value, *args, **kwargs):
         """
-        This function should return a dictionary of parameters to be used in the model.
-        This is the first argument of the model_run function.
+        This function should return a dictionary of parameters to be used in the specific (i.e., single) 
+        model run. This is the first argument of the model_run function.
 
         Note: it should contain only uncertain parameters.
         """
-        raise NotImplementedError
+        parameters_dict = utility.configuring_parameter_values(
+            parameters=parameters,
+            configurationObject=self.configurationObject,
+            default_par_info_dict=self.default_par_info_dict,
+            take_direct_value=take_direct_value
+            )
+        return parameters_dict
 
     @abstractmethod
     def _model_run(self, parameters_dict, *args, **kwargs):
+        """
+        This function should execute a single model run, i.e., for a single value of uncertain parameter vector
+        where parameter values are fetched from parameters_dict
+        """
         raise NotImplementedError
     
     @abstractmethod
     def _process_model_output(self, model_output, unique_run_index, *args, **kwargs):
         raise NotImplementedError
     
-    @abstractmethod
     def _transform_model_output(self, model_output_df, *args, **kwargs):
-        raise NotImplementedError
+        pass
     
     def _plotting(self, result_df, unique_run_index, curr_working_dir):
         pass
