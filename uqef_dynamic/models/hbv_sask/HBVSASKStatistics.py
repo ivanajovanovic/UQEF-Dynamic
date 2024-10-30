@@ -351,14 +351,14 @@ class HBVSASKStatistics(time_dependent_statistics.TimeDependentStatistics):
             if dict_what_to_plot.get("E_minus_std", False):
                 fig.add_trace(go.Scatter(x=pdTimesteps,
                                          y=[(self.result_dict[single_qoi_column][key]["E"] \
-                                             - self.result_dict[single_qoi_column][key]["StdDev"]) for key in keyIter],
-                                         name='mean - std. dev', line_color='darkviolet', mode='lines'),
+                                             - 2*self.result_dict[single_qoi_column][key]["StdDev"]) for key in keyIter],
+                                             name='mean - 2*std. dev', mode='lines', showlegend=False, line_color='rgba(255,255,255,0)',),
                               row=starting_row, col=1)
             if dict_what_to_plot.get("E_plus_std", False):
                 fig.add_trace(go.Scatter(x=pdTimesteps,
                                          y=[(self.result_dict[single_qoi_column][key]["E"] +\
-                                             self.result_dict[single_qoi_column][key]["StdDev"]) for key in keyIter],
-                                         name='mean + std. dev', line_color='darkviolet', mode='lines', fill='tonexty'),
+                                             2*self.result_dict[single_qoi_column][key]["StdDev"]) for key in keyIter],
+                                             name='mean +- 2*std. dev', mode='lines', fill='tonexty', showlegend=True, line_color='rgba(255,255,255,0)',),
                               row=starting_row, col=1)
             if "P10" in self.result_dict[single_qoi_column][keyIter[0]] and dict_what_to_plot.get("P10", False):
                 fig.add_trace(go.Scatter(x=pdTimesteps,
@@ -518,7 +518,6 @@ class HBVSASKStatistics(time_dependent_statistics.TimeDependentStatistics):
     def plotResults_single_qoi(self, single_qoi_column, dict_time_vs_qoi_stat=None, timestep=-1, display=False, fileName="",
                                fileNameIdent="", directory="./", fileNameIdentIsFullName=False, safe=True,
                                dict_what_to_plot=None, **kwargs):
-
         # TODO - This might be a memory problem, why not just self.result_dict[single_qoi_column]!
         if dict_time_vs_qoi_stat is None:
             dict_time_vs_qoi_stat = self.result_dict[single_qoi_column]
@@ -655,16 +654,16 @@ class HBVSASKStatistics(time_dependent_statistics.TimeDependentStatistics):
         if dict_what_to_plot.get("E_minus_std", False) and "StdDev" in dict_time_vs_qoi_stat[keyIter[0]] and "E" in dict_time_vs_qoi_stat[keyIter[0]]:
             fig.add_trace(go.Scatter(x=pdTimesteps,
                                      y=[(dict_time_vs_qoi_stat[key]["E"] \
-                                         - dict_time_vs_qoi_stat[key]["StdDev"]) for key in keyIter],
-                                     name='mean - std. dev', mode='lines', line_color="grey"
+                                         - 2*dict_time_vs_qoi_stat[key]["StdDev"]) for key in keyIter],
+                                     name='mean - 2*std. dev', mode='lines', showlegend=False, line_color='rgba(255,255,255,0)',
                                     #  line_color='darkviolet'
                                      ),
                           row=starting_row, col=1)
         if dict_what_to_plot.get("E_plus_std", False) and "StdDev" in dict_time_vs_qoi_stat[keyIter[0]] and "E" in dict_time_vs_qoi_stat[keyIter[0]]:
             fig.add_trace(go.Scatter(x=pdTimesteps,
                                      y=[(dict_time_vs_qoi_stat[key]["E"] + \
-                                         dict_time_vs_qoi_stat[key]["StdDev"]) for key in keyIter],
-                                     name='mean + std. dev', mode='lines', fill='tonexty', line_color="grey"
+                                         2*dict_time_vs_qoi_stat[key]["StdDev"]) for key in keyIter],
+                                     name='mean +- 2*std. dev', mode='lines', fill='tonexty', showlegend=True, line_color='rgba(255,255,255,0)',
                                     #  line_color='darkviolet'
                                      ),
                           row=starting_row, col=1)
