@@ -80,8 +80,8 @@ timestamp, qoi_column_name=None, time_column_name=utility.TIME_COLUMN_NAME, plot
     configuration_object_file = dict_output_file_paths.get("configuration_object_file")
     nodes_file = dict_output_file_paths.get("nodes_file")
     simulation_parameters_file = dict_output_file_paths.get("simulation_parameters_file")
-    df_all_index_parameter_file = dict_output_file_paths.get("df_all_index_parameter_file")
-    df_all_simulations_file = dict_output_file_paths.get("df_all_simulations_file")
+    df_index_parameter_file = dict_output_file_paths.get("df_index_parameter_file")
+    df_simulations_file = dict_output_file_paths.get("df_simulations_file")
     time_info_file = dict_output_file_paths.get("time_info_file")
 
     # Reading UQEF-Dynamic Output files
@@ -136,8 +136,8 @@ timestamp, qoi_column_name=None, time_column_name=utility.TIME_COLUMN_NAME, plot
     
     # Reading/Creating DataFrame based on Simulation Nodes / Parameters
     # maybe this is not alway necessary
-    if df_all_index_parameter_file.is_file():
-        df_index_parameter = pd.read_pickle(df_all_index_parameter_file, compression="gzip")
+    if df_index_parameter_file.is_file():
+        df_index_parameter = pd.read_pickle(df_index_parameter_file, compression="gzip")
     else:
         df_index_parameter = None
     if df_index_parameter is not None:
@@ -189,10 +189,10 @@ timestamp, qoi_column_name=None, time_column_name=utility.TIME_COLUMN_NAME, plot
     # Reading all the simulations
     # maybe this is not alway necessary
     read_all_saved_simulations_file = True
-    if read_all_saved_simulations_file and df_all_simulations_file.is_file():
+    if read_all_saved_simulations_file and df_simulations_file.is_file():
         # Reading Saved Simulations - Note: This migh be a huge file,
         # especially for MC/Saltelli kind of simulations
-        df_simulation_result = pd.read_pickle(df_all_simulations_file, compression="gzip")
+        df_simulation_result = pd.read_pickle(df_simulations_file, compression="gzip")
         dict_with_results_of_interest["number_full_model_evaluations"] = len(df_simulation_result)
     else:
         df_simulation_result = None
@@ -696,6 +696,18 @@ def save_gpce_surrogate_model(workingDir, gpce, qoi, timestamp):
     
 
 def save_all_gpce_surrogate_model(workingDir, gpce_surrogate_dictionary, list_qoi_column=None, timestamps=None):
+    """
+    Save all GPCE surrogate models for the given list of QOI columns and timestamps.
+
+    Args:
+        workingDir (str): The directory where the models will be saved.
+        gpce_surrogate_dictionary (dict): A dictionary containing the GPCE surrogate models.
+        list_qoi_column (list, optional): The list of QOI columns to save. If None, all columns will be saved.
+        timestamps (list, optional): The list of timestamps to save. If None, all timestamps will be saved.
+
+    Returns:
+        None
+    """
     if list_qoi_column is None:
         list_qoi_column = list(gpce_surrogate_dictionary.keys())
     if timestamps is None:
@@ -716,6 +728,18 @@ def save_gpce_coeffs(workingDir, coeff, qoi, timestamp):
 
 
 def save_all_gpce_coeffs(workingDir, gpce_coeff_dictionary, list_qoi_column=None, timestamps=None):
+    """
+    Save all GPCE coefficients for the given list of QOI columns and timestamps.
+
+    Args:
+        workingDir (str): The working directory where the coefficients will be saved.
+        gpce_coeff_dictionary (dict): A dictionary containing the GPCE coefficients for different QOI columns and timestamps.
+        list_qoi_column (list, optional): A list of QOI columns to save the coefficients for. If not provided, all QOI columns in the dictionary will be saved.
+        timestamps (list, optional): A list of timestamps to save the coefficients for. If not provided, all timestamps in the dictionary for the first QOI column will be saved.
+
+    Returns:
+        None
+    """
     if list_qoi_column is None:
         list_qoi_column = list(gpce_coeff_dictionary.keys())
     if timestamps is None:
@@ -731,7 +755,25 @@ def save_all_gpce_coeffs(workingDir, gpce_coeff_dictionary, list_qoi_column=None
 
 def read_all_saved_gpce_surrogate_models(workingDir, list_qoi_column, single_timestamp_single_file=False, throw_error=True, 
 convert_to_pd_timestamp=True):
-    # TODO it seems as single_timestamp_single_file is not relevant here!
+    """
+    Reads all saved GPCE surrogate models from the specified working directory.
+
+    Args:
+        workingDir (str): The path to the working directory where the GPCE surrogate models are saved.
+        list_qoi_column (list): A list of QOI (Quantity of Interest) columns.
+        single_timestamp_single_file (bool, optional): Whether each timestamp has a separate file. Defaults to False.
+        throw_error (bool, optional): Whether to throw an error if a surrogate file is not found. Defaults to True.
+        convert_to_pd_timestamp (bool, optional): Whether to convert the timestamps to pandas Timestamp objects. Defaults to True.
+
+    Returns:
+        dict: A dictionary containing the GPCE surrogate models for each QOI and timestamp.
+        returns None value if `throw_error` is False but something is missing.
+
+    Raises:
+        FileNotFoundError: If a GPCE surrogate file is not found and `throw_error` is True.
+        FileNotFoundError: If no GPCE surrogate files are found in the working directory and `throw_error` is True.
+    """
+    # TODO it seems as single_timestamp_single_file is not relevant here anymore!
     list_TimeStamp = get_all_timesteps_from_saved_files(workingDir, first_part_of_the_file = "gpce")
     gpce_surrogate_dictionary = dict()  # defaultdict(dict)
     for single_qoi in list_qoi_column:
@@ -777,9 +819,27 @@ def read_single_gpce_surrogate_models(workingDir, single_qoi, single_timestep, t
 
 
 def read_all_saved_gpce_coeffs(workingDir, list_qoi_column, single_timestamp_single_file=False, throw_error=True,
-convert_to_pd_timestamp=True):
+                              convert_to_pd_timestamp=True):
+    """
+    Read all saved GPCE coefficients from the specified working directory.
+
+    Args:
+        workingDir (str): The path to the working directory.
+        list_qoi_column (list): A list of QOI (Quantity of Interest) columns.
+        single_timestamp_single_file (bool, optional): Whether each timestamp has a separate file. Defaults to False.
+        throw_error (bool, optional): Whether to throw an error if a coefficients file is not found. Defaults to True.
+        convert_to_pd_timestamp (bool, optional): Whether to convert the timestamps to pandas Timestamp objects. 
+                                                  Defaults to True.
+
+    Returns:
+        dict: A dictionary containing the GPCE coefficients for each QOI and timestamp.
+
+    Raises:
+        FileNotFoundError: If a coefficients file is not found and `throw_error` is set to True.
+        FileNotFoundError: If no GPCE coefficients files are found in the working directory and `throw_error` is set to True.
+    """
     # TODO it seems as single_timestamp_single_file is not relevant here!
-    list_TimeStamp = get_all_timesteps_from_saved_files(workingDir, first_part_of_the_file = "gpce")
+    list_TimeStamp = get_all_timesteps_from_saved_files(workingDir, first_part_of_the_file="gpce")
     gpce_coeff_dictionary = dict()  # defaultdict(dict)
     for single_qoi in list_qoi_column:
         gpce_coeff_dictionary[single_qoi] = dict()
@@ -787,7 +847,9 @@ convert_to_pd_timestamp=True):
             gpce_coeffs_file_temp = workingDir / f"gpce_coeffs_{single_qoi}_{single_timestep}.npy"
             if not gpce_coeffs_file_temp.is_file():
                 if throw_error:
-                    raise FileNotFoundError(f"The gpce coefficients file for qoi-{single_qoi} and time-stamp-{single_timestep} does not exist")
+                    raise FileNotFoundError(
+                        f"The gpce coefficients file for qoi-{single_qoi} and time-stamp-{single_timestep} does not exist"
+                    )
                 else:
                     if convert_to_pd_timestamp:
                         gpce_coeff_dictionary[single_qoi][pd.Timestamp(single_timestep)] = None
@@ -797,12 +859,12 @@ convert_to_pd_timestamp=True):
             # assert gpce_coeffs_file_temp.is_file(), \
             # f"The gpce coefficients file for qoi-{single_qoi} and time-stamp-{single_timestep} does not exist"
             if convert_to_pd_timestamp:
-                gpce_coeff_dictionary[single_qoi][pd.Timestamp(single_timestep)] = np.load(gpce_coeffs_file_temp,  allow_pickle=True)
+                gpce_coeff_dictionary[single_qoi][pd.Timestamp(single_timestep)] = np.load(gpce_coeffs_file_temp, allow_pickle=True)
             else:
-                gpce_coeff_dictionary[single_qoi][single_timestep] = np.load(gpce_coeffs_file_temp,  allow_pickle=True)
+                gpce_coeff_dictionary[single_qoi][single_timestep] = np.load(gpce_coeffs_file_temp, allow_pickle=True)
     if utility.is_nested_dict_empty_or_none(gpce_coeff_dictionary):
         if throw_error:
-            raise FileNotFoundError(f"No gpce coefficinets files found in the working directory")
+            raise FileNotFoundError("No gpce coefficinets files found in the working directory")
         else:
             return None
     return gpce_coeff_dictionary
@@ -1900,6 +1962,8 @@ def plotting_function_single_qoi(
 ):
     """
     At the moment this is tailored for HBV model
+
+    Note: qoi argument is relevant only when == "GoF"/"gof"
     :param df:
     :return:
     """

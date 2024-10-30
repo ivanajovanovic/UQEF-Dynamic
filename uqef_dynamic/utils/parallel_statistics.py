@@ -104,6 +104,8 @@ def parallel_calc_stats_for_KL(
     :return: results list, where each of the element is yet another list
     with key/timestep and statistics dictionary
     - statistics dictionary contains qoi_values[optional], E
+    - E (mean) is computed as a dot product of qoi_values and weights
+    or as a mean of qoi_values if weights are None or regression is True   
     """
     results = []
     for ip in range(0, len(keyIter_chunk)):  # for each piece of work
@@ -121,12 +123,14 @@ def parallel_calc_stats_for_KL(
     return results
     
 
-def parallel_calc_stats_for_gPCE(keyIter_chunk, qoi_values_chunk, dist, polynomial_expansion, nodes, weights=None,
-                                  regression=False, 
-                                  compute_Sobol_t=False, compute_Sobol_m=False, compute_Sobol_m2=False,
-                                  store_qoi_data_in_stat_dict=False, store_gpce_surrogate_in_stat_dict=False,
-                                  save_gpce_surrogate=False, compute_other_stat_besides_pce_surrogate=True,
-                                  dict_stat_to_compute=utility.DEFAULT_DICT_STAT_TO_COMPUTE):
+def parallel_calc_stats_for_gPCE(
+    keyIter_chunk, qoi_values_chunk, dist, polynomial_expansion, nodes, \
+    weights=None, polynomial_norms=None, regression=False, \
+    compute_Sobol_t=False, compute_Sobol_m=False, compute_Sobol_m2=False, \
+    store_qoi_data_in_stat_dict=False, store_gpce_surrogate_in_stat_dict=False, \
+    save_gpce_surrogate=False, compute_other_stat_besides_pce_surrogate=True, \
+    dict_stat_to_compute=utility.DEFAULT_DICT_STAT_TO_COMPUTE
+    ):
     """
     :return: results list, where each of the element is yet another list
     with key/timestep and statistics dictionary
@@ -146,9 +150,14 @@ def parallel_calc_stats_for_gPCE(keyIter_chunk, qoi_values_chunk, dist, polynomi
         if store_qoi_data_in_stat_dict:
             local_result_dict["qoi_values"] = qoi_values
         if regression:
-            qoi_gPCE, goi_coeff = cp.fit_regression(polynomial_expansion, nodes, qoi_values, retall=True)
+            qoi_gPCE, goi_coeff = cp.fit_regression(
+                polynomials=polynomial_expansion, abscissas=nodes, evals=qoi_values, retall=True,
+                model=None  # classical least-square; one can use as well sklearn.linear_model.LinearRegression(fit_intercept=False)
+            )
         else:
-            qoi_gPCE, goi_coeff = cp.fit_quadrature(polynomial_expansion, nodes, weights, qoi_values, retall=True)
+            qoi_gPCE, goi_coeff = cp.fit_quadrature(
+                orth=polynomial_expansion, nodes=nodes, weights=weights, solves=qoi_values, retall=True, norms=polynomial_norms
+                )
 
         if store_gpce_surrogate_in_stat_dict:
             local_result_dict["gPCE"] = qoi_gPCE

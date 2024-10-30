@@ -1,15 +1,18 @@
 """
-Set of utility functions for preparing and/or postprocessing data for UQ & SA runs of different models
-This module contains functions for:
-- transforming parameters
-- plotting
-- set of utility functions for calculating different GoF/Objective/Likelihood functions/metrices
-- set of utility functions for working with configuration files and configuration objects 
-(e.g., reading, extract data and manipulate configuration file/object)
-- time configurations
-- paths related functions
-- utility functions for processing/manipulating pandas.DataFrame (i.e., main data structure)
-- utility for SG analysis
+A set of utility functions for preparing and/or post-processing data for 
+Uncertainty Quantification (UQ) & Sensitivity Analysis (SA) runs across different models.
+
+This module includes functions for:
+
+- Transforming parameters
+- Plotting
+- Calculating various Goodness-of-Fit (GoF), objective, likelihood functions, and metrics
+- Working with configuration files and objects (e.g., reading, extracting data, and manipulating configuration files/objects)
+- Configuring time settings
+- Path-related operations
+- Processing and manipulating pandas.DataFrame (the primary data structure)
+- Supporting SG analysis
+- etc.
 
 @author: Ivana Jovanovic Buha
 """
@@ -38,6 +41,7 @@ import plotly.offline as pyo
 import seaborn as sns
 import scipy
 from tabulate import tabulate
+import time
 
 # for parallel computing
 import multiprocessing
@@ -45,12 +49,17 @@ import multiprocessing
 from uqef_dynamic.utils import sens_indices_sampling_based_utils
 
 DEFAULT_DICT_WHAT_TO_PLOT = {
-    "E_minus_std": False, "E_plus_std": False, "P10": False, "P90": False,
+    "E_minus_std": False, "E_plus_std": False, 
+    "E_minus_2std": False, "E_plus_2std": False,
+    "P10": False, "P90": False,
     "StdDev": False, "Skew": False, "Kurt": False, "Sobol_m": False, "Sobol_m2": False, "Sobol_t": False
 }
 
 DEFAULT_DICT_STAT_TO_COMPUTE = {
-    "Var": True, "StdDev": True, "P10": True, "P90": True,
+    "Var": True, "StdDev": True, 
+    "E_minus_std": False, "E_plus_std": False, 
+    "E_minus_2std": False, "E_plus_2std": False,
+    "P10": True, "P90": True,
     "Skew": False, "Kurt": False, "Sobol_m": True, "Sobol_m2": False, "Sobol_t": True
 }
 
@@ -59,6 +68,31 @@ TIME_COLUMN_NAME="TimeStamp"
 INDEX_COLUMN_NAME = "Index_run"
 QOI_COLUMN_NAME = "model"  # "Value"
 QOI_COLUMN_NAME_CENTERED = QOI_COLUMN_NAME + "_centered"
+
+ARGS_FILE = 'uqsim_args.pkl'
+CONFIGURATION_OBJECT_FILE = "configurationObject"
+NODES_FILE = "nodes.simnodes.zip"
+SIMULATION_PARAMETERS_FILE = "simulation_parameters.npy"
+PARAMETERS_FILE = "parameters.pkl"
+TIME_INFO_FILE = "time_info.txt"
+# Files produced by UQEF-Dynamic.Statistics and Samples class
+DF_SIMULATIONS_FILE = "df_simulations.pkl"
+# DF_SIMULATIONS_FILE = "df_all_simulations.pkl"  # old one
+DF_STATE_FILE = "df_state.pkl"
+DF_INDEX_PARAMETER_FILE = "df_index_parameter.pkl"
+DF_INDEX_PARAMETER_GOF_FILE = "df_index_parameter_gof.pkl"
+# Active Subspaces and gradient analysis related files
+DICT_APPROX_MATRIX_C_FILE = "dict_approx_matrix_c.pkl"
+DICT_MATRIX_C_EIGEN_DECOMPOSITION_FILE = "dict_matrix_c_eigen_decomposition.pkl"
+DICT_ACTIVE_SCORES_FILE = "active_scores_dict.pkl"
+F_KL_SURROGATE_FILE= "f_kl_surrogate_df.pkl"
+DF_TIME_VARYING_GRAD_ANALYSIS_FILE = "df_time_varying_grad_analysis.pkl"
+DF_TIME_AGGREGATED_GRAD_ANALYSIS_FILE = "df_time_aggregated_grad_analysis.pkl"
+STATISTICS_DICTIONARY_FILE = f"statistics_dictionary_qoi.pkl"
+# Optionally, one might save uqef.simulation parameters / nodes / weights
+DF_UQSIM_SIMULATION_PARAMETERS_FILE = "df_uqsim_simulation_parameters.pkl"
+DF_UQSIM_SIMULATION_NODES_FILE = "df_uqsim_simulation_nodes.pkl"
+DF_UQSIM_SIMULATION_WEIGHTS_FILE = "df_uqsim_simulation_weights.pkl"
 
 ###################################################################################################################
 # Paths related functions
@@ -151,24 +185,76 @@ def get_home_directory():
 ###################################################################################################################
 
 
-def get_dict_with_qoi_name_specific_output_file_paths_based_on_workingDir(workingDir, qoi_string="Value"):
+def get_dict_with_qoi_name_specific_output_file_paths_based_on_workingDir(workingDir, qoi_string="Value", **kwargs):
     statistics_dictionary_file = workingDir / f"statistics_dictionary_qoi_{qoi_string}.pkl"
-    return {"statistics_dictionary_file": statistics_dictionary_file}
+    f_kl_surrogate_coefficients_file = workingDir / f"f_kl_surrogate_coefficients_{qoi_string}.npy"
+    f_kl_surrogate_df_file = workingDir / f"f_kl_surrogate_df_{qoi_string}.pkl"
+    generalized_sobol_indices_file = workingDir / f"generalized_sobol_indices_{qoi_string}.pkl"
+    covariance_matrix_file = workingDir / f"covariance_matrix_{qoi_string}.npy"
+    eigenvalues_file = workingDir / f"eigenvalues_{qoi_string}.npy"
+    eigenvectors_file = workingDir / f"eigenvectors_{qoi_string}.npy"
+
+    return {
+        "statistics_dictionary_file": statistics_dictionary_file,
+        "f_kl_surrogate_coefficients_file": f_kl_surrogate_coefficients_file,
+        "f_kl_surrogate_df_file": f_kl_surrogate_df_file,
+        "generalized_sobol_indices_file": generalized_sobol_indices_file,
+        "covariance_matrix_file": covariance_matrix_file,
+        "eigenvalues_file": eigenvalues_file,
+        "eigenvectors_file": eigenvectors_file,
+        }
 
 
-def get_dict_with_qoi_name_timestamp_specific_output_file_paths_based_on_workingDir(workingDir, qoi_string="Value", timestamp=0.0):
+def get_dict_with_qoi_name_timestamp_specific_output_file_paths_based_on_workingDir(workingDir, qoi_string="Value", timestamp=0.0, **kwargs):
     gpce_surrogate_file = workingDir / f"gpce_surrogate_{qoi_string}_{timestamp}.pkl"
     gpce_coeffs_file = workingDir / f"gpce_coeffs_{qoi_string}_{timestamp}.npy"
-    return {"gpce_surrogate_file":gpce_surrogate_file, "gpce_coeffs_file":gpce_coeffs_file}
+    generalized_sobol_indices_file = workingDir / f"generalized_sobol_indices_{qoi_string}_{timestamp}.pkl"
+    return {
+        "gpce_surrogate_file":gpce_surrogate_file, 
+        "gpce_coeffs_file":gpce_coeffs_file,
+        "generalized_sobol_indices_file": generalized_sobol_indices_file,
+        }
 
 
-def get_dict_with_output_file_paths_based_on_workingDir(workingDir, qoi_string="Value"):
+def get_dict_with_output_file_paths_based_on_workingDir(workingDir, qoi_string="Value", **kwargs):
+    """
+    Returns a dictionary containing output file paths based on the working directory.
+
+    Parameters:
+    - workingDir (str): The working directory.
+    - qoi_string (str): The quality of interest string. Default is "Value".
+    - **kwargs: Additional keyword arguments.
+
+    Returns:
+    - dict: A dictionary containing the following output file paths:
+        - args_file (str): Path to the args file.
+        - configuration_object_file (str): Path to the configuration object file.
+        - nodes_file (str): Path to the nodes file.
+        - simulation_parameters_file (str): Path to the simulation parameters file.
+        - parameters_file (str): Path to the parameters file.
+        - time_info_file (str): Path to the time info file.
+        - df_index_parameter_file (str): Path to the df index parameter file.
+        - df_index_parameter_gof_file (str): Path to the df index parameter gof file.
+        - df_simulations_file (str): Path to the df simulations file.
+        - df_state_file (str): Path to the df state file.
+        - f_kl_surrogate_file (str): Path to the f kl surrogate file.
+        - statistics_dictionary_file (str): Path to the statistics dictionary file.
+        - df_time_varying_grad_analysis_file (str): Path to the df time varying grad analysis file.
+        - df_time_aggregated_grad_analysis_file (str): Path to the df time aggregated grad analysis file.
+        - dict_approx_matrix_c_file (str): Path to the dict approx matrix c file.
+        - dict_matrix_c_eigen_decomposition_file (str): Path to the dict matrix c eigen decomposition file.
+        - dict_active_scores_file (str): Path to the dict active scores file.
+        - df_uqsim_simulation_parameters_file (str): Path to the df uqsim simulation parameters file.
+        - df_uqsim_simulation_nodes_file (str): Path to the df uqsim simulation nodes file.
+        - df_uqsim_simulation_weights_file (str): Path to the df uqsim simulation weights file.
+    """
     args_file, configuration_object_file, nodes_file, simulation_parameters_file, parameters_file, time_info_file, \
-        df_all_index_parameter_file, df_all_index_parameter_gof_file, df_all_simulations_file, \
-            df_state_results_file, df_time_varying_grad_analysis_file, df_time_aggregated_grad_analysis_file, \
-                statistics_dictionary_file, dict_of_approx_matrix_c_file, dict_of_matrix_c_eigen_decomposition_file, \
-                df_uqsim_simulation_parameters, df_uqsim_simulation_nodes, df_uqsim_simulation_weights = \
-                    update_output_file_paths_based_on_workingDir(workingDir, qoi_string=qoi_string)
+    df_index_parameter_file, df_index_parameter_gof_file, df_simulations_file, df_state_file, \
+    f_kl_surrogate_file, statistics_dictionary_file, \
+    df_time_varying_grad_analysis_file, df_time_aggregated_grad_analysis_file, \
+    dict_approx_matrix_c_file, dict_matrix_c_eigen_decomposition_file, dict_active_scores_file, \
+    df_uqsim_simulation_parameters_file, df_uqsim_simulation_nodes_file, df_uqsim_simulation_weights_file = \
+                    update_output_file_paths_based_on_workingDir(workingDir, qoi_string=qoi_string, **kwargs)
     return {
         "args_file": args_file, 
         "configuration_object_file": configuration_object_file, 
@@ -176,55 +262,78 @@ def get_dict_with_output_file_paths_based_on_workingDir(workingDir, qoi_string="
         "simulation_parameters_file": simulation_parameters_file,
         "parameters_file": parameters_file, 
         "time_info_file": time_info_file,
-        "df_all_index_parameter_file": df_all_index_parameter_file,
-        "df_all_index_parameter_gof_file": df_all_index_parameter_gof_file,
-        "df_all_simulations_file": df_all_simulations_file,
-        "df_state_results_file": df_state_results_file,
+        "df_index_parameter_file": df_index_parameter_file,
+        "df_index_parameter_gof_file": df_index_parameter_gof_file,
+        "df_simulations_file": df_simulations_file,
+        "df_state_file": df_state_file,
+        "f_kl_surrogate_file":f_kl_surrogate_file,
+        "statistics_dictionary_file": statistics_dictionary_file,
         "df_time_varying_grad_analysis_file": df_time_varying_grad_analysis_file,
         "df_time_aggregated_grad_analysis_file": df_time_aggregated_grad_analysis_file,
-        "statistics_dictionary_file": statistics_dictionary_file,
-        "dict_of_approx_matrix_c_file": dict_of_approx_matrix_c_file,
-        "dict_of_matrix_c_eigen_decomposition_file": dict_of_matrix_c_eigen_decomposition_file,
-        "df_uqsim_simulation_parameters": df_uqsim_simulation_parameters,
-        "df_uqsim_simulation_nodes": df_uqsim_simulation_nodes,
-        "df_uqsim_simulation_weights": df_uqsim_simulation_weights
+        "dict_approx_matrix_c_file": dict_approx_matrix_c_file,
+        "dict_matrix_c_eigen_decomposition_file": dict_matrix_c_eigen_decomposition_file,
+        "dict_active_scores_file": dict_active_scores_file,
+        "df_uqsim_simulation_parameters_file": df_uqsim_simulation_parameters_file,
+        "df_uqsim_simulation_nodes_file": df_uqsim_simulation_nodes_file,
+        "df_uqsim_simulation_weights_file": df_uqsim_simulation_weights_file
     }
 
 
-def update_output_file_paths_based_on_workingDir(workingDir, qoi_string="Value"):
-    args_file = workingDir / 'uqsim_args.pkl'
-    configuration_object_file = workingDir / "configurationObject"
-    nodes_file = workingDir / "nodes.simnodes.zip"
-    simulation_parameters_file = workingDir / "simulation_parameters.npy"
-    parameters_file = workingDir / "parameters.pkl"
-    time_info_file = workingDir / "time_info.txt"
+def update_output_file_paths_based_on_workingDir(workingDir, qoi_string="Value", **kwargs):
+    """
+    Update the output file paths based on the working directory.
+
+    Args:
+        workingDir (str): The working directory.
+        qoi_string (str, optional): The quality of interest string. Defaults to "Value".
+        **kwargs: Additional keyword arguments for specifying file paths.
+
+    Returns:
+        tuple: A tuple containing the updated file paths.
+
+    """
+    args_file = workingDir / kwargs.get("args_file", ARGS_FILE)
+    configuration_object_file = workingDir / kwargs.get("configuration_object_file", CONFIGURATION_OBJECT_FILE)
+    nodes_file = workingDir / kwargs.get("nodes_file", NODES_FILE)
+    simulation_parameters_file = workingDir / kwargs.get("simulation_parameters_file", SIMULATION_PARAMETERS_FILE)
+    parameters_file = workingDir / kwargs.get("parameters_file", PARAMETERS_FILE)
+    time_info_file = workingDir / kwargs.get("time_info_file", TIME_INFO_FILE)
 
     # Files produced by Samples class
-    df_all_index_parameter_file = workingDir / "df_all_index_parameter_values.pkl"
+    df_index_parameter_file = workingDir / kwargs.get("df_index_parameter_file", DF_INDEX_PARAMETER_FILE)
     # optional set of files
-    df_all_index_parameter_gof_file = workingDir / "df_all_index_parameter_gof_values.pkl"
-    df_all_simulations_file = workingDir / "df_all_simulations.pkl"
-    df_state_results_file = workingDir / "df_state_results.pkl"
-    df_time_varying_grad_analysis_file = workingDir / "df_time_varying_grad_analysis.pkl"
-    df_time_aggregated_grad_analysis_file = workingDir / "df_time_aggregated_grad_analysis.pkl"
+    df_index_parameter_gof_file = workingDir / kwargs.get("df_index_parameter_gof_file", DF_INDEX_PARAMETER_GOF_FILE)
+    df_simulations_file = workingDir / kwargs.get("df_simulations_file", DF_SIMULATIONS_FILE)
+    df_state_file = workingDir / kwargs.get("df_state_file", DF_STATE_FILE)
 
-    # Files produced by UQEF.Statistics and statistics
-    statistics_dictionary_file = workingDir / f"statistics_dictionary_qoi_{qoi_string}.pkl"
+    f_kl_surrogate_file = workingDir / kwargs.get("f_kl_surrogate_file", F_KL_SURROGATE_FILE)
 
-    # Active Subspaces related files
-    dict_of_approx_matrix_c_file = workingDir / "dict_of_approx_matrix_c.pkl"
-    dict_of_matrix_c_eigen_decomposition_file = workingDir / "dict_of_matrix_c_eigen_decomposition.pkl"
+    # Active Subspaces and gradient analysis related files
+    df_time_varying_grad_analysis_file = workingDir / kwargs.get("df_time_varying_grad_analysis_file", DF_TIME_VARYING_GRAD_ANALYSIS_FILE)
+    df_time_aggregated_grad_analysis_file = workingDir / kwargs.get("df_time_aggregated_grad_analysis_file", DF_TIME_AGGREGATED_GRAD_ANALYSIS_FILE)
+    dict_approx_matrix_c_file = workingDir / kwargs.get("dict_approx_matrix_c_file", DICT_APPROX_MATRIX_C_FILE)
+    dict_matrix_c_eigen_decomposition_file = workingDir / kwargs.get("dict_matrix_c_eigen_decomposition_file", DICT_MATRIX_C_EIGEN_DECOMPOSITION_FILE)
+    dict_active_scores_file = workingDir / kwargs.get("dict_active_scores_file", DICT_ACTIVE_SCORES_FILE)
 
     # Optionally, one might save uqef.simulation parameters / nodes / weights
-    df_uqsim_simulation_parameters = workingDir / "df_uqsim_simulation_parameters.pkl"
-    df_uqsim_simulation_nodes = workingDir / "df_uqsim_simulation_nodes.pkl"
-    df_uqsim_simulation_weights = workingDir / "df_uqsim_simulation_weights.pkl"
+    df_uqsim_simulation_parameters_file = workingDir / kwargs.get("df_uqsim_simulation_parameters_file", DF_UQSIM_SIMULATION_PARAMETERS_FILE)
+    df_uqsim_simulation_nodes_file = workingDir / kwargs.get("df_uqsim_simulation_nodes_file", DF_UQSIM_SIMULATION_NODES_FILE)
+    df_uqsim_simulation_weights_file = workingDir / kwargs.get("df_uqsim_simulation_weights_file", DF_UQSIM_SIMULATION_WEIGHTS_FILE)
+
+    # Files produced by UQEF.Statistics and statistics, single qoi - single file
+    statistics_dictionary_file = workingDir / f"statistics_dictionary_qoi_{qoi_string}.pkl"
+    # dict_with_qoi_name_specific_output_file_paths = get_dict_with_qoi_name_specific_output_file_paths_based_on_workingDir(workingDir, qoi_string)
+    # statistics_dictionary_file = dict_with_qoi_name_specific_output_file_paths["statistics_dictionary_file"]
+    # f_kl_surrogate_coefficients_file = dict_with_qoi_name_specific_output_file_paths["f_kl_surrogate_coefficients_file"]
+    # f_kl_surrogate_df_file = dict_with_qoi_name_specific_output_file_paths["f_kl_surrogate_df_file"]
+    # generalized_sobol_indices_file = = dict_with_qoi_name_specific_output_file_paths["generalized_sobol_indices_file"]
 
     return args_file, configuration_object_file, nodes_file, simulation_parameters_file, parameters_file, time_info_file, \
-        df_all_index_parameter_file, df_all_index_parameter_gof_file, df_all_simulations_file, \
-            df_state_results_file, df_time_varying_grad_analysis_file, df_time_aggregated_grad_analysis_file, \
-                statistics_dictionary_file, dict_of_approx_matrix_c_file, dict_of_matrix_c_eigen_decomposition_file, \
-                df_uqsim_simulation_parameters, df_uqsim_simulation_nodes, df_uqsim_simulation_weights
+    df_index_parameter_file, df_index_parameter_gof_file, df_simulations_file, df_state_file, \
+    f_kl_surrogate_file, statistics_dictionary_file, \
+    df_time_varying_grad_analysis_file, df_time_aggregated_grad_analysis_file, \
+    dict_approx_matrix_c_file, dict_matrix_c_eigen_decomposition_file, dict_active_scores_file, \
+    df_uqsim_simulation_parameters_file, df_uqsim_simulation_nodes_file, df_uqsim_simulation_weights_file
 
 
 # TODO Update this class with new changes
@@ -233,18 +342,19 @@ class UQOutputPaths(object):
         self.workingDir = workingDir
         self._update_other_paths_based_on_workingDir(workingDir)
 
-    def _update_other_paths_based_on_workingDir(self, workingDir):
+    def _update_other_paths_based_on_workingDir(self, workingDir, qoi_string="Value", **kwargs):
         # 'global' files
-        self.nodes_file = workingDir / "nodes.simnodes.zip"
-        self.parameters_file = workingDir / "parameters.pkl"
-        self.args_file = workingDir / 'uqsim_args.pkl'
-        self.configuration_object_file = workingDir / "configurationObject"
+
+        self.nodes_file = workingDir / kwargs.get("nodes_file", NODES_FILE)
+        self.parameters_file = workingDir / kwargs.get("parameters_file", PARAMETERS_FILE)
+        self.args_file = workingDir / kwargs.get("args_file", ARGS_FILE)
+        self.configuration_object_file = workingDir / kwargs.get("configuration_object_file", CONFIGURATION_OBJECT_FILE)
 
         # master_configuration_folder = workingDir / "master_configuration"
         self.model_runs_folder = workingDir / "model_runs"
         self.master_configuration_folder = self.model_runs_folder / "master_configuration"
 
-        # Files produced by LarsimModelSetUp - __init__
+        # Files produced by model - __init__
         # TODO this files are either in workingDir or workingDir/"model_runs" - model_runs_folder
         self.df_measured_file = self.model_runs_folder / "df_measured.pkl"  # model_runs_folder/"df_measured.pkl"
         self.df_past_simulated_file = self.model_runs_folder / "df_past_simulated.pkl"  # "df_simulated.pkl"
@@ -253,28 +363,32 @@ class UQOutputPaths(object):
         self.gof_unaltered_meas_file = self.model_runs_folder / "gof_unaltered_meas.pkl"
         self.gpce_file = self.model_runs_folder / "gpce.pkl"
 
-        # Files produced by LarsimSamples
-        self.df_all_simulations_file = self.model_runs_folder / "df_all_simulations.pkl"
-        self.df_all_index_parameter_gof_file = self.model_runs_folder / "df_all_index_parameter_gof_values.pkl"
-        self.df_all_index_parameter_file = self.model_runs_folder / "df_all_index_parameter_values.pkl"
+        self.df_simulations_file = self.model_runs_folder / kwargs.get("df_simulations_file", DF_SIMULATIONS_FILE)
+        self.df_index_parameter_gof_file = self.model_runs_folder /  kwargs.get("df_index_parameter_gof_file", DF_INDEX_PARAMETER_GOF_FILE)
+        self.df_index_parameter_file = self.model_runs_folder / kwargs.get("df_index_parameter_file", DF_INDEX_PARAMETER_FILE)
 
-        # Files produced by UQEF.Statistics and LarsimStatistics
-        self.statistics_dictionary_file = self.model_runs_folder / "statistics_dictionary_qoi_Value.pkl"
+        # Files produced by UQEF-Dynamic.Statistics class
+        self.statistics_dictionary_file = self.model_runs_folder / f"statistics_dictionary_qoi_{qoi_string}.pkl"
         # self.statistics_dictionary_file = self.model_runs_folder / "statistics_dictionary_qoi_calculateNSE.pkl"
 
-        # self.df_all_simulations_file = workingDir / "df_all_simulations.pkl"
-        # self.df_all_index_parameter_gof_file = workingDir / "df_all_index_parameter_gof_values.pkl"
-        # self.df_all_index_parameter_file = workingDir / "df_all_index_parameter_values.pkl"
+        # Active Subspaces and gradient analysis related files
+        self.dict_approx_matrix_c_file = self.model_runs_folder / kwargs.get("dict_approx_matrix_c_file", DICT_APPROX_MATRIX_C_FILE)
+        self.dict_matrix_c_eigen_decomposition_file = self.model_runs_folder /kwargs.get("dict_matrix_c_eigen_decomposition_file", DICT_MATRIX_C_EIGEN_DECOMPOSITION_FILE)
+        self.df_time_varying_grad_analysis_file = self.model_runs_folder / kwargs.get("df_time_varying_grad_analysis_file", DF_TIME_VARYING_GRAD_ANALYSIS_FILE)
+        self.df_time_aggregated_grad_analysis_file = self.model_runs_folder / kwargs.get("df_time_aggregated_grad_analysis_file", DF_TIME_AGGREGATED_GRAD_ANALYSIS_FILE)
+        self.dict_active_scores_file = self.model_runs_folder / kwargs.get("dict_active_scores_file", DICT_ACTIVE_SCORES_FILE)
 
-        self.dict_of_approx_matrix_c_file = self.model_runs_folder / "dict_of_approx_matrix_c.pkl"
-        self.dict_of_matrix_c_eigen_decomposition_file = self.model_runs_folder / "dict_of_matrix_c_eigen_decomposition.pkl"
+        # Optionally, one might save uqef.simulation parameters / nodes / weights
+        self.df_uqsim_simulation_parameters_file = self.model_runs_folder / kwargs.get("df_uqsim_simulation_parameters_file", DF_UQSIM_SIMULATION_PARAMETERS_FILE)
+        self.df_uqsim_simulation_nodes_file = self.model_runs_folder / kwargs.get("df_uqsim_simulation_nodes_file", DF_UQSIM_SIMULATION_NODES_FILE)
+        self.df_uqsim_simulation_weights_file = self.model_runs_folder / kwargs.get("df_uqsim_simulation_weights_file", DF_UQSIM_SIMULATION_WEIGHTS_FILE)
 
         self.output_stat_graph_filename = workingDir / "sim-plotly.html"
         self.output_stat_graph_filename = str(self.output_stat_graph_filename)
 
     def update_specifi_model_run_output_file_paths(self, model_runs_folder, i):
         """
-        Note: THis is specific for Larsim model!
+        Note: This is specific for Larsim model!
         These files are outputed in case when
         run_and_save_simulations and always_save_original_model_runs options are set to True
         model_runs_folder = workingDir / "model_runs"
@@ -293,6 +407,17 @@ class UQOutputPaths(object):
 
 
 def get_df_from_simulationNodes(simulationNodes, nodes_or_paramters="nodes", params_list=None):
+    """
+    Convert UQEF (simulation) nodes object to a pandas DataFrame.
+
+    Args:
+        simulationNodes (object): The UQEF (simulation) nodes object.
+        nodes_or_paramters (str, optional): Specifies whether to convert nodes or parameters. Defaults to "nodes".
+        params_list (list, optional): List of parameter names. Defaults to None.
+
+    Returns:
+        pandas.DataFrame: The converted DataFrame.
+    """
     numDim = simulationNodes.nodes.shape[0]
     numSamples = simulationNodes.nodes.shape[1]
     if nodes_or_paramters == "nodes":
@@ -312,17 +437,43 @@ def get_df_from_simulationNodes(simulationNodes, nodes_or_paramters="nodes", par
 
 
 def get_df_from_simulationNodes_list(simulationNodes_list):
-    """
-    simulationNodes_list.shape = (d, N)
-    """
-    numDim = simulationNodes_list.shape[0]
-    numSamples = simulationNodes_list.shape[1]
-    my_ditc = {f"x{i}": simulationNodes_list[i, :] for i in range(numDim)}
-    df_nodes = pd.DataFrame(my_ditc)
-    return df_nodes
+     """
+     Convert a simulationNodes_list into a pandas DataFrame.
+
+     Parameters:
+     simulationNodes_list (numpy.ndarray): The input simulationNodes_list array with shape (d, N).
+
+     Returns:
+     pandas.DataFrame: The resulting DataFrame with columns representing each dimension of the simulationNodes_list.
+
+     Example:
+     >>> simulationNodes_list = np.array([[1, 2, 3], [4, 5, 6]])
+     >>> get_df_from_simulationNodes_list(simulationNodes_list)
+         x0  x1
+     0   1   4
+     1   2   5
+     2   3   6
+     """
+     numDim = simulationNodes_list.shape[0]
+     numSamples = simulationNodes_list.shape[1]
+     my_ditc = {f"x{i}": simulationNodes_list[i, :] for i in range(numDim)}
+     df_nodes = pd.DataFrame(my_ditc)
+     return df_nodes
 
 
 def generate_df_with_nodes_and_weights_from_file(file_path, params_list=None):
+    """
+    Generate a pandas DataFrame with nodes and weights from a file.
+
+    Args:
+        file_path (str): The path to the file containing the nodes and weights.
+        params_list (list, optional): A list of parameter names corresponding to the columns of the file. 
+                                      If None, default parameter names will be used (x0, x1, x2, ...).
+
+    Returns:
+        pandas.DataFrame: A DataFrame containing the nodes and weights, with column names based on the parameter names.
+
+    """
     nodes_and_weights_array = np.loadtxt(file_path, delimiter=',')
     numDim = nodes_and_weights_array.shape[1] - 1
     numSamples = nodes_and_weights_array.shape[0]
@@ -568,8 +719,25 @@ def transformation_of_parameters_var2(samples, distribution_r, distribution_q):
 
 
 def transform_column_in_df(df, transformation_function_str, column_name, new_column_name=None):
+    """
+    Apply a transformation function to a column in a DataFrame.
+
+    Args:
+        df (pd.DataFrame): The DataFrame to be transformed.
+        transformation_function_str (str): The transformation function to be applied. Supported options are "log", "log2", "log10", and "exp".
+        column_name (str): The name of the column to be transformed.
+        new_column_name (str, optional): The name of the new column to store the transformed values. If not provided, the original column will be overwritten.
+
+    Raises:
+        NotImplementedError: If the specified transformation function is not supported.
+
+    Returns:
+        None; as a side effet update the provided DataFrame with the transformed column.
+
+    """
     if new_column_name is None:
         new_column_name = column_name
+
     if transformation_function_str == "log":
         df[column_name] = df[column_name].apply(lambda x: x if x > 1e-4 else 1e-4)
         df[new_column_name] = np.log(df[column_name], out=np.zeros_like(df[column_name].values), where=(df[column_name].values!=0))
@@ -584,7 +752,7 @@ def transform_column_in_df(df, transformation_function_str, column_name, new_col
         df[new_column_name] = np.exp(df[column_name])
     else:
         # flux_df[new_column_name] = flux_df[single_qoi_column].apply(single_transformation)
-        raise NotImplementedError("For know only log transformation is supported")
+        raise NotImplementedError("For now, only log transformation is supported")
 
 #####################################
 # Utility for calculating different GoF/Objective/Likelihood functions/metrices
@@ -1557,6 +1725,8 @@ def get_param_info_dict(default_par_info_dict: dict, configurationObject: Union[
 
 
 def _get_default_value_from_default_par_info_dict(param_name, default_par_info_dict):
+    if default_par_info_dict is None:
+        raise ValueError("default_par_info_dict is None!")
     if isinstance(default_par_info_dict[param_name], dict):
         return default_par_info_dict[param_name]["default"]
     return default_par_info_dict[param_name]
@@ -1589,16 +1759,22 @@ def _extract_parameters_from_list_of_parameters_from_configurationObject(list_of
     return parameters_dict
 
 
-def _get_parameter_value(single_param, parameters, uncertain_param_counter, take_direct_value, default_par_info_dict):
+def _get_parameter_value(single_param, parameters=None, uncertain_param_counter=0, take_direct_value=False, default_par_info_dict=None):
     if take_direct_value:
-        return parameters[uncertain_param_counter]
-    elif "value" in single_param:
+        if parameters is not None:
+            return parameters[uncertain_param_counter]
+        elif single_param is not None and "name" in single_param:
+            return _get_default_value_from_default_par_info_dict(single_param['name'], default_par_info)
+        else:
+            raise ValueError("parameters is None and single_param is None!")
+    elif single_param is not None and "value" in single_param:
         return single_param["value"]
-    elif "default" in single_param:
+    elif single_param is not None and "default" in single_param:
         return single_param["default"]
-    else:
+    elif single_param is not None and "name" in single_param:
         return _get_default_value_from_default_par_info_dict(single_param['name'], default_par_info_dict)
-
+    else:
+        raise ValueError("single_param is None!")
 
 def _handle_no_parameters(configurationObject, default_par_info_dict):
     if configurationObject is not None:
@@ -1612,6 +1788,24 @@ def _handle_no_parameters(configurationObject, default_par_info_dict):
 
 
 def _handle_parameters(parameters, configurationObject, default_par_info_dict, take_direct_value):
+    """
+    This function is used to extract the parameters from the configuration object.
+
+    Args:
+        parameters (dict, or list): A list of parameters.
+        configurationObject (dict): The configuration object containing information about the parameters.
+        default_par_info_dict (dict): A dictionary containing default parameter information.
+        take_direct_value (bool): A boolean value indicating whether to take the direct value.
+
+    Returns:
+        dict: A dictionary containing paramter names as keys and parameter values (either extracted from the parameters
+        argument, or from the configuration object values, or from the default parameter information dictionary) as values.
+
+    Important control variable is take_direct_value. If take_direct_value is True, 
+    then the function will take the parameter values directly from the parameters variable.     
+
+    The final dictionary will cotain entries for all the parameters which are present in the configurationObject (both cetain and uncertain parameters).
+    """
     parameters_dict = {}
 
     if isinstance(parameters, dict) and take_direct_value:
@@ -1652,8 +1846,9 @@ def parameters_configuration(parameters, configurationObject: Union[dict, List, 
 def configuring_parameter_values(parameters, configurationObject: Union[dict, List, pd.DataFrame, str, pathlib.PosixPath, Any]=None, default_par_info_dict: dict=None, take_direct_value: bool = False) -> dict:
     """
     Note: If not take_direct_value and parameters!= None, parameters_dict will contain
-    some value for every single parameter in configurationObject (e.g., it might at the end have more entries that the
-    input parameters variable)
+    some value for every single parameter in configurationObject (e.g., it might at the end have more entries than the
+    input parameters variable). This it (as of the Nov 2024) in contrast to the logic in TimeDependentModel._parameters_configuration,
+    where only the values for the uncertain parameters should be present in the parameters_dict returned by this!
     :param parameters:
     :type parameters: dictionary or array storing all uncertain parameters
        in the same order as parameters are listed in configurationObject
@@ -1853,10 +2048,10 @@ def _get_nodes_from_file(working_folder, dill_or_pickle="dill"):
 
 
 def _get_df_index_parameter_gof_from_file(
-        working_folder, df_all_index_parameter_gof_values_file_name="df_all_index_parameter_gof_values.pkl"):
-    df_all_index_parameter_gof_values_file = pathlib.Path(working_folder) / df_all_index_parameter_gof_values_file_name
-    df_all_index_parameter_gof_values = pd.read_pickle(df_all_index_parameter_gof_values_file, compression='gzip')
-    return df_all_index_parameter_gof_values
+        working_folder, df_index_parameter_gof_values_file_name="df_index_parameter_gof_values.pkl"):
+    df_index_parameter_gof_values_file = pathlib.Path(working_folder) / df_index_parameter_gof_values_file_name
+    df_index_parameter_gof_values = pd.read_pickle(df_index_parameter_gof_values_file, compression='gzip')
+    return df_index_parameter_gof_values
 
 
 def _get_statistics_dict(working_folder, statistics_dictionary_file_name="statistics_dictionary.pkl"):
@@ -2159,35 +2354,47 @@ def plot_all_model_runs(df_simulation_result: pd.DataFrame, single_qoi_column: s
     :param workingDir: directory where the plot will be saved if save_plot is True 
     :return: plotly figure
     """
-    model_runs = np.empty((
-        df_simulation_result[index_column_name].nunique(), df_simulation_result[time_column_name].nunique()
-    ))
+
     total_number_model_runs =  df_simulation_result[index_column_name].nunique()
-    list_of_dates_of_interest = df_simulation_result[index_column_name].unique()
+    list_of_dates_of_interest = df_simulation_result[time_column_name].unique()
+
     grouped = df_simulation_result.groupby(index_column_name)
     groups = grouped.groups
     keyIter = list(groups.keys())
-    index_run_local = 0
-    for key in keyIter:
-        model_runs[index_run_local] = df_simulation_result.loc[groups[key].values, single_qoi_column]
-        index_run_local += 1
-
     fig = go.Figure()
-    lines = [
-        go.Scatter(
-            x=list_of_dates_of_interest,
-            y=single_row,
-            showlegend=False,
-            # legendgroup=colours[i],
-            mode="lines",
-            line=dict(
-                color='LightSkyBlue'),
-            opacity=0.1
+    for key in keyIter:
+        df_simulation_result_subset = df_simulation_result.loc[groups[key].values]
+        fig.add_trace(
+            go.Scatter(
+                x=df_simulation_result_subset[time_column_name], 
+                y=df_simulation_result_subset[single_qoi_column],
+                line_color='LightSkyBlue', mode="lines", opacity=0.1, showlegend=False,
+            )
         )
-        for single_row in model_runs
-    ]
-    for trace in lines:
-        fig.add_trace(trace)
+
+    # model_runs = np.empty((
+    #     df_simulation_result[index_column_name].nunique(), df_simulation_result[time_column_name].nunique()
+    # ))
+    # index_run_local = 0
+    # for key in keyIter:
+    #     model_runs[index_run_local] = df_simulation_result.loc[groups[key].values, single_qoi_column]
+    #     index_run_local += 1
+    # lines = [
+    #     go.Scatter(
+    #         x=list_of_dates_of_interest,
+    #         y=single_row,
+    #         showlegend=False,
+    #         # legendgroup=colours[i],
+    #         mode="lines",
+    #         line=dict(
+    #             color='LightSkyBlue'),
+    #         opacity=0.1
+    #     )
+    #     for single_row in model_runs
+    # ]
+    # for trace in lines:
+    #     fig.add_trace(trace)
+
     fig.update_traces(mode='lines')
     fig.update_layout(
         title=f"Simulation Results - #runs {total_number_model_runs}",
@@ -2429,9 +2636,13 @@ def compute_gPCE_over_time(model, t: Union[np.array, np.ndarray, List[Union[int,
     coeff = np.empty((len(t),), dtype=object)
     for idx, _ in enumerate(model_runs):  # for element in t:
         if regression:
-            gPCE_over_time[idx] = cp.fit_regression(polynomial_expansion, nodes, model_runs[idx])
+            gPCE_over_time[idx] = cp.fit_regression(
+                polynomials=polynomial_expansion, abscissas=nodes, evals=model_runs[idx], model=None)
         else:
-            gPCE_over_time[idx], coeff[idx] = cp.fit_quadrature(polynomial_expansion, nodes, weights_quad, model_runs[idx], retall=True)
+            gPCE_over_time[idx], coeff[idx] = cp.fit_quadrature(
+                orth=polynomial_expansion, nodes=nodes, weights=weights_quad, 
+                solves=model_runs[idx], retall=True, norms=norms
+                )
     return gPCE_over_time, polynomial_expansion, np.asfarray(norms), np.asfarray(coeff)
 
 
@@ -2446,7 +2657,10 @@ def compute_PSP_over_time(model, t: Union[np.array, np.ndarray, List[Union[int, 
     gPCE_over_time =  np.empty((len(t),), dtype=object) # np.empty((len(t), number_expansion_coefficients))
     coeff = np.empty((len(t),), dtype=object)
     for idx, _ in enumerate(model_runs):  # for element in t:
-        gPCE_over_time[idx], coeff[idx] = cp.fit_quadrature(polynomial_expansion, nodes_quad, weights_quad, model_runs[idx], retall=True)
+        gPCE_over_time[idx], coeff[idx] = cp.fit_quadrature(
+            orth=polynomial_expansion, nodes=nodes_quad, weights=weights_quad, 
+            solves=model_runs[idx], retall=True, norms=norms
+            )
     return gPCE_over_time, polynomial_expansion, np.asfarray(norms), np.asfarray(coeff)
 
 # =================================================================================================
@@ -2461,7 +2675,8 @@ def computing_mc_statistics(
     single_qoi_column: str=QOI_COLUMN_NAME,
     compute_only_mean:bool=False,
     compute_Sobol_m:bool=False,
-    samples=None
+    samples=None,
+    dict_stat_to_compute:dict=DEFAULT_DICT_STAT_TO_COMPUTE,
     ) -> Dict[Any, Dict[str, Any]]:
     """
     Parameters:
@@ -2478,6 +2693,7 @@ def computing_mc_statistics(
     - compute_Sobol_m: bool, optional. Default is False.
     - samples: np.array, optional; only relevan if compute_Sobol_m is True
         matrix of parameter samples used to force the model should be of the size NxD. Defaults to None.
+    - dict_stat_to_compute(dict, optional): dictionary of entrie what statistics to be computedl can be combined with above variables...
 
     Returns:
     - result_dict: Dict[Any, Dict[str, Any]]
@@ -2495,7 +2711,8 @@ def computing_mc_statistics(
     result_dict = defaultdict(dict)
     for key, val_indices in groups.items():
         _, result_dict[key] = computing_mc_statistics_single_date(
-            key, val_indices, df_simulation_result, numEvaluations, single_qoi_column, compute_only_mean, compute_Sobol_m, samples
+            key, val_indices, df_simulation_result, numEvaluations, single_qoi_column, compute_only_mean, compute_Sobol_m, samples,
+            dict_stat_to_compute
             )
     return result_dict
 
@@ -2508,7 +2725,8 @@ def computing_mc_statistics_parallel_in_time(
     single_qoi_column: str=QOI_COLUMN_NAME,
     compute_only_mean:bool=False,
     compute_Sobol_m:bool=False,
-    samples=None
+    samples=None,
+    dict_stat_to_compute:dict=DEFAULT_DICT_STAT_TO_COMPUTE,
 ) -> Dict[Any, Dict[str, Any]]:
     """
     Compute Monte Carlo statistics in parallel for each time point.
@@ -2523,6 +2741,7 @@ def computing_mc_statistics_parallel_in_time(
         compute_Sobol_m (bool, optional): Whether to compute Sobol indices. Defaults to False.
         samples (np.array, optional): Matrix of parameter samples used to force the model should be of the size NxD.
             only relevan if compute_Sobol_m is True; Defaults to None.
+        dict_stat_to_compute(dict, optional): dictionary of entrie what statistics to be computedl can be combined with above variables...
     Returns:
         Dict[Any, Dict[str, Any]]: A dictionary containing the computed statistics for each time point.
     """
@@ -2530,7 +2749,7 @@ def computing_mc_statistics_parallel_in_time(
         with multiprocessing.Pool(processes=num_processes) as pool:
             for date, result_dict_single_date in pool.starmap(computing_mc_statistics_single_date, \
                                        [(key, val_indices, df_simulation_result, numEvaluations,
-                                       single_qoi_column, compute_only_mean, compute_Sobol_m, samples) for key, val_indices in groups.items()]):
+                                       single_qoi_column, compute_only_mean, compute_Sobol_m, samples, dict_stat_to_compute) for key, val_indices in groups.items()]):
                 yield date, result_dict_single_date
     
     result_dict = defaultdict(dict)
@@ -2548,7 +2767,9 @@ def computing_gpce_statistics(
     single_qoi_column: str=QOI_COLUMN_NAME, 
     regression:bool=False, store_gpce_surrogate_in_stat_dict:bool=True, save_gpce_surrogate=False,
     compute_only_gpce:bool=False,
-    compute_Sobol_t:bool=True, compute_Sobol_m:bool=False,compute_Sobol_m2:bool=False
+    compute_Sobol_t:bool=True, compute_Sobol_m:bool=False,compute_Sobol_m2:bool=False,
+    dict_stat_to_compute:dict=DEFAULT_DICT_STAT_TO_COMPUTE,
+    polynomial_norms=None,
 ) -> Dict[Any, Dict[str, Any]]:
     """
     Computes statistics time-wise over all the simulations using gPCE.
@@ -2569,7 +2790,8 @@ def computing_gpce_statistics(
         compute_Sobol_t (bool, optional): Whether to compute Sobol' indices (total effects). Defaults to True.
         compute_Sobol_m (bool, optional): Whether to compute Sobol' indices (main effects). Defaults to False.
         compute_Sobol_m2 (bool, optional): Whether to compute Sobol' indices (total-order main effects). Defaults to False.
-
+        dict_stat_to_compute(dict, optional): dictionary of entrie what statistics to be computedl can be combined with above variables...
+        polynomial_norms(numpy.ndarray, optional): The norms of the polynomial expansion. Defaults to None.
     Returns:
         Dict[Any, Dict[str, Any]]: A dictionary containing the computed statistics for each time stamp.
     
@@ -2586,7 +2808,8 @@ def computing_gpce_statistics(
             key, val_indices, df_simulation_result, polynomial_expansion, nodes, weights, dist,
             single_qoi_column, regression, store_gpce_surrogate_in_stat_dict, save_gpce_surrogate,
             compute_only_gpce,
-            compute_Sobol_t, compute_Sobol_m, compute_Sobol_m2)
+            compute_Sobol_t, compute_Sobol_m, compute_Sobol_m2, dict_stat_to_compute,
+            polynomial_norms)
     return result_dict
         
 
@@ -2598,7 +2821,9 @@ def computing_gpce_statistics_parallel_in_time(
     single_qoi_column: str=QOI_COLUMN_NAME, 
     regression:bool=False, store_gpce_surrogate_in_stat_dict:bool=True, save_gpce_surrogate=False,
     compute_only_gpce:bool=False,
-    compute_Sobol_t:bool=True, compute_Sobol_m:bool=False, compute_Sobol_m2:bool=False
+    compute_Sobol_t:bool=True, compute_Sobol_m:bool=False, compute_Sobol_m2:bool=False,
+    dict_stat_to_compute:dict=DEFAULT_DICT_STAT_TO_COMPUTE,
+    polynomial_norms=None,
 ) -> Dict[Any, Dict[str, Any]]:
     """
     Computes GPCE statistics in parallel for each time point in the given DataFrame.
@@ -2620,7 +2845,8 @@ def computing_gpce_statistics_parallel_in_time(
         compute_Sobol_t (bool, optional): Whether to compute Sobol indices for total effects. Defaults to True.
         compute_Sobol_m (bool, optional): Whether to compute Sobol indices for main effects. Defaults to False.
         compute_Sobol_m2 (bool, optional): Whether to compute Sobol indices for second-order interactions. Defaults to False.
-
+        dict_stat_to_compute(dict, optional): dictionary of entrie what statistics to be computedl can be combined with above variables...
+        polynomial_norms(numpy.ndarray, optional): The norms of the polynomial expansion. Defaults to None.
     Returns:
         Dict[Any, Dict[str, Any]]: A dictionary containing the computed GPCE statistics for each time point.
     """
@@ -2631,7 +2857,7 @@ def computing_gpce_statistics_parallel_in_time(
                                        polynomial_expansion, nodes, weights, dist,
                                        single_qoi_column, 
                                        regression, store_gpce_surrogate_in_stat_dict, save_gpce_surrogate, compute_only_gpce,
-                                       compute_Sobol_t, compute_Sobol_m, compute_Sobol_m2) for key, val_indices in groups.items()]):
+                                       compute_Sobol_t, compute_Sobol_m, compute_Sobol_m2, dict_stat_to_compute, polynomial_norms) for key, val_indices in groups.items()]):
                 yield date, result_dict_single_date
     
     result_dict = defaultdict(dict)
@@ -2643,7 +2869,9 @@ def computing_gpce_statistics_parallel_in_time(
 
 
 def statistics_result_dict_to_df(result_dict,  time_column_name: str=TIME_COLUMN_NAME) -> pd.DataFrame:
-    # Convert the nested dictionary to a pandas DataFrame
+    """
+    Convert the nested dictionary to a pandas DataFrame. Set time column as index column.
+    """
     df_stat = pd.DataFrame.from_dict(result_dict, orient='index')
     df_stat.index.name = time_column_name
     return df_stat
@@ -2656,7 +2884,9 @@ def computing_mc_statistics_single_date(
     single_qoi_column: str=QOI_COLUMN_NAME,
     compute_only_mean:bool=False,
     compute_Sobol_m:bool=False,
-    samples=None):
+    samples=None,
+    dict_stat_to_compute:dict=DEFAULT_DICT_STAT_TO_COMPUTE,
+    ):
     """
     Parameters:
     - time_stamp: current time stamp
@@ -2673,6 +2903,7 @@ def computing_mc_statistics_single_date(
     - compute_Sobol_m: bool, optional. Default is False.
     - samples: np.array, optional; only relevan if compute_Sobol_m is True
         matrix of parameter samples used to force the model should be of the size NxD. Defaults to None.
+    - dict_stat_to_compute(dict, optional): dictionary of entrie what statistics to be computedl can be combined with above variables...
 
     Returns:
     - time_stamp: current time stamp
@@ -2688,7 +2919,8 @@ def computing_mc_statistics_single_date(
 
     result_dict = computing_mc_statistics_simple(
         val_indices=val_indices, df_simulation_result=df_simulation_result, numEvaluations=numEvaluations,
-        single_qoi_column=single_qoi_column, compute_only_mean=compute_only_mean, compute_Sobol_m=compute_Sobol_m, samples=samples
+        single_qoi_column=single_qoi_column, compute_only_mean=compute_only_mean, compute_Sobol_m=compute_Sobol_m, samples=samples,
+        dict_stat_to_compute=dict_stat_to_compute,
     )
     
     return time_stamp, result_dict
@@ -2698,7 +2930,10 @@ def computing_gpce_statistics_single_date(
     time_stamp, val_indices, df_simulation_result, polynomial_expansion, nodes, weights, dist, single_qoi_column: str=QOI_COLUMN_NAME, 
     regression:bool=False, store_gpce_surrogate_in_stat_dict:bool=True, save_gpce_surrogate=False,
     compute_only_gpce:bool=False,
-    compute_Sobol_t:bool=True, compute_Sobol_m:bool=False, compute_Sobol_m2:bool=False):
+    compute_Sobol_t:bool=True, compute_Sobol_m:bool=False, compute_Sobol_m2:bool=False,
+    dict_stat_to_compute:dict=DEFAULT_DICT_STAT_TO_COMPUTE,
+    polynomial_norms=None,
+    ):
     """
     Parameters:
     - time_stamp: current time stamp
@@ -2719,6 +2954,8 @@ def computing_gpce_statistics_single_date(
     - compute_Sobol_t (bool, optional): Whether to compute Sobol' indices (total effects). Defaults to True.
     - compute_Sobol_m (bool, optional): Whether to compute Sobol' indices (main effects). Defaults to False.
     - compute_Sobol_m2 (bool, optional): Whether to compute Sobol' indices (total-order main effects). Defaults to False.
+    - dict_stat_to_compute(dict, optional): dictionary of entrie what statistics to be computedl can be combined with above variables...
+    - polynomial_norms(numpy.ndarray, optional): The norms of the polynomial expansion. Defaults to None.
 
     Returns:
     - time_stamp: current time stamp
@@ -2741,7 +2978,9 @@ def computing_gpce_statistics_single_date(
         store_gpce_surrogate_in_stat_dict=store_gpce_surrogate_in_stat_dict,
         save_gpce_surrogate=save_gpce_surrogate,
         compute_only_gpce=compute_only_gpce,
-        compute_Sobol_t=compute_Sobol_t, compute_Sobol_m=compute_Sobol_m, compute_Sobol_m2=compute_Sobol_m2
+        compute_Sobol_t=compute_Sobol_t, compute_Sobol_m=compute_Sobol_m, compute_Sobol_m2=compute_Sobol_m2,
+        dict_stat_to_compute=dict_stat_to_compute,
+        polynomial_norms=polynomial_norms,
         )
 
     return time_stamp, result_dict
@@ -2759,7 +2998,8 @@ def computing_mc_statistics_simple(
     single_qoi_column: str=QOI_COLUMN_NAME,
     compute_only_mean:bool=False,
     compute_Sobol_m:bool=False,
-    samples=None):
+    samples=None,
+    dict_stat_to_compute:dict=DEFAULT_DICT_STAT_TO_COMPUTE):
     """
     Parameters:
     - qoi_values: np.array, optional
@@ -2777,6 +3017,7 @@ def computing_mc_statistics_simple(
     - compute_Sobol_m: bool, optional. Default is False.
     - samples: np.array, optional; only relevan if compute_Sobol_m is True
         matrix of parameter samples used to force the model should be of the size NxD. Defaults to None.
+    - dict_stat_to_compute(dict, optional): dictionary of entrie what statistics to be computedl can be combined with above variables...
 
     Returns:
     - result_dict: Dict[Any, Any]
@@ -2803,18 +3044,30 @@ def computing_mc_statistics_simple(
         df_simulation_result.loc[val_indices, single_qoi_column_centered] = df_simulation_result.loc[val_indices, single_qoi_column] - mean
 
     if not compute_only_mean:
-        result_dict['Var'] = np.var(qoi_values, ddof=1) 
-        # result_dict['Var'] = np.sum((qoi_values - result_dict["E"]) ** 2, \
-        # axis=0, dtype=np.float64) / (numEvaluations - 1)
-        result_dict["StdDev"] = np.std(qoi_values, 0, ddof=1)
-        result_dict["Skew"] = scipy.stats.skew(qoi_values, axis=0, bias=True)
-        result_dict["Kurt"] = scipy.stats.kurtosis(qoi_values, axis=0, bias=True)
+        if dict_stat_to_compute.get("Var", False):
+            result_dict['Var'] = np.var(qoi_values, ddof=1) 
+            # result_dict['Var'] = np.sum((qoi_values - result_dict["E"]) ** 2, \
+            # axis=0, dtype=np.float64) / (numEvaluations - 1)
+        if dict_stat_to_compute.get("StdDev", False):
+            result_dict["StdDev"] = np.std(qoi_values, 0, ddof=1)
+        if dict_stat_to_compute.get("Skew", False):
+            result_dict["Skew"] = scipy.stats.skew(qoi_values, axis=0, bias=True)
+        if dict_stat_to_compute.get("Kurt", False):
+            result_dict["Kurt"] = scipy.stats.kurtosis(qoi_values, axis=0, bias=True)
 
-        result_dict["P10"] = np.percentile(qoi_values, 10, axis=0)
-        result_dict["P90"] = np.percentile(qoi_values, 90, axis=0)
+        if dict_stat_to_compute.get("P10", False):
+            result_dict["P10"] = np.percentile(qoi_values, 10, axis=0)
+            if isinstance(result_dict["P10"], list) and len(result_dict["P10"]) == 1:
+                result_dict["P10"] = result_dict["P10"][0]
+        if dict_stat_to_compute.get("P90", False):
+            result_dict["P90"] = np.percentile(qoi_values, 90, axis=0)
+            if isinstance(result_dict["P90"], list) and len(result_dict["P90"]) == 1:
+                result_dict["P90"] = result_dict["P90"][0]
 
-        result_dict["E_minus_std"] = result_dict['E'] - result_dict['StdDev']
-        result_dict["E_plus_std"] = result_dict['E'] + result_dict['StdDev']
+        if dict_stat_to_compute.get("E_minus_std", False):
+            result_dict["E_minus_std"] = result_dict['E'] - result_dict['StdDev']
+        if dict_stat_to_compute.get("E_plus_std", False):
+            result_dict["E_plus_std"] = result_dict['E'] + result_dict['StdDev']
 
     if compute_Sobol_m and samples is not None:
         dim = samples.shape[1]
@@ -2834,7 +3087,10 @@ def computing_gpce_statistics_simple(
     single_qoi_column: str=QOI_COLUMN_NAME, 
     regression:bool=False, store_gpce_surrogate_in_stat_dict:bool=True, save_gpce_surrogate=False,
     compute_only_gpce:bool=False,
-    compute_Sobol_t:bool=True, compute_Sobol_m:bool=False, compute_Sobol_m2:bool=False):
+    compute_Sobol_t:bool=True, compute_Sobol_m:bool=False, compute_Sobol_m2:bool=False,
+    dict_stat_to_compute:dict=DEFAULT_DICT_STAT_TO_COMPUTE,
+    polynomial_norms=None,
+    ):
     """
     Parameters:
     - qoi_values: np.array, optional
@@ -2856,6 +3112,8 @@ def computing_gpce_statistics_simple(
     - compute_Sobol_t (bool, optional): Whether to compute Sobol' indices (total effects). Defaults to True.
     - compute_Sobol_m (bool, optional): Whether to compute Sobol' indices (main effects). Defaults to False.
     - compute_Sobol_m2 (bool, optional): Whether to compute Sobol' indices (total-order main effects). Defaults to False.
+    - dict_stat_to_compute(dict, optional): dictionary of entrie what statistics to be computedl can be combined with above variables...
+    - polynomial_norms(numpy.ndarray, optional): The norms of the polynomial expansion. Defaults to None.
 
     Returns:
     - result_dict: Dict[Any, Any]
@@ -2878,7 +3136,10 @@ def computing_gpce_statistics_simple(
     if regression:
         qoi_gPCE, coeff = cp.fit_regression(polynomial_expansion, nodes, qoi_values)
     else:
-        qoi_gPCE, coeff = cp.fit_quadrature(polynomial_expansion, nodes, weights, qoi_values, retall=True)
+        qoi_gPCE, coeff = cp.fit_quadrature(
+            orth=polynomial_expansion, nodes=nodes, weights=weights, 
+            solves=qoi_values, retall=True, norms=polynomial_norms
+            )
 
     numPercSamples = 10 ** 5
 
@@ -2894,19 +3155,28 @@ def computing_gpce_statistics_simple(
         df_simulation_result.loc[val_indices, single_qoi_column_centered] = df_simulation_result.loc[val_indices, single_qoi_column] - mean
 
     if not compute_only_gpce:
-        result_dict["Var"] = float(cp.Var(qoi_gPCE, dist))
-        result_dict["StdDev"] = float(cp.Std(qoi_gPCE, dist))
+        dict_stat_to_compute['Sobol_t'] = compute_Sobol_t
+        dict_stat_to_compute['Sobol_m'] = compute_Sobol_m
+        dict_stat_to_compute['Sobol_m2'] = compute_Sobol_m2
 
-        result_dict["Skew"] = cp.Skew(qoi_gPCE, dist).round(4)
-        result_dict["Kurt"] = cp.Kurt(qoi_gPCE, dist)
-        result_dict["qoi_dist"] = cp.QoI_Dist(qoi_gPCE, dist)
-
-        result_dict["P10"] = float(cp.Perc(qoi_gPCE, 10, dist, numPercSamples))
-        result_dict["P90"] = float(cp.Perc(qoi_gPCE, 90, dist, numPercSamples))
-        if isinstance(result_dict["P10"], list) and len(result_dict["P10"]) == 1:
-            result_dict["P10"] = result_dict["P10"][0]
-            result_dict["P90"] = result_dict["P90"][0]
-
+        if dict_stat_to_compute.get("Var", False):
+            result_dict["Var"] = float(cp.Var(qoi_gPCE, dist))
+        if dict_stat_to_compute.get("StdDev", False):
+            result_dict["StdDev"] = float(cp.Std(qoi_gPCE, dist))
+        if dict_stat_to_compute.get("Skew", False):
+            result_dict["Skew"] = cp.Skew(qoi_gPCE, dist).round(4)
+        if dict_stat_to_compute.get("Kurt", False):
+            result_dict["Kurt"] = cp.Kurt(qoi_gPCE, dist)
+        if dict_stat_to_compute.get("qoi_dist", False):
+            result_dict["qoi_dist"] = cp.QoI_Dist(qoi_gPCE, dist)
+        if dict_stat_to_compute.get("P10", False):
+            result_dict["P10"] = float(cp.Perc(qoi_gPCE, 10, dist, numPercSamples))
+            if isinstance(result_dict["P10"], list) and len(result_dict["P10"]) == 1:
+                result_dict["P10"] = result_dict["P10"][0]
+        if dict_stat_to_compute.get("P90", False):
+            result_dict["P90"] = float(cp.Perc(qoi_gPCE, 90, dist, numPercSamples))
+            if isinstance(result_dict["P90"], list) and len(result_dict["P90"]) == 1:
+                result_dict["P90"] = result_dict["P90"][0]
         if compute_Sobol_t:
             result_dict["Sobol_t"] = cp.Sens_t(qoi_gPCE, dist)
         if compute_Sobol_m:
@@ -3190,15 +3460,17 @@ def setup_kl_expansion_matrix(eigenvalues, N_kl, N, N_quad, weights, centered_ou
     # weights @ centered_outputs[k,:] @ eigenvectors[:,i]
     for i in range(N_kl):
         for k in range(N):
-            # computing f_kl_eval_at_params[i, k]
-    #         f_kl_eval_at_params_2[i, k] = np.dot(np.dot(weights, centered_outputs[k,:]), eigenvectors[:,i])
-            f_kl_eval_at_params[i, k] = 0
-            for m in range(N_quad):
-                f_kl_eval_at_params[i, k] += weights[m]*centered_outputs.T[m,k]*eigenvectors[m,i]
+            # TODO There is some Casting complex values to real discards the imaginary part happening here; probably from complex eigenvectors in certain situations...
+            f_kl_eval_at_params[i, k] = np.sum(weights * centered_outputs[k,:] * eigenvectors[:,i])
+            # f_kl_eval_at_params[i, k] = np.dot(np.dot(weights.ravel(), centered_outputs[k,:].ravel()), eigenvectors[:,i].ravel())
+            # f_kl_eval_at_params[i, k] = 0
+            # for m in range(N_quad):
+            #     f_kl_eval_at_params[i, k] += weights[m]*centered_outputs.T[m,k]*eigenvectors[m,i]
     return f_kl_eval_at_params
 
 
-def pce_of_kl_expansion(N_kl, polynomial_expansion, nodes, weights, f_kl_eval_at_params, regression=False):
+def pce_of_kl_expansion(
+    N_kl, polynomial_expansion, nodes, weights, f_kl_eval_at_params, regression=False, polynomial_norms=None):
     # PCE of the KL Expansion
     f_kl_surrogate_dict = {}
     # f_kl_surrogate_coefficients = np.empty(N_kl, c_number)
@@ -3208,9 +3480,16 @@ def pce_of_kl_expansion(N_kl, polynomial_expansion, nodes, weights, f_kl_eval_at
         f_kl_surrogate_dict[i] = {}
         # print(f"DEBUGGING - f_kl_eval_at_params[{i},:].shape - {f_kl_eval_at_params[i,:].shape}")
         if regression:
-            f_kl_gPCE, f_kl_coeff = cp.fit_regression(polynomial_expansion, nodes, f_kl_eval_at_params[i,:], retall=True)
+            f_kl_gPCE, f_kl_coeff = cp.fit_regression(
+                polynomials=polynomial_expansion, abscissas=nodes, 
+                evals=f_kl_eval_at_params[i,:], retall=True, 
+                model=None,
+                )
         else:
-            f_kl_gPCE, f_kl_coeff = cp.fit_quadrature(polynomial_expansion, nodes, weights, f_kl_eval_at_params[i,:], retall=True)        
+            f_kl_gPCE, f_kl_coeff = cp.fit_quadrature(
+                orth=polynomial_expansion, nodes=nodes, weights=weights, solves=f_kl_eval_at_params[i,:], retall=True,
+                norms=polynomial_norms
+                )        
         f_kl_surrogate_dict[i]["gPCE"] = f_kl_gPCE
         f_kl_surrogate_dict[i]["gpce_coeff"] = f_kl_coeff
         # f_kl_surrogate_coefficients[i] = np.asfarray(f_kl_coeff).T
@@ -3347,6 +3626,9 @@ def computing_generalized_sobol_total_indices_from_poly_expan(
     max_time = max(result_dict_statistics.keys())
     for time_stamp in result_dict_statistics.keys():  
         coefficients = np.asfarray(result_dict_statistics[time_stamp]['gpce_coeff'])
+        # if "Var" in result_dict_statistics[time_stamp]:
+        #     variance = result_dict_statistics[time_stamp]['Var']
+        # else:
         variance = np.sum(coefficients[index] ** 2, axis=0)
         variance_over_time_array.append(variance)
         for idx in range(len(alphas[0])):
@@ -3358,6 +3640,7 @@ def computing_generalized_sobol_total_indices_from_poly_expan(
         denum = np.dot(variance_over_time_array, weights)
     else:
         denum = total_variance
+    print(f"[INFO computing_generalized_sobol_total_indices_from_poly_expan] total_variance={denum}")
     for idx in range(len(alphas[0])):
         param_name = param_names[idx]
         num = np.dot(np.asfarray(dict_of_num[idx]), weights)
@@ -3483,9 +3766,9 @@ def computing_generalized_sobol_total_indices_from_poly_expan_single_timesample(
         #     file.write(f'{param_name}: {s_tot_generalized}\n')
 
 
-#####################################
+# =================================================================================================
 # Utility for SG analysis
-#####################################
+# =================================================================================================
 
 
 def generate_table_single_rule_over_dim_and_orders_sparse_and_nonsparse(rule, dists, dim, q_orders, growth=None):
@@ -3584,7 +3867,7 @@ def generate_table_over_rules_orders_for_single_dim(rules, dist, dim, q_orders, 
                    numalign="right"))
 
 # =================================================================================================
-# Different set of utility functions
+# MISC - Different set of utility functions
 # =================================================================================================
 
 
