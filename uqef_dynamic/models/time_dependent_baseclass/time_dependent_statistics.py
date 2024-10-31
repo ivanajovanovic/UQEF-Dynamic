@@ -1545,117 +1545,138 @@ class TimeDependentStatistics(ABC, Statistics):
         for single_qoi_column in self.list_qoi_column:
             if self.rank == 0:
                 keyIter_chunk, list_of_qoi_values_chunk = self._initialize_chunks(keyIter, single_qoi_column, chunksize)
-
-                numEvaluations_chunk = [self.numEvaluations] * len(keyIter_chunk)
-                if self.regression:
-                    nodesChunks = [self.nodes] * len(keyIter_chunk)
-                    weightsChunks = [self.weights] * len(keyIter_chunk)
-                    distChunks = [self.dist] * len(keyIter_chunk)
-                    polynomial_expansionChunks = [self.polynomial_expansion] * len(keyIter_chunk)
-
-                # TODO Probably all processes already have these data -
-                #  I would not have to propagate those if parallel_calc_stats_for_gPCE would be a class method
-                regressionChunks = [self.regression] * len(keyIter_chunk)
-                dimChunks = [self.dim] * len(keyIter_chunk)
-                compute_Sobol_t_Chunks = [self.compute_Sobol_t] * len(keyIter_chunk)
-                compute_Sobol_m_Chunks = [self.compute_Sobol_m] * len(keyIter_chunk)
-                compute_Sobol_m2_Chunks = [self.compute_Sobol_m2] * len(keyIter_chunk)
-                store_qoi_data_in_stat_dict_Chunks = [self.store_qoi_data_in_stat_dict] * len(keyIter_chunk)
-                store_gpce_surrogate_in_stat_dict_Chunks = [self.store_gpce_surrogate_in_stat_dict] * len(keyIter_chunk)
-                save_gpce_surrogate_Chunks = [self.save_gpce_surrogate] * len(keyIter_chunk)
-                compute_other_stat_besides_pce_surrogate_Chunks = [compute_other_stat_besides_pce_surrogate] * len(keyIter_chunk)
-                dict_stat_to_compute_Chunks = [self.dict_stat_to_compute] * len(keyIter_chunk)
-                compute_sobol_indices_with_samples_chunks = [self.compute_sobol_indices_with_samples] * len(
-                    keyIter_chunk)
-                if self.compute_sobol_indices_with_samples and \
-                        self.compute_Sobol_m and self.nodes is not None:
-                    samples_chunks = [self.nodes.T[:self.numEvaluations]] * len(keyIter_chunk)
-                    # samples = self.uqef_simulationNodes.parameters.T[:self.numEvaluations]
-                else:
-                    samples_chunks = [None] * len(keyIter_chunk)
-                    # samples = None
+                chunks = self._prepare_chunks_mc(keyIter_chunk, compute_other_stat_besides_pce_surrogate)
 
             with futures.MPICommExecutor(MPI.COMM_WORLD, root=0) as executor:
                 if executor is not None:  # master proces; or .\executor.mpi_comm.rank == 0
-                    print(f"{self.rank}: computation of statistics for qoi {single_qoi_column} started...")
-                    solver_time_start = time.time()
-                    if self.regression:
-                        chunk_results_it = executor.map(
-                            parallel_statistics.parallel_calc_stats_for_gPCE,
-                            keyIter_chunk,
-                            list_of_qoi_values_chunk,
-                            distChunks,
-                            polynomial_expansionChunks,
-                            nodesChunks,
-                            weightsChunks,
-                            regressionChunks,
-                            compute_Sobol_t_Chunks,
-                            compute_Sobol_m_Chunks,
-                            compute_Sobol_m2_Chunks,
-                            store_qoi_data_in_stat_dict_Chunks,
-                            store_gpce_surrogate_in_stat_dict_Chunks,
-                            save_gpce_surrogate_Chunks,
-                            compute_other_stat_besides_pce_surrogate_Chunks,
-                            dict_stat_to_compute_Chunks,
-                            chunksize=self.mpi_chunksize,
-                            unordered=self.unordered
-                        )
-                    else:
-                        chunk_results_it = executor.map(
-                            parallel_statistics.parallel_calc_stats_for_MC,
-                            keyIter_chunk,
-                            list_of_qoi_values_chunk, #generator_of_simulations_df
-                            numEvaluations_chunk,
-                            dimChunks,
-                            compute_Sobol_m_Chunks,
-                            store_qoi_data_in_stat_dict_Chunks,
-                            compute_sobol_indices_with_samples_chunks,
-                            samples_chunks,
-                            dict_stat_to_compute_Chunks,
-                            chunksize=self.mpi_chunksize,
-                            unordered=self.unordered
-                        )
-                        # chunk_results_it = executor.map(
-                        #     parallel_statistics.parallel_calc_stats_for_MC,
-                        #     keyIter,
-                        #     generator_of_simulations_df,
-                        #     self.numEvaluations,
-                        #     self.dim,
-                        #     self.compute_Sobol_m,
-                        #     self.store_qoi_data_in_stat_dict,
-                        #     self.compute_sobol_indices_with_samples,
-                        #     samples,
-                        #      self.dict_stat_to_compute,
-                        #     chunksize=self.mpi_chunksize,
-                        #     unordered=self.unordered
-                        # )
-                    print(f"{self.rank}: computation for qoi {single_qoi_column} - waits for shutdown...")
-                    sys.stdout.flush()
-                    executor.shutdown(wait=True)
-                    print(f"{self.rank}: computation for qoi {single_qoi_column} - shut down...")
-                    sys.stdout.flush()
+                    self._compute_mc_statistic_single_qoi_parallel_in_time(
+                        executor, single_qoi_column, keyIter_chunk, list_of_qoi_values_chunk, chunks)
+                    self._postprocess_mc_chunk_results_single_qoi_after_parallel_in_time_analysis(single_qoi_column)
 
-                    solver_time_end = time.time()
-                    solver_time = solver_time_end - solver_time_start
-                    print(f"solver_time for qoi {single_qoi_column}: {solver_time}")
+    def _prepare_chunks_mc(self, keyIter_chunk, compute_other_stat_besides_pce_surrogate=False):
+        # TODO Probably all processes already have these data -
+        #  I would not have to propagate those if parallel_calc_stats_for_gPCE would be a class method
+    
+        if self.compute_sobol_indices_with_samples and \
+                self.compute_Sobol_m and self.nodes is not None:
+            samples_chunks = [self.nodes.T[:self.numEvaluations]] * len(keyIter_chunk)
+            # samples = self.uqef_simulationNodes.parameters.T[:self.numEvaluations]
+        else:
+            samples_chunks = [None] * len(keyIter_chunk)
+            # samples = None
+        
+        chunks = {
+            'compute_Sobol_m_Chunks': [self.compute_Sobol_m] * len(keyIter_chunk),
+            'store_qoi_data_in_stat_dict_Chunks': [self.store_qoi_data_in_stat_dict] * len(keyIter_chunk),
+            'dict_stat_to_compute_Chunks': [self.dict_stat_to_compute] * len(keyIter_chunk),
+        }
+        if self.regression:
+            chunks.update({
+                'distChunks': [self.dist] * len(keyIter_chunk),
+                'polynomial_expansionChunks': [self.polynomial_expansion] * len(keyIter_chunk),
+                'nodesChunks': [self.nodes] * len(keyIter_chunk),
+                'weightsChunks': [self.weights] * len(keyIter_chunk),
+                'regressionChunks': [self.regression] * len(keyIter_chunk),
+                'compute_Sobol_t_Chunks': [self.compute_Sobol_t] * len(keyIter_chunk),
+                'compute_Sobol_m2_Chunks': [self.compute_Sobol_m2] * len(keyIter_chunk),
+                'store_gpce_surrogate_in_stat_dict_Chunks': [self.store_gpce_surrogate_in_stat_dict] * len(keyIter_chunk),
+                'save_gpce_surrogate_Chunks': [self.save_gpce_surrogate] * len(keyIter_chunk),
+                'compute_other_stat_besides_pce_surrogate_Chunks': [compute_other_stat_besides_pce_surrogate] * len(keyIter_chunk),
+            })
+        else:
+            chunks.update({
+                'numEvaluations_chunk':  [self.numEvaluations] * len(keyIter_chunk),
+                'dimChunks': [self.dim] * len(keyIter_chunk),
+                'compute_sobol_indices_with_samples_chunks': [self.compute_sobol_indices_with_samples] * len(keyIter_chunk),
+                'samples_chunks': samples_chunks,
+            })
+        return chunks
 
-                    chunk_results = list(chunk_results_it)
+    def _compute_mc_statistic_single_qoi_parallel_in_time(
+        self, executor, single_qoi_column, keyIter_chunk, list_of_qoi_values_chunk, chunks):
+        print(f"{self.rank}: computation of statistics for qoi {single_qoi_column} started...")
+        solver_time_start = time.time()
+        if self.regression:
+            chunk_results_it = executor.map(
+                parallel_statistics.parallel_calc_stats_for_gPCE,
+                keyIter_chunk,
+                list_of_qoi_values_chunk,
+                chunks['distChunks'],
+                chunks['polynomial_expansionChunks'],
+                chunks['nodesChunks'],
+                chunks['weightsChunks'],
+                chunks['regressionChunks'],
+                chunks['compute_Sobol_t_Chunks'],
+                chunks['compute_Sobol_m_Chunks'],
+                chunks['compute_Sobol_m2_Chunks'],
+                chunks['store_qoi_data_in_stat_dict_Chunks'],
+                chunks['store_gpce_surrogate_in_stat_dict_Chunks'],
+                chunks['save_gpce_surrogate_Chunks'],
+                chunks['compute_other_stat_besides_pce_surrogate_Chunks'],
+                chunks['dict_stat_to_compute_Chunks'],
+                chunksize=self.mpi_chunksize,
+                unordered=self.unordered
+            )
+        else:
+            chunk_results_it = executor.map(
+                parallel_statistics.parallel_calc_stats_for_MC,
+                keyIter_chunk,
+                list_of_qoi_values_chunk, #generator_of_simulations_df
+                chunks['numEvaluations_chunk'],
+                chunks['dimChunks'],
+                chunks['compute_Sobol_m_Chunks'],
+                chunks['store_qoi_data_in_stat_dict_Chunks'],
+                chunks['compute_sobol_indices_with_samples_chunks'],
+                chunks['samples_chunks'],
+                chunks['dict_stat_to_compute_Chunks'],
+                chunksize=self.mpi_chunksize,
+                unordered=self.unordered
+            )
+            # chunk_results_it = executor.map(
+            #     parallel_statistics.parallel_calc_stats_for_MC,
+            #     keyIter,
+            #     generator_of_simulations_df,
+            #     self.numEvaluations,
+            #     self.dim,
+            #     self.compute_Sobol_m,
+            #     self.store_qoi_data_in_stat_dict,
+            #     self.compute_sobol_indices_with_samples,
+            #     samples,
+            #      self.dict_stat_to_compute,
+            #     chunksize=self.mpi_chunksize,
+            #     unordered=self.unordered
+            # )
+        print(f"{self.rank}: computation for qoi {single_qoi_column} - waits for shutdown...")
+        sys.stdout.flush()
+        executor.shutdown(wait=True)
+        print(f"{self.rank}: computation for qoi {single_qoi_column} - shut down...")
+        sys.stdout.flush()
 
-                    for chunk_result in chunk_results:
-                        for result in chunk_result:
-                            self._process_chunk_result_single_qoi_single_time_step(
-                                single_qoi_column, timestamp=result[0], result_dict=result[1])
-                            if self.instantly_save_results_for_each_time_step:
-                                del result[1]
-                    if self.compute_covariance_matrix_in_time and not self.instantly_save_results_for_each_time_step:
-                        covariance_matrix_loc = self.compute_covariance_matrix_in_time_single_qoi(single_qoi_column)
-                        utility.save_covariance_matrix(covariance_matrix_loc, self.workingDir, single_qoi_column)
-                        utility.plot_covariance_matrix(covariance_matrix_loc, self.workingDir, filname=f"covariance_matrix_{single_qoi_column}.png")
-                        print(f"covariance_matrix for {single_qoi_column} is computed: {covariance_matrix_loc}")
-                    self.save_print_plot_and_clear_result_dict_single_qoi(single_qoi_column)
-                    del chunk_results_it
-                    del chunk_results
+        solver_time_end = time.time()
+        solver_time = solver_time_end - solver_time_start
+        print(f"solver_time for qoi {single_qoi_column}: {solver_time}")
 
+        self.chunk_results = list(chunk_results_it)
+
+    def _postprocess_mc_chunk_results_single_qoi_after_parallel_in_time_analysis(self, single_qoi_column):
+        for chunk_result in self.chunk_results:
+            for result in chunk_result:
+                self._process_chunk_result_single_qoi_single_time_step(
+                    single_qoi_column, timestamp=result[0], result_dict=result[1])
+                if self.instantly_save_results_for_each_time_step:
+                    del result[1]
+        self._postprocess_mc_results_single_qoi(single_qoi_column)
+        self.save_print_plot_and_clear_result_dict_single_qoi(single_qoi_column)
+        del self.chunk_results
+    
+    def _postprocess_mc_results_single_qoi(self, single_qoi_column):
+        if self.compute_covariance_matrix_in_time and not self.instantly_save_results_for_each_time_step:
+            covariance_matrix_loc = self.compute_covariance_matrix_in_time_single_qoi(single_qoi_column)
+            utility.save_covariance_matrix(covariance_matrix_loc, self.workingDir, single_qoi_column)
+            utility.plot_covariance_matrix(covariance_matrix_loc, self.workingDir, filname=f"covariance_matrix_{single_qoi_column}.png")
+            print(f"covariance_matrix for {single_qoi_column} is computed: {covariance_matrix_loc}")
+
+    # =================================================================================================
     def calcStatisticsForEnsembleParallel(self, chunksize=1, *args, **kwargs):
         self.calcStatisticsForMcParallel(chunksize=chunksize, *args, **kwargs)
 
@@ -1677,7 +1698,7 @@ class TimeDependentStatistics(ABC, Statistics):
                 if executor is not None:  # master process
                     self._compute_saltelli_statistic_single_qoi_parallel_in_time(
                         executor, single_qoi_column, keyIter_chunk, list_of_qoi_values_chunk, chunks)
-                    self._process_saltelli_results_single_qoi(single_qoi_column)
+                    self._postprocess_saltelli_chunk_results_single_qoi_after_parallel_in_time_analysis(single_qoi_column)
 
     def _prepare_chunks_saltelli(self, keyIter_chunk):
         if self.compute_sobol_indices_with_samples and \
@@ -1726,17 +1747,20 @@ class TimeDependentStatistics(ABC, Statistics):
         print(f"solver_time for qoi {single_qoi_column}: {solver_time}")
 
         self.chunk_results = list(chunk_results_it)
-
-    def _process_saltelli_results_single_qoi(self, single_qoi_column):
+        
+    def _postprocess_saltelli_chunk_results_single_qoi_after_parallel_in_time_analysis(self, single_qoi_column):
         for chunk_result in self.chunk_results:
             for result in chunk_result:
                 self._process_chunk_result_single_qoi_single_time_step(
                     single_qoi_column, timestamp=result[0], result_dict=result[1])
                 if self.instantly_save_results_for_each_time_step:
                     del result[1]
+        self._postprocess_saltelli_results_single_qoi(single_qoi_column)
         self.save_print_plot_and_clear_result_dict_single_qoi(single_qoi_column)
         del self.chunk_results
 
+    def _postprocess_saltelli_results_single_qoi(self, single_qoi_column):
+        pass
 # =================================================================================================
 
     def calcStatisticsForScParallel(self, chunksize=1, *args, **kwargs):
@@ -1755,52 +1779,8 @@ class TimeDependentStatistics(ABC, Statistics):
 
             with futures.MPICommExecutor(MPI.COMM_WORLD, root=0) as executor:
                 if executor is not None:  # master process
-                    print(f"{self.rank}: computation of statistics for qoi {single_qoi_column} started...")
-                    solver_time_start = time.time()
-                    if self.compute_kl_expansion_of_qoi and not self.compute_timewise_gpce_next_to_kl_expansion:
-                        chunk_results_it = executor.map(
-                            parallel_statistics.parallel_calc_stats_for_KL,
-                            keyIter_chunk,
-                            list_of_qoi_values_chunk,
-                            chunks['weightsChunks'],
-                            chunks['regressionChunks'],
-                            chunks['store_qoi_data_in_stat_dict_Chunks']
-                        )
-                    else:
-                        chunk_results_it = executor.map(
-                            parallel_statistics.parallel_calc_stats_for_gPCE,
-                            keyIter_chunk,
-                            list_of_qoi_values_chunk,
-                            chunks['distChunks'],
-                            chunks['polynomial_expansionChunks'],
-                            chunks['nodesChunks'],
-                            chunks['weightsChunks'],
-                            chunks['polynomial_norms_expansionChunks'],
-                            chunks['regressionChunks'],
-                            chunks['compute_Sobol_t_Chunks'],
-                            chunks['compute_Sobol_m_Chunks'],
-                            chunks['compute_Sobol_m2_Chunks'],
-                            chunks['store_qoi_data_in_stat_dict_Chunks'],
-                            chunks['store_gpce_surrogate_in_stat_dict_Chunks'],
-                            chunks['save_gpce_surrogate_Chunks'],
-                            chunks['compute_other_stat_besides_pce_surrogate_Chunks'],
-                            chunks['dict_stat_to_compute_Chunks'],
-                            chunksize=self.mpi_chunksize,
-                            unordered=self.unordered
-                        )
-                    print(f"{self.rank}: computation for qoi {single_qoi_column} - waits for shutdown...")
-                    sys.stdout.flush()
-                    executor.shutdown(wait=True)
-                    print(f"{self.rank}: computation for qoi {single_qoi_column} - shut down...")
-                    sys.stdout.flush()
-
-                    solver_time_end = time.time()
-                    solver_time = solver_time_end - solver_time_start
-                    print(f"solver_time for qoi {single_qoi_column}: {solver_time}")
-
-                    self.chunk_results = list(chunk_results_it)
-                    # self._compute_pce_statistic_single_qoi_parallel_in_time(executor, single_qoi_column, keyIter_chunk, list_of_qoi_values_chunk, chunks)
-                    self._postprocess_pce_results_single_qoi_after_parallel_in_time_analysis(single_qoi_column)
+                    self._compute_pce_statistic_single_qoi_parallel_in_time(executor, single_qoi_column, keyIter_chunk, list_of_qoi_values_chunk, chunks)
+                    self._postprocess_pce_chunk_results_single_qoi_after_parallel_in_time_analysis(single_qoi_column)
 
     def _prepare_chunks_pce(self, keyIter_chunk, compute_other_stat_besides_pce_surrogate):
         chunks = {
@@ -1868,7 +1848,7 @@ class TimeDependentStatistics(ABC, Statistics):
 
         self.chunk_results = list(chunk_results_it)
     
-    def _postprocess_pce_results_single_qoi_after_parallel_in_time_analysis(self, single_qoi_column):
+    def _postprocess_pce_chunk_results_single_qoi_after_parallel_in_time_analysis(self, single_qoi_column):
         for chunk_result in self.chunk_results:
             for result in chunk_result:
                 self._process_chunk_result_single_qoi_single_time_step(
@@ -1876,6 +1856,7 @@ class TimeDependentStatistics(ABC, Statistics):
                 if self.instantly_save_results_for_each_time_step:
                     del result[1]
         self._postprocess_pce_results_single_qoi(single_qoi_column)
+        self.save_print_plot_and_clear_result_dict_single_qoi(single_qoi_column)
         del self.chunk_results
 
     def _postprocess_pce_results_single_qoi(self, single_qoi_column):
@@ -1916,7 +1897,6 @@ class TimeDependentStatistics(ABC, Statistics):
                 utility.save_covariance_matrix(covariance_matrix_loc, self.workingDir, single_qoi_column)
                 utility.plot_covariance_matrix(covariance_matrix_loc, self.workingDir, filname=f"covariance_matrix_{single_qoi_column}.png")
                 print(f"covariance_matrix for {single_qoi_column} is computed: {covariance_matrix_loc}")
-        self.save_print_plot_and_clear_result_dict_single_qoi(single_qoi_column)
 
     # =================================================================================================
 
@@ -2007,6 +1987,8 @@ class TimeDependentStatistics(ABC, Statistics):
             print(f"solver_time for qoi {single_qoi_column}: {solver_time}")
 
             self.save_print_plot_and_clear_result_dict_single_qoi(single_qoi_column)
+
+    # =================================================================================================
 
     def calcStatisticsForMcSaltelli(self, rawSamples=None, timesteps=None,
                                     simulationNodes=None, numEvaluations=None, order=None, regression=None, solverTimes=None,
@@ -2110,6 +2092,8 @@ class TimeDependentStatistics(ABC, Statistics):
 
             self.save_print_plot_and_clear_result_dict_single_qoi(single_qoi_column)
 
+    # =================================================================================================
+
     def calcStatisticsForSc(self, rawSamples=None, timesteps=None,
                             simulationNodes=None, order=None, regression=None, solverTimes=None,
                             work_package_indexes=None, original_runtime_estimator=None, 
@@ -2180,6 +2164,8 @@ class TimeDependentStatistics(ABC, Statistics):
             print(f"solver_time for qoi {single_qoi_column}: {solver_time}")
 
             self._postprocess_pce_results_single_qoi(single_qoi_column)
+
+    # =================================================================================================
 
     def _calc_stats_for_gPCE_single_qoi(self, single_qoi_column, key, dist, qoi_gPCE, compute_other_stat_besides_pce_surrogate=True):
         """
