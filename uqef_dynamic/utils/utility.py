@@ -48,21 +48,6 @@ import multiprocessing
 
 from uqef_dynamic.utils import sens_indices_sampling_based_utils
 
-DEFAULT_DICT_WHAT_TO_PLOT = {
-    "E_minus_std": False, "E_plus_std": False, 
-    "E_minus_2std": False, "E_plus_2std": False,
-    "P10": False, "P90": False,
-    "StdDev": False, "Skew": False, "Kurt": False, "Sobol_m": False, "Sobol_m2": False, "Sobol_t": False
-}
-
-DEFAULT_DICT_STAT_TO_COMPUTE = {
-    "Var": True, "StdDev": True, 
-    "E_minus_std": False, "E_plus_std": False, 
-    "E_minus_2std": False, "E_plus_2std": False,
-    "P10": True, "P90": True,
-    "Skew": False, "Kurt": False, "Sobol_m": True, "Sobol_m2": False, "Sobol_t": True
-}
-
 # definition of some 'static' variables, names, etc.
 TIME_COLUMN_NAME="TimeStamp"
 INDEX_COLUMN_NAME = "Index_run"
@@ -94,6 +79,31 @@ DF_UQSIM_SIMULATION_PARAMETERS_FILE = "df_uqsim_simulation_parameters.pkl"
 DF_UQSIM_SIMULATION_NODES_FILE = "df_uqsim_simulation_nodes.pkl"
 DF_UQSIM_SIMULATION_WEIGHTS_FILE = "df_uqsim_simulation_weights.pkl"
 
+PCE_ENTRY = 'gPCE'
+PCE_COEFF_ENTRY = 'gpce_coeff'
+MEAN_ENTRY = 'E'
+VAR_ENTRY = 'Var'
+STD_DEV_ENTRY = 'StdDev'
+SOBOL_FIRST_ORDER_ENTRY = 'Sobol_m'
+SOBOL_SECOND_ORDER_ENTRY = 'Sobol_m2'
+SOBOL_TOTAL_ORDER_ENTRY = 'Sobol_t'
+P10_ENTRY = 'P10'
+P90_ENTRY = 'P90'
+
+DEFAULT_DICT_WHAT_TO_PLOT = {
+    "E_minus_std": False, "E_plus_std": False, 
+    "E_minus_2std": False, "E_plus_2std": False,
+    "P10": False, "P90": False,
+    "StdDev": False, "Skew": False, "Kurt": False, "Sobol_m": False, "Sobol_m2": False, "Sobol_t": False
+}
+
+DEFAULT_DICT_STAT_TO_COMPUTE = {
+    "Var": True, "StdDev": True, 
+    "E_minus_std": False, "E_plus_std": False, 
+    "E_minus_2std": False, "E_plus_2std": False,
+    "P10": True, "P90": True,
+    "Skew": False, "Kurt": False, "Sobol_m": True, "Sobol_m2": False, "Sobol_t": True
+}
 ###################################################################################################################
 # Paths related functions
 ###################################################################################################################
@@ -493,14 +503,14 @@ def generate_df_with_nodes_and_weights_from_file(file_path, params_list=None):
 
 
 def plot_2d_matrix_static_from_list(simulationNodes_list, title="Plot nodes"):
-    if not isinstance(simulationNodes, pd.DataFrame):
+    if not isinstance(simulationNodes_list, pd.DataFrame):
         dfsimulationNodes = get_df_from_simulationNodes_list(simulationNodes_list, nodes_or_paramters)
     else:
         dfsimulationNodes = simulationNodes_list
 
     sns.set(style="ticks", color_codes=True)
     g = sns.pairplot(dfsimulationNodes, vars=list(dfsimulationNodes.columns), corner=True)
-    plt.title(title, loc='left')
+    # plt.title(title, loc='left')
     plt.show()
 
 
@@ -1251,6 +1261,8 @@ def read_simulation_settings_from_configuration_object(configurationObject: Unio
 
     result_dict["autoregressive_model_first_order"] = strtobool(dict_config_simulation_settings.get(\
         "autoregressive_model_first_order", "False"))
+    result_dict["scale_factor_autoregressive_model_first_order"] = dict_config_simulation_settings.get(\
+            "scale_factor_autoregressive_model_first_order", 1.0)
 
     if "transform_model_output" in kwargs:
         transform_model_output = kwargs['transform_model_output']
@@ -1789,7 +1801,8 @@ def _handle_no_parameters(configurationObject, default_par_info_dict):
 
 def _handle_parameters(parameters, configurationObject, default_par_info_dict, take_direct_value):
     """
-    This function is used to extract the parameters from the configuration object.
+    This function is used to extract the parameters from the configuration object and assigne them
+    the conrete value from parameters (dictionary or list).
 
     Args:
         parameters (dict, or list): A list of parameters.
@@ -2178,6 +2191,41 @@ def plot_subplot_params_hist_from_df(df_index_parameter_gof):
     return fig
 
 
+def generate_mask_based_on_multiple_column_comparison(df, column_name, threshold_value, comparison):
+    """
+    Generate a boolean mask based on multiple column comparisons.
+
+    Args:
+        df (pandas.DataFrame): The DataFrame to generate the mask from.
+        column_name (str or list): The name(s) of the column(s) to compare.
+        threshold_value (float or list): The threshold value(s) to compare against.
+        comparison (str or list): The comparison operator(s) to use for the comparison.
+
+    Returns:
+        pandas.Series: A boolean mask indicating which rows satisfy all the conditions.
+
+    Raises:
+        ValueError: If the lengths of `column_name`, `threshold_value`, and `comparison` are not the same.
+
+    """
+    if not isinstance(column_name, list):
+        column_name = [column_name,]
+    if not isinstance(threshold_value, list):
+        threshold_value = [threshold_value,]
+    if not isinstance(comparison, list):
+        comparison = [comparison,]
+    if len(column_name) != len(threshold_value) or len(column_name) != len(comparison):
+        raise ValueError("Length of column_name, threshold_value and comparison should be the same!")
+    # Initialize `mask` to True for all rows initially
+    mask = pd.Series([True] * len(df), index=df.index)
+    for single_column_name, single_threshold_value, single_comparison in zip(column_name, threshold_value, comparison):
+        # Generate a mask for the current condition
+        current_mask = generate_mask_based_on_column_comparison(df, single_column_name, single_threshold_value, single_comparison)
+        # Combine the new mask with the cumulative mask using `&`
+        mask = mask & current_mask
+    return mask
+
+
 def generate_mask_based_on_column_comparison(df, column_name, threshold_value, comparison="smaller"):
     """
     comparison should be: "smaller", "greater", "equal", "not_equal", "smaller_or_equal",  "greater_or_equal"
@@ -2246,16 +2294,46 @@ def plot_subplot_params_hist_from_df_conditioned(df_index_parameter_gof, name_of
         )
     return fig
 
+# Problematic function until plotly is updated
+# def plot_scatter_matrix_params_vs_gof(
+#     df_index_parameter_gof, columns_with_parameters=None, name_of_gof_column="NSE", hover_name="Index_run"):
+#     if columns_with_parameters is None:
+#         columns_with_parameters = _get_parameter_columns_df_index_parameter_gof(df_index_parameter_gof)
+#     # fig = px.scatter_matrix(df_index_parameter_gof, dimensions=columns_with_parameters, color=name_of_gof_column)
+#     #     # hover_name=hover_name
+#     # fig.update_traces(diagonal_visible=False)
+#     df = df_index_parameter_gof
+#     columns = columns_with_parameters
 
-def plot_scatter_matrix_params_vs_gof(df_index_parameter_gof, name_of_gof_column="NSE",
-                                      hover_name="Index_run"):
-    columns_with_parameters = _get_parameter_columns_df_index_parameter_gof(df_index_parameter_gof)
-    fig = px.scatter_matrix(df_index_parameter_gof,
-                            dimensions=columns_with_parameters,
-                            color=name_of_gof_column)
-                            # hover_name=hover_name)
-    fig.update_traces(diagonal_visible=False)
-    return fig
+#     num_columns = len(columns)
+#     # Create a subplot grid for scatter matrix
+#     fig = make_subplots(rows=num_columns, cols=num_columns,
+#                         shared_xaxes=True, shared_yaxes=True,
+#                         horizontal_spacing=0.02, vertical_spacing=0.02)
+
+#     for i, x_col in enumerate(columns):
+#         for j, y_col in enumerate(columns):
+#             if i == j:
+#                 # Diagonal cells: Histogram for the column
+#                 fig.add_trace(go.Histogram(x=df[x_col], marker=dict(color='lightblue')),
+#                             row=i+1, col=j+1)
+#             else:
+#                 # Off-diagonal cells: Scatter plot for column pairs
+#                 fig.add_trace(go.Scatter(x=df[x_col], y=df[y_col], mode='markers',
+#                                         marker=dict(size=5, color=df[name_of_gof_column], 
+#                                         coloraxis="coloraxis")),
+#                             row=i+1, col=j+1)
+
+#             # Update axis labels only on the outer edges
+#             if j == 0:
+#                 fig.update_yaxes(title_text=y_col, row=i+1, col=j+1)
+#             if i == num_columns - 1:
+#                 fig.update_xaxes(title_text=x_col, row=i+1, col=j+1)
+
+#     # Update layout
+#     fig.update_layout(height=600, width=600, title_text="Custom Scatter Matrix",
+#                     showlegend=False)
+#     return fig
 
 ###################################################################################################################
 # Plotting UQ & SA Output
@@ -2315,17 +2393,34 @@ def plot_surface_2d_params_vs_gof(df_index_parameter_gof, param1, param2, num_of
 def plot_parallel_params_vs_gof(df_index_parameter_gof, name_of_gof_column="NSE", list_of_params=None):
     if list_of_params is None:
         list_of_params = _get_parameter_columns_df_index_parameter_gof(df_index_parameter_gof)
-    dimensions = list_of_params + [name_of_gof_column, ]
-    fig = px.parallel_coordinates(df_index_parameter_gof, color=name_of_gof_column, dimensions=dimensions)
+    dimensions_columns = list_of_params + [name_of_gof_column,]
+    # fig = px.parallel_coordinates(df_index_parameter_gof, color=name_of_gof_column, dimensions=dimensions_columns)
+    # Step-by-step Define the dimensions for the parallel coordinates
+    dimensions = [
+        dict(range=[df_index_parameter_gof[col].min(), df_index_parameter_gof[col].max()],
+            label=col,
+            values=df_index_parameter_gof[col])
+        for col in dimensions_columns
+    ]
+
+    # Create the parallel coordinates plot
+    fig = go.Figure(data=go.Parcoords(
+        line=dict(color=df_index_parameter_gof[name_of_gof_column],
+                #colorscale='Viridis',  # Optional color scale
+                showscale=True),       # Shows color scale legend
+        dimensions=dimensions
+    ))
     return fig
 
 
-def plot_scatter_matrix_params_vs_gof_seaborn(df_index_parameter_gof, name_of_gof_column="NSE"):
-    columns_with_parameters = _get_parameter_columns_df_index_parameter_gof(df_index_parameter_gof)
+def plot_scatter_matrix_params_vs_gof_seaborn(df_index_parameter_gof, columns_with_parameters=None, name_of_gof_column="NSE"):
+    if columns_with_parameters is None:
+        columns_with_parameters = _get_parameter_columns_df_index_parameter_gof(df_index_parameter_gof)
     sns.set(style="ticks", color_codes=True)
-    g = sns.pairplot(df_index_parameter_gof,
-                     vars=columns_with_parameters,
-                     corner=True, hue=name_of_gof_column)
+    g = sns.pairplot(
+        df_index_parameter_gof, vars=columns_with_parameters, 
+        corner=True, hue=name_of_gof_column
+    )
     plt.show()
 
 
@@ -2368,7 +2463,7 @@ def plot_all_model_runs(df_simulation_result: pd.DataFrame, single_qoi_column: s
             go.Scatter(
                 x=df_simulation_result_subset[time_column_name], 
                 y=df_simulation_result_subset[single_qoi_column],
-                line_color='LightSkyBlue', mode="lines", opacity=0.1, showlegend=False,
+                line_color='LightSkyBlue', mode="lines", opacity=0.3, showlegend=False,
             )
         )
 
@@ -2663,6 +2758,33 @@ def compute_PSP_over_time(model, t: Union[np.array, np.ndarray, List[Union[int, 
             )
     return gPCE_over_time, polynomial_expansion, np.asfarray(norms), np.asfarray(coeff)
 
+
+def build_gpce_surrogate_from_coefficients(gpce_coeffs, polynomial_expansion, polynomial_norms=None):
+    """
+    Builds a Generalized Polynomial Chaos Expansion surrogate model based on the saved coefficients.
+
+    Args:
+        gpce_coeffs (dict or np.ndarray): Coefficients of the GPCE expansion. If a dictionary, it should contain
+            coefficients for each time stamp. If a numpy array, it should contain coefficients for a particular time stamp.
+        polynomial_expansion (): Chaospy polynomial expansion.
+        polynomial_norms (): polynomial norms.
+
+    Returns:
+        gpce_surrogate (dict or np.ndarray): Surrogate model built using the GPCE method.
+
+    Raises:
+        Exception: If gpce_coeffs is neither a dictionary nor a numpy array.
+
+    """
+    if isinstance(gpce_coeffs, dict):
+        gpce_surrogate = dict()
+        for key, single_gpce_coeffs in gpce_coeffs.items():
+            gpce_surrogate[key] = sum([c * p for c, p in zip(single_gpce_coeffs, polynomial_expansion)])  #sum(c * p for c, p in zip(single_gpce_coeffs, polynomial_expansion))
+    elif isinstance(gpce_coeffs, np.ndarray):
+        gpce_surrogate = sum(c * p for c, p in zip(gpce_coeffs, polynomial_expansion))
+    else:
+        raise Exception("gpce_coeffs should be either a dictionary or a numpy array")
+    return gpce_surrogate
 # =================================================================================================
 # Functions for computing statistics over time
 # =================================================================================================
