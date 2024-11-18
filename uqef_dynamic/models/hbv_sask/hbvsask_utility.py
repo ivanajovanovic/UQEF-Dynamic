@@ -77,7 +77,9 @@ def _plot_output_data_and_precipitation(input_data_df, simulated_data_df=None, i
         input_data_df = input_data_df.loc[
                         simulated_data_df[simulated_time_column].min():simulated_data_df[simulated_time_column].max()]
 
-    N_max = input_data_df[precipitation_columns].max()
+    if precipitation_columns in input_data_df.columns:
+        N_max = input_data_df[precipitation_columns].max()
+
     timesteps_min = input_data_df.index.min()
     timesteps_max = input_data_df.index.max()
 
@@ -101,8 +103,9 @@ def _plot_output_data_and_precipitation(input_data_df, simulated_data_df=None, i
                                      name=simulated_column
                                      ))
 
-    fig.add_trace(go.Scatter(x=input_data_df.index, y=input_data_df[precipitation_columns],
-                             text=input_data_df[precipitation_columns], name="Precipitation", yaxis="y2", ))
+    if precipitation_columns in input_data_df.columns:
+        fig.add_trace(go.Scatter(x=input_data_df.index, y=input_data_df[precipitation_columns],
+                                text=input_data_df[precipitation_columns], name="Precipitation", yaxis="y2", ))
 
     if reset_index_of_input_data_df:
         input_data_df.reset_index(inplace=True)
@@ -124,22 +127,25 @@ def _plot_output_data_and_precipitation(input_data_df, simulated_data_df=None, i
             ticks="inside",
             title="Q [cm/s]",
             titlefont={"color": "#d62728"},
-        ),
-        yaxis2=dict(
-            anchor="x",
-            domain=[0.7, 1],
-            mirror=True,
-            range=[N_max, 0],
-            side="right",
-            tickfont={"color": '#1f77b4'},
-            nticks=3,
-            tickmode="auto",
-            ticks="inside",
-            titlefont={"color": '#1f77b4'},
-            title="N [mm/h]",
-            type="linear",
         )
     )
+    if precipitation_columns in input_data_df.columns:
+        fig.update_layout(
+            yaxis2=dict(
+                anchor="x",
+                domain=[0.7, 1],
+                mirror=True,
+                range=[N_max, 0],
+                side="right",
+                tickfont={"color": '#1f77b4'},
+                nticks=3,
+                tickmode="auto",
+                ticks="inside",
+                titlefont={"color": '#1f77b4'},
+                title="N [mm/h]",
+                type="linear",
+            ),
+        )
     fig.update_layout(legend=dict(
         yanchor="bottom",
         y=0.01,
@@ -185,8 +191,17 @@ def plot_streamflow_and_precipitation(input_data_df, simulated_data_df=None, inp
                                      name="Simulated Streamflow"
                                      ))
 
-    fig.add_trace(go.Scatter(x=input_data_df.index, y=input_data_df[precipitation_columns],
-                             text=input_data_df[precipitation_columns], name="Precipitation", yaxis="y2", ))
+    if precipitation_columns in simulated_data_df.columns:
+        fig.add_trace(
+            go.Scatter(
+            x=simulated_data_df.index, y=simulated_data_df[precipitation_columns],
+            text=simulated_data_df[precipitation_columns], name="Precipitation", yaxis="y2", 
+            )
+        )
+    else:
+        fig.add_trace(go.Scatter(x=input_data_df.index, y=input_data_df[precipitation_columns],
+                            text=input_data_df[precipitation_columns], name="Precipitation", yaxis="y2", ))
+
 
     if input_data_time_column is not None and input_data_time_column != "index" and input_data_time_column in input_data_df.columns:
         input_data_df.reset_index(inplace=True)

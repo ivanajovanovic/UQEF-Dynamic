@@ -31,16 +31,16 @@
     "hbv_model_path": "Hydro_Models/HBV-SASK-data"
   },
   "simulation_settings": {
-    "qoi":"GoF",
-    "qoi_column":"Q_cms",
+    "qoi":["Q_cms", "AET"],
+    "qoi_column":["Q_cms", "AET"],
     "autoregressive_model_first_order":"False",
-    "transform_model_output":"None",
-    "read_measured_data": "True",
-    "qoi_column_measured":"streamflow",
+    "transform_model_output":["None", "None"],
+    "read_measured_data": ["True", "False"],
+    "qoi_column_measured":["streamflow", "None"],
     "objective_function_qoi":"RMSE",
     "calculate_GoF":"True",
     "objective_function":["MAE", "MSE", "RMSE", "NRMSE", "NSE", "LogNSE", "KGE"],
-    "mode":"sliding_window",
+    "mode":"continuous",
     "interval": 365,
     "min_periods": 365,
     "method": "avrg",
@@ -93,14 +93,14 @@
       "distribution": "Uniform",
       "lower": 0.1,
       "upper": 0.9,
-      "default": 0.1
+      "default": 0.3
     },
     {
       "name": "K2",
       "distribution": "Uniform",
       "lower": 0.0,
       "upper": 0.05,
-      "default": 0.025
+      "default": 0.05
     },
     {
       "name": "LP",

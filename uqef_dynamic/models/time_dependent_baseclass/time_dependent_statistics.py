@@ -13,6 +13,8 @@ import pathlib
 import pickle
 import plotly.graph_objects as go
 import plotly.express as px
+import plotly.offline as pyo
+from plotly.subplots import make_subplots
 import scipy
 from scipy import stats
 # from sklearn.preprocessing import MinMaxScaler
@@ -397,6 +399,8 @@ class TimeDependentStatistics(ABC, Statistics):
         # Note: no need to have both store_gpce_surrogate_in_stat_dict and save_gpce_surrogate set to True; 
         # however current implamantion requires that store_gpce_surrogate_in_stat_dict is set to True if save_gpce_surrogate is set to True
         self.save_gpce_surrogate = kwargs.get('save_gpce_surrogate', False)
+        if self.save_gpce_surrogate:
+            self.store_gpce_surrogate_in_stat_dict = True
         self.compute_other_stat_besides_pce_surrogate = kwargs.get('compute_other_stat_besides_pce_surrogate', True)
 
         self.parallel_statistics = kwargs.get('parallel_statistics', False)
@@ -873,7 +877,6 @@ class TimeDependentStatistics(ABC, Statistics):
 
         if self.autoregressive_model_first_order:
             self.get_measured_data(
-                time_column_name=self.time_column_name,
                 timestepRange=[self.timesteps_min_minus_one, self.timesteps_max],
                 qoi_column_name=self.list_original_model_output_columns  # or list(self.dict_corresponding_original_qoi_column.values)
             )
@@ -1112,6 +1115,9 @@ class TimeDependentStatistics(ABC, Statistics):
     # =================================================================================================
 
     def _update_df_index_parameter_gof_values_based_on_mask(self, mask):
+        """
+        This function filters based on mask and overwrites self.samples.df_index_parameter_gof_values
+        """
         if self.samples.df_index_parameter_gof_values is not None:
             filtered_df = self.samples.df_index_parameter_gof_values[mask]
             if filtered_df.empty:
@@ -1124,14 +1130,14 @@ class TimeDependentStatistics(ABC, Statistics):
         else:
             raise ValueError("There is no condition ment - samples.df_index_parameter_gof_values is empty!")
 
-    def _get_list_of_index_runs_to_keep(self):
-        if self.samples.df_index_parameter_gof_values is not None:
-            list_of_index_runs_to_keep = self.samples.df_index_parameter_gof_values.index.tolist()
-            # list_of_index_runs_to_keep = self.samples.df_index_parameter_gof_values[self.index_column_name].tolist()
-            if not list_of_index_runs_to_keep:
+    def _get_list_of_index_runs(self, df):
+        if df is not None and not df.empty:
+            # list_of_index_runs= df.index.tolist()
+            list_of_index_runs = df[self.index_column_name].tolist()
+            if not list_of_index_runs:
                 raise ValueError("There is no condition ment - After filtering based on provided mask the DF \
-                (df_index_parameter_gof_values) list_of_index_runs_to_keep is empty!")
-            return list_of_index_runs_to_keep
+                (df_index_parameter_gof_values) list_of_index_runs is empty!")
+            return list_of_index_runs
         else:
             raise ValueError("There is no condition ment - samples.df_index_parameter_gof_values is empty!")
 
@@ -1180,12 +1186,16 @@ class TimeDependentStatistics(ABC, Statistics):
             raise ValueError(" self.samples.df_index_parameter_values is None!")
         # print(f"[DEBUGGING] len(self.samples.df_index_parameter_values) AFTER: {len(self.samples.df_index_parameter_values)}")
 
-    def _validate_condition(self, condition_results_based_on_metric, condition_results_based_on_metric_value):
-        if self.samples.df_index_parameter_gof_values is None \
-                or condition_results_based_on_metric is None \
-                or condition_results_based_on_metric not in self.samples.df_index_parameter_gof_values.columns \
-                or condition_results_based_on_metric_value is None:
-            raise Exception(f"Error in Statistics.handle_condition - it is not possible to condition df_index_parameter_gof_values on the column {condition_results_based_on_metric}")
+    # def _validate_condition(self, df, condition_results_based_on_metric, condition_results_based_on_metric_value):
+    #     if df is None or condition_results_based_on_metric is None or condition_results_based_on_metric_value is None:
+    #         raise Exception(f"Error in Statistics.handle_condition - it is not possible to condition df-index-parameter-gof-values on the column {condition_results_based_on_metric}")
+    #     if isinstance(condition_results_based_on_metric, str):
+    #         if condition_results_based_on_metric not in df.columns:
+    #             raise Exception(f"Error in Statistics.handle_condition - the column {condition_results_based_on_metric} is not in the df-index-parameter-gof-values")
+    #     elif isinstance(condition_results_based_on_metric, list):
+    #         for single_condition in condition_results_based_on_metric:
+    #             if single_condition not in df.columns:
+    #                 raise Exception(f"Error in Statistics.handle_condition - the column {single_condition} is not in the df-index-parameter-gof-values")
 
     def _apply_condition(self, condition_results_based_on_metric, condition_results_based_on_metric_value, condition_results_based_on_metric_sign):
         """
@@ -1196,18 +1206,21 @@ class TimeDependentStatistics(ABC, Statistics):
         (self.nodes, self.samples.df_simulation_result, self.samples.df_index_parameter_values)
 
         Args:
-            condition_results_based_on_metric (str): The name of the column to apply the condition on.
-            condition_results_based_on_metric_value (float): The value to compare against in the condition.
-            condition_results_based_on_metric_sign (str): The comparison sign to use in the condition (
+            condition_results_based_on_metric (str or list): The name(s) of the column(s) to compare.
+            condition_results_based_on_metric_value (float or list): The threshold value(s) to compare against.
+            condition_results_based_on_metric_sign (str or list): The comparison operator(s) to use for the comparison(
                 e.g., '==', '!=', '<', '>', '<=', '>=', "smaller", "greater", "equal", "not_equal", "smaller_or_equal",  "greater_or_equal").
-
         Returns:
             None
         """
         try:
-            mask = utility.generate_mask_based_on_column_comparison(
+            mask = utility.generate_mask_based_on_multiple_column_comparison(
                 df=self.samples.df_index_parameter_gof_values, column_name=condition_results_based_on_metric,
-                threshold_value=condition_results_based_on_metric_value, comparison=condition_results_based_on_metric_sign)
+                threshold_value=condition_results_based_on_metric_value, comparison=condition_results_based_on_metric_sign
+            )
+            # mask = utility.generate_mask_based_on_column_comparison(
+            #     df=self.samples.df_index_parameter_gof_values, column_name=condition_results_based_on_metric,
+            #     threshold_value=condition_results_based_on_metric_value, comparison=condition_results_based_on_metric_sign)
         except Exception as e:
             print(f"Caught an exception: {e}; the execution will continue without any updated of nodes of dataframes \
             storing model runs!")
@@ -1221,7 +1234,7 @@ class TimeDependentStatistics(ABC, Statistics):
             return
 
         try:
-            list_of_index_runs_to_keep = self._get_list_of_index_runs_to_keep()
+            list_of_index_runs_to_keep = self._get_list_of_index_runs(df=self.samples.df_index_parameter_gof_values)
         except ValueError as e:
             print(f"Caught an exception: {e}; the execution will continue without any updated of nodes of dataframes \
             storing model runs!")
@@ -1255,9 +1268,9 @@ class TimeDependentStatistics(ABC, Statistics):
 
         Parameters:
         kwargs (dict): A dictionary containing the conditions for the model runs. It should have the following keys:
-            - condition_results_based_on_metric: The column to condition on.
-            - condition_results_based_on_metric_value: The value to condition on.
-            - condition_results_based_on_metric_sign: The comparison sign string.
+            - condition_results_based_on_metric: column(s) to condition on.
+            - condition_results_based_on_metric_value: value(s) to condition on.
+            - condition_results_based_on_metric_sign: comparison sign(s) string.
 
         Raises:
         Exception: If it is not possible to condition df_index_parameter_gof_values on the column.
@@ -1272,7 +1285,8 @@ class TimeDependentStatistics(ABC, Statistics):
             return
 
         if condition_results_based_on_metric is not None and condition_results_based_on_metric_value is not None:
-            self._validate_condition(condition_results_based_on_metric, condition_results_based_on_metric_value)
+            # self._validate_condition(self.samples.df_index_parameter_gof_values, condition_results_based_on_metric, condition_results_based_on_metric_value)
+            uqef_dynamic_utils.validate_condition(self.samples.df_index_parameter_gof_values, condition_results_based_on_metric, condition_results_based_on_metric_value)
             self._apply_condition(condition_results_based_on_metric, condition_results_based_on_metric_value, condition_results_based_on_metric_sign)
         else:
             print(f"[STAT INFO] - The conditioning of model runs based on the metric {condition_results_based_on_metric} is not performed \
@@ -1331,6 +1345,27 @@ class TimeDependentStatistics(ABC, Statistics):
 
     def prepareForMcStatistics(self, simulationNodes, numEvaluations, regression=False, order=None,
                               poly_normed=False, poly_rule='three_terms_recurrence', cross_truncation=1.0, *args, **kwargs):
+        """
+        This function should be called before any statistical analysis is performed. It sets the initial values
+        for the Monte Carlo simulation.
+
+        Parameters:
+        - simulationNodes: UQEF Nodes object.
+        - numEvaluations (int): Number of evaluations for the Monte Carlo simulation. Can be refered from simulationNodes as well.
+        - regression (bool, optional): Flag indicating whether gPCE+regression method is used. Defaults to False.
+        - order (int, optional): Order of the polynomial. Only relevant if regression is True. Defaults to None.
+        - poly_normed (bool, optional): Flag indicating whether the polynomial is normalized.  Only relevant if regression is True. Defaults to False.
+        - poly_rule (str, optional): Rule for generating the polynomial.  Only relevant if regression is True. Defaults to 'three_terms_recurrence'.
+        - cross_truncation (float, optional): Cross truncation value.  Only relevant if regression is True. Defaults to 1.0.
+        - *args, **kwargs: Additional arguments and keyword arguments.
+            - condition_results_based_on_metric: column(s) to condition on.
+            - condition_results_based_on_metric_value: value(s) to condition on.
+            - condition_results_based_on_metric_sign: comparison sign(s) string.
+
+        Returns:
+        None
+
+        """
         self.mc_set_initial_values(simulationNodes, numEvaluations, regression, order, poly_normed, poly_rule, cross_truncation)
         if self.regression:
             self.handle_expansion_generation()
@@ -1341,6 +1376,25 @@ class TimeDependentStatistics(ABC, Statistics):
             self.handle_conditioning_model_runs(kwargs)
 
     def prepareForScStatistics(self, simulationNodes, order, poly_normed=False, poly_rule='three_terms_recurrence', regression=False, cross_truncation=1.0, *args, **kwargs):
+        """
+        Prepares the statistics for using methods based on gPCE (i.e., Stochastic Collocation or Pseudo-spectra-projection PSP method)
+
+        Args:
+            simulationNodes (list): UQEF Nodes object.
+            order (int): Order of the polynomial chaos expansion.
+            poly_normed (bool, optional): Whether to normalize the polynomial basis. Defaults to False.
+            poly_rule (str, optional): The rule for generating the polynomial basis. Defaults to 'three_terms_recurrence'.
+            regression (bool, optional): Whether to perform regression analysis (i.e., stochastic collocation). Defaults to False (i.e., then PSP method is performed).
+            cross_truncation (float, optional): The cross truncation threshold for regression analysis. Defaults to 1.0.
+            *args: Variable length argument list.
+            **kwargs: Arbitrary keyword arguments.
+                - condition_results_based_on_metric: column(s) to condition on.
+                - condition_results_based_on_metric_value: value(s) to condition on.
+                - condition_results_based_on_metric_sign: comparison sign(s) string.
+
+        Returns:
+            None
+        """
         self.pce_set_initial_values(simulationNodes, order, poly_normed, poly_rule, regression, cross_truncation)
         self.handle_expansion_generation()
         if self.regression:
@@ -1352,6 +1406,25 @@ class TimeDependentStatistics(ABC, Statistics):
 
     def prepareForMcSaltelliStatistics(self, simulationNodes, numEvaluations=None, regression=False, order=None,
                                     poly_normed=False, poly_rule='three_terms_recurrence', cross_truncation=1.0, *args, **kwargs):
+        """
+        Prepares the statistics for performing McSaltelli analysis.
+
+        Args:
+            simulationNodes: UQEF Nodes object.
+            numEvaluations (int): Number of evaluations for the Monte Carlo simulation. Can be refered from simulationNodes as well.
+            regression (bool, optional): Flag indicating whether gPCE+regression method is used. Defaults to False.
+            order (int, optional): Order of the polynomial. Only relevant if regression is True. Defaults to None.
+            poly_normed (bool, optional): Flag indicating whether the polynomial is normalized.  Only relevant if regression is True. Defaults to False.
+            poly_rule (str, optional): Rule for generating the polynomial.  Only relevant if regression is True. Defaults to 'three_terms_recurrence'.
+            cross_truncation (float, optional): Cross truncation value.  Only relevant if regression is True. Defaults to 1.0.
+            *args: Variable length argument list.
+            **kwargs: Arbitrary keyword arguments.
+                - condition_results_based_on_metric: column(s) to condition on.
+                - condition_results_based_on_metric_value: value(s) to condition on.
+                - condition_results_based_on_metric_sign: comparison sign(s) string.
+        Returns:
+            None
+        """
         self.mc_set_initial_values(simulationNodes, numEvaluations, regression, order, poly_normed, poly_rule, cross_truncation)
         # if self.regression:
         #     self.handle_expansion_generation()
@@ -1404,6 +1477,8 @@ class TimeDependentStatistics(ABC, Statistics):
         :return:
         """
         df_measured_subset = None
+        if self.scale_factor_autoregressive_model_first_order is None:
+            self.scale_factor_autoregressive_model_first_order = 1.0
         if self.measured_fetched and self.df_measured is not None:
             if single_qoi_column in list(self.df_measured["qoi"].unique()):
                 df_measured_subset = self.df_measured.loc[self.df_measured["qoi"] == single_qoi_column][[
@@ -1424,7 +1499,7 @@ class TimeDependentStatistics(ABC, Statistics):
             # Compute the previous timestamp
             previous_timestamp = utility.compute_previous_timestamp(
                 timestamp=timestamp, resolution=self.resolution)
-            result_dict["E"] = result_dict["E"] + 0.8*df_measured_subset.loc[previous_timestamp]["measured"] #.values[0]
+            result_dict["E"] = result_dict["E"] + self.scale_factor_autoregressive_model_first_order*df_measured_subset.loc[previous_timestamp]["measured"] #.values[0]
             if result_dict["E"]<1e-10:
                 result_dict["E"] = 0.0
             if reset_index:
@@ -1461,8 +1536,8 @@ class TimeDependentStatistics(ABC, Statistics):
         # TODO - think if this should be done here or in the parallel_calc_stats_for_gPCE...
         if self.save_gpce_surrogate and "gPCE" in result_dict:
             utility.save_gpce_surrogate_model(workingDir=self.workingDir, gpce=result_dict["gPCE"], qoi=single_qoi_column, timestamp=timestamp)
-            if "gpce_coeff" in result_dict:
-                utility.save_gpce_coeffs(workingDir=self.workingDir, coeff=result_dict["gpce_coeff"], qoi=single_qoi_column, timestamp=timestamp)
+        if self.save_gpce_surrogate and "gpce_coeff" in result_dict:
+            utility.save_gpce_coeffs(workingDir=self.workingDir, coeff=result_dict["gpce_coeff"], qoi=single_qoi_column, timestamp=timestamp)
 
     def save_print_plot_and_clear_result_dict_single_qoi(self, single_qoi_column):
         if self.instantly_save_results_for_each_time_step:
@@ -1576,6 +1651,7 @@ class TimeDependentStatistics(ABC, Statistics):
                 'polynomial_expansionChunks': [self.polynomial_expansion] * len(keyIter_chunk),
                 'nodesChunks': [self.nodes] * len(keyIter_chunk),
                 'weightsChunks': [self.weights] * len(keyIter_chunk),
+                'polynomial_norms_expansionChunks': [self.polynomial_norms] * len(keyIter_chunk),
                 'regressionChunks': [self.regression] * len(keyIter_chunk),
                 'compute_Sobol_t_Chunks': [self.compute_Sobol_t] * len(keyIter_chunk),
                 'compute_Sobol_m2_Chunks': [self.compute_Sobol_m2] * len(keyIter_chunk),
@@ -1605,6 +1681,7 @@ class TimeDependentStatistics(ABC, Statistics):
                 chunks['polynomial_expansionChunks'],
                 chunks['nodesChunks'],
                 chunks['weightsChunks'],
+                chunks['polynomial_norms_expansionChunks'],
                 chunks['regressionChunks'],
                 chunks['compute_Sobol_t_Chunks'],
                 chunks['compute_Sobol_m_Chunks'],
@@ -1696,8 +1773,9 @@ class TimeDependentStatistics(ABC, Statistics):
 
             with futures.MPICommExecutor(MPI.COMM_WORLD, root=0) as executor:
                 if executor is not None:  # master process
-                    self._compute_saltelli_statistic_single_qoi_parallel_in_time(
-                        executor, single_qoi_column, keyIter_chunk, list_of_qoi_values_chunk, chunks)
+                    self._compute_saltelli_statistic_single_qoi_parallel_in_time(\
+                    executor, single_qoi_column, keyIter_chunk, list_of_qoi_values_chunk, chunks
+                    )
                     self._postprocess_saltelli_chunk_results_single_qoi_after_parallel_in_time_analysis(single_qoi_column)
 
     def _prepare_chunks_saltelli(self, keyIter_chunk):
@@ -2481,12 +2559,12 @@ class TimeDependentStatistics(ABC, Statistics):
 
     # =================================================================================================
 
-    def _get_measured_single_qoi(self, timestepRange=None, time_column_name="TimeStamp",
-                qoi_column_measured="measured", **kwargs):
+    def _get_measured_single_qoi(
+        self, timestepRange=None, time_column_name="TimeStamp", qoi_column_measured="measured", **kwargs):
         return None
         # raise NotImplementedError
 
-    def get_measured_data(self, timestepRange=None, time_column_name="TimeStamp", qoi_column_name="measured",
+    def get_measured_data(self, timestepRange=None, time_column_name=None, qoi_column_name=None,
                               **kwargs):
         """
 
@@ -2501,6 +2579,14 @@ class TimeDependentStatistics(ABC, Statistics):
          (computed in utility.read_simulation_settings_from_configuration_object function)
          """
 
+        if timestepRange is None:
+            timestepRange = (self.timesteps_min, self.timesteps_max)
+
+        if time_column_name is None:
+            time_column_name = self.time_column_name
+
+        if qoi_column_name is None:
+            qoi_column_name = self.list_original_model_output_columns 
         if not isinstance(qoi_column_name, list):
             qoi_column_name = [qoi_column_name, ]
 
@@ -2570,16 +2656,461 @@ class TimeDependentStatistics(ABC, Statistics):
             self.df_measured = None
             self.measured_fetched = False
 
-    def get_unaltered_run_data(self, timestepRange=None, time_column_name="TimeStamp", qoi_column_name="streamflow",
-                              **kwargs):
-        return None
-        # raise NotImplementedError
+    def get_unaltered_run_data(
+        self, timestepRange=None, time_column_name=None, qoi_column_name=None, **kwargs):
+        """
+        This function fetches the unaltered run data from the simulation results file.
+        The unaltered run data is stored in the self.df_unaltered attribute.
+        Reimplement this function in the child class if the unaltered run data is needed.
+        """
+        if timestepRange is None:
+            timestepRange = (self.timesteps_min, self.timesteps_max)
+        if time_column_name is None:
+            time_column_name = self.time_column_name
+        if qoi_column_name is None:
+            qoi_column_name = self.list_original_model_output_columns.copy()
+        if not isinstance(qoi_column_name, list):
+            qoi_column_name = [qoi_column_name, ]
+        self.df_unaltered = None
+        self.unaltered_computed = False
 
-    def get_forcing_data(self, timestepRange=None, time_column_name="TimeStamp", forcing_column_names="precipitation",
-                         **kwargs):
-        return None
-        # raise NotImplementedError
+    def get_forcing_data(self, timestepRange=None, time_column_name=None, **kwargs):
+        """
+        This function fetches the forcing data from the forcing file.
+        The forcing data is stored in the self.forcing_df attribute.
+        Reimplement this function in the child class if the forcing data is needed.
+        """
+        if timestepRange is None:
+            timestepRange = (self.timesteps_min, self.timesteps_max)
+        if time_column_name is None:
+            time_column_name = self.time_column_name
+        self.forcing_df = None
+        self.forcing_data_fetched = False
 
+    # =================================================================================================
+    # =================================================================================================
+
+    def extract_mean_time_series(self):
+        """
+        Extracts the mean time series for each quantity of interest (QoI).
+
+        Raises:
+            Exception: If self.result_dict is None, indicating that the statistics need to be calculated first.
+
+        Returns:
+            pd.DataFrame or None: A DataFrame containing the mean time series for each QoI, or None if no QoI is available.
+        """
+        if self.result_dict is None:
+            raise Exception('[STAT INFO] extract_mean_time_series - self.result_dict is None. '
+                            'Calculate the statistics first!')
+        list_of_single_qoi_mean_df = []
+        for single_qoi_column in self.list_qoi_column:
+            keyIter = list(self.pdTimesteps)  #self.timesteps (?)
+            try:
+                mean_time_series = [self.result_dict[single_qoi_column][key]["E"] for key in keyIter]
+            except KeyError as e:
+                continue
+            qoi_column = [single_qoi_column] * len(keyIter)
+            mean_df_single_qoi = pd.DataFrame(list(zip(qoi_column, mean_time_series, self.pdTimesteps)),
+                                              columns=['qoi', 'mean_qoi', self.time_column_name])  # self.timesteps (?)
+            list_of_single_qoi_mean_df.append(mean_df_single_qoi) 
+
+        if list_of_single_qoi_mean_df:
+            self.qoi_mean_df = pd.concat(list_of_single_qoi_mean_df, ignore_index=True, sort=False, axis=0)
+        else:
+            self.qoi_mean_df = None
+
+    def create_df_from_statistics_data(self, compute_measured_normalized_data=False, set_lower_predictions_to_zero=False):
+        """
+        Create a DataFrame from the statistics data.
+        Iterates over each QoI column and creates a DataFrame containing the statistics data for each QoI.
+        Take a look at the create_df_from_statistics_data_single_qoi function for more details.
+
+        Args:
+            compute_measured_normalized_data (bool, optional): Flag to compute measured normalized data. Defaults to False.
+            set_lower_predictions_to_zero (bool, optional): Flag to set lower predictions to zero. Defaults to False.
+
+        Returns:
+            None
+
+        """
+        list_of_single_qoi_dfs = []
+        for single_qoi_column in self.list_qoi_column:
+            df_statistics_single_qoi = self.create_df_from_statistics_data_single_qoi(
+                qoi_column=single_qoi_column, 
+                compute_measured_normalized_data=compute_measured_normalized_data,
+                set_lower_predictions_to_zero=set_lower_predictions_to_zero
+                )
+            if df_statistics_single_qoi is not None:
+                if "qoi" not in df_statistics_single_qoi.columns:
+                    df_statistics_single_qoi["qoi"] = single_qoi_column
+                list_of_single_qoi_dfs.append(df_statistics_single_qoi)
+        if list_of_single_qoi_dfs:
+            self.df_statistics = pd.concat(list_of_single_qoi_dfs, axis=0)
+            self.df_statistics.sort_values(by=self.time_column_name, ascending=True, inplace=True)
+        else:
+            self.df_statistics = None
+
+    def _check_if_df_statistics_is_computed(self, recompute_if_not=False):
+        if self.df_statistics is None or self.df_statistics.empty:
+            if recompute_if_not:
+                self.create_df_from_statistics_data()
+            else:
+                raise Exception(f"You are trying to call a plotting utiltiy function whereas "
+                                f"self.df_statistics object is still not computed - make sure to first call"
+                                f"self.create_df_from_statistics_data")
+        else:
+            return
+
+    def merge_df_statistics_data_with_forcing_data(self, **kwargs):
+        """
+        Merges the statistics data with the forcing data based on the time column.
+
+        Args:
+            **kwargs: Additional keyword arguments to be passed to the `get_forcing_data` method.
+
+        Returns:
+            DataFrame: The merged DataFrame containing the statistics data and the measured forcing data.
+        """
+        if not self.forcing_data_fetched or self.forcing_df is None or self.forcing_df.empty:
+            self.get_forcing_data(**kwargs)
+        if self.df_statistics is None or self.df_statistics.empty:
+            self.create_df_from_statistics_data()
+        df_statistics_and_measured = pd.merge(
+            self.df_statistics, self.forcing_df, left_on=self.time_column_name,
+            right_index=True)
+        return df_statistics_and_measured
+
+    def merge_df_statistics_data_with_measured_and_forcing_data(self, add_measured_data=True, add_forcing_data=True, **kwargs):
+        """
+        Merges the statistics data with measured data and forcing data based on the time column.
+
+        Args:
+            **kwargs: Additional keyword arguments to be passed to the `get_measured_data `
+            or  `get_forcing_data` method.
+
+        Returns:
+            DataFrame: The merged DataFrame containing the statistics data and the measured forcing data.
+        """
+        if add_measured_data and (not self.measured_fetched or self.df_measured is None or self.df_measured.empty):
+            transform_measured_data_as_original_model = kwargs.pop(
+                "transform_measured_data_as_original_model", True)
+            self.get_measured_data(
+                timestepRange=(self.timesteps_min, self.timesteps_max),
+                transform_measured_data_as_original_model=transform_measured_data_as_original_model, **kwargs)
+            self.create_df_from_statistics_data()  # make sure that measured data is added to the statistics data in a single DataFrame
+
+        if add_forcing_data and (not self.forcing_data_fetched or self.forcing_df is None or self.forcing_df.empty):
+            self.get_forcing_data(**kwargs)
+        
+        if self.df_statistics is None:
+            self.create_df_from_statistics_data()
+
+        if self.df_statistics is None or self.df_statistics.empty:
+            raise Exception("The statistics data is not available.")
+        if add_forcing_data and (self.forcing_df is None or self.forcing_df.empty):
+            raise Exception("The forcing data is not available.")
+        if add_measured_data and (self.df_measured is None or self.df_measured.empty):
+            raise Exception("The measured data is not available.")
+
+        if add_forcing_data:
+            return pd.merge(
+                self.df_statistics, self.forcing_df, left_on=self.time_column_name,
+                right_index=True)
+        else:
+            return self.df_statistics
+
+    def describe_df_statistics(self):
+        """
+        Prints descriptive statistics for each QOI in the dataframe.
+
+        This method computes and prints descriptive statistics for each QOI (Quantity of Interest)
+        in the dataframe `df_statistics`. It first checks if the statistics have been computed,
+        and if not, it recomputes them. Then, it iterates over each QOI, subsets the dataframe
+        for that QOI, and prints the descriptive statistics using the `describe` method.
+
+        Note: This method assumes that the dataframe `df_statistics` has a column named 'qoi'
+        which contains the QOI values.
+
+        Returns:
+            None
+        """
+        self._check_if_df_statistics_is_computed(recompute_if_not=True)
+        for single_qoi in self.list_qoi_column:
+            df_statistics_single_qoi_subset = self.df_statistics.loc[
+                self.df_statistics['qoi'] == single_qoi]
+            print(f"{single_qoi}\n\n")
+            print(df_statistics_single_qoi_subset.describe(include=np.number))
+
+    def create_df_from_sensitivity_indices(
+        self, si_type="Sobol_t", compute_measured_normalized_data=False):
+        """
+        Creates one big Pandas DataFrame for all QoIs.
+
+        :param si_type: The type of sensitivity indices to compute. 
+        Should be one of "Sobol_t", "Sobol_m", or "Sobol_m2". Defaults to "Sobol_t". (default: "Sobol_t").
+        :param compute_measured_normalized_data: Whether to compute measured normalized data (default: False).
+        :return: The combined DataFrame containing sensitivity indices for all QoIs.
+        """
+        si_df = None
+        list_of_single_qoi_dfs = []
+        for single_qoi_column in self.list_qoi_column:
+            single_si_df = self.create_df_from_sensitivity_indices_single_qoi(
+                qoi_column=single_qoi_column, si_type=si_type,
+                compute_measured_normalized_data=compute_measured_normalized_data
+            )
+            if single_si_df is not None:
+                single_si_df["qoi"] = single_qoi_column
+                single_si_df.reset_index(inplace=True)
+                single_si_df.rename(columns={single_si_df.index.name: self.time_column_name}, inplace=True)
+                list_of_single_qoi_dfs.append(single_si_df)
+        if list_of_single_qoi_dfs:
+            si_df = pd.concat(list_of_single_qoi_dfs, axis=0)
+            si_df.sort_values(by=self.time_column_name, ascending=True, inplace=True)
+        return si_df
+
+    def create_df_from_statistics_data_single_qoi(
+        self, qoi_column, compute_measured_normalized_data=False, set_lower_predictions_to_zero=False):
+        """
+        Creates a pandas DataFrame from the statistics data for a single quantity of interest (qoi).
+
+        Args:
+            qoi_column (str): The column name of the quantity of interest.
+            compute_measured_normalized_data (bool, optional): Flag indicating whether to compute normalized measured data. Defaults to False.
+            set_lower_predictions_to_zero (bool, optional): Flag indicating whether to set lower predictions to zero. Defaults to False.
+
+        Returns:
+            pandas.DataFrame: The DataFrame containing the statistics data for the specified qoi.
+
+        Raises:
+
+        Note:
+            This method retrieves the statistics data from the result_dict attribute and constructs a DataFrame
+            with columns representing different statistical measures such as mean, standard deviation, percentiles, etc.
+            The DataFrame also includes the time column and the qoi column.
+
+            If measured data is available (i.e., df_measured is not Noe) the method addes measured data to the final 
+            data frame as well, and if compute_measured_normalized_data is True, the method computes
+            the normalized measured data and adds it as a column in the DataFrame.
+
+            If the unaltered_computed flag is True, the plan is to add it to the final df
+        """
+        # try:
+        #     self.result_dict[qoi_column]
+        # except KeyError as e:
+        #     return None
+        if not self.result_dict[qoi_column]:
+            return None
+
+        keyIter = list(self.pdTimesteps)  # self.timesteps (?)
+
+        list_of_columns = [self.pdTimesteps, ]  # self.timesteps (?)
+        list_of_columns_names = [self.time_column_name, ]
+        # list_of_columns = [self.pdTimesteps, mean_time_series, std_time_series,
+        #                    p10_time_series, p90_time_series]
+        # list_of_columns_names = [self.time_column_name, "E", "StdDev", "P10", "P90"]
+
+        if "E" in self.result_dict[qoi_column][keyIter[0]]:
+            mean_time_series = [self.result_dict[qoi_column][key]["E"] for key in keyIter]
+            list_of_columns.append(mean_time_series)
+            list_of_columns_names.append("E")
+        if "gpce_coeff" in self.result_dict[qoi_column][keyIter[0]]:
+            list_of_columns.append([self.result_dict[qoi_column][key]["gpce_coeff"] for key in keyIter])
+            list_of_columns_names.append("gpce_coeff")
+        if "gPCE" in self.result_dict[qoi_column][keyIter[0]]:
+            list_of_columns.append([self.result_dict[qoi_column][key]["gPCE"] for key in keyIter])
+            list_of_columns_names.append("gPCE")
+        if "Var" in self.result_dict[qoi_column][keyIter[0]]:
+            std_time_series = [self.result_dict[qoi_column][key]["Var"] for key in keyIter]
+            list_of_columns.append(std_time_series)
+            list_of_columns_names.append("Var")
+        if "StdDev" in self.result_dict[qoi_column][keyIter[0]]:
+            std_time_series = [self.result_dict[qoi_column][key]["StdDev"] for key in keyIter]
+            list_of_columns.append(std_time_series)
+            list_of_columns_names.append("StdDev")
+        if "P10" in self.result_dict[qoi_column][keyIter[0]]:
+            p10_time_series = [self.result_dict[qoi_column][key]["P10"] for key in keyIter]
+            list_of_columns.append(p10_time_series)
+            list_of_columns_names.append("P10")
+        if "P90" in self.result_dict[qoi_column][keyIter[0]]:
+            p90_time_series = [self.result_dict[qoi_column][key]["P90"] for key in keyIter]
+            list_of_columns.append(p90_time_series)
+            list_of_columns_names.append("P90")
+        if "Skew" in self.result_dict[qoi_column][keyIter[0]]:
+            list_of_columns.append([self.result_dict[qoi_column][key]["Skew"] for key in keyIter])
+            list_of_columns_names.append("Skew")
+        if "Kurt" in self.result_dict[qoi_column][keyIter[0]]:
+            list_of_columns.append([self.result_dict[qoi_column][key]["Kurt"] for key in keyIter])
+            list_of_columns_names.append("Kurt")
+        if "qoi_dist" in self.result_dict[qoi_column][keyIter[0]]:
+            list_of_columns.append([self.result_dict[qoi_column][key]["qoi_dist"] for key in keyIter])
+            list_of_columns_names.append("qoi_dist")
+
+        # self._check_if_Sobol_t_computed(keyIter[0], qoi_column=qoi_column)
+        # self._check_if_Sobol_m_computed(keyIter[0], qoi_column=qoi_column)
+        is_Sobol_t_computed = "Sobol_t" in self.result_dict[qoi_column][keyIter[0]]
+        is_Sobol_m_computed = "Sobol_m" in self.result_dict[qoi_column][keyIter[0]]
+        is_Sobol_m2_computed = "Sobol_m2" in self.result_dict[qoi_column][keyIter[0]]
+
+        if is_Sobol_m_computed:
+            for i in range(len(self.labels)):
+                sobol_m_time_series = [self.result_dict[qoi_column][key]["Sobol_m"][i] for key in keyIter]
+                list_of_columns.append(sobol_m_time_series)
+                temp = "Sobol_m_" + self.labels[i]
+                list_of_columns_names.append(temp)
+        if is_Sobol_m2_computed:
+            for i in range(len(self.labels)):
+                sobol_m2_time_series = [self.result_dict[qoi_column][key]["Sobol_m2"][i] for key in keyIter]
+                list_of_columns.append(sobol_m2_time_series)
+                temp = "Sobol_m2_" + self.labels[i]
+                list_of_columns_names.append(temp)
+        if is_Sobol_t_computed:
+            for i in range(len(self.labels)):
+                sobol_t_time_series = [self.result_dict[qoi_column][key]["Sobol_t"][i] for key in keyIter]
+                list_of_columns.append(sobol_t_time_series)
+                temp = "Sobol_t_" + self.labels[i]
+                list_of_columns_names.append(temp)
+
+        if not list_of_columns:
+            return None
+
+        df_statistics_single_qoi = pd.DataFrame(list(zip(*list_of_columns)), columns=list_of_columns_names)
+        df_statistics_single_qoi["qoi"] = qoi_column
+
+        if 'E' in df_statistics_single_qoi.columns:
+            if 'StdDev' in df_statistics_single_qoi.columns:
+                df_statistics_single_qoi["E_minus_std"] = df_statistics_single_qoi['E'] - df_statistics_single_qoi['StdDev']
+                df_statistics_single_qoi["E_plus_std"] = df_statistics_single_qoi['E'] + df_statistics_single_qoi['StdDev']
+                df_statistics_single_qoi["E_minus_2std"] = df_statistics_single_qoi['E'] - 2*df_statistics_single_qoi['StdDev']
+                df_statistics_single_qoi["E_plus_2std"] = df_statistics_single_qoi['E'] + 2*df_statistics_single_qoi['StdDev']
+            elif 'Var' in df_statistics_single_qoi.columns:
+                df_statistics_single_qoi["E_minus_std"] = df_statistics_single_qoi['E'] - np.sqrt(df_statistics_single_qoi['Var'])
+                df_statistics_single_qoi["E_plus_std"] = df_statistics_single_qoi['E'] + np.sqrt(df_statistics_single_qoi['Var'])
+                df_statistics_single_qoi["E_minus_2std"] = df_statistics_single_qoi['E'] - 2*np.sqrt(df_statistics_single_qoi['Var'])
+                df_statistics_single_qoi["E_plus_2std"] = df_statistics_single_qoi['E'] + 2*np.sqrt(df_statistics_single_qoi['Var'])
+
+        if set_lower_predictions_to_zero:
+            if 'E_minus_std' in df_statistics_single_qoi:
+                df_statistics_single_qoi.loc[df_statistics_single_qoi["E_minus_std"] < 0, "E_minus_std"] = 0
+            if 'E_minus_2std' in df_statistics_single_qoi:
+                df_statistics_single_qoi.loc[df_statistics_single_qoi["E_minus_2std"] < 0, "E_minus_2std"] = 0
+            if 'P10' in df_statistics_single_qoi:
+                df_statistics_single_qoi['P10'] = df_statistics_single_qoi['P10'].apply(lambda x: max(0, x))
+
+        if self.measured_fetched and self.df_measured is not None:
+            if qoi_column in list(self.df_measured["qoi"].unique()):
+                # print(f"{qoi_column}")
+                df_measured_subset = self.df_measured.loc[self.df_measured["qoi"] == qoi_column][[
+                    self.time_column_name, "measured"]]
+                # df_measured_subset.drop("qoi", inplace=True)
+                df_statistics_single_qoi = pd.merge(df_statistics_single_qoi, df_measured_subset,
+                                                    on=[self.time_column_name, ], how='left')
+            elif self.dict_corresponding_original_qoi_column[qoi_column] in list(self.df_measured["qoi"].unique()):
+                df_measured_subset = self.df_measured.loc[
+                    self.df_measured["qoi"] == self.dict_corresponding_original_qoi_column[qoi_column]][[
+                    self.time_column_name, "measured"]]
+                # df_measured_subset.drop("qoi", inplace=True)
+                df_statistics_single_qoi = pd.merge(df_statistics_single_qoi, df_measured_subset,
+                                                    on=[self.time_column_name, ], how='left')
+            else:
+                df_statistics_single_qoi["measured"] = np.nan
+        else:
+            df_statistics_single_qoi["measured"] = np.nan
+
+        if self.unaltered_computed:
+            pass  # TODO
+
+        return df_statistics_single_qoi
+
+    def create_df_from_sensitivity_indices_single_qoi(
+        self, qoi_column, si_type="Sobol_t", compute_measured_normalized_data=False):
+        """
+        Creates a DataFrame from sensitivity indices for a single quantity of interest (QoI).
+
+        Args:
+            qoi_column (str): The column name of the quantity of interest.
+            si_type (str, optional): The type of sensitivity index to compute. 
+                Should be one of "Sobol_t", "Sobol_m", or "Sobol_m2". Defaults to "Sobol_t".
+            compute_measured_normalized_data (bool, optional): Whether to compute normalized measured data. 
+                Defaults to False.
+
+        Returns:
+            pandas.DataFrame: The DataFrame containing the sensitivity indices.
+
+        Raises:
+
+        Note:
+            - The sensitivity indices are computed based on the result_dict, which should contain the necessary data.
+            - The result_dict should have the sensitivity indices computed for the specified qoi_column and si_type.
+            - If the sensitivity indices are not computed for the specified qoi_column and si_type, 
+              the method returns None.
+
+        """
+        # try:
+        #     self.result_dict[qoi_column]
+        # except KeyError as e:
+        #     return None
+        if not self.result_dict[qoi_column]:
+            return None
+
+        keyIter = list(self.pdTimesteps)  # self.timesteps (?)
+        is_Sobol_t_computed = "Sobol_t" in self.result_dict[qoi_column][keyIter[0]]
+        is_Sobol_m_computed = "Sobol_m" in self.result_dict[qoi_column][keyIter[0]]
+        is_Sobol_m2_computed = "Sobol_m2" in self.result_dict[qoi_column][keyIter[0]]
+
+        if si_type == "Sobol_t" and not is_Sobol_t_computed:
+            #raise Exception("Sobol Total Order Indices are not computed")
+            return None
+        elif si_type == "Sobol_m" and not is_Sobol_m_computed:
+            #raise Exception("Sobol Main Order Indices are not computed")
+            return None
+        elif si_type == "Sobol_m2" and not is_Sobol_m2_computed:
+            #raise Exception("Sobol Second Order Indices are not computed")
+            return None
+
+        list_of_df_over_parameters = []
+        for i in range(len(self.labels)):
+            # if uq_method == "saltelli":
+            #     si_single_param = [self.result_dict[key][si_type][i][0] for key in keyIter]
+            # else:
+            si_single_param = [self.result_dict[qoi_column][key][si_type][i] for key in keyIter]
+            df_temp = pd.DataFrame(list(zip(si_single_param, self.pdTimesteps)),
+                                   columns=[si_type + "_" + self.labels[i], self.time_column_name])  #self.timesteps (?)
+            list_of_df_over_parameters.append(df_temp)
+        si_df = reduce(lambda left, right: pd.merge(left, right, on=self.time_column_name, how='outer'),
+                       list_of_df_over_parameters)
+
+        if self.measured_fetched and self.df_measured is not None:
+            if qoi_column in list(self.df_measured["qoi"].unique()):
+                df_measured_subset = self.df_measured.loc[self.df_measured["qoi"] == qoi_column][[
+                    self.time_column_name, "measured"]]
+                si_df = pd.merge(si_df, df_measured_subset, on=[self.time_column_name,], how='left')
+                if compute_measured_normalized_data:
+                    # df_statistics_single_qoi["measured_norm"] = MinMaxScaler().fit_transform(
+                    #     np.array(df_statistics_single_qoi["measured"]).reshape(-1, 1))
+                    si_df["measured_norm"] = (si_df["measured"] - si_df["measured"].min()) / (
+                            si_df["measured"].max() - si_df["measured"].min())
+            elif self.dict_corresponding_original_qoi_column[qoi_column] in list(self.df_measured["qoi"].unique()):
+                df_measured_subset = self.df_measured.loc[
+                    self.df_measured["qoi"] == self.dict_corresponding_original_qoi_column[qoi_column]][[
+                    self.time_column_name, "measured"]]
+                # df_measured_subset.drop("qoi", inplace=True)
+                si_df = pd.merge(si_df, df_measured_subset, on=[self.time_column_name, ], how='left')
+                if compute_measured_normalized_data:
+                    # df_statistics_single_qoi["measured_norm"] = MinMaxScaler().fit_transform(
+                    #     np.array(df_statistics_single_qoi["measured"]).reshape(-1, 1))
+                    si_df["measured_norm"] = (si_df["measured"] - si_df["measured"].min()) / (
+                            si_df["measured"].max() - si_df["measured"].min())
+            else:
+                si_df["measured"] = np.nan
+        else:
+            si_df["measured"] = np.nan
+
+        si_df.set_index(self.time_column_name, inplace=True)
+        return si_df
+
+    # =================================================================================================
+    # Set of functions for plotting
     # =================================================================================================
 
     def printResults(self, timestep=-1, **kwargs):
@@ -2670,6 +3201,7 @@ class TimeDependentStatistics(ABC, Statistics):
                     "E_minus_std": False, "E_plus_std": False, "P10": False, "P90": False,
                     "StdDev": False, "Skew": False, "Kurt": False, "Sobol_m": False, "Sobol_m2": False, "Sobol_t": False
                 }
+                self.dict_what_to_plot = dict_what_to_plot
 
         # dict_qoi_vs_plot_rows = defaultdict(dict, {single_qoi_column: {} for single_qoi_column in list_qoi_column_to_plot})
 
@@ -2720,368 +3252,333 @@ class TimeDependentStatistics(ABC, Statistics):
 
     # =================================================================================================
 
-    def extract_mean_time_series(self):
+    def plot_measured_data_single_qoi(self, single_qoi: str, fig=None, add_to_subplot=False, **kwargs):
         """
-        Extracts the mean time series for each quantity of interest (QoI).
-
-        Raises:
-            Exception: If self.result_dict is None, indicating that the statistics need to be calculated first.
-
-        Returns:
-            pd.DataFrame or None: A DataFrame containing the mean time series for each QoI, or None if no QoI is available.
-        """
-        if self.result_dict is None:
-            raise Exception('[STAT INFO] extract_mean_time_series - self.result_dict is None. '
-                            'Calculate the statistics first!')
-        list_of_single_qoi_mean_df = []
-        for single_qoi_column in self.list_qoi_column:
-            keyIter = list(self.pdTimesteps)  #self.timesteps (?)
-            try:
-                mean_time_series = [self.result_dict[single_qoi_column][key]["E"] for key in keyIter]
-            except KeyError as e:
-                continue
-            qoi_column = [single_qoi_column] * len(keyIter)
-            mean_df_single_qoi = pd.DataFrame(list(zip(qoi_column, mean_time_series, self.pdTimesteps)),
-                                              columns=['qoi', 'mean_qoi', self.time_column_name])  # self.timesteps (?)
-            list_of_single_qoi_mean_df.append(mean_df_single_qoi) 
-
-        if list_of_single_qoi_mean_df:
-            self.qoi_mean_df = pd.concat(list_of_single_qoi_mean_df, ignore_index=True, sort=False, axis=0)
-        else:
-            self.qoi_mean_df = None
-
-    def create_df_from_statistics_data(self, uq_method="sc", compute_measured_normalized_data=False):
-        """
-        Create a DataFrame from the statistics data.
+        Plots the measured data for a single quantity of interest (QoI).
 
         Args:
-            uq_method (str, optional): The uncertainty quantification method. Defaults to "sc".
-            compute_measured_normalized_data (bool, optional): Flag to compute measured normalized data. Defaults to False.
+            single_qoi (str): The name of the quantity of interest (QoI) to plot.
+            fig (go.Figure, optional): The plotly figure to add the measured data to. Defaults to None.
+            add_to_subplot (bool, optional): Whether to add the measured data to a subplot. Defaults to False.
+            if true, then n_rows and n_col should be provided in kwargs; the function on that case just extend the 
+            propagated figure and retuns None
 
         Returns:
+            None or go.Figure: The plot of the measured data for the specified QoI.
+
+        Raises:
             None
-
         """
-        list_of_single_qoi_dfs = []
-        for single_qoi_column in self.list_qoi_column:
-            df_statistics_single_qoi = self.create_df_from_statistics_data_single_qoi(
-                qoi_column=single_qoi_column, uq_method=uq_method,
-                compute_measured_normalized_data=compute_measured_normalized_data)
-            if df_statistics_single_qoi is not None:
-                if "qoi" not in df_statistics_single_qoi.columns:
-                    df_statistics_single_qoi["qoi"] = single_qoi_column
-                list_of_single_qoi_dfs.append(df_statistics_single_qoi)
-        if list_of_single_qoi_dfs:
-            self.df_statistics = pd.concat(list_of_single_qoi_dfs, axis=0)
-        else:
-            self.df_statistics = None
+        if fig is None:
+            fig = go.Figure()
+            add_to_subplot = False
 
-    def _check_if_df_statistics_is_computed(self, recompute_if_not=False):
-        if self.df_statistics is None or self.df_statistics.empty:
-            if recompute_if_not:
-                self.create_df_from_statistics_data()
+        if add_to_subplot:
+            n_rows=kwargs.get("n_rows", 1)
+            n_col=kwargs.get("n_col", 1)
+
+        if self.measured_fetched and self.df_measured is not None and not self.df_measured.empty:
+            df_measured_subset = self.df_measured[self.df_measured["qoi"]==single_qoi]
+            if not df_measured_subset.empty:
+                if add_to_subplot:
+                    fig.add_trace(
+                        go.Scatter(
+                            x=df_measured_subset[self.time_column_name], 
+                            y=df_measured_subset["measured"],
+                            name=f"measured {single_qoi}",
+                            line_color='red', mode="lines", opacity=1.0, showlegend=True,
+                        ), row=n_rows, col=n_col
+                    )
+                else:
+                    fig.add_trace(
+                        go.Scatter(
+                            x=df_measured_subset[self.time_column_name], 
+                            y=df_measured_subset["measured"],
+                            name=f"measured {single_qoi}",
+                            line_color='red', mode="lines", opacity=1.0, showlegend=True,
+                        )
+                    )
+                    return fig
             else:
-                raise Exception(f"You are trying to call a plotting utiltiy function whereas "
-                                f"self.df_statistics object is still not computed - make sure to first call"
-                                f"self.create_df_from_statistics_data")
+                print(f"[STAT INFO] DF subset storing measured data for QoI-{single_qoi} is empty!")
         else:
-            return
+            print(f"[STAT INFO] No plotting in plot_measured_data_single_qoi - df_measured is empty!")
 
-    def merge_df_statistics_data_with_forcing_data(self, **kwargs):
+    def plot_mean_data_single_qoi(self, single_qoi: str, df: pd.DataFrame=None, fig=None, add_to_subplot=False, **kwargs):
         """
-        Merges the statistics data with the forcing data based on the time column.
-
+        Plots mean computed data for a single quantity of interest (QoI) from pandas DataFrame!
         Args:
-            **kwargs: Additional keyword arguments to be passed to the `get_forcing_data` method.
+            single_qoi (str): The name of the quantity of interest (QoI) to plot.
+            df (): Df storinf mean value. Defaults to None; if None self.df_statistics is used and assumed it is already computed.
+                   If DF is provided it is assumed that it stores only data for the particular QoI and that it has 'E' column
+            fig (go.Figure, optional): The plotly figure to add the measured data to. Defaults to None.
+            add_to_subplot (bool, optional): Whether to add the measured data to a subplot. Defaults to False.
+            if true, then n_rows and n_col should be provided in kwargs; the function on that case just extend the 
+            propagated figure and retuns None
 
         Returns:
-            DataFrame: The merged DataFrame containing the statistics data and the measured forcing data.
+            None or go.Figure: The plot of the measured data for the specified QoI.
+
+        Raises:
+            None
         """
-        if not self.forcing_data_fetched or self.forcing_df is None or self.forcing_df.empty:
-            self.get_forcing_data(time_column_name=self.time_column_name, **kwargs)
-        if self.df_statistics is None or self.df_statistics.empty:
-            self.create_df_from_statistics_data()
-        df_statistics_and_measured = pd.merge(
-            self.df_statistics, self.forcing_df, left_on=self.time_column_name,
-            right_index=True)
-        return df_statistics_and_measured
+        if fig is None:
+            fig = go.Figure()
+            add_to_subplot = False
 
-    def describe_df_statistics(self):
-            """
-            Prints descriptive statistics for each QOI in the dataframe.
+        if add_to_subplot:
+            n_rows=kwargs.get("n_rows", 1)
+            n_col=kwargs.get("n_col", 1)
 
-            This method computes and prints descriptive statistics for each QOI (Quantity of Interest)
-            in the dataframe `df_statistics`. It first checks if the statistics have been computed,
-            and if not, it recomputes them. Then, it iterates over each QOI, subsets the dataframe
-            for that QOI, and prints the descriptive statistics using the `describe` method.
+        if df is None:
+            if self.df_statistics is None or self.df_statistics.empty:
+                print(f"[STAT INFO] DF subset storing mean computed data for QoI-{single_qoi} is not provided and df_statistics empty!")
+                return
+            else:
+                df = self.df_statistics[self.df_statistics["qoi"]==single_qoi]
 
-            Note: This method assumes that the dataframe `df_statistics` has a column named 'qoi'
-            which contains the QOI values.
+        if not df.empty:
+            if add_to_subplot:
+                fig.add_trace(
+                    go.Scatter(
+                        x=df[self.time_column_name], 
+                        y=df["E"],
+                        name=f"Mean {single_qoi}",
+                        line_color='green', mode="lines", opacity=1.0, showlegend=True,
+                    ), row=n_rows, col=n_col
+                )
+            else:
+                fig.add_trace(
+                    go.Scatter(
+                        x=df[self.time_column_name], 
+                        y=df["E"],
+                        name=f"Mean {single_qoi}",
+                        line_color='green', mode="lines", opacity=1.0, showlegend=True,
+                    )
+                )
+                return fig
+        else:
+            print(f"[STAT INFO] DF subset storing mean computed data for QoI-{single_qoi} is not provided and df_statistics empty!")
 
-            Returns:
-                None
-            """
-            self._check_if_df_statistics_is_computed(recompute_if_not=True)
-            for single_qoi in self.list_qoi_column:
-                df_statistics_single_qoi_subset = self.df_statistics.loc[
-                    self.df_statistics['qoi'] == single_qoi]
-                print(f"{single_qoi}\n\n")
-                print(df_statistics_single_qoi_subset.describe(include=np.number))
-
-    def create_df_from_sensitivity_indices(self, si_type="Sobol_t", uq_method="sc",
-                                           compute_measured_normalized_data=False):
+    def get_info_for_plotting_forcing_data(self, **kwargs):
         """
-        Creates one big Pandas DataFrame for all QoIs.
+        Gets the information needed for plotting the forcing data.
 
-        :param si_type: The type of sensitivity indices to compute. 
-        Should be one of "Sobol_t", "Sobol_m", or "Sobol_m2". Defaults to "Sobol_t". (default: "Sobol_t").
-        :param uq_method: The uncertainty quantification method to use (default: "sc").
-        :param compute_measured_normalized_data: Whether to compute measured normalized data (default: False).
-        :return: The combined DataFrame containing sensitivity indices for all QoIs.
+        Args:
+            kwargs: Additional keyword arguments.
+
+        Returns:
+            dict: A dictionary containing the information needed for plotting the forcing data.
+        Reimplement this function in the child class if the forcing data is needed.
         """
-        si_df = None
-        list_of_single_qoi_dfs = []
-        for single_qoi_column in self.list_qoi_column:
-            single_si_df = self.create_df_from_sensitivity_indices_single_qoi(
-                qoi_column=single_qoi_column, si_type=si_type, uq_method=uq_method,
-                compute_measured_normalized_data=compute_measured_normalized_data
+        return {
+            "n_rows": 0,
+            "subplot_titles": []
+        }
+
+    def plot_forcing_data(self, df: pd.DataFrame=None, fig=None, add_to_subplot=False, **kwargs):
+        """
+        This function should plot the forcing data.
+        The forcing data should be read from the self.forcing_df attribute in case df is None.
+        Args:
+            df (pd.DataFrame, optional): The DataFrame containing the forcing data. Defaults to None. 
+                if None self.forcing_df is used.
+            fig (go.Figure, optional): The plotly figure to add the measured data to. Defaults to None.
+            add_to_subplot (bool, optional): Whether to add the measured data to a subplot. Defaults to False.
+            kwargs: Additional keyword arguments.
+
+        Reimplement this function in the child class if the forcing data is needed.
+        """
+        pass
+
+    def plot_conditioned_simulation_runs_single_qoi(
+        self, single_qoi: str, df_simulation_result: pd.DataFrame=None, fig=None, add_to_subplot=False, **kwargs):
+        """
+        Plots the conditioned simulation runs for a single quantity of interest (QoI).
+
+        Args:
+            single_qoi (str): The name of the quantity of interest (QoI) to plot.
+            df_simulation_result (pd.DataFrame, optional): The DataFrame containing the simulation results. 
+                If not provided, it will be retrieved from `self.samples` if available.
+            fig (go.Figure, optional): The Figure object to add the plot to. If not provided, a new Figure object will be created.
+            add_to_subplot (bool, optional): Whether to add the plot to an existing subplot. Default is False.
+            **kwargs: Additional keyword arguments for customization.
+                - df_index_parameter_gof (pd.DataFrame, optional): The DataFrame containing the index-parameter goodness-of-fit values.
+                - allow_conditioning_results_based_on_metric (bool, optional): Flag indicating whether to condition the results based on a metric. Default is False.
+                - condition_results_based_on_metric (str, optional): The metric to condition the results on. Default is None.
+                - condition_results_based_on_metric_value (float, optional): The value of the metric to condition the results on. Default is None.
+                - condition_results_based_on_metric_sign (str, optional): The sign of the metric to condition the results on. Default is None.  
+        Returns:
+            go.Figure: The Figure object with the plot.
+
+        """
+        df_index_parameter_gof = kwargs.get("df_index_parameter_gof", None)
+        allow_conditioning_results_based_on_metric = kwargs.get("allow_conditioning_results_based_on_metric", False)
+        if fig is None:
+            fig = go.Figure()
+            add_to_subplot = False
+
+        if add_to_subplot:
+            n_rows=kwargs.get("n_rows", 1)
+            n_col=kwargs.get("n_col", 1)
+
+        if df_simulation_result is None and self.samples is not None:
+            df_simulation_result = self.samples.get_df_simulation_result()
+
+        if df_simulation_result is not None and not df_simulation_result.empty:
+            if allow_conditioning_results_based_on_metric:
+                condition_results_based_on_metric = kwargs.get("condition_results_based_on_metric", None)
+                condition_results_based_on_metric_value = kwargs.get("condition_results_based_on_metric_value", None)
+                condition_results_based_on_metric_sign = kwargs.get("condition_results_based_on_metric_sign", None)
+                if df_index_parameter_gof is None and self.samples is not None:
+                    df_index_parameter_gof = self.samples.get_df_index_parameter_gof_values()
+                if df_index_parameter_gof is not None and not df_index_parameter_gof.empty:
+                    df_simulation_result_for_plotting = uqef_dynamic_utils.filter_df_simulation_result_based_on_gof_condition(
+                        df_simulation_result, df_index_parameter_gof,
+                        condition_results_based_on_metric, condition_results_based_on_metric_value,
+                        condition_results_based_on_metric_sign, index_column_name=self.index_column_name, 
+                        time_column_name=self.time_column_name
+                    )
+                else:
+                    df_simulation_result_for_plotting = df_simulation_result
+            else:
+                df_simulation_result_for_plotting = df_simulation_result
+                
+            grouped = df_simulation_result_for_plotting.groupby(self.index_column_name)
+            groups = grouped.groups
+            keyIter = list(groups.keys())
+            for key in keyIter:
+                temp = df_simulation_result_for_plotting.loc[groups[key].values]
+                fig.add_trace(
+                    go.Scatter(
+                        x=temp[self.time_column_name], 
+                        y=temp[single_qoi],
+                        line_color='LightSkyBlue', mode="lines", opacity=0.3, showlegend=False,
+                    ), row=n_rows, col=n_col
+                )
+            if not add_to_subplot:
+                return fig
+        else:
+            print(f"[STAT INFO] DF simulation result for QoI-{single_qoi} is empty!")
+
+    def plot_filtered_data_results_measured_and_forcing_single_qoi(
+        self, single_qoi, plot_measured=True, plot_forcing=True, plot_df_simulation_result=True, plot_mean_data = True,
+        df_simulation_result=None, df_index_parameter_gof=None, allow_conditioning_results_based_on_metric=True,
+        directory_for_saving_plots=None, fileName: str=None,
+        title=None, **kwargs):
+        """
+        Plots the filtered data results for a single quantity of interest (QoI).
+        
+        Args:
+            single_qoi (str): The name of the quantity of interest (QoI) to plot.
+            plot_measured (bool, optional): Whether to plot the measured data. Defaults to True.
+            plot_forcing (bool, optional): Whether to plot the forcing data. Defaults to True.
+            plot_df_simulation_result (bool, optional): Whether to plot the simulation results. Defaults to True.
+            plot_mean_data (bool, optional): Whether to plot the mean data. Defaults to True.
+            df_simulation_result (pd.DataFrame, optional): The simulation results dataframe. Defaults to None.
+            df_index_parameter_gof (pd.DataFrame, optional): The index parameter goodness-of-fit dataframe. Defaults to None.
+            allow_conditioning_results_based_on_metric (bool, optional): Whether to allow conditioning results based on a metric. Defaults to True.
+            directory_for_saving_plots (str or pathlib.Path, optional): The directory to save the plots. Defaults to None.
+            fileName (str, optional): The file name for the plot. Defaults to None.
+            title (str, optional): The title of the plot. Defaults to None.
+            **kwargs: Additional keyword arguments to pass to other functions (i.e., merge_df_statistics_data_with_measured_and_forcing_data
+                get_info_for_plotting_forcing_data, and plot_forcing_data functions)
+                - condition_results_based_on_metric (str, optional): The metric to condition the results on. Default is None. 
+                    relevant only if allow_conditioning_results_based_on_metric is True.
+                - condition_results_based_on_metric_value (float, optional): The value of the metric to condition the results on. Default is None.
+                                relevant only if allow_conditioning_results_based_on_metric is True.
+                - condition_results_based_on_metric_sign (str, optional): The sign of the metric to condition the results on. Default is None. 
+                                relevant only if allow_conditioning_results_based_on_metric is True. 
+        
+        Returns:
+            fig: The plotly figure object.
+        """
+        df_statistics_and_measured = self.merge_df_statistics_data_with_measured_and_forcing_data(
+            add_measured_data=plot_measured, add_forcing_data=plot_forcing, **kwargs)
+        # filter only relevant qoi
+        df_statistics_and_measured_single_qoi = df_statistics_and_measured[df_statistics_and_measured["qoi"]==single_qoi]
+
+        if plot_forcing:
+            get_info_for_plotting_forcing_data = self.get_info_for_plotting_forcing_data(**kwargs)
+            n_rows = get_info_for_plotting_forcing_data.get("n_rows", 0)
+            subplot_titles = get_info_for_plotting_forcing_data.get("subplot_titles", [])
+            # number_rows_forcing = n_rows
+            # subplot_titles_forcing = subplot_titles
+        else:
+            n_rows = 0
+            subplot_titles = []
+        n_rows = n_rows + 1
+        if plot_measured:
+            subplot_titles = subplot_titles + [f"Measured & Simulated {single_qoi}"]
+        else:
+            subplot_titles = subplot_titles + [f"Simulated {single_qoi}"]
+        
+        fig = make_subplots(
+            rows=n_rows, cols=1,
+            subplot_titles=subplot_titles,
+            shared_xaxes=False,
+            vertical_spacing=0.1
+        )
+
+        if plot_forcing:
+            self.plot_forcing_data(df=df_statistics_and_measured_single_qoi, fig=fig, add_to_subplot=True, n_rows=1, n_col=1, **kwargs)
+
+        if plot_df_simulation_result:
+            condition_results_based_on_metric = kwargs.get("condition_results_based_on_metric", None)
+            condition_results_based_on_metric_value = kwargs.get("condition_results_based_on_metric_value", None)
+            condition_results_based_on_metric_sign = kwargs.get("condition_results_based_on_metric_sign", None)
+            self.plot_conditioned_simulation_runs_single_qoi(
+                single_qoi, df_simulation_result, fig=fig, add_to_subplot=True, n_rows=n_rows, n_col=1, 
+                df_index_parameter_gof=df_index_parameter_gof,
+                allow_conditioning_results_based_on_metric=allow_conditioning_results_based_on_metric, 
+                condition_results_based_on_metric=condition_results_based_on_metric,
+                condition_results_based_on_metric_value=condition_results_based_on_metric_value,
+                condition_results_based_on_metric_sign=condition_results_based_on_metric_sign
+                )
+
+        if plot_measured:
+            self.plot_measured_data_single_qoi(single_qoi=single_qoi, fig=fig, add_to_subplot=True, n_rows=n_rows, n_col=1)
+
+        if plot_mean_data:
+            self.plot_mean_data_single_qoi(single_qoi=single_qoi, fig=fig, add_to_subplot=True, n_rows=n_rows, n_col=1)
+
+        fig.update_layout(
+            xaxis=dict(
+                rangemode='normal',
+                range=[self.timesteps_min, self.timesteps_max],
+                type="date"
+            ),
+            yaxis=dict(
+                rangemode='normal',  # Ensures the range is not padded for markers
+                autorange=True       # Auto-range is enabled
             )
-            if single_si_df is not None:
-                single_si_df["qoi"] = single_qoi_column
-                single_si_df.reset_index(inplace=True)
-                single_si_df.rename(columns={single_si_df.index.name: self.time_column_name}, inplace=True)
-                list_of_single_qoi_dfs.append(single_si_df)
-        if list_of_single_qoi_dfs:
-            si_df = pd.concat(list_of_single_qoi_dfs, axis=0)
-        return si_df
+        )
 
-    def create_df_from_statistics_data_single_qoi(self, qoi_column, uq_method="sc",
-                                                  compute_measured_normalized_data=False):
-        """
-        Creates a pandas DataFrame from the statistics data for a single quantity of interest (qoi).
+        if title is None:
+            title = f"Runs, measured and forcing data ({single_qoi})"
+        fig.update_layout(height=1100, width=1100)
+        fig.update_layout(
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1.0),
+                title=title,
+                showlegend=True,
+                # template="plotly_white",
+            )
 
-        Args:
-            qoi_column (str): The column name of the quantity of interest.
-            uq_method (str, optional): The uncertainty quantification method. Defaults to "sc".
-            compute_measured_normalized_data (bool, optional): Flag indicating whether to compute normalized measured data. Defaults to False.
+        if directory_for_saving_plots is None:
+            directory_for_saving_plots = self.workingDir
+        if not str(directory_for_saving_plots).endswith("/"):
+            directory_for_saving_plots = str(directory_for_saving_plots) + "/"
+        # directory_for_saving_plots = pathlib.Path(directory_for_saving_plots)
+        if os.path.isdir(str(directory_for_saving_plots)):
+            if fileName is None:
+                fileName = f"measured_forcing_and_model_runs_plot_{single_qoi}.html"
+            fileName = str(directory_for_saving_plots) + fileName        
+            pyo.plot(fig, filename=fileName)
+            
+        # fig.show()
+        return fig
 
-        Returns:
-            pandas.DataFrame: The DataFrame containing the statistics data for the specified qoi.
-
-        Raises:
-
-        Note:
-            This method retrieves the statistics data from the result_dict attribute and constructs a DataFrame
-            with columns representing different statistical measures such as mean, standard deviation, percentiles, etc.
-            The DataFrame also includes the time column and the qoi column.
-
-            To be added - If measured data is available and compute_measured_normalized_data is True, the method computes
-            the normalized measured data and adds it as a column in the DataFrame.
-
-            If the unaltered_computed flag is True, the plan is to add it to the final df
-        """
-        # try:
-        #     self.result_dict[qoi_column]
-        # except KeyError as e:
-        #     return None
-        if not self.result_dict[qoi_column]:
-            return None
-
-        keyIter = list(self.pdTimesteps)  # self.timesteps (?)
-
-        list_of_columns = [self.pdTimesteps, ]  # self.timesteps (?)
-        list_of_columns_names = [self.time_column_name, ]
-        # list_of_columns = [self.pdTimesteps, mean_time_series, std_time_series,
-        #                    p10_time_series, p90_time_series]
-        # list_of_columns_names = [self.time_column_name, "E", "StdDev", "P10", "P90"]
-
-        if "E" in self.result_dict[qoi_column][keyIter[0]]:
-            mean_time_series = [self.result_dict[qoi_column][key]["E"] for key in keyIter]
-            list_of_columns.append(mean_time_series)
-            list_of_columns_names.append("E")
-        if "gpce_coeff" in self.result_dict[qoi_column][keyIter[0]]:
-            list_of_columns.append([self.result_dict[qoi_column][key]["gpce_coeff"] for key in keyIter])
-            list_of_columns_names.append("gpce_coeff")
-        if "gPCE" in self.result_dict[qoi_column][keyIter[0]]:
-            list_of_columns.append([self.result_dict[qoi_column][key]["gPCE"] for key in keyIter])
-            list_of_columns_names.append("gPCE")
-        if "Var" in self.result_dict[qoi_column][keyIter[0]]:
-            std_time_series = [self.result_dict[qoi_column][key]["Var"] for key in keyIter]
-            list_of_columns.append(std_time_series)
-            list_of_columns_names.append("Var")
-        if "StdDev" in self.result_dict[qoi_column][keyIter[0]]:
-            std_time_series = [self.result_dict[qoi_column][key]["StdDev"] for key in keyIter]
-            list_of_columns.append(std_time_series)
-            list_of_columns_names.append("StdDev")
-        if "P10" in self.result_dict[qoi_column][keyIter[0]]:
-            p10_time_series = [self.result_dict[qoi_column][key]["P10"] for key in keyIter]
-            list_of_columns.append(p10_time_series)
-            list_of_columns_names.append("P10")
-        if "P90" in self.result_dict[qoi_column][keyIter[0]]:
-            p90_time_series = [self.result_dict[qoi_column][key]["P90"] for key in keyIter]
-            list_of_columns.append(p90_time_series)
-            list_of_columns_names.append("P90")
-        if "Skew" in self.result_dict[qoi_column][keyIter[0]]:
-            list_of_columns.append([self.result_dict[qoi_column][key]["Skew"] for key in keyIter])
-            list_of_columns_names.append("Skew")
-        if "Kurt" in self.result_dict[qoi_column][keyIter[0]]:
-            list_of_columns.append([self.result_dict[qoi_column][key]["Kurt"] for key in keyIter])
-            list_of_columns_names.append("Kurt")
-        if "qoi_dist" in self.result_dict[qoi_column][keyIter[0]]:
-            list_of_columns.append([self.result_dict[qoi_column][key]["qoi_dist"] for key in keyIter])
-            list_of_columns_names.append("qoi_dist")
-
-        # self._check_if_Sobol_t_computed(keyIter[0], qoi_column=qoi_column)
-        # self._check_if_Sobol_m_computed(keyIter[0], qoi_column=qoi_column)
-        is_Sobol_t_computed = "Sobol_t" in self.result_dict[qoi_column][keyIter[0]]
-        is_Sobol_m_computed = "Sobol_m" in self.result_dict[qoi_column][keyIter[0]]
-        is_Sobol_m2_computed = "Sobol_m2" in self.result_dict[qoi_column][keyIter[0]]
-
-        if is_Sobol_m_computed:
-            for i in range(len(self.labels)):
-                sobol_m_time_series = [self.result_dict[qoi_column][key]["Sobol_m"][i] for key in keyIter]
-                list_of_columns.append(sobol_m_time_series)
-                temp = "Sobol_m_" + self.labels[i]
-                list_of_columns_names.append(temp)
-        if is_Sobol_m2_computed:
-            for i in range(len(self.labels)):
-                sobol_m2_time_series = [self.result_dict[qoi_column][key]["Sobol_m2"][i] for key in keyIter]
-                list_of_columns.append(sobol_m2_time_series)
-                temp = "Sobol_m2_" + self.labels[i]
-                list_of_columns_names.append(temp)
-        if is_Sobol_t_computed:
-            for i in range(len(self.labels)):
-                sobol_t_time_series = [self.result_dict[qoi_column][key]["Sobol_t"][i] for key in keyIter]
-                list_of_columns.append(sobol_t_time_series)
-                temp = "Sobol_t_" + self.labels[i]
-                list_of_columns_names.append(temp)
-
-        if not list_of_columns:
-            return None
-
-        df_statistics_single_qoi = pd.DataFrame(list(zip(*list_of_columns)), columns=list_of_columns_names)
-        df_statistics_single_qoi["qoi"] = qoi_column
-
-        if 'E' in df_statistics_single_qoi.columns and 'StdDev' in df_statistics_single_qoi.columns:
-            df_statistics_single_qoi["E_minus_std"] = df_statistics_single_qoi['E'] - df_statistics_single_qoi['StdDev']
-            df_statistics_single_qoi["E_plus_std"] = df_statistics_single_qoi['E'] + df_statistics_single_qoi['StdDev']
-            df_statistics_single_qoi["E_minus_2std"] = df_statistics_single_qoi['E'] - 2*df_statistics_single_qoi['StdDev']
-            df_statistics_single_qoi["E_plus_2std"] = df_statistics_single_qoi['E'] + 2*df_statistics_single_qoi['StdDev']
-
-        if self.measured_fetched and self.df_measured is not None:
-            if qoi_column in list(self.df_measured["qoi"].unique()):
-                # print(f"{qoi_column}")
-                df_measured_subset = self.df_measured.loc[self.df_measured["qoi"] == qoi_column][[
-                    self.time_column_name, "measured"]]
-                # df_measured_subset.drop("qoi", inplace=True)
-                df_statistics_single_qoi = pd.merge(df_statistics_single_qoi, df_measured_subset,
-                                                    on=[self.time_column_name, ], how='left')
-            elif self.dict_corresponding_original_qoi_column[qoi_column] in list(self.df_measured["qoi"].unique()):
-                df_measured_subset = self.df_measured.loc[
-                    self.df_measured["qoi"] == self.dict_corresponding_original_qoi_column[qoi_column]][[
-                    self.time_column_name, "measured"]]
-                # df_measured_subset.drop("qoi", inplace=True)
-                df_statistics_single_qoi = pd.merge(df_statistics_single_qoi, df_measured_subset,
-                                                    on=[self.time_column_name, ], how='left')
-            else:
-                df_statistics_single_qoi["measured"] = np.nan
-        else:
-            df_statistics_single_qoi["measured"] = np.nan
-
-        if self.unaltered_computed:
-            pass  # TODO
-
-        return df_statistics_single_qoi
-
-    def create_df_from_sensitivity_indices_single_qoi(self, qoi_column, si_type="Sobol_t", uq_method="sc",
-                                                      compute_measured_normalized_data=False):
-        """
-        Creates a DataFrame from sensitivity indices for a single quantity of interest (QoI).
-
-        Args:
-            qoi_column (str): The column name of the quantity of interest.
-            si_type (str, optional): The type of sensitivity index to compute. 
-                Should be one of "Sobol_t", "Sobol_m", or "Sobol_m2". Defaults to "Sobol_t".
-            uq_method (str, optional): The uncertainty quantification method. Defaults to "sc".
-            compute_measured_normalized_data (bool, optional): Whether to compute normalized measured data. 
-                Defaults to False.
-
-        Returns:
-            pandas.DataFrame: The DataFrame containing the sensitivity indices.
-
-        Raises:
-
-        Note:
-            - The sensitivity indices are computed based on the result_dict, which should contain the necessary data.
-            - The result_dict should have the sensitivity indices computed for the specified qoi_column and si_type.
-            - If the sensitivity indices are not computed for the specified qoi_column and si_type, 
-              the method returns None.
-
-        """
-        # try:
-        #     self.result_dict[qoi_column]
-        # except KeyError as e:
-        #     return None
-        if not self.result_dict[qoi_column]:
-            return None
-
-        keyIter = list(self.pdTimesteps)  # self.timesteps (?)
-        is_Sobol_t_computed = "Sobol_t" in self.result_dict[qoi_column][keyIter[0]]
-        is_Sobol_m_computed = "Sobol_m" in self.result_dict[qoi_column][keyIter[0]]
-        is_Sobol_m2_computed = "Sobol_m2" in self.result_dict[qoi_column][keyIter[0]]
-
-        if si_type == "Sobol_t" and not is_Sobol_t_computed:
-            #raise Exception("Sobol Total Order Indices are not computed")
-            return None
-        elif si_type == "Sobol_m" and not is_Sobol_m_computed:
-            #raise Exception("Sobol Main Order Indices are not computed")
-            return None
-        elif si_type == "Sobol_m2" and not is_Sobol_m2_computed:
-            #raise Exception("Sobol Second Order Indices are not computed")
-            return None
-
-        list_of_df_over_parameters = []
-        for i in range(len(self.labels)):
-            # if uq_method == "saltelli":
-            #     si_single_param = [self.result_dict[key][si_type][i][0] for key in keyIter]
-            # else:
-            si_single_param = [self.result_dict[qoi_column][key][si_type][i] for key in keyIter]
-            df_temp = pd.DataFrame(list(zip(si_single_param, self.pdTimesteps)),
-                                   columns=[si_type + "_" + self.labels[i], self.time_column_name])  #self.timesteps (?)
-            list_of_df_over_parameters.append(df_temp)
-        si_df = reduce(lambda left, right: pd.merge(left, right, on=self.time_column_name, how='outer'),
-                       list_of_df_over_parameters)
-
-        if self.measured_fetched and self.df_measured is not None:
-            if qoi_column in list(self.df_measured["qoi"].unique()):
-                df_measured_subset = self.df_measured.loc[self.df_measured["qoi"] == qoi_column][[
-                    self.time_column_name, "measured"]]
-                si_df = pd.merge(si_df, df_measured_subset, on=[self.time_column_name,], how='left')
-                if compute_measured_normalized_data:
-                    # df_statistics_single_qoi["measured_norm"] = MinMaxScaler().fit_transform(
-                    #     np.array(df_statistics_single_qoi["measured"]).reshape(-1, 1))
-                    si_df["measured_norm"] = (si_df["measured"] - si_df["measured"].min()) / (
-                            si_df["measured"].max() - si_df["measured"].min())
-            elif self.dict_corresponding_original_qoi_column[qoi_column] in list(self.df_measured["qoi"].unique()):
-                df_measured_subset = self.df_measured.loc[
-                    self.df_measured["qoi"] == self.dict_corresponding_original_qoi_column[qoi_column]][[
-                    self.time_column_name, "measured"]]
-                # df_measured_subset.drop("qoi", inplace=True)
-                si_df = pd.merge(si_df, df_measured_subset, on=[self.time_column_name, ], how='left')
-                if compute_measured_normalized_data:
-                    # df_statistics_single_qoi["measured_norm"] = MinMaxScaler().fit_transform(
-                    #     np.array(df_statistics_single_qoi["measured"]).reshape(-1, 1))
-                    si_df["measured_norm"] = (si_df["measured"] - si_df["measured"].min()) / (
-                            si_df["measured"].max() - si_df["measured"].min())
-            else:
-                si_df["measured"] = np.nan
-        else:
-            si_df["measured"] = np.nan
-
-        si_df.set_index(self.time_column_name, inplace=True)
-        return si_df
-
-    def plot_heatmap_si_single_qoi(self, qoi_column, si_df=None, si_type="Sobol_t", uq_method="sc"):
+    def plot_heatmap_si_single_qoi(self, qoi_column, si_df=None, si_type="Sobol_t"):
         """
         Plots a heatmap of sensitivity indices for a single quantity of interest (QoI).
 
@@ -3090,7 +3587,6 @@ class TimeDependentStatistics(ABC, Statistics):
             si_df (pandas.DataFrame, optional): The sensitivity indices DataFrame. If not provided, it will be created using
                 the `create_df_from_sensitivity_indices_single_qoi` method.
             si_type (str, optional): The type of sensitivity indices to use. Defaults to "Sobol_t".
-            uq_method (str, optional): The uncertainty quantification method. Defaults to "sc".
 
         Returns:
             plotly.graph_objects.Figure: The heatmap figure.
@@ -3100,7 +3596,7 @@ class TimeDependentStatistics(ABC, Statistics):
 
         """
         if si_df is None:
-            si_df = self.create_df_from_sensitivity_indices_single_qoi(qoi_column, si_type, uq_method)
+            si_df = self.create_df_from_sensitivity_indices_single_qoi(qoi_column, si_type)
 
         if si_df is None:
             print(f"Error in plot_heatmap_si_single_qoi - {si_type} is probably not computed for {qoi_column}")
@@ -3129,16 +3625,20 @@ class TimeDependentStatistics(ABC, Statistics):
             si_df.reset_index(inplace=True)
             si_df.rename(columns={si_df.index.name: self.time_column_name}, inplace=True)
 
+        fig.update_xaxes(
+            tickformat='%b %y',            # Format dates as "Month Day" (e.g., "Jan 01")
+            dtick="M1"                     # Set tick interval to 1 day for denser ticks
+        )
+
         return fig
 
-    def plot_si_indices_over_time_single_qoi(self, qoi_column, si_type="Sobol_t", uq_method="sc"):
+    def plot_si_indices_over_time_single_qoi(self, qoi_column, si_type="Sobol_t"):
         """
         Plots the sensitivity indices over time for a single quantity of interest (QoI).
 
         Args:
             qoi_column (str): The column name of the quantity of interest.
             si_type (str, optional): The type of sensitivity index to plot. Defaults to "Sobol_t".
-            uq_method (str, optional): The uncertainty quantification method. Defaults to "sc".
 
         Returns:
             go.Figure: The plot figure object.
@@ -3148,18 +3648,24 @@ class TimeDependentStatistics(ABC, Statistics):
         for i in range(len(self.labels)):
             try:
                 fig.add_trace(
-                    go.Scatter(x=self.pdTimesteps, y=[self.result_dict[qoi_column][key][si_type][i] for key in keyIter],
-                               name=self.labels[i], legendgroup=self.labels[i], line_color=colors.COLORS[i])) #self.timesteps (?)
+                    go.Scatter(
+                        x=self.pdTimesteps, y=[self.result_dict[qoi_column][key][si_type][i] for key in keyIter],
+                        name=self.labels[i], legendgroup=self.labels[i], line_color=colors.COLORS[i]),
+                        mode='lines+markers'
+                        ) #self.timesteps (?)
             except KeyError as e:
                 print(f"Error in plot_si_indices_over_time_single_qoi - "
                       f"StatisticsObject.result_dict has not key {qoi_column}")
                 raise
+        fig.update_xaxes(
+            tickformat='%b %y',            # Format dates as "Month Day" (e.g., "Jan 01")
+            dtick="M1"                     # Set tick interval to 1 day for denser ticks
+        )
         return fig
 
     # =================================================================================================
     # Set of functions which require some measured/observed data
     # =================================================================================================
-
 
     def compare_mean_time_series_and_measured(self):
         # TODO Finish this
@@ -3227,15 +3733,15 @@ class TimeDependentStatistics(ABC, Statistics):
 
     def plot_si_and_normalized_measured_time_signal_single_qoi(
             self, qoi_column, si_df=None, si_type="Sobol_t",
-            observed_column_normalized="measured_norm", uq_method="sc", plot_forcing_data=False):
+            observed_column_normalized="measured_norm", plot_forcing_data=False):
 
         if si_df is None:
             si_df = self.create_df_from_sensitivity_indices_single_qoi(
-                qoi_column, si_type, uq_method, compute_measured_normalized_data=True
+                qoi_column, si_type, compute_measured_normalized_data=True
             )
 
         if si_df is None:
-            print(f"Error in plot_heatmap_si_single_qoi - {si_type} is probably not computed for {qoi_column}")
+            print(f"Error in plot_si_and_normalized_measured_time_signal_single_qoi - {si_type} is probably not computed for {qoi_column}")
             return None
 
         if 'qoi' in si_df.columns.tolist():
@@ -3249,7 +3755,18 @@ class TimeDependentStatistics(ABC, Statistics):
         si_columns_to_plot = [x for x in si_df.columns.tolist() if x != 'measured' \
                               and x != 'measured_norm' and x != 'qoi']
 
-        fig = px.line(si_df, x=si_df.index, y=si_columns_to_plot)
+        si_columns_to_label = [single_column.split('_')[-1] for single_column in si_columns_to_plot]
+        # fig = px.line(
+        #     si_df, x=si_df.index, y=si_columns_to_plot) #mode='lines+markers' markers=True
+        fig = go.Figure()
+        for i, single_column in enumerate(si_columns_to_plot):
+            fig.add_trace(
+                go.Scatter(
+                    x=si_df.index, y=si_df[single_column],
+                    name=si_columns_to_label[i], line_color=colors.COLORS[i],
+                    text=si_columns_to_label[i], mode='lines'
+                )
+            ) #self.timesteps (?)
 
         if observed_column_normalized in si_df.columns.tolist() and not si_df[observed_column_normalized].isnull().all():
             fig.add_trace(go.Scatter(
@@ -3263,6 +3780,10 @@ class TimeDependentStatistics(ABC, Statistics):
 
         # if plot_forcing_data:
         #     pass
+        fig.update_xaxes(
+            tickformat='%b %y',            # Format dates as "Month Day" (e.g., "Jan 01")
+            dtick="M1"                     # Set tick interval to 1 day for denser ticks
+        )
         return fig
     
     # =================================================================================================

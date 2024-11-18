@@ -3,14 +3,16 @@
 This script is used to evaluate the surrogate model (gPCE) for a single QoI at all time steps.
 It is parallelized using MPI.
 """
-import inspect
 from distutils.util import strtobool
 import dill
+import inspect
 import numpy as np
-import sys
+import os
 import pathlib
 import pandas as pd
 import pickle
+import subprocess
+import sys
 import time
 
 # for message passing
@@ -30,7 +32,7 @@ import uqef
 # warnings.simplefilter(action='ignore', category=FutureWarning)
 # pd.options.mode.chained_assignment = None
 
-linux_cluster_run = True
+linux_cluster_run = False
 # sys.path.insert(0, os.getcwd())
 if linux_cluster_run:
     sys.path.insert(0, '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic')
@@ -38,7 +40,7 @@ else:
     sys.path.insert(0, '/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic')
 
 from uqef_dynamic.utils import utility
-from uqef_dynamic.utils import uqPostprocessing
+from uqef_dynamic.utils import uqef_dynamic_utils
 from uqef_dynamic.utils import create_stat_object
 
 #####################################
@@ -51,161 +53,272 @@ size = comm.Get_size()
 # num_threads = threading.active_count()
 
 # Define a function to process a single date
-def evaluate_gPCE_model_single_date(single_date, single_qoi, result_dict, nodes, gPCE_model_evaluated, workingDir):
+def evaluate_gPCE_model_single_date_old(single_date, single_qoi, nodes, gPCE_model_evaluated, result_dict=None, workingDir=None):
     if 'gPCE' in result_dict[single_qoi][single_date]:
         gPCE_model = result_dict[single_qoi][single_date]['gPCE']
     else:
-        gPCE_model = uqPostprocessing.read_single_gpce_surrogate_models(
+        gPCE_model = uqef_dynamic_utils.read_single_gpce_surrogate_models(
             workingDir, single_qoi, single_date, throw_error=True)
     gPCE_model_evaluated[single_date] = np.array(gPCE_model(*nodes))
 
-def main(workingDir,  single_qoi="Q_cms", sampleFromStandardDist=True, sampling_rule="halton", number_of_samples=1000):
+
+def evaluate_gPCE_model_single_date(single_date, gPCE_model, nodes, gPCE_model_evaluated):
+    gPCE_model_evaluated[single_date] = np.array(gPCE_model(*nodes))
+
+
+def evaluate_gPCE_surrogate_model_over_time_single_qoi(
+    workingDir,  single_qoi="Value", number_of_samples=1000, sampling_rule="halton",
+    sample_new_nodes_from_standard_dist=True, read_new_nodes_from_file=False,
+    rounding=False, round_dec=4, inputModelDir=None, directory_for_saving_plots=None,  
+    single_timestamp_single_file=False, printing=False, plotting=True, **kwargs):
     if rank == 0:
         print(f"Number of MPI processes: {size}")
-        # inputModelDir = None
-        # if model == "larsim":
-        #     if linux_cluster_run:
-        #         inputModelDir = os.path.abspath(
-        #             os.path.join('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2', 'Larsim-data'))
-        #     else:
-        #         pass
-        # elif model == "hbvsask":
-        #     if linux_cluster_run:
-        #         inputModelDir = pathlib.Path("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/HBV-SASK-data")
-        #     else:
-        #         pass
-        #     basis = "Oldman_Basin"  # 'Banff_Basin'
+
+        add_measured_data=kwargs.get('add_measured_data', False)
+        add_forcing_data=kwargs.get('add_forcing_data', False)
+        read_saved_simulations = kwargs.get('read_saved_simulations', False)
+
+        inputModelDir_function_input_argument = inputModelDir  # This is because it will be overwritten by the inputModelDir from read_output_files_uqef_dynamic
+        workingDir_function_input_argument = workingDir  # This is because it will be overwritten by the workingDir from read_output_files_uqef_dynamic, or maybe not
+
+        # Get all files /data/ dataframe / paths saved by UQEF-Dynamic        
+        results_dict = uqef_dynamic_utils.read_output_files_uqef_dynamic(
+            workingDir, read_saved_simulations=read_saved_simulations)
+        for key, value in results_dict.items():
+            globals()[key] = value
+        
+        # This is due to the fact that sometimes instantly_save_results_for_each_time_step variable/fleg tends to be overwritten in the Statistics class, due to different set-ups
+        if single_timestamp_single_file is None:
+            single_timestamp_single_file = uqsim_args_dict["instantly_save_results_for_each_time_step"] 
+        uqsim_args_dict["instantly_save_results_for_each_time_step"] = single_timestamp_single_file
+
+        statisticsObject = create_stat_object.create_and_extend_statistics_object(
+            configurationObject, uqsim_args_dict, workingDir, model, 
+            df_simulation_result=df_simulation_result
+            )
+
+        # =============================================================
+        # args_files = utility.get_dict_with_output_file_paths_based_on_workingDir(workingDir,)
+        # for key, value in args_files.items():
+        #     globals()[key] = value
+
+        # # Load the UQSim args dictionary
+        # with open(args_file, 'rb') as f:
+        #     uqsim_args = pickle.load(f)
+        # uqsim_args_dict = vars(uqsim_args)
+        # model = uqsim_args_dict["model"]
+
+        # # Load the configuration object
+        # with open(configuration_object_file, 'rb') as f:
+        #     configurationObject = dill.load(f)
+        # simulation_settings_dict = utility.read_simulation_settings_from_configuration_object(configurationObject)
+        # if model == "hbvsask":
+        #     basis = configurationObject['model_settings']['basis']
+
+        # # Reading Nodes and Parameters
+        # with open(nodes_file, 'rb') as f:
+        #     simulationNodes = pickle.load(f)
+
+        # # Reading Parameters and GoF Computed Data
+        # if df_all_index_parameter_file.is_file():
+        #     df_index_parameter = pd.read_pickle(df_all_index_parameter_file, compression="gzip")
+        #     params_list = utility._get_parameter_columns_df_index_parameter_gof(
+        #         df_index_parameter)
         # else:
-        #     raise NotImplementedError
+        #     raise FileNotFoundError(f"File {df_all_index_parameter_file} not found; it is needed to get the list of uncertain parameters atm")
 
-        # args_file, configuration_object_file, nodes_file, parameters_file, time_info_file, \
-        #     df_all_index_parameter_file, df_all_index_parameter_gof_file, df_all_simulations_file, \
-        #         df_state_results_file, df_time_varying_grad_analysis_file, df_time_aggregated_grad_analysis_file, \
-        #             statistics_dictionary_file, dict_of_approx_matrix_c_file, dict_of_matrix_c_eigen_decomposition_file = \
-        #                 utility.update_output_file_paths_based_on_workingDir(workingDir)
-        
-        dict_output_file_paths = utility.get_dict_with_output_file_paths_based_on_workingDir(workingDir)
-        args_file = dict_output_file_paths.get("args_file")
-        configuration_object_file = dict_output_file_paths.get("configuration_object_file")
-        nodes_file = dict_output_file_paths.get("nodes_file")
-        df_all_index_parameter_file = dict_output_file_paths.get("df_all_index_parameter_file")
-        df_all_index_parameter_gof_file = dict_output_file_paths.get("df_all_index_parameter_gof_file")
-        df_all_simulations_file = dict_output_file_paths.get("df_all_simulations_file")
-        
-        # Load the UQSim args dictionary
-        with open(args_file, 'rb') as f:
-            uqsim_args = pickle.load(f)
-        uqsim_args_dict = vars(uqsim_args)
-        model = uqsim_args_dict["model"]
-        inputModelDir = uqsim_args_dict["inputModelDir"]
+        # if df_all_index_parameter_gof_file.is_file():
+        #     df_index_parameter_gof = pd.read_pickle(df_all_index_parameter_gof_file, compression="gzip")
+        #     gof_list = utility._get_gof_columns_df_index_parameter_gof(
+        #         df_index_parameter_gof)
 
-        # Load the configuration object
-        with open(configuration_object_file, 'rb') as f:
-            configurationObject = dill.load(f)
-        simulation_settings_dict = utility.read_simulation_settings_from_configuration_object(configurationObject)
-        if model == "hbvsask":
-            basis = configurationObject['model_settings']['basis']
+        # df_nodes = utility.get_df_from_simulationNodes(simulationNodes, nodes_or_paramters="nodes", params_list=params_list)
+        # df_nodes_params = utility.get_df_from_simulationNodes(simulationNodes, nodes_or_paramters="parameters",  params_list=params_list)
 
-        # Reading Nodes and Parameters
-        with open(nodes_file, 'rb') as f:
-            simulationNodes = pickle.load(f)
+        # # Reading Saved Simulations - Note: This migh be a huge file,
+        # # especially for MC/Saltelli kind of simulations
+        # if df_all_simulations_file.is_file():
+        #     df_simulation_result = pd.read_pickle(df_all_simulations_file, compression="gzip")
+        # else:
+        #     df_simulation_result = None
+
+        # # Re-create Statistics Object and DataFrame Object That contains all the Statistics Data
+        # statisticsObject = create_stat_object.create_statistics_object(
+        #     configurationObject, uqsim_args_dict, workingDir, model=model)
+
+        # if single_qoi not in statisticsObject.list_qoi_column:
+        #     raise ValueError(f"single_qoi - {single_qoi} not in statisticsObject.list_qoi_column - {statisticsObject.list_qoi_column}")
+
+        # # Recreate statisticsObject.result_dict
+        # statistics_dictionary = uqef_dynamic_utils.read_all_saved_statistics_dict(\
+        #     workingDir, [single_qoi, ], uqsim_args_dict.get("instantly_save_results_for_each_time_step", False), throw_error=True)
+
+        # # Once you have satistics_dictionary extend StatisticsObject...
+        # uqef_dynamic_utils.extend_statistics_object(
+        #     statisticsObject=statisticsObject,
+        #     statistics_dictionary=statistics_dictionary,
+        #     df_simulation_result=df_simulation_result,
+        #     get_measured_data=False,
+        #     get_unaltered_data=False
+        # )
+        # =============================================================
 
         # Re-create simulationNodes from configuration file
-        node_names = []
-        for parameter_config in configurationObject["parameters"]:
-            node_names.append(parameter_config["name"])
-        uqef_simulationNodes = uqef.nodes.Nodes(node_names)
-        if sampleFromStandardDist:
-            uqef_simulationNodes.setTransformation()
-        for parameter_config in configurationObject["parameters"]:
-            if parameter_config["distribution"] == "None":
-                uqef_simulationNodes.setValue(parameter_config["name"], parameter_config["default"])
-            else:
-                cp_dist_signature = inspect.signature(getattr(cp, parameter_config["distribution"]))
-                dist_parameters_values = []
-                for p in cp_dist_signature.parameters:
-                    dist_parameters_values.append(parameter_config[p])
+        # node_names = []
+        # for parameter_config in configurationObject["parameters"]:
+        #     node_names.append(parameter_config["name"])
+        # uqef_simulationNodes = uqef.nodes.Nodes(node_names)
+        # if sampleFromStandardDist:
+        #     uqef_simulationNodes.setTransformation()
+        # for parameter_config in configurationObject["parameters"]:
+        #     if parameter_config["distribution"] == "None":
+        #         uqef_simulationNodes.setValue(parameter_config["name"], parameter_config["default"])
+        #     else:
+        #         cp_dist_signature = inspect.signature(getattr(cp, parameter_config["distribution"]))
+        #         dist_parameters_values = []
+        #         for p in cp_dist_signature.parameters:
+        #             dist_parameters_values.append(parameter_config[p])
 
-                uqef_simulationNodes.setDist(parameter_config["name"],
-                                             getattr(cp, parameter_config["distribution"])(
-                                                 *dist_parameters_values))
-                if sampleFromStandardDist:
-                    if parameter_config["distribution"] == "Uniform":
-                        uqef_simulationNodes.setStandardDist(parameter_config["name"],
-                                                        getattr(cp, parameter_config["distribution"])(
-                                                            lower=-1, upper=1
-                                                        ))
-                    else:
-                        uqef_simulationNodes.setStandardDist(parameter_config["name"],
-                                                             getattr(cp, parameter_config["distribution"])())
-        nodes, parameters = uqef_simulationNodes.generateNodesForMC(
-                    number_of_samples, rule=sampling_rule)
+        #         uqef_simulationNodes.setDist(parameter_config["name"],
+        #                                      getattr(cp, parameter_config["distribution"])(
+        #                                          *dist_parameters_values))
+        #         if sampleFromStandardDist:
+        #             if parameter_config["distribution"] == "Uniform":
+        #                 uqef_simulationNodes.setStandardDist(parameter_config["name"],
+        #                                                 getattr(cp, parameter_config["distribution"])(
+        #                                                     lower=-1, upper=1
+        #                                                 ))
+        #             else:
+        #                 uqef_simulationNodes.setStandardDist(parameter_config["name"],
+        #                                                      getattr(cp, parameter_config["distribution"])())
+        # nodes, parameters = uqef_simulationNodes.generateNodesForMC(
+        #             number_of_samples, rule=sampling_rule)
 
-        # Reading Parameters and GoF Computed Data
-        if df_all_index_parameter_file.is_file():
-            df_index_parameter = pd.read_pickle(df_all_index_parameter_file, compression="gzip")
-            params_list = utility._get_parameter_columns_df_index_parameter_gof(
-                df_index_parameter)
-        else:
-            raise FileNotFoundError(f"File {df_all_index_parameter_file} not found; it is needed to get the list of uncertain parameters atm")
+        jointDists = simulationNodes.joinedDists
+        jointStandard = simulationNodes.joinedStandardDists
 
-        if df_all_index_parameter_gof_file.is_file():
-            df_index_parameter_gof = pd.read_pickle(df_all_index_parameter_gof_file, compression="gzip")
-            gof_list = utility._get_gof_columns_df_index_parameter_gof(
-                df_index_parameter_gof)
+        # This variable marks if the surrogate model is meant to be evalauted in the parameters
+        # originating from a 'standard' parameters space / distribution
+        evaluateSurrogateAtStandardDist = statisticsObject.sampleFromStandardDist  # uqsim_args_dict['sampleFromStandardDist']
 
-        df_nodes = utility.get_df_from_simulationNodes(simulationNodes, nodes_or_paramters="nodes", params_list=params_list)
-        df_nodes_params = utility.get_df_from_simulationNodes(simulationNodes, nodes_or_paramters="parameters",  params_list=params_list)
-
-        # Reading Saved Simulations - Note: This migh be a huge file,
-        # especially for MC/Saltelli kind of simulations
-        if df_all_simulations_file.is_file():
-            df_simulation_result = pd.read_pickle(df_all_simulations_file, compression="gzip")
-        else:
-            df_simulation_result = None
-
-        # Re-create Statistics Object and DataFrame Object That contains all the Statistics Data
-        statisticsObject = create_stat_object.create_statistics_object(
-            configurationObject, uqsim_args_dict, workingDir, model=model)
-
-        if single_qoi not in statisticsObject.list_qoi_column:
-            raise ValueError(f"single_qoi - {single_qoi} not in statisticsObject.list_qoi_column - {statisticsObject.list_qoi_column}")
-
-        # Recreate statisticsObject.result_dict
-        statistics_dictionary = uqPostprocessing.read_all_saved_statistics_dict(\
-            workingDir, [single_qoi, ], uqsim_args_dict.get("instantly_save_results_for_each_time_step", False), throw_error=True)
-
-        # Once you have satistics_dictionary extend StatisticsObject...
-        uqPostprocessing.extend_statistics_object(
-            statisticsObject=statisticsObject,
-            statistics_dictionary=statistics_dictionary,
-            df_simulation_result=df_simulation_result,
-            get_measured_data=False,
-            get_unaltered_data=False
+        parameters = uqef_dynamic_utils.generate_parameters_for_mc_simulation(
+            jointDists=jointDists, numSamples=number_of_samples, rule=sampling_rule,
+            sampleFromStandardDist=sample_new_nodes_from_standard_dist, 
+            read_nodes_from_file=read_new_nodes_from_file, rounding=rounding, round_dec=round_dec,
         )
+        if evaluateSurrogateAtStandardDist and jointStandard is not None:
+            nodes = utility.transformation_of_parameters(
+                parameters, jointDists, jointStandard)
+        else:
+            nodes = parameters
 
-        # Add measured Data
-        if model == "larsim":
-            raise NotImplementedError
+        # =============================================================
+
+        # statistics_result_dict = statisticsObject.result_dict  # statistics_dictionary
+        statistics_pdTimesteps = statisticsObject.pdTimesteps
+        statistics_single_qois = statisticsObject.result_dict[single_qoi].keys()
+
+        gpce_surrogate = None 
+        gpce_coeffs = None
+
+        # gpce_surrogate = uqef_dynamic_utils.fetch_gpce_surrogate_single_qoi(
+        #     qoi_column_name=single_qoi, workingDir=workingDir,
+        #     statistics_dictionary=statisticsObject.result_dict, 
+        #     throw_error=False, single_timestamp_single_file=single_timestamp_single_file)
+
+        # if gpce_surrogate is None:
+        #     gpce_coeffs = uqef_dynamic_utils.fetch_gpce_coeff_single_qoi(
+        #         qoi_column_name=single_qoi, workingDir=workingDir,
+        #         statistics_dictionary=statisticsObject.result_dict, 
+        #         throw_error=False, single_timestamp_single_file=single_timestamp_single_file)
+        #     #convert_to_pd_timestamp
+        #     # If you have only saved gPCE coefficints, then one must build the polynomial basis as well..
+        #     # polynomial_basis
+        #     statisticsObject.prepareForScStatistics(
+        #         simulationNodes, order=uqsim_args_dict['sc_p_order'], 
+        #         poly_normed=uqsim_args_dict['sc_poly_normed'], 
+        #         poly_rule=uqsim_args_dict['sc_poly_rule'], 
+        #         regression=uqsim_args_dict['regression'], 
+        #         cross_truncation=uqsim_args_dict['cross_truncation']
+        #     )
+        #     polynomial_expansion = statisticsObject.polynomial_expansion
+        #     polynomial_norms = statisticsObject.polynomial_norms
+        #     # check what is the structure of gpce_coeffs
+        #     # gpce_surrogate = defaultdict()
+        #     gpce_surrogate = utility.build_gpce_surrogate_from_coefficients(
+        #         gpce_coeffs, polynomial_expansion, polynomial_norms)
+
+        # if isinstance(gpce_surrogate, dict) and single_qoi in gpce_surrogate:
+        #     gpce_surrogate = gpce_surrogate[single_qoi]
+
+        # # Make sure that in the end gpce_surrogate is a dictionary ovet timestamps
+        # if isinstance(gpce_surrogate, np.ndarray) or isinstance(gpce_surrogate, np.baseclass.ndpoly):
+        #     gpce_surrogate = {0: gpce_surrogate}  # {statistics_pdTimesteps[0]: gpce_surrogate}
+
+        # if gpce_surrogate is None or not isinstance(gpce_surrogate, dict):
+        #     raise Exception(f"Sorry but there is not gPCE model not saved or not of the required type!")
+
+        # if statisticsObject.pdTimesteps!=list(gpce_surrogate.keys()):
+        #     print("Watch-out - The timestamps of the statistics and the gPCE surrogate do not match!")
+        # statistics_pdTimesteps = list(gpce_surrogate.keys())
+
+        # if printing:
+        #     temp = gpce_surrogate[statistics_pdTimesteps[0]]
+        #     print(f"gpce_surrogate - {gpce_surrogate}")
+        #     temp = gpce_coeffs[statistics_pdTimesteps[0]]
+        #     print(f"gpce_coeffs - {temp}")
+
+        statisticsObject.prepareForScStatistics(
+            simulationNodes, order=uqsim_args_dict['sc_p_order'], 
+            poly_normed=uqsim_args_dict['sc_poly_normed'], 
+            poly_rule=uqsim_args_dict['sc_poly_rule'], 
+            regression=uqsim_args_dict['regression'], 
+            cross_truncation=uqsim_args_dict['cross_truncation']
+        )
+        polynomial_expansion = statisticsObject.polynomial_expansion
+        polynomial_norms = statisticsObject.polynomial_norms
+        # =============================================================
+
+        # Add measured Data and/or forcing
+        # This might be relevant for plotting in the end
+        if printing:
+            print(f"inputModelDir from model - {inputModelDir}; inputModelDir_function_input_argument-{inputModelDir_function_input_argument}")
+            print(f"workingDir from model - {workingDir}; workingDir_function_input_argument-{workingDir_function_input_argument}")
+
+        if inputModelDir_function_input_argument is None:
+            inputModelDir_function_input_argument = inputModelDir
+
         elif model == "hbvsask":
             # This is hard-coded for HBV
-            statisticsObject.inputModelDir_basis = inputModelDir / basis
-            statisticsObject.get_measured_data(
-                timestepRange=(statisticsObject.timesteps_min, statisticsObject.timesteps_max),
-                transforme_mesured_data_as_original_model="False")
-        else:
-            raise NotImplementedError
+            basis = configurationObject['model_settings']['basis']
+            statisticsObject.inputModelDir_basis = inputModelDir_function_input_argument / basis
 
-        # Create a Pandas.DataFrame
-        statisticsObject.create_df_from_statistics_data()
+        # statisticsObject.get_measured_data(
+        #     timestepRange=(statisticsObject.timesteps_min, statisticsObject.timesteps_max), 
+        #     transform_mesured_data_as_original_model=True)
+        
+        # # Add forcing Data
+        # statisticsObject.get_forcing_data(time_column_name=statisticsObject.time_column_name)
 
-        # Add forcing Data
-        statisticsObject.get_forcing_data(time_column_name=utility.TIME_COLUMN_NAME)
+        # # Create a Pandas.DataFrame - this is repeated, now with measured data
+        # statisticsObject.create_df_from_statistics_data()
+        
+        # # Merge Everything
+        # df_statistics_and_measured = pd.merge(
+        #     statisticsObject.df_statistics, statisticsObject.forcing_df, 
+        #     left_on=statisticsObject.time_column_name, right_index=True)
 
-        # Merge Everything
-        df_statistics_and_measured = pd.merge(
-            statisticsObject.df_statistics, statisticsObject.forcing_df, left_on=statisticsObject.time_column_name, right_index=True)
-        print(df_statistics_and_measured)
+        df_statistics_and_measured = statisticsObject.merge_df_statistics_data_with_measured_and_forcing_data(
+            add_measured_data=add_measured_data, add_forcing_data=add_forcing_data)
+        # filter only relevant qoi
+        df_statistics_and_measured_single_qoi = df_statistics_and_measured[df_statistics_and_measured["qoi"]==single_qoi]
+
+        if printing:
+            print(f"statisticsObject.df_statistics-{statisticsObject.df_statistics}")
+            print(f"statisticsObject.forcing_df-{statisticsObject.forcing_df}")
+            print(f"statisticsObject.df_measured-{statisticsObject.df_measured}")
+            print(f"df_statistics_and_measured-{df_statistics_and_measured}")
+            print(f"df_simulation_result-{df_simulation_result}")
 
         # Sensitivity Analysis - Computing DataFrame with SI
         # si_m_df = statisticsObject.create_df_from_sensitivity_indices(si_type="Sobol_m")
@@ -234,26 +347,33 @@ def main(workingDir,  single_qoi="Q_cms", sampleFromStandardDist=True, sampling_
 
         # gPCE_model = defaultdict()
         # for single_date in statisticsObject.pdTimesteps:
-        #     gPCE_model[single_date] = statisticsObject.result_dict["Q_cms"][single_date]['gPCE']
+        #     gPCE_model[single_date] = statisticsObject.result_dict[single_qoi][single_date]['gPCE']
         #
 
         # List of dates to process (assuming statisticsObject.pdTimesteps is a list)
-        statistics_result_dict = statisticsObject.result_dict  # statistics_dictionary
-        statistics_pdTimesteps = statisticsObject.pdTimesteps
+
     else:
+        gpce_surrogate = None
+        gpce_coeffs = None
         single_qoi = None
         nodes = None
         statistics_pdTimesteps = None
-        statistics_result_dict = None
+        # statistics_result_dict = None
         workingDir = None
+        polynomial_expansion = None
+        single_timestamp_single_file = None
 
     single_qoi = comm.bcast(single_qoi, root=0)
     nodes = comm.bcast(nodes, root=0)
     statistics_pdTimesteps = comm.bcast(statistics_pdTimesteps, root=0)
-    statistics_result_dict = comm.bcast(statistics_result_dict, root=0)
+    # statistics_result_dict = comm.bcast(statistics_result_dict, root=0)
     workingDir = comm.bcast(workingDir, root=0)
+    gpce_surrogate = comm.bcast(gpce_surrogate, root=0)
+    gpce_coeffs = comm.bcast(gpce_coeffs, root=0)
+    polynomial_expansion = comm.bcast(polynomial_expansion, root=0)
     # List of dates to process (assuming statisticsObject.pdTimesteps is a list)
     dates_to_process = statistics_pdTimesteps
+    single_timestamp_single_file = single_timestamp_single_file
 
     if rank == 0:
         start = time.time()
@@ -274,9 +394,43 @@ def main(workingDir,  single_qoi="Q_cms", sampleFromStandardDist=True, sampling_
     # Monitor memory usage at regular intervals
     memory_usage_history = []
 
+    # =============================================================
+
     # Process dates
     for date in my_dates:
-        evaluate_gPCE_model_single_date(date, single_qoi, statistics_result_dict, nodes, gPCE_model_evaluated, workingDir)
+        # TODO generate / read / fetch your own gpce_surrogate
+        # =============================================================
+        # Fetch my own gpce surrogate model 
+        # =============================================================
+
+        gpce_surrogate = uqef_dynamic_utils.fetch_gpce_surrogate_single_qoi_single_timestamp(
+            qoi_column_name=single_qoi, timestamp=date, workingDir=workingDir,
+            statistics_dictionary=None, 
+            throw_error=False, single_timestamp_single_file=single_timestamp_single_file
+            )
+
+        if gpce_surrogate is None:
+            gpce_coeffs = uqef_dynamic_utils.fetch_gpce_coeff_single_qoi_single_timestamp(
+                qoi_column_name=single_qoi, timestamp=date, workingDir=workingDir,
+                statistics_dictionary=None, 
+                throw_error=False, single_timestamp_single_file=single_timestamp_single_file)
+            gpce_surrogate = utility.build_gpce_surrogate_from_coefficients(
+                gpce_coeffs, polynomial_expansion)
+
+        if isinstance(gpce_surrogate, dict):
+            if single_qoi in gpce_surrogate:
+                gpce_surrogate = gpce_surrogate[single_qoi]
+            if date in gpce_surrogate:
+                gpce_surrogate = gpce_surrogate[date]
+
+        if gpce_surrogate is None or not isinstance(gpce_surrogate, cp.ndpoly):
+            raise Exception(f"Sorry but there is not gPCE model not saved or not of the required type!")
+        # =============================================================
+
+        evaluate_gPCE_model_single_date(
+            single_date=date, gPCE_model=gpce_surrogate, nodes=nodes, gPCE_model_evaluated=gPCE_model_evaluated)
+        # evaluate_gPCE_model_single_date(
+        #     single_date=date, single_qoi=single_qoi, nodes=nodes, gPCE_model_evaluated=gPCE_model_evaluated, workingDir=workingDir)
 
         # Query memory usage and record it
         memory_usage = psutil.virtual_memory().used / (1024 * 1024)  # Memory usage in MB
@@ -309,12 +463,13 @@ def main(workingDir,  single_qoi="Q_cms", sampleFromStandardDist=True, sampling_
         end = time.time()
         runtime = end - start
         print(f"MPI: Time needed for evaluating {number_of_samples} \
-         gPCE model (qoi is {single_qoi}) for {len(statisticsObject.pdTimesteps)} time steps is: {runtime}")
+         gPCE model (qoi is {single_qoi}) for {len(statistics_pdTimesteps)} time steps is: {runtime}")
         print(f"gPCE_model_evaluated at times - {gPCE_model_evaluated.keys()} \n")
 
         print(f"len(statisticsObject.pdTimesteps) - {len(statisticsObject.pdTimesteps)}")
         print(f"len(dates_to_process) - {len(dates_to_process)}")
         print(f"len(gPCE_model_evaluated.keys()) - {len(gPCE_model_evaluated.keys())}")
+        print(f"len(statistics_pdTimesteps) - {len(statistics_pdTimesteps)}")
  
         # Some debugging
         temp_date = statisticsObject.pdTimesteps[-1]  # dates_to_process[-1]
@@ -327,9 +482,13 @@ def main(workingDir,  single_qoi="Q_cms", sampleFromStandardDist=True, sampling_
         # Plotting
         # ====================================================================================
 
-        directory_for_saving_plots = workingDir
+        if directory_for_saving_plots is None:
+            directory_for_saving_plots = workingDir
         if not str(directory_for_saving_plots).endswith("/"):
             directory_for_saving_plots = str(directory_for_saving_plots) + "/"
+        if not os.path.isdir(directory_for_saving_plots):
+            subprocess.run(["mkdir", directory_for_saving_plots])
+        directory_for_saving_plots_pathlib = pathlib.Path(directory_for_saving_plots)
 
         # Extract the lists from the dictionary
         lists = list(gPCE_model_evaluated.values())
@@ -425,52 +584,32 @@ if __name__ == '__main__':
     workingDir = pathlib.Path("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/paper_hydro_uq_sim/hbv_uq_cm2.0173")
     # 3D Sparse-gPCE l=7, p=3 2005-2007 deltaQ_cms
     workingDir = pathlib.Path('/gpfs/scratch/pr63so/ga45met2/hbvsask_runs/pce_deltq_3d_longer_oldman')
+    # 10D Sparse-gPCE l=6, p=4, ct=0.7 2006 Q_cms
+    workingDir = pathlib.Path('/work/ga45met/mnt/hbv_uq_mpp3.0035')
+    # 10D Sparse-gPCE l=6, p=5, ct=0.7 2006 Q_cms
+    workingDir = pathlib.Path('/work/ga45met/mnt/hbv_uq_mpp3.0036')
 
     # Parameters relevant for generating MC like samples to evaluate the surrogate gPCE model
     sampling_rule = "halton"  # 'sobol' 'random'
-    number_of_samples = 1000
-    sampleFromStandardDist = True
+    number_of_samples = 100
+    sample_new_nodes_from_standard_dist = False
 
-    single_qoi="delta_Q_cms"  # e.g., "Q_cms"
+    single_qoi="Q_cms"  # e.g., "Q_cms" 'delta_Q_cms'
 
-    main(workingDir, single_qoi=single_qoi, 
-         sampleFromStandardDist=sampleFromStandardDist, sampling_rule=sampling_rule, number_of_samples=number_of_samples)
+    inputModelDir = pathlib.Path("/work/ga45met/Hydro_Models/HBV-SASK-data")
+    directory_for_saving_plots = pathlib.Path('/work/ga45met/paper_hydro_uq_sim/hbv_sask/gpce_p4_sgl6_ct07_generalized_2006_oldman')
+    directory_for_saving_plots = pathlib.Path('/work/ga45met/paper_hydro_uq_sim/hbv_sask/gpce_p5_sgl6_ct07_generalized_2006_oldman')
 
-
-######################
-# from mpi4py import MPI
-# import numpy as np
-#
-# # Initialize MPI
-# comm = MPI.COMM_WORLD
-# rank = comm.Get_rank()
-# size = comm.Get_size()
-#
-# # Distribute work among processes
-# all_dates = statisticsObject.pdTimesteps
-# dates_per_process = len(all_dates) // size
-# remainder = len(all_dates) % size
-#
-# # Calculate the range of dates for this process
-# start_index = rank * dates_per_process
-# end_index = (rank + 1) * dates_per_process + (1 if rank < remainder else 0)
-#
-# # Initialize a dictionary to store the results for this process
-# gPCE_model_evaluated = {}
-#
-# # Iterate over the assigned date range
-# for i in range(start_index, end_index):
-#     single_date = all_dates[i]
-#     gPCE_model = statisticsObject.result_dict[single_uq][single_date]['gPCE']
-#     gPCE_model_evaluated[single_date] = gPCE_model(uqef_simulationNodes.nodes.T)
-#
-# # Gather results from all processes into one dictionary
-# all_results = comm.gather(gPCE_model_evaluated, root=0)
-#
-# # The root process (rank 0) will have all the results in one dictionary
-# if rank == 0:
-#     final_result = {}
-#     for result_dict in all_results:
-#         final_result.update(result_dict)
-#     print("Final result:", final_result)
-######################
+    evaluate_gPCE_surrogate_model_over_time_single_qoi(
+        workingDir, single_qoi=single_qoi, 
+        sample_new_nodes_from_standard_dist=sample_new_nodes_from_standard_dist, 
+        sampling_rule=sampling_rule, 
+        number_of_samples=number_of_samples,
+        inputModelDir=inputModelDir,
+        directory_for_saving_plots=directory_for_saving_plots,
+        single_timestamp_single_file=False,
+        add_measured_data=True,
+        add_forcing_data=True,
+        read_saved_simulations=True,
+        printing=True, plotting=True,
+    )

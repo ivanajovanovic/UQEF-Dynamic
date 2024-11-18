@@ -17,6 +17,7 @@ import math
 import pathlib
 import pandas as pd
 import scipy
+import seaborn as sns
 import time
 from typing import List, Optional, Dict, Any, Union, Tuple
 
@@ -41,6 +42,204 @@ from uqef_dynamic.utils import sens_indices_sampling_based_utils
 # ============================================================================================
 # Whole pipeline for reading the output saved by UQEF-Dynamic simulation and producing dict of interes
 # ============================================================================================
+def read_output_files_uqef_dynamic(workingDir, printing=False, **kwargs):
+    """
+    This function reads the output files created by the UQEF-Dynamic pipeline.
+    It reads general file produced by all the models (not specific to any model).
+    Args:
+    - workingDir: pathlib.Path object, path to the working directory
+    - printing: bool, if True, print the information about the output files
+
+    Keyword Args:
+    - read_saved_simulations: bool, if True, read the simulation results
+    - read_saved_states: bool, if True, read the state results
+
+    Returns:
+    - results_dict: dict, dictionary with the following keys / values:
+        - workingDir: pathlib.Path object, path to the working directory
+        - args_files: dict, dictionary sotrying the paths to the output files
+           take a look at the function utility.get_dict_with_output_file_paths_based_on_workingDir
+        - uqsim_args_dict: dict, dictionary with the UQEF simulation arguments
+        - model: str, name of the model
+        - inputModelDir: pathlib.Path object, path to the input model directory
+        - configurationObject: dict, configuration object
+        - simulation_settings_dict: dict, dictionary with the simulation settings
+           take a look at the function utility.read_simulation_settings_from_configuration_object
+        - simulationNodes: object, UQEF simulation nodes
+        - time_info: str, time information
+        - params_list: list, list of model uncertain parameters
+        - df_index_parameter: pandas DataFrame, index parameter; None is missing
+        - df_index_parameter_gof: pandas DataFrame, index parameter goodness-of-fit (GOF); None is missing
+        - gof_list: list, list of goodness-of-fit (GOF) measures; None is missing
+        - df_simulation_result: pandas DataFrame, simulation results; None is missing
+        - df_state: pandas DataFrame, state; None is missing
+    """
+    if not workingDir.is_dir():
+        raise Exception(f"Directory {workingDir} does not exist!")
+
+    results_dict = {}
+    
+    args_files = utility.get_dict_with_output_file_paths_based_on_workingDir(
+        workingDir,
+    )
+    for key, value in args_files.items():
+        globals()[key] = value
+
+    # Load the UQSim args dictionary
+    uqsim_args_dict = utility.load_uqsim_args_dict(args_file)
+    if printing:
+        print("INFO: uqsim_args_dict: ", uqsim_args_dict)
+    model = uqsim_args_dict["model"]
+
+    # Maybe to do something like this...
+    # if inputModelDir is not None:
+    #     if inputModelDir != uqsim_args_dict["inputModelDir"]:
+    #         uqsim_args_dict["inputModelDir"] = pathlib.Path(inputModelDir)
+    # else:
+    #     inputModelDir = uqsim_args_dict["inputModelDir"]
+    # inputModelDir = pathlib.Path(inputModelDir)
+    inputModelDir = uqsim_args_dict["inputModelDir"]
+
+    # Load the configuration object
+    configurationObject = utility.load_configuration_object(configuration_object_file)
+    if printing:
+        print("configurationObject: ", configurationObject)
+    simulation_settings_dict = utility.read_simulation_settings_from_configuration_object(configurationObject)
+
+    # Timing information
+    with open(time_info_file, 'r') as f:
+        time_info = f.read() #readlines()?
+    if printing:
+        print("INFO: time_info: ", time_info)
+
+    # Reading Nodes and Parameters
+    with open(nodes_file, 'rb') as f:
+        simulationNodes = pickle.load(f)
+    if printing:
+        print("INFO: simulationNodes: ", simulationNodes)
+    dim = simulationNodes.distNodes.shape[0]
+    # number_model_runs = simulationNodes.nodes.shape[1]  # this is actually, not a final number of model runs for saltelli's simulation
+    distStandard = simulationNodes.joinedStandardDists
+    dist = simulationNodes.joinedDists
+    if printing:
+        print(f"INFO: model-{model}; dim - {dim};")
+
+    results_dict["workingDir"]=workingDir
+    results_dict["args_files"]=args_files
+    results_dict["uqsim_args_dict"]=uqsim_args_dict
+    results_dict["model"]=model
+    results_dict["inputModelDir"]=inputModelDir
+    results_dict["configurationObject"]=configurationObject
+    results_dict["simulation_settings_dict"]=simulation_settings_dict
+    results_dict["time_info"]=time_info
+    results_dict["simulationNodes"]=simulationNodes
+
+    if df_index_parameter_file.is_file():
+        df_index_parameter = pd.read_pickle(df_index_parameter_file, compression="gzip")
+        params_list = utility._get_parameter_columns_df_index_parameter_gof(
+            df_index_parameter)
+        if printing:
+            print(f"INFO: df_index_parameter - {df_index_parameter}")
+    else:
+        df_index_parameter = None
+        params_list = []
+        for single_param in configurationObject["parameters"]:
+            params_list.append(single_param["name"])
+    if printing:
+        print(f"INFO: params_list - {params_list} (note - all the parameters)")
+    results_dict["df_index_parameter"]=df_index_parameter
+    results_dict["params_list"]=params_list
+
+    if df_index_parameter_gof_file.is_file():
+        df_index_parameter_gof = pd.read_pickle(df_index_parameter_gof_file, compression="gzip")
+        gof_list = utility._get_gof_columns_df_index_parameter_gof(
+            df_index_parameter_gof)
+        if printing:
+            print(f"INFO: df_index_parameter_gof - {df_index_parameter_gof}")
+            print(f"INFO: gof_list - {gof_list}")
+    else:
+        df_index_parameter_gof = None
+        gof_list = None
+    results_dict["df_index_parameter_gof"]=df_index_parameter_gof
+    results_dict["gof_list"]=gof_list
+
+    # Reading/Creating DataFrame based on Simulation Nodes / Parameters
+    # df_nodes = utility.get_df_from_simulationNodes(simulationNodes, nodes_or_paramters="nodes", params_list=params_list)
+    # df_nodes_params = utility.get_df_from_simulationNodes(simulationNodes, nodes_or_paramters="parameters",  params_list=params_list)
+ 
+    read_saved_simulations = kwargs.get('read_saved_simulations', False)
+    read_saved_states = kwargs.get('read_saved_states', False)
+
+    if read_saved_simulations and df_simulations_file.is_file():
+        df_simulation_result = pd.read_pickle(df_simulations_file, compression="gzip")
+        if printing:
+            print(f"INFO: df_simulation_result - {df_simulation_result}")
+    else:
+        df_simulation_result = None
+    results_dict["df_simulation_result"]=df_simulation_result
+
+    if read_saved_states and df_state_file.is_file():
+        df_state = pd.read_pickle(df_state_file, compression="gzip")
+        if printing:
+            print(f"INFO: df_state - {df_state}")
+    else:
+        df_state = None
+    results_dict["df_state"]=df_state
+
+    # list_qoi_column = simulation_settings_dict.list_qoi_column
+    # list_qoi_column = statisticsObject.list_qoi_column
+
+    return results_dict
+
+def read_all_saved_uqef_dynamic_results_and_produce_dict_of_interest_single_qoi(workingDir, **kwargs):
+    """
+    This function builds on top of the read_output_files_uqef_dynamic function.
+    It returns similar dictionary as read_all_saved_uqef_dynamic_results_and_produce_dict_of_interest_single_qoi_single_timestamp
+    but for all the timestamps.
+    Args:
+    - workingDir: pathlib.Path object, path to the working directory
+
+    """
+    dict_with_results_of_interest = defaultdict()
+    results_dict = read_output_files_uqef_dynamic(workingDir, **kwargs)
+    for key, value in results_dict.items():
+        globals()[key] = value
+
+    # Update dict with results of interest based on uqsim_args_dict - add variant, q_order, mc_numevaluations
+    update_dict_with_results_of_interest_based_on_uqsim_args_dict(dict_with_results_of_interest, uqsim_args_dict)
+
+    # Timing information
+    for line in time_info:
+        if line.startswith("time_model_simulations"):
+            dict_with_results_of_interest["time_model_simulations"] = line.split(':')[1].strip()
+        elif line.startswith("time_computing_statistics"):
+            dict_with_results_of_interest["time_computing_statistics"] = line.split(':')[1].strip()
+
+    # whatch-out this might be tricky when not all params are regarded as uncertain!
+    param_labeles = utility.get_list_of_uncertain_parameters_from_configuration_dict(
+        configurationObject, raise_error=True, uq_method=uqsim_args_dict["uq_method"])
+    #print(f"Debugging - params_list: {params_list}; simulationNodes.nodeNames: {simulationNodes.nodeNames}; param_labeles: {param_labeles}")    
+    dict_with_results_of_interest["parameterNames"] = params_list  #not simulationNodes.nodeNames, instead better simulationNodes.orderdDistsNames
+    dict_with_results_of_interest["stochasticParameterNames"] = param_labeles
+
+    simulation_parameters_file = args_files["simulation_parameters_file"]
+    if df_simulation_result is not None:
+        dict_with_results_of_interest["number_full_model_evaluations"] = len(df_simulation_result)
+    elif simulation_parameters_file.is_file():
+        simulation_parameters = np.load(simulation_parameters_file,  allow_pickle=True)
+        #print(f"Debugging - simulation_parameters.shape: {simulation_parameters.shape}")
+        dict_with_results_of_interest["number_full_model_evaluations"] = simulation_parameters.shape[0]
+    else:
+        if uqsim_args_dict["uq_method"]!="saltelli":
+            dict_with_results_of_interest["number_full_model_evaluations"] = simulationNodes.nodes.shape[1]
+        else:
+            dict_with_results_of_interest["number_full_model_evaluations"] = (uqsim_args_dict["mc_numevaluations"]) * (2 + dim)
+
+    if dict_with_results_of_interest["variant"] not in ["m1", "m2"]:
+        dict_with_results_of_interest["full_number_quadrature_points"] = \
+        (dict_with_results_of_interest["q_order"] + 1) ** dim
+
+    return dict_with_results_of_interest
 
 
 def read_all_saved_uqef_dynamic_results_and_produce_dict_of_interest_single_qoi_single_timestamp(workingDir, 
@@ -64,7 +263,8 @@ timestamp, qoi_column_name=None, time_column_name=utility.TIME_COLUMN_NAME, plot
         comparison_surrogate_vs_model_numSamples - number of samples for the comparison
         comparison_surrogate_vs_model_mc_rule - rule for the comparison
         evaluateSurrogateAtStandardDist - if True, it will evaluate the surrogate model at the standard distribution
-
+        read_saved_simulations: bool, if True, read the simulation results
+        read_saved_states: bool, if True, read the state results
     :return: dict_with_results_of_interest
 
     """
@@ -75,28 +275,23 @@ timestamp, qoi_column_name=None, time_column_name=utility.TIME_COLUMN_NAME, plot
     dict_with_results_of_interest = defaultdict()
     dict_with_results_of_interest["outputModelDir"] = workingDir
 
-    dict_output_file_paths = utility.get_dict_with_output_file_paths_based_on_workingDir(workingDir)
-    args_file = dict_output_file_paths.get("args_file")
-    configuration_object_file = dict_output_file_paths.get("configuration_object_file")
-    nodes_file = dict_output_file_paths.get("nodes_file")
-    simulation_parameters_file = dict_output_file_paths.get("simulation_parameters_file")
-    df_index_parameter_file = dict_output_file_paths.get("df_index_parameter_file")
-    df_simulations_file = dict_output_file_paths.get("df_simulations_file")
-    time_info_file = dict_output_file_paths.get("time_info_file")
+    args_files = utility.get_dict_with_output_file_paths_based_on_workingDir(workingDir)
+    for key, value in args_files.items():
+        globals()[key] = value
 
     # Reading UQEF-Dynamic Output files
-    with open(args_file, 'rb') as f:
-        uqsim_args = pickle.load(f)
-    uqsim_args_dict = vars(uqsim_args)
-    #uqsim_args_dict = utility.load_uqsim_args_dict(args_file)
 
-    with open(configuration_object_file, 'rb') as f:
-        configurationObject = dill.load(f)
-    #configurationObject = utility.load_configuration_object(configuration_object_file)
+    # Load the UQSim args dictionary
+    uqsim_args_dict = utility.load_uqsim_args_dict(args_file)
 
+    # Update dict with results of interest based on uqsim_args_dict - add variant, q_order, mc_numevaluations
     update_dict_with_results_of_interest_based_on_uqsim_args_dict(dict_with_results_of_interest, uqsim_args_dict)
-    
-    ########################################################
+
+    # Load the configuration object
+    configurationObject = utility.load_configuration_object(configuration_object_file)
+    simulation_settings_dict = utility.read_simulation_settings_from_configuration_object(configurationObject)
+
+    # Timing information
     with open(time_info_file) as f:
         lines = f.readlines()
         for line in lines:
@@ -107,8 +302,88 @@ timestamp, qoi_column_name=None, time_column_name=utility.TIME_COLUMN_NAME, plot
                 dict_with_results_of_interest["time_computing_statistics"] = line.split(':')[1].strip()
 
     ########################################################
+    # Reading Simulation Nodes / Parameters
+    with open(nodes_file, 'rb') as f:
+        simulationNodes = pickle.load(f)
+    dim = simulationNodes.distNodes.shape[0] #len(param_labeles)  # this should represent a stochastic dimensionality
+
+    if df_index_parameter_file.is_file():
+        df_index_parameter = pd.read_pickle(df_index_parameter_file, compression="gzip")
+    else:
+        df_index_parameter = None
+    if df_index_parameter is not None:
+        params_list = utility._get_parameter_columns_df_index_parameter_gof(
+            df_index_parameter)
+    else:
+        params_list = []
+        for single_param in configurationObject["parameters"]:
+            params_list.append(single_param["name"])
+
+    if df_index_parameter_gof_file.is_file():
+        df_index_parameter_gof = pd.read_pickle(df_index_parameter_gof_file, compression="gzip")
+        gof_list = utility._get_gof_columns_df_index_parameter_gof(
+            df_index_parameter_gof)
+
+    # whatch-out this might be tricky when not all params are regarded as uncertain!
+    param_labeles = utility.get_list_of_uncertain_parameters_from_configuration_dict(
+        configurationObject, raise_error=True, uq_method=uqsim_args_dict["uq_method"])
+    #print(f"Debugging - params_list: {params_list}; simulationNodes.nodeNames: {simulationNodes.nodeNames}; param_labeles: {param_labeles}")    
+    dict_with_results_of_interest["parameterNames"] = params_list  #not simulationNodes.nodeNames, instead better simulationNodes.orderdDistsNames
+    dict_with_results_of_interest["stochasticParameterNames"] = param_labeles
+
+    # updating dict_with_results_of_interest
+    # number_full_model_evaluations will be overwritten below in certain setups 
+    # (main issue is to fatch the correct number for the saltelli method)
+    dict_with_results_of_interest["number_full_model_evaluations"] = simulationNodes.nodes.shape[1]
+    if uqsim_args_dict["uq_method"]=="saltelli":
+        dict_with_results_of_interest["number_full_model_evaluations"] = (uqsim_args_dict["mc_numevaluations"]) * (2 + dim)
+        # dict_with_results_of_interest["number_full_model_evaluations"] = (simulationNodes.nodes.shape[1]/2) * (2 + dim)
+    
+    # Reading parameters which were saved to run/stimulate the model
+    if simulation_parameters_file.is_file():
+        simulation_parameters = np.load(simulation_parameters_file,  allow_pickle=True)
+        #print(f"Debugging - simulation_parameters.shape: {simulation_parameters.shape}")
+        dict_with_results_of_interest["number_full_model_evaluations"] = simulation_parameters.shape[0]
+
+    if dict_with_results_of_interest["variant"] not in ["m1", "m2"]:
+        dict_with_results_of_interest["full_number_quadrature_points"] = \
+        (dict_with_results_of_interest["q_order"] + 1) ** dim
+
+    ########################################################
+    # TODO Whatch out if params_list or param_labeles should be propagated here 
+    # Reading/Creating DataFrame based on Simulation Nodes / Parameters
+    df_nodes = utility.get_df_from_simulationNodes(simulationNodes, nodes_or_paramters="nodes", params_list=params_list)
+    df_nodes_params = utility.get_df_from_simulationNodes(simulationNodes, nodes_or_paramters="parameters",  params_list=params_list)
+
+    if plotting:
+        fig = utility.plot_subplot_params_hist_from_df(df_index_parameter)
+        fig.update_layout(title="Prior Distribution of the Parameters",)
+        fig.show()
+        utility.plot_2d_matrix_static(df_nodes, nodes_or_paramters="nodes")
+        utility.plot_2d_matrix_static(df_nodes_params, nodes_or_paramters="parameters")
+
+    ########################################################
+    # Reading all the simulations
+    # maybe this is not alway necessary
+
+    read_saved_simulations = kwargs.get('read_saved_simulations', False)
+    read_saved_states = kwargs.get('read_saved_states', False)
+
+    if read_saved_simulations and df_simulations_file.is_file():
+        # Reading Saved Simulations - Note: This migh be a huge file,
+        # especially for MC/Saltelli kind of simulations
+        df_simulation_result = pd.read_pickle(df_simulations_file, compression="gzip")
+        dict_with_results_of_interest["number_full_model_evaluations"] = len(df_simulation_result)
+    else:
+        df_simulation_result = None
+
+    if read_saved_states and df_state_file.is_file():
+        df_state = pd.read_pickle(df_state_file, compression="gzip")
+        if printing:
+            print(f"INFO: df_state - {df_state}")
+
+    ########################################################
     # Specific part for a single QoI and timestep, this should be refactored to be more general
-    simulation_settings_dict = utility.read_simulation_settings_from_configuration_object(configurationObject)
     qoi_column = simulation_settings_dict["qoi_column"]
     list_qoi_column = simulation_settings_dict["list_qoi_column"] 
     if qoi_column_name is None:
@@ -130,80 +405,12 @@ timestamp, qoi_column_name=None, time_column_name=utility.TIME_COLUMN_NAME, plot
     dict_with_results_of_interest["timestamp"] = timestamp
 
     ########################################################
-    # Reading Simulation Nodes / Parameters
-    with open(nodes_file, 'rb') as f:
-        simulationNodes = pickle.load(f)
-    
-    # Reading/Creating DataFrame based on Simulation Nodes / Parameters
-    # maybe this is not alway necessary
-    if df_index_parameter_file.is_file():
-        df_index_parameter = pd.read_pickle(df_index_parameter_file, compression="gzip")
-    else:
-        df_index_parameter = None
-    if df_index_parameter is not None:
-        params_list = utility._get_parameter_columns_df_index_parameter_gof(
-            df_index_parameter)
-    else:
-        params_list = []
-        for single_param in configurationObject["parameters"]:
-            params_list.append(single_param["name"])
-
-    # whatch-out this might be tricky when not all params are regarded as uncertain!
-    param_labeles = utility.get_list_of_uncertain_parameters_from_configuration_dict(
-        configurationObject, raise_error=True, uq_method=uqsim_args_dict["uq_method"])
-    #print(f"Debugging - params_list: {params_list}; simulationNodes.nodeNames: {simulationNodes.nodeNames}; param_labeles: {param_labeles}")    
-    dict_with_results_of_interest["parameterNames"] = params_list  #not simulationNodes.nodeNames, instead better simulationNodes.orderdDistsNames
-    dict_with_results_of_interest["stochasticParameterNames"] = param_labeles
-    dim = simulationNodes.distNodes.shape[0] #len(param_labeles)  # this should represent a stochastic dimensionality
-
-    # updating dict_with_results_of_interest
-    # number_full_model_evaluations will be overwritten below in certain setups 
-    # (main issue is to fatch the correct number for the saltelli method)
-    dict_with_results_of_interest["number_full_model_evaluations"] = simulationNodes.nodes.shape[1]
-    if uqsim_args_dict["uq_method"]=="saltelli":
-        dict_with_results_of_interest["number_full_model_evaluations"] = (uqsim_args_dict["mc_numevaluations"]) * (2 + dim)
-        # dict_with_results_of_interest["number_full_model_evaluations"] = (simulationNodes.nodes.shape[1]/2) * (2 + dim)
-    
-    # Reading parameters which were saved to run/stimulate the model
-    if simulation_parameters_file.is_file():
-        simulation_parameters = np.load(simulation_parameters_file,  allow_pickle=True)
-        #print(f"Debugging - simulation_parameters.shape: {simulation_parameters.shape}")
-        dict_with_results_of_interest["number_full_model_evaluations"] = simulation_parameters.shape[0]
-
-    if dict_with_results_of_interest["variant"] not in ["m1", "m2"]:
-        dict_with_results_of_interest["full_number_quadrature_points"] = \
-        (dict_with_results_of_interest["q_order"] + 1) ** dim
-
-    ########################################################
-    df_nodes = utility.get_df_from_simulationNodes(simulationNodes, nodes_or_paramters="nodes", params_list=params_list)
-    df_nodes_params = utility.get_df_from_simulationNodes(simulationNodes, nodes_or_paramters="parameters",  params_list=params_list)
-
-    if plotting:
-        fig = utility.plot_subplot_params_hist_from_df(df_index_parameter)
-        fig.update_layout(title="Prior Distribution of the Parameters",)
-        fig.show()
-        utility.plot_2d_matrix_static(df_nodes, nodes_or_paramters="nodes")
-        utility.plot_2d_matrix_static(df_nodes_params, nodes_or_paramters="parameters")
-
-    ########################################################
-    # Reading all the simulations
-    # maybe this is not alway necessary
-    read_all_saved_simulations_file = True
-    if read_all_saved_simulations_file and df_simulations_file.is_file():
-        # Reading Saved Simulations - Note: This migh be a huge file,
-        # especially for MC/Saltelli kind of simulations
-        df_simulation_result = pd.read_pickle(df_simulations_file, compression="gzip")
-        dict_with_results_of_interest["number_full_model_evaluations"] = len(df_simulation_result)
-    else:
-        df_simulation_result = None
-
-    ########################################################
     # Readinga dictionary containing statistics data
     # Reading UQEF-Dynamic Output files specific for some QoI and timestep
     # dict_output_file_paths_qoi = utility.get_dict_with_qoi_name_specific_output_file_paths_based_on_workingDir(workingDir, qoi_column_name)
     # statistics_dictionary_file = dict_output_file_paths_qoi.get("statistics_dictionary_file")
     # Read a Dictionary Containing Statistics Data
-    single_timestamp_single_file = uqsim_args_dict.get("instantly_save_results_for_each_time_step", False)
+    single_timestamp_single_file = uqsim_args_dict.get("instantly_save_results_for_each_time_step", False)  # TODO might be problem if instantly_save_results_for_each_time_step was overwritten
     statistics_dictionary = read_all_saved_statistics_dict(\
         workingDir, list_qoi_column, single_timestamp_single_file, throw_error=True, convert_to_pd_timestamp=convert_to_pd_timestamp)
     statistics_dictionary  = statistics_dictionary[qoi_column_name]
@@ -217,6 +424,7 @@ timestamp, qoi_column_name=None, time_column_name=utility.TIME_COLUMN_NAME, plot
 
     ########################################################
 
+    # TODO Hm, think if this is needed 
     dict_with_results_of_interest.update(statistics_dictionary)
 
     ########################################################
@@ -412,7 +620,6 @@ timestamp, qoi_column_name=None, time_column_name=utility.TIME_COLUMN_NAME, plot
 
 def update_dict_with_results_of_interest_based_on_uqsim_args_dict(dict_with_results_of_interest, uqsim_args_dict):
     variant = None
-    # TODO add additional arguments when mc/saltelli but with regression option 
     if uqsim_args_dict["regression"]:
         variant = "m3"
         dict_with_results_of_interest["q_order"] = uqsim_args_dict["sc_q_order"]
@@ -494,7 +701,7 @@ def compare_surrogate_and_full_model_for_single_qoi_single_timestamp(
     For a general comparison one should rely on code in scinetifc_pipelines/compare_model_and_surrogate.py module!
     surrogate_model: gPCE model built for a particular QoI and a particular timestep
 
-    Note: idea - if jointStandard is provided, then one expect that the surrogate model has to be evaluated at the set of nodes
+    Note: idea - if jointStandard is provided, then one expects that the surrogate model has to be evaluated at the set of nodes
     which come from 'standard' distribution; evaluateSurrogateAtStandardDist should be set to True in this case
     """
     write_to_a_file = kwargs.get('write_to_a_file', False)
@@ -634,10 +841,26 @@ def get_all_timesteps_from_saved_files(workingDir, first_part_of_the_file="stati
             list_TimeStamp.add(single_timestep)  # pd.Timestamp(single_timestep)
     return list_TimeStamp
 
+
+def get_list_of_qois_from_saved_files(workingDir, first_part_of_the_file="statistics"):
+    """
+    Note: use this function carefully
+    """
+    all_files = os.listdir(workingDir)
+    list_qois = set() # []
+    for filename in all_files:
+        parts = filename.split('_')
+        if parts[0] == first_part_of_the_file and parts[-1].endswith(".pkl"):
+            single_qoi = parts[-2]
+            list_qois.add(single_qoi)
+    return list_qois
     
+
 def read_all_saved_statistics_dict(workingDir, list_qoi_column, single_timestamp_single_file=False, throw_error=True, convert_to_pd_timestamp=True):
     if single_timestamp_single_file:
         list_TimeStamp = get_all_timesteps_from_saved_files(workingDir, first_part_of_the_file = "statistics")
+        if not list_TimeStamp:
+            single_timestamp_single_file = False
     statistics_dictionary = defaultdict(dict)
     for single_qoi in list_qoi_column:
         if single_timestamp_single_file:
@@ -774,7 +997,14 @@ convert_to_pd_timestamp=True):
         FileNotFoundError: If no GPCE surrogate files are found in the working directory and `throw_error` is True.
     """
     # TODO it seems as single_timestamp_single_file is not relevant here anymore!
-    list_TimeStamp = get_all_timesteps_from_saved_files(workingDir, first_part_of_the_file = "gpce")
+    list_TimeStamp = get_all_timesteps_from_saved_files(workingDir, first_part_of_the_file="gpce")
+    # if list_qoi_column is None:
+    #     list_qoi_column = get_list_of_qois_from_saved_files(workingDir, first_part_of_the_file="gpce")
+    if not list_TimeStamp:
+        if throw_error:
+            raise FileNotFoundError(f"No gpce surrogate files found in the working directory")
+        else:
+            return None
     gpce_surrogate_dictionary = dict()  # defaultdict(dict)
     for single_qoi in list_qoi_column:
         gpce_surrogate_dictionary[single_qoi] = dict()
@@ -840,7 +1070,14 @@ def read_all_saved_gpce_coeffs(workingDir, list_qoi_column, single_timestamp_sin
     """
     # TODO it seems as single_timestamp_single_file is not relevant here!
     list_TimeStamp = get_all_timesteps_from_saved_files(workingDir, first_part_of_the_file="gpce")
+    if not list_TimeStamp:
+        if throw_error:
+            raise FileNotFoundError(f"No gpce coeff files found in the working directory")
+        else:
+            return None
     gpce_coeff_dictionary = dict()  # defaultdict(dict)
+    # if list_qoi_column is None:
+    #     list_qoi_column = get_list_of_qois_from_saved_files(workingDir, first_part_of_the_file="gpce")
     for single_qoi in list_qoi_column:
         gpce_coeff_dictionary[single_qoi] = dict()
         for single_timestep in list_TimeStamp:
@@ -881,6 +1118,323 @@ def read_single_gpce_coeffs(workingDir, single_qoi, single_timestep, throw_error
             return None
 
 
+def read_gpce_surrogate_models_and_coefficients(workingDir, list_qoi_column, convert_to_pd_timestamp=False, printing=False):
+    """
+    This function reads the gPCE surrogate models (polynomials) and gPCE coefficents from saved files.
+    Args:
+    - workingDir: pathlib.Path object, path to the working directory
+    - list_qoi_column: list, list of the quantity of interest (QoI) columns
+    - convert_to_pd_timestamp: bool, if True, convert the timestamp to pandas timestamp when reading/creating dictionaries storitng gPCE model-related data
+    - printing: bool, if True, print the information about the gPCE surrogate models
+    Returns:
+    - gpce_surrogate_dictionary: dict, dictionary with the gPCE surrogate models
+    - gpce_coeff_dictionary: dict, dictionary with the gPCE coefficients
+    """
+    gpce_surrogate_dictionary = read_all_saved_gpce_surrogate_models(
+        workingDir=workingDir, list_qoi_column=list_qoi_column, throw_error=False, convert_to_pd_timestamp=convert_to_pd_timestamp)
+    gpce_coeff_dictionary = read_all_saved_gpce_coeffs(
+        workingDir=workingDir, list_qoi_column=list_qoi_column, throw_error=False, convert_to_pd_timestamp=convert_to_pd_timestamp)
+    if gpce_surrogate_dictionary is not None and printing:
+        print(f"INFO: gpce_surrogate_dictionary - {gpce_surrogate_dictionary}")
+    if gpce_coeff_dictionary is not None and printing:
+        print(f"INFO: gpce_coeff_dictionary - {gpce_coeff_dictionary}")
+    return gpce_surrogate_dictionary, gpce_coeff_dictionary
+
+
+def get_entry_surrogate_single_qoi_from_statistics_dict(statistics_dictionary, entry_label=utility.PCE_ENTRY, qoi_column_name=None):
+    """
+    Retrieves a specified entry for a single quantity of interest (QoI) from a statistics dictionary.
+
+    Args:
+        entry_label (str): The label of the entry/key to retrieve from the statistics dictionary. Default is utility.PCE_ENTRY.
+        statistics_dictionary (dict): The statistics dictionary.
+        qoi_column_name (str, optional): The name of the column in the statistics dictionary containing the QoI data.
+
+    Returns:
+        dict or None: The surrogate dictionary for the specified entry label, or None if the entry is not found.
+
+    """
+    if statistics_dictionary is None:
+        return None
+
+    if entry_label in statistics_dictionary:
+        return statistics_dictionary[entry_label]
+    elif entry_label in statistics_dictionary[list(statistics_dictionary.keys())[0]]:
+        gpce_surrogate_dictionary = dict()
+        for single_timestamp in statistics_dictionary.keys():
+            gpce_surrogate_dictionary[single_timestamp] = statistics_dictionary[single_timestamp][entry_label]
+        return gpce_surrogate_dictionary
+    elif qoi_column_name is not None and qoi_column_name in statistics_dictionary:
+        statistics_dictionary = statistics_dictionary[qoi_column_name]
+        if entry_label in statistics_dictionary:
+            return statistics_dictionary[entry_label]
+        elif entry_label in statistics_dictionary[list(statistics_dictionary.keys())[0]]:
+            gpce_surrogate_dictionary = dict()
+            for single_timestamp in statistics_dictionary.keys():
+                gpce_surrogate_dictionary[single_timestamp] = statistics_dictionary[single_timestamp][entry_label]
+            return gpce_surrogate_dictionary
+    else:
+        return None
+
+
+def get_entry_surrogate_single_qoi_single_timestamp_from_statistics_dict(
+    statistics_dictionary, timestamp, qoi_column_name, entry_label=utility.PCE_ENTRY):
+    """
+    Retrieves a specified entry for a single quantity of interest (QoI) from a statistics dictionary.
+
+    Args:
+        statistics_dictionary (dict): The statistics dictionary.
+        timestamp (int or pd.Timestamp):
+        qoi_column_name (str): The name of the column in the statistics dictionary containing the QoI data.
+        entry_label (str): The label of the entry/key to retrieve from the statistics dictionary. Default is utility.PCE_ENTRY.
+
+    Returns:
+        dict or None: The surrogate dictionary for the specified entry label, or None if the entry is not found.
+
+    """
+    if statistics_dictionary is None:
+        return None
+
+    if entry_label in statistics_dictionary:
+        return statistics_dictionary[entry_label]
+    elif timestamp in statistics_dictionary.keys() and entry_label in statistics_dictionary[timestamp]:
+        return statistics_dictionary[timestamp][entry_label]
+    elif qoi_column_name is not None and qoi_column_name in statistics_dictionary:
+        statistics_dictionary = statistics_dictionary[qoi_column_name]
+        if entry_label in statistics_dictionary:
+            return statistics_dictionary[entry_label]
+        elif timestamp in statistics_dictionary.keys() and entry_label in statistics_dictionary[timestamp]:
+            return statistics_dictionary[timestamp][entry_label]
+    else:
+        return None
+
+def fetch_gpce_surrogate_single_qoi_single_timestamp(qoi_column_name, timestamp, workingDir=None, 
+statistics_dictionary=None, throw_error=False, **kwargs):
+    """
+        Fetches the gPCE surrogate model for a single QoI singe timestamp
+        Parameters:
+        - qoi_column_name (str): The name of the QoI column.
+        - timestamp (int or pd.Timestamp):
+        - workingDir (str, optional): The working directory. Default is None.
+        - statistics_dictionary (dict, optional): The statistics dictionary. Default is None.
+        - throw_error (bool, optional): Whether to throw an error if the surrogate model cannot be fetched. Default is False.
+        - **kwargs: Additional keyword arguments.
+
+    """
+    convert_to_pd_timestamp = kwargs.get('convert_to_pd_timestamp', False)
+    single_timestamp_single_file = kwargs.get('single_timestamp_single_file', False)
+
+    if workingDir is None and statistics_dictionary is None:
+        raise ValueError("Both workingDir and statistics_dictionary are None!")
+    
+    # first try to read from the statistics_dictionary
+    if statistics_dictionary is not None:
+        gpce_surrogate_dictionary = get_entry_surrogate_single_qoi_single_timestamp_from_statistics_dict(
+            statistics_dictionary=statistics_dictionary, timestamp=timestamp, qoi_column_name=qoi_column_name, 
+            entry_label=utility.PCE_ENTRY)
+        if gpce_surrogate_dictionary is not None:
+            return gpce_surrogate_dictionary
+
+    if workingDir is not None:
+        # Try to read from the saved files
+        gpce_surrogate_dictionary = read_single_gpce_surrogate_models(
+            workingDir=workingDir, single_qoi=qoi_column_name, single_timestep=timestamp, throw_error=False)
+        if gpce_surrogate_dictionary is not None:
+            return gpce_surrogate_dictionary
+        else:
+            # Try to read saved statistics dictionary and read it from there
+            statistics_dictionary = read_all_saved_statistics_dict(\
+                workingDir=workingDir, 
+                list_qoi_column=[qoi_column_name,], 
+                single_timestamp_single_file=single_timestamp_single_file, 
+                throw_error=False, 
+                convert_to_pd_timestamp=convert_to_pd_timestamp)
+            # Now try the once again to read from the statistics_dictionary
+            statistics_dictionary = statistics_dictionary[qoi_column_name][timestamp]
+            return get_entry_surrogate_single_qoi_single_timestamp_from_statistics_dict(
+                statistics_dictionary=statistics_dictionary, timestamp=timestamp, qoi_column_name=qoi_column_name, 
+                entry_label=utility.PCE_ENTRY)
+
+    return None
+
+def fetch_gpce_surrogate_single_qoi(qoi_column_name, workingDir=None, 
+statistics_dictionary=None, throw_error=False, **kwargs):
+    """
+    Fetches the gPCE surrogate model for a single QoI.
+
+    Parameters:
+    - qoi_column_name (str): The name of the QoI column.
+    - workingDir (str, optional): The working directory. Default is None.
+    - statistics_dictionary (dict, optional): The statistics dictionary. Default is None.
+    - throw_error (bool, optional): Whether to throw an error if the surrogate model cannot be fetched. Default is False.
+    - **kwargs: Additional keyword arguments.
+
+    Keyword Arguments:
+    - convert_to_pd_timestamp (bool, optional): Whether to convert the timestamps to pandas Timestamp objects. Default is False.
+    - single_timestamp_single_file (bool, optional): Whether the statistics dictionary contains a single timestamp in a single file. Default is False.
+
+    Returns:
+    - gpce_surrogate_dictionary (dict): The gPCE surrogate model dictionary. Might be nested dictionary
+
+    Raises:
+    - ValueError: If both workingDir and statistics_dictionary are None.
+
+    Notes:
+    - This function tries to fetch the gPCE surrogate model for a single QoI in multiple ways. 
+    It first tries to read from the statistics_dictionary, and if not found, it tries to read from the saved files. 
+    If the surrogate model is still not found, it tries to read the saved statistics dictionary and fetches the surrogate model from there.
+    """
+    convert_to_pd_timestamp = kwargs.get('convert_to_pd_timestamp', False)
+    single_timestamp_single_file = kwargs.get('single_timestamp_single_file', False)
+
+    if workingDir is None and statistics_dictionary is None:
+        raise ValueError("Both workingDir and statistics_dictionary are None!")
+    
+    # first try to read from the statistics_dictionary
+    if statistics_dictionary is not None:
+        gpce_surrogate_dictionary = get_entry_surrogate_single_qoi_from_statistics_dict(
+            statistics_dictionary, utility.PCE_ENTRY, qoi_column_name)
+        if gpce_surrogate_dictionary is not None:
+            return gpce_surrogate_dictionary
+
+    if workingDir is not None:
+        # Try to read from the saved files
+        gpce_surrogate_dictionary = read_all_saved_gpce_surrogate_models(
+            workingDir=workingDir, 
+            list_qoi_column=[qoi_column_name,], 
+            throw_error=False, 
+            convert_to_pd_timestamp=convert_to_pd_timestamp)
+        if gpce_surrogate_dictionary is not None:
+            return gpce_surrogate_dictionary
+        else:
+            # Try to read saved statistics dictionary and read it from there
+            statistics_dictionary = read_all_saved_statistics_dict(\
+                workingDir=workingDir, 
+                list_qoi_column=[qoi_column_name,], 
+                single_timestamp_single_file=single_timestamp_single_file, 
+                throw_error=False, 
+                convert_to_pd_timestamp=convert_to_pd_timestamp)
+            # Now try the once again to read from the statistics_dictionary
+            return get_entry_surrogate_single_qoi_from_statistics_dict(statistics_dictionary, utility.PCE_ENTRY, qoi_column_name)
+
+    return None
+
+
+def fetch_gpce_coeff_single_qoi_single_timestamp(qoi_column_name, timestamp, workingDir=None, 
+statistics_dictionary=None, throw_error=False, **kwargs):
+    """
+            Fetches the coefficints of the gPCE surrogate model for a single QoI singe timestamp
+        Parameters:
+        - qoi_column_name (str): The name of the QoI column.
+        - timestamp (int or pd.Timestamp):
+        - workingDir (str, optional): The working directory. Default is None.
+        - statistics_dictionary (dict, optional): The statistics dictionary. Default is None.
+        - throw_error (bool, optional): Whether to throw an error if the surrogate model cannot be fetched. Default is False.
+        - **kwargs: Additional keyword arguments.
+
+    """
+    convert_to_pd_timestamp = kwargs.get('convert_to_pd_timestamp', False)
+    single_timestamp_single_file = kwargs.get('single_timestamp_single_file', False)
+
+    if workingDir is None and statistics_dictionary is None:
+        raise ValueError("Both workingDir and statistics_dictionary are None!")
+    
+    # first try to read from the statistics_dictionary
+    if statistics_dictionary is not None:
+        gpce_coeff_dictionary = get_entry_surrogate_single_qoi_single_timestamp_from_statistics_dict(
+            statistics_dictionary=statistics_dictionary, timestamp=timestamp, qoi_column_name=qoi_column_name, 
+            entry_label=utility.PCE_COEFF_ENTRY)
+        if gpce_coeff_dictionary is not None:
+            return gpce_coeff_dictionary
+
+    if workingDir is not None:
+        # Try to read from the saved files
+        gpce_coeff_dictionary = read_single_gpce_coeffs(
+            workingDir=workingDir, single_qoi=qoi_column_name, single_timestep=timestamp, throw_error=False)
+        if gpce_coeff_dictionary is not None:
+            return gpce_coeff_dictionary
+        else:
+            # Try to read saved statistics dictionary and read it from there
+            statistics_dictionary = read_all_saved_statistics_dict(\
+                workingDir=workingDir, 
+                list_qoi_column=[qoi_column_name,], 
+                single_timestamp_single_file=single_timestamp_single_file, 
+                throw_error=False, 
+                convert_to_pd_timestamp=convert_to_pd_timestamp)
+            # Now try the once again to read from the statistics_dictionary
+            statistics_dictionary = statistics_dictionary[qoi_column_name][timestamp]
+            return get_entry_surrogate_single_qoi_single_timestamp_from_statistics_dict(
+                statistics_dictionary=statistics_dictionary, timestamp=timestamp, qoi_column_name=qoi_column_name, 
+                entry_label=utility.PCE_COEFF_ENTRY)
+
+    return None
+
+
+def fetch_gpce_coeff_single_qoi(qoi_column_name, workingDir=None, 
+statistics_dictionary=None, throw_error=False, **kwargs):
+    """
+    Fetches the coefficints of the gPCE surrogate model for a single QoI.
+
+    Parameters:
+    - qoi_column_name (str): The name of the QoI column.
+    - workingDir (str, optional): The working directory. Default is None.
+    - statistics_dictionary (dict, optional): The statistics dictionary. Default is None.
+    - throw_error (bool, optional): Whether to throw an error if the gPCE coefficients cannot be fetched. Default is False.
+    - **kwargs: Additional keyword arguments.
+
+    Keyword Arguments:
+    - convert_to_pd_timestamp (bool, optional): Whether to convert the timestamps to pandas Timestamp objects. Default is False.
+    - single_timestamp_single_file (bool, optional): Whether the statistics dictionary contains a single timestamp in a single file. Default is False.
+
+    Returns:
+    - gpce_coeff_dictionary (dict): The gPCE coefficients dictionary for the specified QoI.
+
+    Raises:
+    - ValueError: If both workingDir and statistics_dictionary are None.
+
+    Notes:
+    - This function tries to fetch the gPCE surrogate model for a single QoI in multiple ways. 
+    It first tries to read from the statistics_dictionary. 
+    If the gPCE coefficients are not found in the statistics_dictionary, it then tries to read from the saved files. 
+    If the gPCE coefficients are still not found, it tries to read the saved statistics dictionary and fetch the gPCE coefficients from there.
+
+    """
+    convert_to_pd_timestamp = kwargs.get('convert_to_pd_timestamp', False)
+    single_timestamp_single_file = kwargs.get('single_timestamp_single_file', False)
+
+    if workingDir is None and statistics_dictionary is None:
+        raise ValueError("Both workingDir and statistics_dictionary are None!")
+    
+    # first try to read from the statistics_dictionary
+    if statistics_dictionary is not None:
+        gpce_coeff_dictionary = get_entry_surrogate_single_qoi_from_statistics_dict(
+            statistics_dictionary, utility.PCE_COEFF_ENTRY, qoi_column_name)
+        if gpce_coeff_dictionary is not None:
+            return gpce_coeff_dictionary
+
+    if workingDir is not None:
+        # Try to read from the saved files
+        gpce_coeff_dictionary = read_all_saved_gpce_coeffs(
+            workingDir=workingDir, 
+            list_qoi_column=[qoi_column_name,], 
+            throw_error=False, 
+            convert_to_pd_timestamp=convert_to_pd_timestamp)
+        if gpce_coeff_dictionary is not None:
+            return gpce_coeff_dictionary
+        else:
+            # Try to read saved statistics dictionary and read it from there
+            statistics_dictionary = read_all_saved_statistics_dict(\
+                workingDir=workingDir, 
+                list_qoi_column=[qoi_column_name,], 
+                single_timestamp_single_file=single_timestamp_single_file, 
+                throw_error=False, 
+                convert_to_pd_timestamp=convert_to_pd_timestamp)
+            # Now try the once again to read from the statistics_dictionary
+            return get_entry_surrogate_single_qoi_from_statistics_dict(statistics_dictionary, utility.PCE_COEFF_ENTRY, qoi_column_name)
+
+    return None
+
+
 ###################################################################################################################
 # Running UQEF-Dynamic model
 ###################################################################################################################
@@ -911,7 +1465,7 @@ def run_uqef_dynamic_model_over_parameters(model, parameters: np.ndarray, raise_
     - ("grad_matrix", gradient_matrix_dict): a dictionary containing the gradient vectors for the time period specified in the configuration file.
     """
     i_s = np.arange(parameters.shape[1])
-    results_array = model(i_s ,parameters.T, raise_exception_on_model_break, *args, **kwargs)    
+    results_array = model(i_s, parameters.T, raise_exception_on_model_break, *args, **kwargs)    
     return results_array
 
 
@@ -1590,10 +2144,30 @@ def describe_df_statistics(df_statistics_and_measured, single_qoi=None):
 
 
 def _get_sensitivity_indices_subset_of_big_df_statistics(df_statistics, single_qoi, param_names,
-        si_type="Sobol_t", list_of_columns_to_keep=["measured", "precipitation", "temperature"]):
-    df_statistics_and_measured_single_qoi = df_statistics.loc[df_statistics['qoi'] == single_qoi]
+        si_type="Sobol_t", list_of_columns_to_keep=[]):
+    """
+    Get a subset of the DataFrame `df_statistics` containing statistics and measured values for a single quantity of interest (`single_qoi`),
+    along with sensitivity indices for specified parameter names (`param_names`).
+
+    Args:
+        df_statistics (pandas.DataFrame): The DataFrame containing statistics and measured values.
+        single_qoi (str): The quantity of interest to filter the DataFrame on.
+        param_names (str or list): The parameter names to include in the sensitivity indices.
+            If a single string is provided, it will be converted to a list.
+        si_type (str, optional): The type of sensitivity index to include.
+            Valid options are "Sobol_t", "Sobol_m", and "Sobol_m2".
+            Defaults to "Sobol_t".
+        list_of_columns_to_keep (list, optional): The list of column names to keep in the subset DataFrame.
+            Defaults to []
+
+    Returns:
+        pandas.DataFrame: The subset (VIEW) of `df_statistics` containing the specified columns.
+
+    """
+
     # TODO allow user to specify which column names
     # list_of_columns_to_keep = ["measured", "precipitation", "temperature"]
+    list_of_columns_to_keep = list_of_columns_to_keep.copy()
     if not isinstance(param_names, list):
         param_names = [param_names,]
     for param_name in param_names:
@@ -1603,65 +2177,121 @@ def _get_sensitivity_indices_subset_of_big_df_statistics(df_statistics, single_q
             list_of_columns_to_keep.append(f"Sobol_m_{param_name}")
         elif si_type == "Sobol_m2":
             list_of_columns_to_keep.append(f"Sobol_m2_{param_name}")
-    df_statistics_and_measured_single_qoi_subset = df_statistics_and_measured_single_qoi[list_of_columns_to_keep]
-    return df_statistics_and_measured_single_qoi_subset
+    # df_statistics_and_measured_single_qoi = df_statistics.loc[df_statistics['qoi'] == single_qoi]
+    # df_statistics_and_measured_single_qoi_subset = df_statistics_and_measured_single_qoi[list_of_columns_to_keep]
+    # return df_statistics_and_measured_single_qoi_subset
+    return df_statistics.loc[df_statistics['qoi'] == single_qoi, list_of_columns_to_keep]
 
 
 def describe_sensitivity_indices_single_qoi_under_some_condition(
         df_statistics, single_qoi, param_names,
-        si_type="Sobol_t", condition_columns=None,condition_value=None, condition_sign="equal",
-        list_of_columns_to_keep=["measured", "precipitation", "temperature"]):
+        si_type="Sobol_t", condition_columns=None, condition_value=None, condition_sign="equal",
+        list_of_columns_to_keep=[]):
+    """
+    Describes sensitivity indices for a single quantity of interest (QoI) under a given condition.
+
+    Parameters:
+        df_statistics (DataFrame): The DataFrame containing the statistics.
+        single_qoi (str): The name of the single quantity of interest (QoI).
+        param_names (list): The list of parameter names.
+        si_type (str, optional): The type of sensitivity index. Defaults to "Sobol_t".
+        condition_columns (str or list, optional): The column(s) to apply the condition on. Defaults to None.
+        condition_value (int or float, optional): The value to compare against. Defaults to None.
+        condition_sign (str, optional): The condition sign to use for comparison. Defaults to "equal".
+        list_of_columns_to_keep (list, optional): The list of columns to keep in the subset. Defaults to []
+
+    Raises:
+        Exception: If condition_sign is not one of the following strings: 
+        "smaller", "greater", "equal", "not_equal", "smaller_or_equal", "greater_or_equal",
+        '==', '!=', '<', '>', '<=', '>=', "less than", "less than or equal", "greater than", "greater than or equal".
+
+    Returns:
+        None
+    """
     df_statistics_and_measured_single_qoi_subset = _get_sensitivity_indices_subset_of_big_df_statistics(
         df_statistics, single_qoi, param_names, si_type, list_of_columns_to_keep)
+
+    # print(f"[DEBUGGING] {id(df_statistics_and_measured_single_qoi_subset)} {id(df_statistics)}")
     if condition_columns is None or condition_value is None:
         result_describe = df_statistics_and_measured_single_qoi_subset.describe(include=np.number)
-        print(f"{result_describe}")
+        # print(f"{result_describe}")
     else:
-        if condition_sign=="equal":
-            df_subset = df_statistics_and_measured_single_qoi_subset[
-                df_statistics_and_measured_single_qoi_subset[condition_columns] == condition_value].copy()
-            result_describe = df_subset.describe(include=np.number)
-            print(f"{result_describe}")
-        elif condition_sign=="greater than":
-            df_subset = df_statistics_and_measured_single_qoi_subset[
-                df_statistics_and_measured_single_qoi_subset[condition_columns] > condition_value].copy()
-            result_describe = df_subset.describe(include=np.number)
-            print(f"{result_describe}")
-        elif condition_sign=="greater than or equal":
-            df_subset = df_statistics_and_measured_single_qoi_subset[
-                df_statistics_and_measured_single_qoi_subset[condition_columns] >= condition_value].copy()
-            result_describe = df_subset.describe(include=np.number)
-            print(f"{result_describe}")
-        elif condition_sign=="less than":
-            df_subset = df_statistics_and_measured_single_qoi_subset[
-                df_statistics_and_measured_single_qoi_subset[condition_columns] < condition_value].copy()
-            result_describe = df_subset.describe(include=np.number)
-            print(f"{result_describe}")
-        elif condition_sign=="less than or equal":
-            df_subset = df_statistics_and_measured_single_qoi_subset[
-                df_statistics_and_measured_single_qoi_subset[condition_columns] <= condition_value].copy()
-            result_describe = df_subset.describe(include=np.number)
-            print(f"{result_describe}")
-        else:
+        if condition_sign not in ["smaller", "greater", "equal", "not_equal", "smaller_or_equal", "greater_or_equal",
+        '==', '!=', '<', '>', '<=', '>=', "less than", "less than or equal", "greater than", "greater than or equal"]:
+        # if condition_sign not in ["equal", "greater than", "greater than or equal", "less than", "less than or equal"]:
             raise Exception(f"Error in describe_sensitivity_indices_single_qoi_under_some_condition "
                             f"method - condition_sign should be one of the following strings: equal"
                             f"/greater than/greater than or equal/less than/less than or equal")
+        if condition_sign == "equal" or condition_sign == "==":
+            # df_subset = df_statistics_and_measured_single_qoi_subset[
+            #     df_statistics_and_measured_single_qoi_subset[condition_columns] == condition_value].copy()
+            # result_describe = df_subset.describe(include=np.number)
+            result_describe = df_statistics_and_measured_single_qoi_subset[\
+            df_statistics_and_measured_single_qoi_subset[condition_columns] == condition_value].describe(include=np.number)
+            # print(f"{result_describe}")
+        elif condition_sign == "greater than" or condition_sign == "greater" or condition_sign == ">":
+            # df_subset = df_statistics_and_measured_single_qoi_subset[
+            #     df_statistics_and_measured_single_qoi_subset[condition_columns] > condition_value].copy()
+            # result_describe = df_subset.describe(include=np.number)
+            result_describe = df_statistics_and_measured_single_qoi_subset[\
+            df_statistics_and_measured_single_qoi_subset[condition_columns] > condition_value].describe(include=np.number)
+            # print(f"{result_describe}")
+        elif condition_sign == "greater than or equal" or condition_sign == "greater_or_equal" or condition_sign == '>=':
+            # df_subset = df_statistics_and_measured_single_qoi_subset[
+            #     df_statistics_and_measured_single_qoi_subset[condition_columns] >= condition_value].copy()
+            # result_describe = df_subset.describe(include=np.number)
+            result_describe = df_statistics_and_measured_single_qoi_subset[\
+            df_statistics_and_measured_single_qoi_subset[condition_columns] >= condition_value].describe(include=np.number)
+            # print(f"{result_describe}")
+        elif condition_sign == "less than" or condition_sign == "smaller" or condition_sign == '<':
+            # df_subset = df_statistics_and_measured_single_qoi_subset[
+            #     df_statistics_and_measured_single_qoi_subset[condition_columns] < condition_value].copy()
+            # result_describe = df_subset.describe(include=np.number)
+            result_describe = df_statistics_and_measured_single_qoi_subset[\
+            df_statistics_and_measured_single_qoi_subset[condition_columns] < condition_value].describe(include=np.number)
+            # print(f"{result_describe}")
+        elif condition_sign == "less than or equal" or condition_sign == "smaller_or_equal" or condition_sign == '<=':
+            # df_subset = df_statistics_and_measured_single_qoi_subset[
+            #     df_statistics_and_measured_single_qoi_subset[condition_columns] <= condition_value].copy()
+            # result_describe = df_subset.describe(include=np.number)
+            result_describe = df_statistics_and_measured_single_qoi_subset[\
+            df_statistics_and_measured_single_qoi_subset[condition_columns] <= condition_value].describe(include=np.number)
+            # print(f"{result_describe}")
+        elif condition_sign == "not_equal" or condition_sign == '!=':
+            result_describe = df_statistics_and_measured_single_qoi_subset[\
+            df_statistics_and_measured_single_qoi_subset[condition_columns] != condition_value].describe(include=np.number)
+    return result_describe
 
 
 def compute_df_statistics_columns_correlation(
         df_statistics, single_qoi, param_names,
-        only_sensitivity_indices_columns=True, si_type="Sobol_t", plot=True, list_of_columns_to_keep=["measured", "precipitation", "temperature"]):
+        only_sensitivity_indices_columns=True, si_type="Sobol_t", plot=True, list_of_columns_to_keep=[]):
+    """
+    Computes the correlation matrix between columns of a DataFrame containing statistical data.
+    If plot plots the correlation matrix
+    Args:
+        df_statistics (pandas.DataFrame): The DataFrame containing the statistical data.
+        single_qoi (str): The name of the quantity of interest (QoI) to consider.
+        param_names (list): The names of the parameters.
+        only_sensitivity_indices_columns (bool, optional): Whether to consider only the columns related to sensitivity indices. Defaults to True.
+        si_type (str, optional): The type of sensitivity indices to consider. Defaults to "Sobol_t".
+        plot (bool, optional): Whether to plot the correlation matrix. Defaults to True.
+        list_of_columns_to_keep (list, optional): The list of columns to keep when considering only sensitivity indices columns. Defaults to [].
+
+    Returns:
+        None
+    """
     if only_sensitivity_indices_columns:
         df_statistics_and_measured_single_qoi_subset = _get_sensitivity_indices_subset_of_big_df_statistics(
             df_statistics, single_qoi, param_names, si_type, list_of_columns_to_keep)
     else:
-        df_statistics_and_measured_single_qoi = df_statistics.loc[df_statistics['qoi'] == single_qoi]
+        # df_statistics_and_measured_single_qoi = df_statistics.loc[df_statistics['qoi'] == single_qoi]
         df_statistics_and_measured_single_qoi_subset = df_statistics_and_measured_single_qoi
+        df_statistics_and_measured_single_qoi_subset = df_statistics.loc[df_statistics['qoi'] == single_qoi]
 
     corr_df_statistics_and_measured_single_qoi_subset = df_statistics_and_measured_single_qoi_subset.corr()
     print(f"Correlation matrix: {corr_df_statistics_and_measured_single_qoi_subset} \n")
     if plot:
-        import seaborn as sns
         sns.set(style="darkgrid")
         mask = np.triu(np.ones_like(corr_df_statistics_and_measured_single_qoi_subset, dtype=bool))
         fig, axs = plt.subplots(figsize=(11, 9))
@@ -1670,70 +2300,55 @@ def compute_df_statistics_columns_correlation(
         plt.show()
 
 
+def validate_condition(df, condition_results_based_on_metric, condition_results_based_on_metric_value):
+    if df is None or condition_results_based_on_metric is None or condition_results_based_on_metric_value is None:
+        raise Exception(f"Error in Statistics.handle_condition - it is not possible to condition df-index-parameter-gof-values on the column {condition_results_based_on_metric}")
+    if isinstance(condition_results_based_on_metric, str):
+        if condition_results_based_on_metric not in df.columns:
+            raise Exception(f"Error in Statistics.handle_condition - the column {condition_results_based_on_metric} is not in the df-index-parameter-gof-values")
+    elif isinstance(condition_results_based_on_metric, list):
+        for single_condition in condition_results_based_on_metric:
+            if single_condition not in df.columns:
+                raise Exception(f"Error in Statistics.handle_condition - the column {single_condition} is not in the df-index-parameter-gof-values")
+
+
+def filter_df_simulation_result_based_on_gof_condition(
+    df_simulation_result: pd.DataFrame, df_index_parameter_gof: pd.DataFrame, 
+    condition_results_based_on_metric: Union[str, list], condition_results_based_on_metric_value: Union[int, float, list], 
+    condition_results_based_on_metric_sign: Union[str, list], 
+    index_column_name: str=utility.INDEX_COLUMN_NAME, time_column_name: str=utility.TIME_COLUMN_NAME) -> pd.DataFrame:
+    """
+    Apply a condition to filter the data (model runs - df_simulation_result) 
+    based on a given column (metric/gof/likelihood) and the value.
+    The analysis is performed based on df_index_parameter_gof_values pd.DataFrame.
+
+    Args:
+        df_simulation_result
+        df_index_parameter_gof
+        condition_results_based_on_metric (str or list): The name(s) of the column(s) to compare.
+        condition_results_based_on_metric_value (float or list): The threshold value(s) to compare against.
+        condition_results_based_on_metric_sign (str or list): The comparison operator(s) to use for the comparison(
+            e.g., '==', '!=', '<', '>', '<=', '>=', "smaller", "greater", "equal", "not_equal", "smaller_or_equal",  "greater_or_equal").
+    Returns:
+        Data Frame containing filtered data
+    """
+    validate_condition(df_index_parameter_gof, condition_results_based_on_metric, condition_results_based_on_metric_value)
+    mask = utility.generate_mask_based_on_multiple_column_comparison(
+        df=df_index_parameter_gof, column_name=condition_results_based_on_metric, 
+        threshold_value=condition_results_based_on_metric_value, comparison=condition_results_based_on_metric_sign)
+
+    list_of_index_runs_to_keep = df_index_parameter_gof[mask][index_column_name].tolist()
+
+    filtered_df_simulation_result = df_simulation_result[df_simulation_result[index_column_name].isin(list_of_index_runs_to_keep)]
+    filtered_df_simulation_result.sort_values(
+        by=[index_column_name, time_column_name], ascending=[True, True], 
+        inplace=True, kind='quicksort', na_position='last'
+    )
+    return filtered_df_simulation_result
+
 ###################################################################################################################
 # Set of functions for plotting and or computing (KDE-based) CDFs and PDFs - these function may go to utility as well?
 ###################################################################################################################
-
-
-def plot_parameters_sensitivity_indices_vs_temp_prec_measured(
-        df_statistics, single_qoi, param_names, si_type="Sobol_t", list_of_columns_to_keep=["measured", "precipitation", "temperature"]):
-    """
-    Note: important assumption is that the df_statistics DataFrame has columns with names like: "measured", "precipitation", "temperature"
-    This is a specific function tailored for the HBV model and other environmental models/hydrologic models
-    :param df_statistics:
-    :param single_qoi:
-    :param param_names:
-    :param si_type:
-    :return:
-    """
-    df_statistics_and_measured_single_qoi_subset = _get_sensitivity_indices_subset_of_big_df_statistics(
-        df_statistics, single_qoi, param_names, si_type, list_of_columns_to_keep)
-    num_param = len(param_names)
-    fig, axs = plt.subplots(3, num_param, figsize=(15, 8))
-    # param = configurationObject["parameters"][0]["name"]
-    # param_num = 0
-    param_counter = 0
-    for i, ax in enumerate(axs.flat):
-        param_num = param_counter % num_param
-        param = param_names[param_num]
-        if i % 3 == 0:
-            if si_type == "Sobol_t":
-                ax.scatter(*df_statistics_and_measured_single_qoi_subset[[f"Sobol_t_{param}", "measured"]].values.T)
-                # ax.scatter(*df_statistics_and_measured_single_qoi_subset[["measured", f"sobol_t_{param}", ]].values.T)
-            elif si_type == "Sobol_m":
-                ax.scatter(*df_statistics_and_measured_single_qoi_subset[[f"Sobol_m_{param}", "measured"]].values.T)
-            elif si_type == "Sobol_m2":
-                ax.scatter(*df_statistics_and_measured_single_qoi_subset[[f"Sobol_m2_{param}", "measured"]].values.T)
-        elif i % 3 == 1:
-            if si_type == "Sobol_t":
-                ax.scatter(
-                    *df_statistics_and_measured_single_qoi_subset[[f"Sobol_t_{param}", "precipitation"]].values.T)
-            elif si_type == "Sobol_m":
-                ax.scatter(
-                    *df_statistics_and_measured_single_qoi_subset[[f"Sobol_m_{param}", "precipitation"]].values.T)
-            elif si_type == "Sobol_m2":
-                ax.scatter(
-                    *df_statistics_and_measured_single_qoi_subset[[f"Sobol_m2_{param}", "precipitation"]].values.T)
-        elif i % 3 == 2:
-            if si_type == "Sobol_t":
-                ax.scatter(*df_statistics_and_measured_single_qoi_subset[[f"Sobol_t_{param}", "temperature"]].values.T)
-            elif si_type == "Sobol_m":
-                ax.scatter(*df_statistics_and_measured_single_qoi_subset[[f"Sobol_m_{param}", "temperature"]].values.T)
-            elif si_type == "Sobol_m2":
-                ax.scatter(*df_statistics_and_measured_single_qoi_subset[[f"Sobol_m2_{param}", "temperature"]].values.T)
-        param_counter += 1
-    #     ax.set_title(f'{param}')
-    # set labels
-    for i in range(num_param):
-        param = param_names[i]
-        plt.setp(axs[-1, i], xlabel=f'{si_type} {param}')
-        # plt.setp(axs[:, i], ylabel=f'{param}')
-    plt.setp(axs[0, 0], ylabel='measured')
-    plt.setp(axs[1, 0], ylabel='precipitation')
-    plt.setp(axs[2, 0], ylabel='temperature')
-    # plt.setp(axs[0, :], xlabel='measured')
-    # plt.setp(axs[1, :], xlabel='precipitation')
-    # plt.setp(axs[2, :], xlabel='temperature')
 
 
 def plot_cdfs_of_parameters_sensitivity_indices(df_statistics, single_qoi, param_names, si_type="Sobol_t"):
@@ -1877,6 +2492,106 @@ def plot_si_and_normalized_measured_time_signal_single_qoi(
 # ============================================================================================
 # TODO Think about moving this to some model specific utility module
 
+def plot_parameters_sensitivity_indices_vs_temp_prec_measured(df_statistics, single_qoi, param_names, si_type="Sobol_t"):
+    """
+    Note: important assumption is that the df_statistics DataFrame has columns with names like: "measured", "precipitation", "temperature"
+    This is a specific function tailored for the HBV model and other environmental models/hydrologic models
+    :param df_statistics:
+    :param single_qoi:
+    :param param_names:
+    :param si_type:
+    :return:
+    """
+    list_of_columns_to_keep = ["measured", "precipitation", "temperature"]
+    df_statistics_and_measured_single_qoi_subset = _get_sensitivity_indices_subset_of_big_df_statistics(
+        df_statistics, single_qoi, param_names, si_type, list_of_columns_to_keep)
+    num_param = len(param_names)
+    fig, axs = plt.subplots(3, num_param, figsize=(15, 8))
+    # param = configurationObject["parameters"][0]["name"]
+    # param_num = 0
+    # param_counter = 0
+    for i, ax in enumerate(axs.flat):
+        param_num = i % num_param
+        param = param_names[param_num]
+        # if i % 3 == 0:
+        if i < num_param:
+            if si_type == "Sobol_t":
+                ax.scatter(*df_statistics_and_measured_single_qoi_subset[[f"Sobol_t_{param}", "measured"]].values.T)
+                # ax.scatter(*df_statistics_and_measured_single_qoi_subset[["measured", f"sobol_t_{param}", ]].values.T)
+            elif si_type == "Sobol_m":
+                ax.scatter(*df_statistics_and_measured_single_qoi_subset[[f"Sobol_m_{param}", "measured"]].values.T)
+            elif si_type == "Sobol_m2":
+                ax.scatter(*df_statistics_and_measured_single_qoi_subset[[f"Sobol_m2_{param}", "measured"]].values.T)
+            # elif i % 3 == 1:
+        elif i>=num_param and i<2*num_param:
+            if si_type == "Sobol_t":
+                ax.scatter(
+                    *df_statistics_and_measured_single_qoi_subset[[f"Sobol_t_{param}", "precipitation"]].values.T)
+            elif si_type == "Sobol_m":
+                ax.scatter(
+                    *df_statistics_and_measured_single_qoi_subset[[f"Sobol_m_{param}", "precipitation"]].values.T)
+            elif si_type == "Sobol_m2":
+                ax.scatter(
+                    *df_statistics_and_measured_single_qoi_subset[[f"Sobol_m2_{param}", "precipitation"]].values.T)
+            # elif i % 3 == 2:
+        else:
+            if si_type == "Sobol_t":
+                ax.scatter(*df_statistics_and_measured_single_qoi_subset[[f"Sobol_t_{param}", "temperature"]].values.T)
+            elif si_type == "Sobol_m":
+                ax.scatter(*df_statistics_and_measured_single_qoi_subset[[f"Sobol_m_{param}", "temperature"]].values.T)
+            elif si_type == "Sobol_m2":
+                ax.scatter(*df_statistics_and_measured_single_qoi_subset[[f"Sobol_m2_{param}", "temperature"]].values.T)
+        # param_counter += 1
+    #     ax.set_title(f'{param}')
+    # set labels
+    for i in range(num_param):
+        param = param_names[i]
+        plt.setp(axs[-1, i], xlabel=f'{si_type} {param}')
+        # plt.setp(axs[:, i], ylabel=f'{param}')
+    plt.setp(axs[0, 0], ylabel='measured')
+    plt.setp(axs[1, 0], ylabel='precipitation')
+    plt.setp(axs[2, 0], ylabel='temperature')
+    # plt.setp(axs[0, :], xlabel='measured')
+    # plt.setp(axs[1, :], xlabel='precipitation')
+    # plt.setp(axs[2, :], xlabel='temperature')
+
+
+def plot_parameters_sensitivity_indices_vs_temp_prec_measured_plotly(
+    df, single_qoi, param_names, forcing_measured_columns, si_type="Sobol_t"):
+    df =_get_sensitivity_indices_subset_of_big_df_statistics(
+        df_statistics=df, 
+        single_qoi=single_qoi, 
+        param_names=param_names.copy(), 
+        si_type=si_type, 
+        list_of_columns_to_keep=forcing_measured_columns.copy()
+    )
+
+    num_columns = len(param_names)
+    number_rows = len(forcing_measured_columns)
+
+    # print(f"num_columns={num_columns}")
+    # print(f"number_rows={number_rows}")
+
+    # Create a subplot grid
+    fig = make_subplots(rows=number_rows, cols=num_columns, shared_xaxes=True, shared_yaxes=True,
+                        horizontal_spacing=0.01, vertical_spacing=0.01)
+
+    # Populate the subplot grid with scatter plots
+    for i, x_col in enumerate(forcing_measured_columns):
+        for j, y_col in enumerate(param_names):
+            fig.add_trace(
+                go.Scatter(x=df[f"{si_type}_{y_col}"], y=df[x_col], mode='markers', marker=dict(size=5)),
+                row=i+1, col=j+1
+            )
+            # Update axes titles
+            if j == 0:
+                fig.update_yaxes(title_text=x_col, row=i+1, col=j+1)
+            if i == number_rows-1:
+                fig.update_xaxes(title_text=y_col, row=i+1, col=j+1)
+
+    # Update layout
+    fig.update_layout(title=f"UQEF-Dynamic Scatter Plot -{si_type}", height=800, width=1000, showlegend=False)
+    return fig
 
 def plot_forcing_mean_predicted_and_observed_all_qoi(statisticsObject, directory="./", fileName="simulation_big_plot.html"):
     """
@@ -1948,6 +2663,10 @@ def plot_forcing_mean_predicted_and_observed_all_qoi(statisticsObject, directory
     fig.update_yaxes(autorange="reversed", row=1, col=1)
     fig.update_layout(height=600, width=800, title_text="Detailed plot of most important time-series")
     fig.update_layout(xaxis=dict(type="date"))
+    fig.update_xaxes(
+        tickformat='%b %y',            # Format dates as "Month Day" (e.g., "Jan 01")
+        dtick="M1"                     # Set tick interval to 1 day for denser ticks
+    )
     if not str(directory).endswith("/"):
         directory = str(directory) + "/"
     if fileName is None:
@@ -2035,7 +2754,7 @@ def plotting_function_single_qoi(
     fig.add_trace(
         go.Scatter(
             x=df['TimeStamp'], y=df['measured'],
-            name="Observed Streamflow", mode='lines',
+            name="Observed Streamflow ()", mode='lines',
             # line=dict(color='green'),
         ),
         row=3, col=1
@@ -2050,34 +2769,55 @@ def plotting_function_single_qoi(
         row=starting_row_for_predicted_data, col=1
     )
 
-    if dict_what_to_plot.get("E_minus_std", False):
+    if dict_what_to_plot.get("E_minus_std", False) and 'E_minus_std' in df.columns:
         fig.add_trace(
             go.Scatter(
                 x=df['TimeStamp'], y=df['E_minus_std'],
                 name=f'E_minus_std',
-                text=df['E_minus_std'], mode='lines', line_color="grey",
+                text=df['E_minus_std'], mode='lines', showlegend=False, line_color='rgba(200, 200, 200, 0.4)', #line_color="grey",
             ),
             row=starting_row_for_predicted_data, col=1
         )
-    if dict_what_to_plot.get("E_plus_std", False):
+    if dict_what_to_plot.get("E_plus_std", False) and 'E_plus_std' in df.columns:
         fig.add_trace(
             go.Scatter(
                 x=df['TimeStamp'], y=df['E_plus_std'],
-                name=f'E_plus_std',
-                text=df['E_plus_std'], line_color="grey",
-                mode='lines', fill='tonexty'
+                name=f'E+-std',
+                text=df['E_plus_std'],
+                mode='lines', fill='tonexty', showlegend=True, line_color='rgba(200, 200, 200, 0.4)', #line_color="grey",
             ),
             row=starting_row_for_predicted_data, col=1
         )
+
+    if dict_what_to_plot.get("E_minus_2std", False) and 'E_minus_2std' in df.columns:
+        fig.add_trace(
+            go.Scatter(
+                x=df['TimeStamp'], y=df['E_minus_2std'],
+                name=f'E_minus_2std',
+                text=df['E_minus_2std'], mode='lines', showlegend=False, line_color='rgba(200, 200, 200, 0.4)', #line_color="grey",
+            ),
+            row=starting_row_for_predicted_data, col=1
+        )
+    if dict_what_to_plot.get("E_plus_2std", False) and 'E_plus_2std' in df.columns:
+        fig.add_trace(
+            go.Scatter(
+                x=df['TimeStamp'], y=df['E_plus_2std'],
+                name=f'E+-2std',
+                text=df['E_plus_2std'],
+                mode='lines', fill='tonexty', showlegend=True, line_color='rgba(200, 200, 200, 0.4)', #line_color="grey",
+            ),
+            row=starting_row_for_predicted_data, col=1
+        )
+
     if dict_what_to_plot.get("P10", False) and 'P10' in df.columns:
         fig.add_trace(go.Scatter(x=df['TimeStamp'], y=df["P10"],
                                  name=f'P10',
-                                 line_color='yellow', mode='lines'),
+                                 line_color='rgba(255, 165, 0, 0.3)', mode='lines', showlegend=False),
                       row=starting_row_for_predicted_data, col=1)
     if dict_what_to_plot.get("P90", False) and 'P90' in df.columns:
         fig.add_trace(go.Scatter(x=df['TimeStamp'], y=df["P90"],
-                                 name=f'P90',
-                                 line_color='yellow', mode='lines', fill='tonexty'),
+                                 name=f'P10-P90',
+                                 line_color='rgba(255, 165, 0, 0.3)', mode='lines', fill='tonexty', showlegend=True),
                       row=starting_row_for_predicted_data, col=1)
 
     starting_row_for_predicted_data += 1
@@ -2110,8 +2850,11 @@ def plotting_function_single_qoi(
 
     fig.update_layout(height=600, width=800,
                       title_text=f"Detailed plot of most important time-series - QoI {single_qoi}")
-    fig.update_layout(xaxis=dict(type="date"))
-
+    #fig.update_layout(xaxis=dict(type="date"))
+    fig.update_xaxes(
+        tickformat='%b %y',            # Format dates as "Month Day" (e.g., "Jan 01")
+        dtick="M1"                     # Set tick interval to 1 day for denser ticks
+    )
     if not str(directory).endswith("/"):
         directory = str(directory) + "/"
     fileName = directory + fileName

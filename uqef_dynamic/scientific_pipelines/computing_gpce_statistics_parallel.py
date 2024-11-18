@@ -1,4 +1,6 @@
 """
+This file is used to compute the statistics for gPCE surrogate model; 
+it is mainly used for the parallel computing for the hydrological model HBV-SASK / LARSIM
 @author: Ivana Jovanovic Buha
 """
 import inspect
@@ -50,7 +52,7 @@ size = comm.Get_size()
 # num_threads = threading.active_count()
 
 
-def main():
+def main(workingDir=None):
     """
     Main function for computing the statistics for gPCE surrogate model
     The default is that the gPCE surrogate model and computed coefficients are saved in the corresponding files in the workingDir;  
@@ -59,81 +61,95 @@ def main():
     if rank == 0:
         print(f"Number of MPI processes: {size}")
 
-        # 7D Sparse-gPCE l=7, p=2 2007 deltaQ_cms - 203
-        workingDir = pathlib.Path('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/paper_hydro_uq_sim/hbv_uq_cm2.0220')
-        # 3D Sparse-gPCE l=7, p=3 2005-2007 deltaQ_cms
-        workingDir = pathlib.Path('/gpfs/scratch/pr63so/ga45met2/hbvsask_runs/pce_deltq_3d_short_oldman')
-        workingDir = pathlib.Path('/gpfs/scratch/pr63so/ga45met2/hbvsask_runs/pce_deltq_3d_longer_oldman')
+        if workingDir is None:
+            workingDir = pathlib.Path(os.getcwd())
 
         read_all_saved_simulations_file = False
 
-        # args_file, configuration_object_file, nodes_file, parameters_file, time_info_file, \
-        # df_all_index_parameter_file, df_all_index_parameter_gof_file, df_all_simulations_file, \
-        #     df_state_results_file, df_time_varying_grad_analysis_file, df_time_aggregated_grad_analysis_file, \
-        #         statistics_dictionary_file, dict_of_approx_matrix_c_file, dict_of_matrix_c_eigen_decomposition_file = utility.update_output_file_paths_based_on_workingDir(workingDir)
         dict_output_file_paths = utility.get_dict_with_output_file_paths_based_on_workingDir(workingDir)
+    
         args_file = dict_output_file_paths.get("args_file")
         configuration_object_file = dict_output_file_paths.get("configuration_object_file")
         nodes_file = dict_output_file_paths.get("nodes_file")
-        df_all_index_parameter_file = dict_output_file_paths.get("df_all_index_parameter_file")
-        df_all_index_parameter_gof_file = dict_output_file_paths.get("df_all_index_parameter_gof_file")
-        df_all_simulations_file = dict_output_file_paths.get("df_all_simulations_file")
+        parameters_file = dict_output_file_paths.get("parameters_file")
+        time_info_file = dict_output_file_paths.get("time_info_file")
+        df_index_parameter_file = dict_output_file_paths.get("df_index_parameter_file")
+        df_index_parameter_gof_file = dict_output_file_paths.get("df_index_parameter_gof_file")
+        df_simulations_file = dict_output_file_paths.get("df_simulations_file")
+        df_state_file = dict_output_file_paths.get("df_state_file")
 
         # Load the UQSim args dictionary
-        with open(args_file, 'rb') as f:
-            uqsim_args = pickle.load(f)
-        uqsim_args_dict = vars(uqsim_args)
+        uqsim_args_dict = utility.load_uqsim_args_dict(args_file)
+        print("INFO: uqsim_args_dict: ", uqsim_args_dict)
         model = uqsim_args_dict["model"]
         inputModelDir = uqsim_args_dict["inputModelDir"]
 
         # Load the configuration object
-        with open(configuration_object_file, 'rb') as f:
-            configurationObject = dill.load(f)
+        configurationObject = utility.load_configuration_object(configuration_object_file)
+        print("configurationObject: ", configurationObject)
         simulation_settings_dict = utility.read_simulation_settings_from_configuration_object(configurationObject)
+
         if model == "hbvsask":
+            inputModelDir = uqsim_args_dict["inputModelDir"]
             basis = configurationObject['model_settings']['basis']
         
         # Reading Nodes and Parameters
         with open(nodes_file, 'rb') as f:
-        #     simulationNodes = dill.load(f)
             simulationNodes = pickle.load(f)
-
+        print("INFO: simulationNodes: ", simulationNodes)
         dim = simulationNodes.nodes.shape[0]
         model_runs = simulationNodes.nodes.shape[1]
-        dist = simulationNodes.joinedStandardDists
-        print(f"INFO: model - {model}; dim - {dim}; model_runs - {model_runs}")
-
-        # Reading Parameters and GoF Computed Data
-        if df_all_index_parameter_file.is_file():
-            df_index_parameter = pd.read_pickle(df_all_index_parameter_file, compression="gzip")
-            params_list = utility._get_parameter_columns_df_index_parameter_gof(
-                df_index_parameter)
-        else:
-            raise FileNotFoundError(f"File {df_all_index_parameter_file} not found; it is needed to get the list of uncertain parameters atm")
-
-        if df_all_index_parameter_gof_file.is_file():
-            df_index_parameter_gof = pd.read_pickle(df_all_index_parameter_gof_file, compression="gzip")
-            gof_list = utility._get_gof_columns_df_index_parameter_gof(
-                df_index_parameter_gof)
-
+        distStandard = simulationNodes.joinedStandardDists
+        dist = simulationNodes.joinedDists
+        print(f"INFO: model-{model}; dim - {dim}; model_runs - {model_runs}")
         df_nodes = utility.get_df_from_simulationNodes(simulationNodes, nodes_or_paramters="nodes", params_list=params_list)
         df_nodes_params = utility.get_df_from_simulationNodes(simulationNodes, nodes_or_paramters="parameters",  params_list=params_list)
 
+        with open(time_info_file, 'r') as f:
+            time_info = f.read()
+        print("INFO: time_info: ", time_info)
+
+        # Reading Prameters and GoF Computed Data
+        if df_index_parameter_file.is_file():
+            df_index_parameter = pd.read_pickle(df_index_parameter_file, compression="gzip")
+            params_list = utility._get_parameter_columns_df_index_parameter_gof(
+                df_index_parameter)
+            print(f"INFO: df_index_parameter - {df_index_parameter}")
+        else:
+            params_list = []
+            for single_param in configurationObject["parameters"]:
+                params_list.append(single_param["name"])
+        print(f"INFO: params_list - {params_list} (note - all the parameters)")
+
+        if df_index_parameter_gof_file.is_file():
+            df_index_parameter_gof = pd.read_pickle(df_index_parameter_gof_file, compression="gzip")
+            gof_list = utility._get_gof_columns_df_index_parameter_gof(
+                df_index_parameter_gof)
+            print(f"INFO: df_index_parameter_gof - {df_index_parameter_gof}")
+            print(f"INFO: gof_list - {gof_list}")
+        else:
+            gof_list = None
+
         # or in case of a big simulation, skip reading df_simulation_result
-        if read_all_saved_simulations_file and df_all_simulations_file.is_file():
+        df_simulation_result = None
+        if read_all_saved_simulations_file and df_simulations_file.is_file():
             # Reading Saved Simulations - Note: This migh be a huge file,
             # especially for MC/Saltelli kind of simulations
-            df_simulation_result = pd.read_pickle(df_all_simulations_file, compression="gzip")
-        else:
-            df_simulation_result = None
+            if df_simulations_file.is_file():
+                df_simulation_result = pd.read_pickle(df_simulations_file, compression="gzip")
+                print(f"INFO: df_simulation_result - {df_simulation_result}")
 
         # Re-create Statistics Object and DataFrame Object That contains all the Statistics Data
         statisticsObject = create_stat_object.create_statistics_object(
-            configurationObject, uqsim_args_dict, workingDir, model=model)
+            configuration_object=configurationObject, uqsim_args_dict=uqsim_args_dict, \
+            workingDir=workingDir, model=model)
 
         # Recreate statisticsObject.result_dict
         statistics_dictionary = uqef_dynamic_utils.read_all_saved_statistics_dict(\
-            workingDir, statisticsObject.list_qoi_column, uqsim_args_dict.get("instantly_save_results_for_each_time_step", False))
+            workingDir=workingDir, list_qoi_column=statisticsObject.list_qoi_column, 
+            single_timestamp_single_file=uqsim_args_dict.get("instantly_save_results_for_each_time_step", False), 
+            throw_error=False
+            )
 
         # print(f"DEBUGGING - statistics_dictionary.keys()={statistics_dictionary.keys()}")  # should be a list of list_qoi_column
         for single_qoi in statisticsObject.list_qoi_column:
@@ -143,7 +159,7 @@ def main():
         uqef_dynamic_utils.extend_statistics_object(
             statisticsObject=statisticsObject, 
             statistics_dictionary=statistics_dictionary, 
-            df_simulation_result=df_simulation_result,  # df_simulation_result=None,
+            df_simulation_result=df_simulation_result,
             get_measured_data=False, 
             get_unaltered_data=False
         )
@@ -166,7 +182,7 @@ def main():
         # Add forcing Data
         statisticsObject.get_forcing_data(time_column_name=utility.TIME_COLUMN_NAME)
 
-        # Merge Everything
+        # Merge Everything into a single DataFrame
         df_statistics_and_measured = pd.merge(
             statisticsObject.df_statistics, statisticsObject.forcing_df, 
             left_on=statisticsObject.time_column_name, right_index=True)
@@ -174,6 +190,10 @@ def main():
         df_statistics_and_measured = df_statistics_and_measured.sort_values(by=utility.TIME_COLUMN_NAME)
 
         print(df_statistics_and_measured)
+
+        # ========================================================
+        # Read the gPCE surrogate model and its coefficients
+        # ========================================================
 
         # In case gPCE surrogate and the coefficeints are not saved in the stat_dictionary but as a separate files
         try_reading_gPCE_from_statisticsObject = False
@@ -268,7 +288,7 @@ def main():
                 qoi_gPCE = temp_gpce_model
                 start = time.time()
                 parallelStatistics.calculate_stats_gpce(
-                    local_result_dict, qoi_gPCE, dist, compute_other_stat_besides_pce_surrogate=True,
+                    local_result_dict, qoi_gPCE, distStandard, compute_other_stat_besides_pce_surrogate=True,
                     compute_Sobol_t=True, compute_Sobol_m=True)
                 local_result_dict
                 extended_result_dict[single_qoi][single_timestamp] = local_result_dict
@@ -280,7 +300,7 @@ def main():
                 # Check if the 'autoregressive mode' mode is activated - then (re)compute the mean value to correspond to the mean of final QoI
                 if strtobool(configurationObject["simulation_settings"]["autoregressive_model_first_order"]):
                     previous_timestamp  = utility.compute_previous_timestamp(single_timestamp, resolution="daily")
-                    temp_E = local_result_dict["E"]  # float(cp.E(temp_gpce_model, dist))
+                    temp_E = local_result_dict["E"]  # float(cp.E(temp_gpce_model, distStandard))
                     temp_E += 0.8*df_statistics_and_measured_subset[df_statistics_and_measured_subset[utility.TIME_COLUMN_NAME]==previous_timestamp]['measured'].values[0]
                         # print(f"E original={local_result_dict['E']}")
                         # print(f"Measured={df_statistics_and_measured_subset[df_statistics_and_measured_subset[utility.TIME_COLUMN_NAME]==single_timestamp]['measured'].values[0]}")
@@ -291,4 +311,11 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+
+    # 7D Sparse-gPCE l=7, p=2 2007 deltaQ_cms - 203
+    workingDir = pathlib.Path('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/paper_hydro_uq_sim/hbv_uq_cm2.0220')
+    # 3D Sparse-gPCE l=7, p=3 2005-2007 deltaQ_cms
+    workingDir = pathlib.Path('/gpfs/scratch/pr63so/ga45met2/hbvsask_runs/pce_deltq_3d_short_oldman')
+    workingDir = pathlib.Path('/gpfs/scratch/pr63so/ga45met2/hbvsask_runs/pce_deltq_3d_longer_oldman')
+
+    main(workindDir=workingDir)

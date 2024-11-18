@@ -48,21 +48,22 @@ if local_debugging:
     uqsim.args.mc_numevaluations = 1000
     uqsim.args.sampling_rule = "latin_hypercube"  # "random" | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
     
-    uqsim.args.sc_q_order = 7  # 7 #10 3
+    uqsim.args.sc_q_order = 5  # 7 #10 3
     uqsim.args.sc_p_order = 3  # 4, 5, 6, 8
     uqsim.args.sc_quadrature_rule = "g"  # "p" "genz_keister_24" "leja" "clenshaw_curtis"
  
     uqsim.args.read_nodes_from_file = True
-    l = 7  # 10
+    l = 5  # 10
+    dim = 3
     path_to_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/sparse_grid_nodes_weights")  # this a path to the file where the nodes and weights are stored
-    uqsim.args.parameters_file = path_to_file / f"KPU_d3_l{l}.asc" # f"KPU_d7_l{l}.asc"
+    uqsim.args.parameters_file = path_to_file / f"KPU_d{dim}_l{l}.asc" # f"KPU_d7_l{l}.asc"
     uqsim.args.parameters_setup_file = None  #pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/KPU_HBV_d3.json")
     
     uqsim.args.sc_poly_rule = "three_terms_recurrence"  # "gram_schmidt" | "three_terms_recurrence" | "cholesky"
     uqsim.args.sc_poly_normed = True  # True
     uqsim.args.sc_sparse_quadrature = False  # False
     uqsim.args.regression = False
-    uqsim.args.cross_truncation = 1.0
+    uqsim.args.cross_truncation = 0.7
 
     # paths, if necessary change them
     uqsim.args.inputModelDir = pathlib.Path("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/HBV-SASK-data")
@@ -83,8 +84,8 @@ if local_debugging:
     uqsim.args.instantly_save_results_for_each_time_step = False #False
     uqsim.args.uqsim_store_to_file = False
 
-    uqsim.args.compute_Sobol_t = True  # True False
-    uqsim.args.compute_Sobol_m = False  # True False
+    uqsim.args.compute_Sobol_t = False  # True False
+    uqsim.args.compute_Sobol_m = True  # True False
 
     uqsim.args.num_cores = 1
 
@@ -115,8 +116,10 @@ compute_other_stat_besides_pce_surrogate = True  # This is relevant only when uq
 compute_kl_expansion_of_qoi = False
 compute_timewise_gpce_next_to_kl_expansion = False
 kl_expansion_order = 10
+
 compute_generalized_sobol_indices = False
 compute_generalized_sobol_indices_over_time = False
+
 compute_covariance_matrix_in_time = True
 
 allow_conditioning_results_based_on_metric = False

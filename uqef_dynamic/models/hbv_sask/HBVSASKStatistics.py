@@ -64,80 +64,11 @@ class HBVSASKStatistics(time_dependent_statistics.TimeDependentStatistics):
                 self.read_measured_streamflow = self.read_measured_data
                 self.streamflow_column_name = self.qoi_column_measured
 
-    ###################################################################################################################
-
-    def prepare(self, rawSamples, **kwargs):
-        super(HBVSASKStatistics, self).prepare(rawSamples=rawSamples, **kwargs)
-
-    ###################################################################################################################
-
-    def prepareForMcStatistics(self, simulationNodes, numEvaluations, regression=None, order=None,
-                              poly_normed=None, poly_rule=None, *args, **kwargs):
-        super(HBVSASKStatistics, self).prepareForMcStatistics(simulationNodes, numEvaluations, regression, order,
-                                                              poly_normed, poly_rule, *args, **kwargs)
-
-    def prepareForScStatistics(self, simulationNodes, order, poly_normed, poly_rule, *args, **kwargs):
-        super(HBVSASKStatistics, self).prepareForScStatistics(simulationNodes, order, poly_normed, poly_rule,
-                                                              *args, **kwargs)
-
-    def prepareForMcSaltelliStatistics(self, simulationNodes, numEvaluations=None, regression=None, order=None,
-                                    poly_normed=None, poly_rule=None, *args, **kwargs):
-        super(HBVSASKStatistics, self).prepareForMcSaltelliStatistics(simulationNodes, numEvaluations, regression, order,
-                                                                      poly_normed, poly_rule, *args, **kwargs)
-
-    ###################################################################################################################
-
-    def calcStatisticsForMcParallel(self, chunksize=1, regression=False, *args, **kwargs):
-        super(HBVSASKStatistics, self).calcStatisticsForMcParallel(chunksize, regression, *args, **kwargs)
-
-    def calcStatisticsForEnsembleParallel(self, chunksize=1, regression=False, *args, **kwargs):
-        super(HBVSASKStatistics, self).calcStatisticsForEnsembleParallel(chunksize, regression, *args, **kwargs)
-
-    def calcStatisticsForScParallel(self, chunksize=1, regression=False, *args, **kwargs):
-        super(HBVSASKStatistics, self).calcStatisticsForScParallel(chunksize, regression, *args, **kwargs)
-
-    def calcStatisticsForMcSaltelliParallel(self, chunksize=1, regression=False, *args, **kwargs):
-        super(HBVSASKStatistics, self).calcStatisticsForMcSaltelliParallel(chunksize, regression, *args, **kwargs)
-
-    ###################################################################################################################
-
-    def param_grad_analysis(self):
-        super(HBVSASKStatistics, self).param_grad_analysis()
-
-    ###################################################################################################################
-
-    def _check_if_Sobol_t_computed(self, timestamp=None, qoi_column=None):
-        super(HBVSASKStatistics, self)._check_if_Sobol_t_computed(timestamp, qoi_column)
-
-    def _check_if_Sobol_m_computed(self, timestamp=None, qoi_column=None):
-        super(HBVSASKStatistics, self)._check_if_Sobol_m_computed(timestamp, qoi_column)
-
-    def _check_if_Sobol_m2_computed(self, timestamp=None, qoi_column=None):
-        super(HBVSASKStatistics, self)._check_if_Sobol_m2_computed(timestamp, qoi_column)
-
-    ###################################################################################################################
-
-    def saveToFile(self, fileName="statistics_dict", fileNameIdent="", directory="./",
-                   fileNameIdentIsFullName=False, **kwargs):
-        super(HBVSASKStatistics, self).saveToFile(fileName, fileNameIdent, directory,
-                   fileNameIdentIsFullName, **kwargs)
-
-    ###################################################################################################################
-    # TODO What about AET or other QoI/Model output, make this more general
-    # TODO Make below functions more general
-
-    def get_measured_data(self, timestepRange=None, time_column_name="TimeStamp",
-                          qoi_column_name="streamflow", **kwargs):
-        super(HBVSASKStatistics, self).get_measured_data(
-            timestepRange, time_column_name, qoi_column_name, **kwargs)
-
-    def get_unaltered_run_data(self, timestepRange=None, time_column_name="TimeStamp", qoi_column_name="streamflow",
-                              **kwargs):
-        self.df_unaltered = None
-        self.unaltered_computed = False
-
-    def get_forcing_data(self, timestepRange=None, time_column_name="TimeStamp", forcing_column_names="precipitation",
-                          **kwargs):
+    def get_forcing_data(self, timestepRange=None, time_column_name=None, **kwargs):
+        if timestepRange is None:
+            timestepRange = (self.timesteps_min, self.timesteps_max)
+        if time_column_name is None:
+            time_column_name = self.time_column_name
         self.forcing_df = self._get_precipitation_temperature_input_data(
             timestepRange=timestepRange, time_column_name=time_column_name, **kwargs)
         self.forcing_data_fetched = True
@@ -147,11 +78,16 @@ class HBVSASKStatistics(time_dependent_statistics.TimeDependentStatistics):
     ##########################
     def _get_measured_single_qoi(self, timestepRange=None, time_column_name="TimeStamp",
         qoi_column_measured="measured", **kwargs):
+        if timestepRange is None:
+            timestepRange = (self.timesteps_min, self.timesteps_max)
+        if time_column_name is None:
+            time_column_name = self.time_column_name
         if qoi_column_measured == "streamflow":
             return self._get_measured_streamflow(
                 timestepRange=timestepRange, time_column_name=time_column_name,
                 streamflow_column_name=qoi_column_measured, **kwargs)
         else:
+            print(f"[HBV-SASK Stat - Sorry no other measured data ({qoi_column_measured}) is available besides streamflow]")
             raise NotImplementedError
 
     def _get_measured_streamflow(self, timestepRange=None, time_column_name="TimeStamp",
@@ -239,8 +175,9 @@ class HBVSASKStatistics(time_dependent_statistics.TimeDependentStatistics):
         time_column_name = kwargs.get('time_column_name', self.time_column_name)
 
         if plot_measured_timeseries and (not self.measured_fetched or self.df_measured is None or self.df_measured.empty):
-            self.get_measured_data(time_column_name=time_column_name,
-                                   qoi_column_name=self.list_original_model_output_columns)
+            self.get_measured_data(
+                time_column_name=time_column_name,
+                qoi_column_name=self.list_original_model_output_columns)
 
         if plot_unaltered_timeseries:
             self.get_unaltered_run_data()
@@ -269,12 +206,18 @@ class HBVSASKStatistics(time_dependent_statistics.TimeDependentStatistics):
                                    dict_what_to_plot=None, **kwargs):
         pdTimesteps = self.pdTimesteps
         keyIter = list(pdTimesteps)
+        timesteps_min = min(pdTimesteps)
+        timesteps_max = max(pdTimesteps)
 
         if dict_what_to_plot is None:
-            dict_what_to_plot = {
-                "E_minus_std": False, "E_plus_std": False, "P10": False, "P90": False,
-                "StdDev": False, "Skew": False, "Kurt": False, "Sobol_m": False, "Sobol_m2": False, "Sobol_t": False
-            }
+            if self.dict_what_to_plot is not None:
+                dict_what_to_plot = self.dict_what_to_plot
+            else:
+                dict_what_to_plot = {
+                    "E_minus_std": False, "E_plus_std": False, "P10": False, "P90": False,
+                    "StdDev": False, "Skew": False, "Kurt": False, "Sobol_m": False, "Sobol_m2": False, "Sobol_t": False
+                }
+                self.dict_what_to_plot = dict_what_to_plot
 
         n_rows, starting_row = self._compute_number_of_rows_for_plotting(dict_what_to_plot, forcing)
 
@@ -348,27 +291,41 @@ class HBVSASKStatistics(time_dependent_statistics.TimeDependentStatistics):
                                      name=f'E[{single_qoi_column}]',
                                      line_color='green', mode='lines'),
                           row=starting_row, col=1)
-            if dict_what_to_plot.get("E_minus_std", False):
+            
+            if dict_what_to_plot.get("E_minus_std", False) and "StdDev" in self.result_dict[single_qoi_column][keyIter[0]]:
+                fig.add_trace(go.Scatter(x=pdTimesteps,
+                                         y=[(self.result_dict[single_qoi_column][key]["E"] \
+                                             - self.result_dict[single_qoi_column][key]["StdDev"]) for key in keyIter],
+                                             name='mean - std. dev', mode='lines', showlegend=False, line_color='rgba(200, 200, 200, 0.4)',),
+                              row=starting_row, col=1)
+            if dict_what_to_plot.get("E_plus_std", False) and "StdDev" in self.result_dict[single_qoi_column][keyIter[0]]:
+                fig.add_trace(go.Scatter(x=pdTimesteps,
+                                         y=[(self.result_dict[single_qoi_column][key]["E"] +\
+                                             self.result_dict[single_qoi_column][key]["StdDev"]) for key in keyIter],
+                                             name='mean +- std. dev', mode='lines', fill='tonexty', showlegend=True, line_color='rgba(200, 200, 200, 0.4)',),
+                              row=starting_row, col=1)
+            if dict_what_to_plot.get("E_minus_2std", False) and "StdDev" in self.result_dict[single_qoi_column][keyIter[0]]:
                 fig.add_trace(go.Scatter(x=pdTimesteps,
                                          y=[(self.result_dict[single_qoi_column][key]["E"] \
                                              - 2*self.result_dict[single_qoi_column][key]["StdDev"]) for key in keyIter],
-                                             name='mean - 2*std. dev', mode='lines', showlegend=False, line_color='rgba(255,255,255,0)',),
+                                             name='mean - 2*std. dev', mode='lines', showlegend=False, line_color='rgba(200, 200, 200, 0.4)',),
                               row=starting_row, col=1)
-            if dict_what_to_plot.get("E_plus_std", False):
+            if dict_what_to_plot.get("E_plus_2std", False) and "StdDev" in self.result_dict[single_qoi_column][keyIter[0]]:
                 fig.add_trace(go.Scatter(x=pdTimesteps,
                                          y=[(self.result_dict[single_qoi_column][key]["E"] +\
                                              2*self.result_dict[single_qoi_column][key]["StdDev"]) for key in keyIter],
-                                             name='mean +- 2*std. dev', mode='lines', fill='tonexty', showlegend=True, line_color='rgba(255,255,255,0)',),
+                                             name='mean +- 2*std. dev', mode='lines', fill='tonexty', showlegend=True, line_color='rgba(200, 200, 200, 0.4)',),
                               row=starting_row, col=1)
+
             if "P10" in self.result_dict[single_qoi_column][keyIter[0]] and dict_what_to_plot.get("P10", False):
                 fig.add_trace(go.Scatter(x=pdTimesteps,
                                          y=[self.result_dict[single_qoi_column][key]["P10"] for key in keyIter],
-                                         name='10th percentile', line_color='yellow', mode='lines'),
+                                         name='10th percentile', line_color='rgba(128,128,128, 0.3)', mode='lines', showlegend=False,),
                               row=starting_row, col=1)
             if "P90" in self.result_dict[single_qoi_column][keyIter[0]] and dict_what_to_plot.get("P90", False):
                 fig.add_trace(go.Scatter(x=pdTimesteps,
                                          y=[self.result_dict[single_qoi_column][key]["P90"] for key in keyIter],
-                                         name='90th percentile', line_color='yellow', mode='lines', fill='tonexty'),
+                                         name='10th percentile-90th percentile', mode='lines', fill='tonexty', showlegend=True, line=dict(color='rgba(128,128,128, 0.3)'), fillcolor='rgba(128,128,128, 0.3)'),
                               row=starting_row, col=1)
             dict_qoi_vs_plot_rows[single_qoi_column]["qoi"] = starting_row
             starting_row += 1
@@ -404,7 +361,7 @@ class HBVSASKStatistics(time_dependent_statistics.TimeDependentStatistics):
                     fig.add_trace(go.Scatter(
                         x=pdTimesteps,
                         y=[self.result_dict[single_qoi_column][key]["Sobol_m"][i] for key in keyIter],
-                        name=name, legendgroup=self.labels[i], line_color=colors.COLORS[i], mode='lines'),
+                        name=name, legendgroup=self.labels[i], line_color=colors.COLORS[i], mode='lines+markers'),
                         row=starting_row, col=1)
                 dict_qoi_vs_plot_rows[single_qoi_column]["Sobol_m"] = starting_row
                 starting_row += 1
@@ -416,7 +373,7 @@ class HBVSASKStatistics(time_dependent_statistics.TimeDependentStatistics):
                     fig.add_trace(go.Scatter(
                         x=pdTimesteps,
                         y=[self.result_dict[single_qoi_column][key]["Sobol_m2"][i] for key in keyIter],
-                        name=name, legendgroup=self.labels[i], line_color=colors.COLORS[i], mode='lines'),
+                        name=name, legendgroup=self.labels[i], line_color=colors.COLORS[i], mode='lines+markers'),
                         row=starting_row, col=1)
                 dict_qoi_vs_plot_rows[single_qoi_column]["Sobol_m2"] = starting_row
                 starting_row += 1
@@ -428,7 +385,7 @@ class HBVSASKStatistics(time_dependent_statistics.TimeDependentStatistics):
                     fig.add_trace(go.Scatter(
                         x=pdTimesteps,
                         y=[self.result_dict[single_qoi_column][key]["Sobol_t"][i] for key in keyIter],
-                        name=name, legendgroup=self.labels[i], line_color=colors.COLORS[i], mode='lines'),
+                        name=name, legendgroup=self.labels[i], line_color=colors.COLORS[i], mode='lines+markers'),
                         row=starting_row, col=1)
                 dict_qoi_vs_plot_rows[single_qoi_column]["Sobol_t"] = starting_row
                 starting_row += 1
@@ -464,33 +421,17 @@ class HBVSASKStatistics(time_dependent_statistics.TimeDependentStatistics):
         width = len(self.list_qoi_column) * 1000
         fig.update_layout(width=width)
         fig.update_layout(title_text=window_title)
-        fig.update_layout(xaxis=dict(type="date"))
-
+        fig.update_layout(xaxis=dict(rangemode='normal', range=[timesteps_min, timesteps_max], type="date"))
+        fig.update_xaxes(
+            tickformat='%b %y',            # Format dates as "Month Day" (e.g., "Jan 01")
+            dtick="M1"                     # Set tick interval to 1 day for denser ticks
+        )
         print(f"[HVB STAT INFO] _plotStatisticsDict_plotly function is almost over, just to save the plot!")
 
         # filename = pathlib.Path(filename)
         plot(fig, filename=filename, auto_open=display)
         return fig
 
-    def _compute_number_of_rows_for_plotting(self, dict_what_to_plot=None, forcing=False,
-                                             list_qoi_column_to_plot=None, result_dict=None, **kwargs):
-        return super(HBVSASKStatistics, self)._compute_number_of_rows_for_plotting(
-            dict_what_to_plot, forcing, list_qoi_column_to_plot, result_dict, **kwargs)
-    ###################################################################################################################
-
-    def extract_mean_time_series(self):
-        super(HBVSASKStatistics, self).extract_mean_time_series()
-
-    def create_df_from_statistics_data(self, uq_method="sc", compute_measured_normalized_data=False):
-        super(HBVSASKStatistics, self).create_df_from_statistics_data(
-    uq_method=uq_method, compute_measured_normalized_data=compute_measured_normalized_data)
-
-    def create_df_from_statistics_data_single_qoi(
-            self, qoi_column, uq_method="sc", compute_measured_normalized_data=False):
-        return super(HBVSASKStatistics, self).create_df_from_statistics_data_single_qoi(
-            qoi_column=qoi_column, uq_method=uq_method, compute_measured_normalized_data=compute_measured_normalized_data)
-
-    ###################################################################################################################
     def prepare_for_plotting(self, timestep=-1, display=False,
                     fileName="", fileNameIdent="", directory="./",
                     fileNameIdentIsFullName=False, safe=True, **kwargs):
@@ -502,8 +443,9 @@ class HBVSASKStatistics(time_dependent_statistics.TimeDependentStatistics):
         time_column_name = kwargs.get('time_column_name', self.time_column_name)
 
         if plot_measured_timeseries and (not self.measured_fetched or self.df_measured is None or self.df_measured.empty):
-            self.get_measured_data(time_column_name=time_column_name,
-                                   qoi_column_name=self.list_original_model_output_columns)
+            self.get_measured_data(
+                time_column_name=time_column_name,
+                qoi_column_name=self.list_original_model_output_columns)
 
         if plot_unaltered_timeseries:
             self.get_unaltered_run_data()
@@ -567,7 +509,8 @@ class HBVSASKStatistics(time_dependent_statistics.TimeDependentStatistics):
                     "E_minus_std": False, "E_plus_std": False, "P10": False, "P90": False,
                     "StdDev": False, "Skew": False, "Kurt": False, "Sobol_m": False, "Sobol_m2": False, "Sobol_t": False
                 }
-
+                self.dict_what_to_plot = dict_what_to_plot
+                
         # self._check_if_Sobol_t_computed(keyIter[0], qoi_column=single_qoi_column)
         # self._check_if_Sobol_m_computed(keyIter[0], qoi_column=single_qoi_column)
 
@@ -654,28 +597,42 @@ class HBVSASKStatistics(time_dependent_statistics.TimeDependentStatistics):
         if dict_what_to_plot.get("E_minus_std", False) and "StdDev" in dict_time_vs_qoi_stat[keyIter[0]] and "E" in dict_time_vs_qoi_stat[keyIter[0]]:
             fig.add_trace(go.Scatter(x=pdTimesteps,
                                      y=[(dict_time_vs_qoi_stat[key]["E"] \
-                                         - 2*dict_time_vs_qoi_stat[key]["StdDev"]) for key in keyIter],
-                                     name='mean - 2*std. dev', mode='lines', showlegend=False, line_color='rgba(255,255,255,0)',
+                                         - dict_time_vs_qoi_stat[key]["StdDev"]) for key in keyIter],
+                                     name='mean - std. dev', mode='lines', showlegend=False, line_color='rgba(200, 200, 200, 0.4)',
                                     #  line_color='darkviolet'
                                      ),
                           row=starting_row, col=1)
         if dict_what_to_plot.get("E_plus_std", False) and "StdDev" in dict_time_vs_qoi_stat[keyIter[0]] and "E" in dict_time_vs_qoi_stat[keyIter[0]]:
             fig.add_trace(go.Scatter(x=pdTimesteps,
                                      y=[(dict_time_vs_qoi_stat[key]["E"] + \
-                                         2*dict_time_vs_qoi_stat[key]["StdDev"]) for key in keyIter],
-                                     name='mean +- 2*std. dev', mode='lines', fill='tonexty', showlegend=True, line_color='rgba(255,255,255,0)',
+                                         dict_time_vs_qoi_stat[key]["StdDev"]) for key in keyIter],
+                                     name='mean +- std. dev', mode='lines', fill='tonexty', showlegend=True, line_color='rgba(200, 200, 200, 0.4)',
                                     #  line_color='darkviolet'
                                      ),
                           row=starting_row, col=1)
+        if dict_what_to_plot.get("E_minus_2std", False) and "StdDev" in dict_time_vs_qoi_stat[keyIter[0]] and "E" in dict_time_vs_qoi_stat[keyIter[0]]:
+            fig.add_trace(go.Scatter(x=pdTimesteps,
+                                        y=[(dict_time_vs_qoi_stat[key]["E"] \
+                                            - 2*dict_time_vs_qoi_stat[key]["StdDev"]) for key in keyIter],
+                                            name='mean - 2*std. dev', mode='lines', showlegend=False, line_color='rgba(200, 200, 200, 0.4)',),
+                            row=starting_row, col=1)
+        if dict_what_to_plot.get("E_plus_2std", False) and "StdDev" in dict_time_vs_qoi_stat[keyIter[0]] and "E" in dict_time_vs_qoi_stat[keyIter[0]]:
+            fig.add_trace(go.Scatter(x=pdTimesteps,
+                                        y=[(dict_time_vs_qoi_stat[key]["E"] +\
+                                            2*dict_time_vs_qoi_stat[key]["StdDev"]) for key in keyIter],
+                                            name='mean +- 2*std. dev', mode='lines', fill='tonexty', showlegend=True, line_color='rgba(200, 200, 200, 0.4)',),
+                            row=starting_row, col=1)
+
+        # 'rgba(255, 165, 0, 0.3)'
         if "P10" in dict_time_vs_qoi_stat[keyIter[0]] and dict_what_to_plot.get("P10", False):
             fig.add_trace(go.Scatter(x=pdTimesteps,
                                      y=[dict_time_vs_qoi_stat[key]["P10"] for key in keyIter],
-                                     name='10th percentile', line_color='rgba(128,128,128, 0.3)', mode='lines'),
+                                     name='10th percentile', line_color='rgba(128,128,128, 0.3)', showlegend=False, mode='lines'),
                           row=starting_row, col=1)
         if "P90" in dict_time_vs_qoi_stat[keyIter[0]] and dict_what_to_plot.get("P90", False):
             fig.add_trace(go.Scatter(x=pdTimesteps,
                                      y=[dict_time_vs_qoi_stat[key]["P90"] for key in keyIter],
-                                     name='90th percentile', mode='lines', fill='tonexty', line=dict(color='rgba(128,128,128, 0.3)'), fillcolor='rgba(128,128,128, 0.3)'),
+                                     name='10th percentile-90th percentile', mode='lines', fill='tonexty', showlegend=True, line=dict(color='rgba(128,128,128, 0.3)'), fillcolor='rgba(128,128,128, 0.3)'),
                                     #  line_color='yellow',
                           row=starting_row, col=1)
         dict_plot_rows["qoi"] = starting_row
@@ -799,7 +756,7 @@ class HBVSASKStatistics(time_dependent_statistics.TimeDependentStatistics):
                              row=dict_plot_rows["generalized_sobol_total_index"], col=1)
             
         fig.update_layout(title_text=window_title)
-        # fig.update_layout(xaxis=dict(type="date"))
+        fig.update_layout(xaxis=dict(type="date"))
         fig.update_layout(
             xaxis=dict(
                 rangemode='normal',
@@ -818,7 +775,10 @@ class HBVSASKStatistics(time_dependent_statistics.TimeDependentStatistics):
                 showlegend=True,
                 # template="plotly_white",
             )
-
+        fig.update_xaxes(
+            tickformat='%b %y',            # Format dates as "Month Day" (e.g., "Jan 01")
+            dtick="M1"                     # Set tick interval to 1 day for denser ticks
+        )
         print(f"[HVB STAT INFO] _plotStatisticsDict_plotly function for Qoi-{single_qoi_column} is almost over, just to save the plot!")
 
         # filename = pathlib.Path(filename)
@@ -890,9 +850,75 @@ class HBVSASKStatistics(time_dependent_statistics.TimeDependentStatistics):
         fig.update_yaxes(autorange="reversed", row=1, col=1)
         fig.update_layout(height=600, width=800, title_text="Detailed plot of most important time-series")
         fig.update_layout(xaxis=dict(type="date"))
+        fig.update_xaxes(
+            tickformat='%b %y',            # Format dates as "Month Day" (e.g., "Jan 01")
+            dtick="M1"                     # Set tick interval to 1 day for denser ticks
+        )
         if not str(directory).endswith("/"):
             directory = str(directory) + "/"
         fileName = directory + fileName
         plot(fig, filename=fileName)
         return fig
 
+    def get_info_for_plotting_forcing_data(self, **kwargs):
+        return {
+            "n_rows": 2,
+            "subplot_titles": ["Temperature [°C]", "Precipitation [mm/day]",]
+        }
+
+    def plot_forcing_data(self, df: pd.DataFrame=None, fig=None, add_to_subplot=False, **kwargs):
+        if df is None:
+            df = self.df_forcing
+
+        if df is None or df.empty:
+            print(f"[STAT INFO] DF subset storing forcing data is empty!")
+            return
+
+        if fig is None:
+            add_to_subplot = False
+
+        if add_to_subplot:
+            n_rows=kwargs.get("n_rows", 1)
+            n_col=kwargs.get("n_col", 1)
+        else:
+            fig = make_subplots(rows=2, cols=1, shared_xaxes=True)
+            n_rows = 1
+            n_col = 1
+
+        reset_index_in_the_end = False
+        if df.index.name != self.time_column_name:
+            df.set_index(self.time_column_name, inplace=True)
+            reset_index_in_the_end = True
+
+        fig.add_trace(
+            go.Scatter(
+                x=df.index, 
+                y=df[self.temperature_column_name],
+                text=df[self.temperature_column_name],
+                name="Temperature", mode='lines+markers',
+                showlegend=False
+                # marker_color='blue'
+            ), row=n_rows, col=n_col
+        )
+
+        fig.add_trace(
+            go.Bar(
+                x=df.index, 
+                y=df[self.precipitation_column_name],
+                text=df[self.precipitation_column_name],
+                name="Precipitation",
+                showlegend=False,
+                marker_color='red'
+                # mode="lines",
+                #         line=dict(
+                #             color='LightSkyBlue')
+            ), row=n_rows+1,col=n_col
+        )
+        fig.update_yaxes(autorange="reversed", row=2, col=1)
+        
+        if reset_index_in_the_end:
+            df.reset_index(inplace=True)
+            df.rename(columns={df.index.name: self.time_column_name}, inplace=True)
+
+        if not add_to_subplot:
+            return fig

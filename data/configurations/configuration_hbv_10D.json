@@ -7,17 +7,17 @@
       "start_hour": 0,
       "start_minute": 0,
 
-      "end_day": 30,
-      "end_month": 6,
-      "end_year": 2007,
+      "end_day": 1,
+      "end_month": 10,
+      "end_year": 2006,
       "end_hour": 0,
       "end_minute": 0,
 
       "run_full_timespan":"False",
-      "spin_up_length":1095,
-      "simulation_length": 5,
+      "spin_up_length":1096,
+      "simulation_length": 365,
       "resolution": "daily",
-
+      
       "cut_runs": "False",
       "timestep": 5
     },
@@ -63,28 +63,28 @@
       "name": "C0",
       "distribution": "Uniform",
       "lower": 0.0,
-      "upper": 20.0,
-      "default": 5.0
+      "upper": 10.0,
+      "default": 0.5
     },
     {
       "name": "ETF",
       "distribution": "Uniform",
       "lower": 0.0,
       "upper": 1.0,
-      "default": 0.5
+      "default": 0.2
     },    
     {
       "name": "FC",
       "distribution": "Uniform",
       "lower": 50.0,
-      "upper": 1000.0,
-      "default": 100
+      "upper": 500.0,
+      "default": 250
     },
     {
       "name": "beta",
       "distribution": "Uniform",
       "lower": 1.0,
-      "upper": 4.0,
+      "upper": 3.0,
       "default": 2.0
     },
     {
@@ -92,14 +92,14 @@
       "distribution": "Uniform",
       "lower": 0.1,
       "upper": 0.9,
-      "default": 0.5
+      "default": 0.3
     },
     {
       "name": "K2",
       "distribution": "Uniform",
       "lower": 0.0,
-      "upper": 0.1,
-      "default": 0.025
+      "upper": 0.05,
+      "default": 0.05
     },
     {
       "name": "LP",

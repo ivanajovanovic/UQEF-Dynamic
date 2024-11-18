@@ -1096,6 +1096,8 @@ class HBVSASKModel(object):
             flux_df.set_index(self.time_column_name, inplace=True)
             reset_index = True
         flux_df.sort_index(inplace=True)
+        if self.scale_factor_autoregressive_model_first_order is None:
+            self.scale_factor_autoregressive_model_first_order = 1.0
         for idx, single_qoi_column in enumerate(self.list_qoi_column):
             new_column_name = "delta_" + single_qoi_column
             if self.list_read_measured_data[idx] and self.list_qoi_column_measured[idx] is not None:
@@ -1104,7 +1106,7 @@ class HBVSASKModel(object):
                     previous_timestamp = utility.compute_previous_timestamp(timestamp, self.resolution)
                     flux_df.at[timestamp, new_column_name] = (
                             flux_df.at[previous_timestamp, single_qoi_column_measured] -
-                            0.8*flux_df.at[timestamp, single_qoi_column]
+                            self.scale_factor_autoregressive_model_first_order*flux_df.at[timestamp, single_qoi_column]
                     )
             else:
                 flux_df[new_column_name] = flux_df[single_qoi_column].diff()

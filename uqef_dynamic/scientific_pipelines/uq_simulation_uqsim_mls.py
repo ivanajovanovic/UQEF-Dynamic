@@ -56,42 +56,37 @@ local_debugging = True
 if local_debugging:
     save_solver_results = False
 
-    uqsim.args.model = "battery"  # "larsim" "hbvsask" "battery" "oscillator" "simple_oscillator"
+    uqsim.args.model = "hbvsask"  # "larsim" "hbvsask" "battery" "oscillator" "simple_oscillator"
 
     uqsim.args.uncertain = "all"
     uqsim.args.chunksize = 1
 
-    uqsim.args.uq_method = "sc"  # "sc" | "saltelli" | "mc" | "ensemble"
+    uqsim.args.uq_method = "mc"  # "sc" | "saltelli" | "mc" | "ensemble"
     
-    uqsim.args.mc_numevaluations = 1000
-    uqsim.args.sampling_rule = "random"  # "random" | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
+    uqsim.args.mc_numevaluations = 3000
+    uqsim.args.sampling_rule = "latin_hypercube"  # "random" | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
     
-    uqsim.args.sc_q_order = 6  # 7 #10 3
-    uqsim.args.sc_p_order = 2  # 4, 5, 6, 8
+    uqsim.args.sc_q_order = 5  # 7 #10 3
+    uqsim.args.sc_p_order = 3  # 4, 5, 6, 8
     uqsim.args.sc_quadrature_rule = "g"  # "p" "genz_keister_24" "leja" "clenshaw_curtis"
 
-    uqsim.args.read_nodes_from_file = True
-    l = 6  # 10
+    uqsim.args.read_nodes_from_file = False
+    l = 5  # 10
+    dim = 10
     path_to_file = pathlib.Path("/work/ga45met/sparseSpACE/sparse_grid_nodes_weights")
-    uqsim.args.parameters_file = path_to_file / f"KPU_d6_l{l}.asc" # f"KPU_d7_l{l}.asc"
+    uqsim.args.parameters_file = path_to_file / f"KPU_d{dim}_l{l}.asc" # f"KPU_d7_l{l}.asc"
     uqsim.args.parameters_setup_file = None #pathlib.Path("/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic/data/configurations/KPU_HBV_d3.json")
 
     uqsim.args.sc_poly_rule = "three_terms_recurrence"  # "gram_schmidt" | "three_terms_recurrence" | "cholesky"
     uqsim.args.sc_poly_normed = True  # True
     uqsim.args.sc_sparse_quadrature = False  # False
-    uqsim.args.regression = False
-    uqsim.args.cross_truncation = 1.0
+    uqsim.args.regression = True
+    uqsim.args.cross_truncation = 0.7
 
     # paths, if necessary change them
     uqsim.args.inputModelDir = os.path.abspath(os.path.join('/work/ga45met/mnt/linux_cluster_2', 'UQEF-Dynamic'))
     uqsim.args.sourceDir = os.path.abspath(os.path.join('/work/ga45met/mnt/linux_cluster_2', 'UQEF-Dynamic'))
     
-    # HBV-SASK
-    uqsim.args.inputModelDir = pathlib.Path("/work/ga45met/Hydro_Models/HBV-SASK-data")
-    uqsim.args.sourceDir = pathlib.Path("/work/ga45met/Hydro_Models/HBV-SASK-data")
-    uqsim.args.outputResultDir = os.path.abspath(os.path.join('/work/ga45met/Hydro_Models/HBV-SASK-data', 'Oldman_Basin/model_runs', 'mc_6d_1000'))
-    uqsim.args.config_file = '/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic/data/configurations/configuration_hbv_6D_GoF.json'
-
     # Larsim
     # uqsim.args.inputModelDir = str(pathlib.Path('/work/ga45met/Larsim-data'))
 
@@ -101,48 +96,56 @@ if local_debugging:
     uqsim.args.outputResultDir = os.path.abspath(os.path.join('/work/ga45met/uqef_dynamic_runs/linear_damped_runs', 'trying_out_mc_1000_random')) 
     uqsim.args.config_file = '/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic/data/configurations/configuration_oscillator.json'
 
-    # Simple Oscillator
-    uqsim.args.outputResultDir = os.path.abspath(os.path.join('/work/ga45met/uqef_dynamic_runs/simple_oscillator', 'trying_out_q4_sg_l5')) 
-    uqsim.args.config_file = '/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic/data/configurations/configuration_simple_oscillator.json'
-
     # Battery
     uqsim.args.inputModelDir = pathlib.Path('/work/ga45met/anaconda3/envs/py3115_uq/lib/python3.11/site-packages/pybamm/input/drive_cycles')
     uqsim.args.outputResultDir = os.path.abspath(os.path.join("/work/ga45met/uqef_dynamic_runs/battery_results", 'kl10_p2_sg_l6'))  # mc_10000 mc_10000_terminal_voltage
     uqsim.args.config_file = '/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic/data/configurations/configuration_battery.json'
 
+    # Simple Oscillator
+    uqsim.args.outputResultDir = os.path.abspath(os.path.join('/work/ga45met/uqef_dynamic_runs/simple_oscillator', 'trying_out_p4_sg_l5_generalized_over_time_N10')) 
+    uqsim.args.config_file = '/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic/data/configurations/configuration_simple_oscillator.json'
+
+    # HBV-SASK
+    uqsim.args.inputModelDir = pathlib.Path("/work/ga45met/Hydro_Models/HBV-SASK-data")
+    uqsim.args.sourceDir = pathlib.Path("/work/ga45met/Hydro_Models/HBV-SASK-data")
+    uqsim.args.outputResultDir = os.path.abspath(os.path.join('/work/ga45met/Hydro_Models/HBV-SASK-data', 'Oldman_Basin/model_runs', 'mc_6d_1000'))
+    uqsim.args.outputResultDir = os.path.abspath(os.path.join('/work/ga45met/uqef_dynamic_runs/hbv_sask_runs/Oldman_Basin', 'mc10d_3000_regression_autoregressive'))
+    uqsim.args.config_file = '/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic/data/configurations/configuration_hbv_10D_short.json'
+
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
 
-    uqsim.args.sampleFromStandardDist = True  # False
+    uqsim.args.sampleFromStandardDist = True
 
     uqsim.args.mpi = True
     uqsim.args.mpi_method = "MpiPoolSolver"  # "LinearSolver"
 
     uqsim.args.disable_statistics = False
     uqsim.args.disable_calc_statistics = False
-    uqsim.args.parallel_statistics = True  # False
+    uqsim.args.parallel_statistics = True
 
-    uqsim.args.instantly_save_results_for_each_time_step = False #False
+    uqsim.args.instantly_save_results_for_each_time_step = False
     uqsim.args.uqsim_store_to_file = False
 
-    uqsim.args.compute_Sobol_m = True  # True False
-    uqsim.args.compute_Sobol_t = True  # True False
+    uqsim.args.compute_Sobol_m = True
+    uqsim.args.compute_Sobol_t = False
 
     uqsim.args.num_cores = 1
 
     uqsim.args.save_all_simulations = True  # True for sc
     uqsim.args.store_qoi_data_in_stat_dict = False  # if set to True, the qoi_values entry is stored in the stat_dict 
     uqsim.args.store_gpce_surrogate_in_stat_dict = True
-    uqsim.args.collect_and_save_state_data = False # False 
+    uqsim.args.collect_and_save_state_data = False
 
     uqsim.setup_configuration_object()
 
 # TODO Eventually add these configurations to uqef.args
 utility.DEFAULT_DICT_WHAT_TO_PLOT = {
-    "E_minus_std": False, "E_plus_std": False, "P10": True, "P90": True,
+    "E_minus_std": False, "E_plus_std": False, "E_minus_2std": True, "E_plus_2std":True, 
+    "P10": False, "P90": False,
     "StdDev": True, "Skew": False, "Kurt": False, "Sobol_m": True, "Sobol_m2": False, "Sobol_t": True
 }
 utility.DEFAULT_DICT_STAT_TO_COMPUTE = {
-    "Var": True, "StdDev": False, "P10": True, "P90": True,
+    "Var": True, "StdDev": True, "P10": True, "P90": True,
     "E_minus_std": False, "E_plus_std": False,
     "Skew": False, "Kurt": False, "Sobol_m": True, "Sobol_m2": False, "Sobol_t": True
 }
@@ -154,12 +157,14 @@ if uqsim.args.uq_method == "mc" and uqsim.args.compute_Sobol_m:
 save_gpce_surrogate = True  # if True a gpce surrogate for each QoI for each time step is saved in a separate file
 compute_other_stat_besides_pce_surrogate = True  # This is relevant only when uq_method == "sc" 
 
-compute_kl_expansion_of_qoi = True
+compute_kl_expansion_of_qoi = False
 kl_expansion_order = 10
 compute_timewise_gpce_next_to_kl_expansion = False
-compute_generalized_sobol_indices = True
+
+compute_generalized_sobol_indices = False
 compute_generalized_sobol_indices_over_time = False
-compute_covariance_matrix_in_time = True
+
+compute_covariance_matrix_in_time = False
 
 allow_conditioning_results_based_on_metric = False
 
@@ -322,9 +327,9 @@ uqsim.statistics.update({"hbvsask"         : (lambda: HBVSASKStatistics.HBVSASKS
     compute_kl_expansion_of_qoi = compute_kl_expansion_of_qoi,
     index_column_name = "Index_run",
     allow_conditioning_results_based_on_metric=allow_conditioning_results_based_on_metric,
-    condition_results_based_on_metric = 'NSE',
-    condition_results_based_on_metric_value = 0.2,
-    condition_results_based_on_metric_sign = "greater_or_equal",
+    condition_results_based_on_metric = condition_results_based_on_metric,
+    condition_results_based_on_metric_value = condition_results_based_on_metric_value,
+    condition_results_based_on_metric_sign = condition_results_based_on_metric_sign,
     compute_timewise_gpce_next_to_kl_expansion=compute_timewise_gpce_next_to_kl_expansion,
     kl_expansion_order = kl_expansion_order,
     compute_generalized_sobol_indices = compute_generalized_sobol_indices,

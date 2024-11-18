@@ -58,6 +58,15 @@ class pybammModelUQ(TimeDependentModel):
         self.t_starting = min(self.t_sol)
         self.t_final  = max(self.t_sol)
 
+        def j0_neg(c_e, c_s_surf, c_s_max, T):
+            return 96485.3321 * 1e-10 * c_e**0.5 * c_s_surf**0.5 * (c_s_max - c_s_surf)**0.5
+        self.j0_neg = j0_neg
+    
+        def j0_pos(c_e, c_s_surf, c_s_max, T):
+            return 96485.3321 * 1e-10 * c_e**0.5 * c_s_surf**0.5 * (c_s_max - c_s_surf)**0.5
+        self.j0_pos = j0_pos
+
+
     def _timespan_setup(self, **kwargs):
         self.spin_up_length = 0
         self.simulation_length = len(self.t_sol)
@@ -86,6 +95,9 @@ class pybammModelUQ(TimeDependentModel):
         model_params["Positive electrode diffusivity [m2.s-1]"] = parameters[3]
         model_params["Negative particle radius [m]"] = parameters[4]
         model_params["Positive particle radius [m]"] = parameters[5]
+        # model_params['Negative electrode exchange-current density [A.m-2]'] = self.j0_neg
+        # model_params['Positive electrode exchange-current density [A.m-2]'] =self.j0_pos
+
         return model_params
     
     def _model_run(self, parameters_dict):

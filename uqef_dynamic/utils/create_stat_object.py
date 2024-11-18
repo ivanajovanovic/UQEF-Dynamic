@@ -126,24 +126,73 @@ def create_statistics_object(configuration_object, uqsim_args_dict, workingDir, 
         raise ValueError("Model not supported")
     return statisticsObject
 
+
+def create_and_extend_statistics_object(configurationObject, uqsim_args_dict, workingDir, model, df_simulation_result=None, printing=False):
+    """
+    This function creates the statistics object (calles create_statistics_object)
+    reads the statistics_dictionary and extend the statistics object with the statistics_dictionary.
+    Args:
+    - configurationObject: dict, configuration object
+    - uqsim_args_dict: dict, dictionary with the UQEF simulation arguments
+    - workingDir: pathlib.Path object, path to the working directory
+    - model: str, name of the model
+    - df_simulation_result: pandas DataFrame, simulation results; Default is None
+    - printing: bool, if True, print the statistics dictionary
+    Returns:
+    - statisticsObject: object, UQEF-Dynamic time-dependent statistics object
+    """
+    # Load the statistics object
+    # statistics_dictionary_file = utility.get_dict_with_qoi_name_specific_output_file_paths_based_on_workingDir(\
+    # workingDir, qoi_string=qoi_string)
+    statisticsObject = create_statistics_object(
+        configuration_object=configurationObject, uqsim_args_dict=uqsim_args_dict, \
+        workingDir=workingDir, model=model)
+    statistics_dictionary = uqef_dynamic_utils.read_all_saved_statistics_dict(\
+        workingDir=workingDir, list_qoi_column=statisticsObject.list_qoi_column, 
+        single_timestamp_single_file=uqsim_args_dict.get("instantly_save_results_for_each_time_step", False), 
+        throw_error=False
+        )
+    if printing:
+        print(f"INFO: statistics_dictionary - {statistics_dictionary}")
+    
+    uqef_dynamic_utils.extend_statistics_object(
+        statisticsObject=statisticsObject, 
+        statistics_dictionary=statistics_dictionary, 
+        df_simulation_result=df_simulation_result,
+        get_measured_data=False, 
+        get_unaltered_data=False
+    )
+
+    # Create a Pandas.DataFrame
+    statisticsObject.create_df_from_statistics_data()
+
+    return statisticsObject
 # ==============================================================================================================
 # Functions for reading all saved output files from UQ and SA simulations and creating a DataFrame
 # ==============================================================================================================
 
 
-def get_df_statistics_and_df_si_from_saved_files(workingDir, inputModelDir=None):
+def get_df_statistics_and_df_si_from_saved_files(workingDir, inputModelDir=None, set_lower_predictions_to_zero=False, **kwargs):
     """
     Retrieves the statistics and sensitivity indices data from saved files.
 
     Args:
         workingDir (str): The working directory where the saved files are located.
         inputModelDir (str, optional): The input model directory. Defaults to None.
+        set_lower_predictions_to_zero (bool, optional): If True, sets the lower predictions ('E', 'P10') to zero. Defaults to False.
+    Keyword Args:
+        read_saved_simulations (bool, optional): If True, reads the saved simulations. Defaults to False.
+        read_saved_states (bool, optional): If True, reads the saved states. Defaults to False.
 
     Returns:
         tuple: A tuple containing the following:
             - statisticsObject: The statistics object.
-            - df_statistics_and_measured: The DataFrame containing the statistics and measured data.
-            - si_t_df: The DataFrame containing the sensitivity indices.
+            - df_statistics_and_measured: The DataFrame containing the statistics ( and measured data and forcing).
+            - si_t_df: The DataFrame containing the total order sensitivity indices.
+            - si_m_df: The DataFrame containing the first order sensitivity indices.
+            - df_simulation_result: The DataFrame containing the simulation results.
+            - df_index_parameter_file: The DataFrame containing the index parameter file.
+            - df_index_parameter_gof_file: The DataFrame containing the index parameter goodness-of-fit file.
 
     Raises:
         FileNotFoundError: If any of the required files are not found.
@@ -157,94 +206,110 @@ def get_df_statistics_and_df_si_from_saved_files(workingDir, inputModelDir=None)
     df_all_simulations_file = dict_output_file_paths.get("df_all_simulations_file")
     time_info_file = dict_output_file_paths.get("time_info_file")
 
-    with open(configuration_object_file, 'rb') as f:
-        configurationObject = dill.load(f)
-    simulation_settings_dict = utility.read_simulation_settings_from_configuration_object(configurationObject)
-    with open(args_file, 'rb') as f:
-        uqsim_args = pickle.load(f)
-    uqsim_args_dict = vars(uqsim_args)
+    args_files = utility.get_dict_with_output_file_paths_based_on_workingDir(workingDir)
+    for key, value in args_files.items():
+        globals()[key] = value
+
+    # Load the UQSim args dictionary
+    uqsim_args_dict = utility.load_uqsim_args_dict(args_file)
     model = uqsim_args_dict["model"]
-    if inputModelDir is None:
-        inputModelDir = pathlib.Path(uqsim_args_dict["inputModelDir"])
+
+    # Load the configuration object
+    configurationObject = utility.load_configuration_object(configuration_object_file)
+    simulation_settings_dict = utility.read_simulation_settings_from_configuration_object(configurationObject)
+
+    if inputModelDir is not None:
+        if inputModelDir != uqsim_args_dict["inputModelDir"]:
+            uqsim_args_dict["inputModelDir"] = pathlib.Path(inputModelDir)
     else:
-        inputModelDir = pathlib.Path(inputModelDir) 
+        inputModelDir = uqsim_args_dict["inputModelDir"]
+    inputModelDir = pathlib.Path(inputModelDir)
 
     # with open(nodes_file, 'rb') as f:
     #     simulationNodes = pickle.load(f)
         
-    if df_all_index_parameter_file.is_file():
-        df_index_parameter = pd.read_pickle(df_all_index_parameter_file, compression="gzip")
-    else:
-        df_index_parameter = None
-    if df_index_parameter is not None:
+    if df_index_parameter_file.is_file():
+        df_index_parameter = pd.read_pickle(df_index_parameter_file, compression="gzip")
         params_list = utility._get_parameter_columns_df_index_parameter_gof(
             df_index_parameter)
     else:
+        df_index_parameter = None
+        print(f"Be careful - {df_index_parameter_file} does not exist; df_index_parameter is None!")
         params_list = []
         for single_param in configurationObject["parameters"]:
             params_list.append(single_param["name"])
-    if df_all_index_parameter_gof_file.is_file():
-        df_index_parameter_gof = pd.read_pickle(df_all_index_parameter_gof_file, compression="gzip")
-        df_index_parameter_gof
-    else:
-        print(f"Be careful - {df_all_index_parameter_gof_file} does not exist!")
-        df_index_parameter_gof = None
-    if df_index_parameter_gof is not None:
+
+    if df_index_parameter_gof_file.is_file():
+        df_index_parameter_gof = pd.read_pickle(df_index_parameter_gof_file, compression="gzip")
         gof_list = utility._get_gof_columns_df_index_parameter_gof(
             df_index_parameter_gof)
     else:
+        print(f"Be careful - {df_index_parameter_gof_file} does not exist; df_index_parameter_gof is None; gof_list is not populated!")
+        df_index_parameter_gof = None
         gof_list = None
-        print(f"Be careful - {df_all_index_parameter_gof_file} does not exist - therefore gof_list is not populated!")
 
     # df_nodes = utility.get_df_from_simulationNodes(simulationNodes, nodes_or_paramters="nodes", params_list=params_list)
     # df_nodes_params = utility.get_df_from_simulationNodes(simulationNodes, nodes_or_paramters="parameters",  params_list=params_list)
 
-    read_all_saved_simulations_file = False
-    if read_all_saved_simulations_file and df_all_simulations_file.is_file():
-        # Reading Saved Simulations - Note: This might be a huge file,
-        # especially for MC/Saltelli kind of simulations
-        df_simulation_result = pd.read_pickle(df_all_simulations_file, compression="gzip")
+    read_saved_simulations = kwargs.get('read_saved_simulations', False)
+    read_saved_states = kwargs.get('read_saved_states', False)
+
+    if read_saved_simulations and df_simulations_file.is_file():
+        df_simulation_result = pd.read_pickle(df_simulations_file, compression="gzip")
     else:
         df_simulation_result = None
+    if read_saved_states and df_state_file.is_file():
+        df_state = pd.read_pickle(df_state_file, compression="gzip")
+    else:
+        df_state = None
 
-    statisticsObject = create_statistics_object(
-        configurationObject, uqsim_args_dict, workingDir, model=model)
-    statistics_dictionary = uqef_dynamic_utils.read_all_saved_statistics_dict(\
-        workingDir, statisticsObject.list_qoi_column, uqsim_args_dict.get("instantly_save_results_for_each_time_step", False), throw_error=True)
+    # Load the statistics object
 
-    uqef_dynamic_utils.extend_statistics_object(
-        statisticsObject=statisticsObject, 
-        statistics_dictionary=statistics_dictionary, 
-        df_simulation_result=df_simulation_result,  # df_simulation_result=None,
-        get_measured_data=False, 
-        get_unaltered_data=False
-    )
-
-    # This is hardcoded for HBV fro now
+    # statisticsObject = create_statistics_object(
+    #     configurationObject, uqsim_args_dict, workingDir, model=model)
+    # statistics_dictionary = uqef_dynamic_utils.read_all_saved_statistics_dict(\
+    #     workingDir, statisticsObject.list_qoi_column, uqsim_args_dict.get("instantly_save_results_for_each_time_step", False), throw_error=True)
+    # uqef_dynamic_utils.extend_statistics_object(
+    #     statisticsObject=statisticsObject, 
+    #     statistics_dictionary=statistics_dictionary, 
+    #     df_simulation_result=df_simulation_result,  # df_simulation_result=None,
+    #     get_measured_data=False, 
+    #     get_unaltered_data=False
+    # )
+    # # This is hardcoded for HBV fro now
     # if model == "HBV" or model == "hbvsask" or model == "hbv" or model == "HBV-SASK" or model == "hbv-sask":
     #     basis = configurationObject['model_settings']['basis']
     #     statisticsObject.inputModelDir_basis = inputModelDir / basis
+    # # Add measured Data
+    # statisticsObject.get_measured_data(
+    #     timestepRange=(statisticsObject.timesteps_min, statisticsObject.timesteps_max), 
+    #     transforme_mesured_data_as_original_model=True)
 
-    # Add measured Data
-    statisticsObject.get_measured_data(
-        timestepRange=(statisticsObject.timesteps_min, statisticsObject.timesteps_max), 
-        transforme_mesured_data_as_original_model="False")
+    # # Create a Pandas.DataFrame
+    # statisticsObject.create_df_from_statistics_data()
+    # # Add forcing Data
+    # statisticsObject.get_forcing_data(time_column_name=statisticsObject.time_column_name)
+    # # Merge Everything
+    # df_statistics_and_measured = pd.merge(
+    #     statisticsObject.df_statistics, 
+    #     statisticsObject.forcing_df, left_on=statisticsObject.time_column_name, right_index=True)
+    
+    # or
+    statisticsObject = create_and_extend_statistics_object(
+        configurationObject, uqsim_args_dict, workingDir, model, 
+        df_simulation_result=df_simulation_result, printing=False)
+    df_statistics_and_measured = statisticsObject.merge_df_statistics_data_with_measured_and_forcing_data(
+    add_measured_data=True, add_forcing_data=True, transform_measured_data_as_original_model=True)
 
-    # Create a Pandas.DataFrame
-    statisticsObject.create_df_from_statistics_data()
-
-    # Add forcing Data
-    statisticsObject.get_forcing_data(time_column_name="TimeStamp")
-
-    # Merge Everything
-    df_statistics_and_measured = pd.merge(
-        statisticsObject.df_statistics, 
-        statisticsObject.forcing_df, left_on=statisticsObject.time_column_name, right_index=True)
-
-    df_statistics_and_measured['E_minus_std'] = df_statistics_and_measured['E_minus_std'].apply(lambda x: max(0, x))
-    df_statistics_and_measured['P10'] = df_statistics_and_measured['P10'].apply(lambda x: max(0, x))
+    if set_lower_predictions_to_zero:
+        if 'E_minus_std' in df_statistics_and_measured:
+            df_statistics_and_measured['E_minus_std'] = df_statistics_and_measured['E_minus_std'].apply(lambda x: max(0, x))        
+        if 'E_minus_2std' in df_statistics_and_measured:
+            df_statistics_and_measured['E_minus_2std'] = df_statistics_and_measured['E_minus_2std'].apply(lambda x: max(0, x))        
+        if 'P10' in df_statistics_and_measured:
+            df_statistics_and_measured['P10'] = df_statistics_and_measured['P10'].apply(lambda x: max(0, x))
 
     si_t_df = statisticsObject.create_df_from_sensitivity_indices(si_type="Sobol_t")
     si_m_df = statisticsObject.create_df_from_sensitivity_indices(si_type="Sobol_m")
 
-    return statisticsObject, df_statistics_and_measured, si_t_df, si_m_df
+    return statisticsObject, df_statistics_and_measured, si_t_df, si_m_df, df_simulation_result, df_index_parameter_file, df_index_parameter_gof_file

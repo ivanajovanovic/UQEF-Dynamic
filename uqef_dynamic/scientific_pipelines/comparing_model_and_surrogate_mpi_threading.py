@@ -1,5 +1,7 @@
 """
-@author: Ivana Jovanovic
+@author: Ivana Jovanovic Buha
+This script is used to evaluate the surrogate model (gPCE) for a single QoI at all time steps.
+It is parallelized using MPI and multi-threading.
 """
 import inspect
 import os
@@ -46,7 +48,7 @@ else:
     sys.path.insert(0, '/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic')
 
 from uqef_dynamic.utils import utility
-from uqef_dynamic.utils import uqPostprocessing
+from uqef_dynamic.utils import uqef_dynamic_utils
 
 from uqef_dynamic.models.larsim import LarsimModelUQ
 from uqef_dynamic.models.larsim import LarsimStatistics
@@ -201,20 +203,20 @@ if __name__ == '__main__':
         # df_simulation_result = None
 
         # Re-create Statistics Object and DataFrame Object That contains all the Statistics Data
-        statisticsObject = uqPostprocessing.create_statistics_object(
+        statisticsObject = uqef_dynamic_utils.create_statistics_object(
             configurationObject, uqsim_args_dict, workingDir, model=model)
 
         # Way of doing thinks when instantly_save_results_for_each_time_step is True...
         # Recreate statisticsObject.result_dict
-        statistics_dictionary = uqPostprocessing.read_all_saved_statistics_dict(
+        statistics_dictionary = uqef_dynamic_utils.read_all_saved_statistics_dict(
             workingDir, [single_qoi, ], single_timestamp_single_file=True)
 
         # Way of doing thing when instantly_save_results_for_each_time_step is False...
-        # statistics_dictionary = uqPostprocessing.read_all_saved_statistics_dict(
+        # statistics_dictionary = uqef_dynamic_utils.read_all_saved_statistics_dict(
         #     workingDir, statisticsObject.list_qoi_column, single_timestamp_single_file=False)
 
         # Once you have satistics_dictionary extend StatisticsObject...
-        uqPostprocessing.extend_statistics_object(
+        uqef_dynamic_utils.extend_statistics_object(
             statisticsObject=statisticsObject,
             statistics_dictionary=statistics_dictionary,
             df_simulation_result=df_simulation_result,

@@ -109,8 +109,8 @@ def parallel_calc_stats_for_KL(
     """
     results = []
     for ip in range(0, len(keyIter_chunk)):  # for each piece of work
-        key = keyIter_chunk[ip]
-        print(f"Parallel computation for timestamp {key}...")
+        timestamp = keyIter_chunk[ip]
+        print(f"Parallel computation for timestamp {timestamp}...")
         qoi_values = qoi_values_chunk[ip]
         local_result_dict = dict()
         if store_qoi_data_in_stat_dict:
@@ -119,7 +119,7 @@ def parallel_calc_stats_for_KL(
             local_result_dict["E"] = np.mean(qoi_values, 0)
         else:
             local_result_dict["E"] = np.dot(qoi_values, weights)
-        results.append([key, local_result_dict])
+        results.append([timestamp, local_result_dict])
     return results
     
 
@@ -143,8 +143,8 @@ def parallel_calc_stats_for_gPCE(
     """
     results = []
     for ip in range(0, len(keyIter_chunk)):  # for each piece of work
-        key = keyIter_chunk[ip]
-        print(f"Parallel computation for timestamp {key}...")
+        timestamp = keyIter_chunk[ip]
+        print(f"Parallel computation for timestamp {timestamp}...")
         qoi_values = qoi_values_chunk[ip]
         local_result_dict = dict()
         if store_qoi_data_in_stat_dict:
@@ -165,10 +165,8 @@ def parallel_calc_stats_for_gPCE(
 
         if save_gpce_surrogate: # and "gPCE" in local_result_dict:
             # # TODO - propagate workingDir and single_qoi_column
-            # utility.save_gpce_surrogate_model(workingDir=workingDir, gpce=qoi_gPCE, qoi=single_qoi_column, timestamp=key)
-            # if "gpce_coeff" in local_result_dict:
-            #     utility.save_gpce_coeffs(
-            #         workingDir=workingDir, coeff=local_result_dict['gpce_coeff'], qoi=single_qoi_column, timestamp=key)
+            # utility.save_gpce_surrogate_model(workingDir=workingDir, gpce=qoi_gPCE, qoi=single_qoi_column, timestamp=timestamp)
+            # utility.save_gpce_coeffs(workingDir=workingDir, coeff=goi_coeff, qoi=single_qoi_column, timestamp=timestamp)
             pass
 
         calculate_stats_gpce(
@@ -178,7 +176,7 @@ def parallel_calc_stats_for_gPCE(
             dict_stat_to_compute=dict_stat_to_compute
             )
 
-        results.append([key, local_result_dict])
+        results.append([timestamp, local_result_dict])
     return results
 
 
@@ -275,7 +273,7 @@ def parallel_calc_stats_for_mc_saltelli(
     """
     results = []
     for ip in range(0, len(keyIter_chunk)):  # for each peace of work
-        key = keyIter_chunk[ip]
+        timestamp = keyIter_chunk[ip]
         print(f"Parallel computation for timestamp {timestamp}...")
         qoi_values = qoi_values_chunk[ip]
 
@@ -339,5 +337,5 @@ def parallel_calc_stats_for_mc_saltelli(
                 if compute_Sobol_m:
                     local_result_dict["Sobol_m"] = s_i
 
-        results.append([key, local_result_dict])
+        results.append([timestamp, local_result_dict])
     return results
