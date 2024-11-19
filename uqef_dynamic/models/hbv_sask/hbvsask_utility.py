@@ -142,7 +142,7 @@ def _plot_output_data_and_precipitation(input_data_df, simulated_data_df=None, i
                 tickmode="auto",
                 ticks="inside",
                 titlefont={"color": '#1f77b4'},
-                title="N [mm/h]",
+                title="N [mm/day]",
                 type="linear",
             ),
         )
@@ -235,7 +235,7 @@ def plot_streamflow_and_precipitation(input_data_df, simulated_data_df=None, inp
             tickmode="auto",
             ticks="inside",
             titlefont={"color": '#1f77b4'},
-            title="N [mm/h]",
+            title="N [mm/day]",
             type="linear",
         )
     )
@@ -318,7 +318,7 @@ def extend_hbv_plot_with_observed_and_forcing_data_and_update_layout(
             tickmode="auto",
             ticks="inside",
             titlefont={"color": '#1f77b4'},
-            title="N [mm/h]",
+            title="N [mm/day]",
             type="linear",
             )
         )
@@ -382,27 +382,31 @@ def extend_hbv_plot_with_forcing_and_update_layout(
             tickmode="auto",
             ticks="inside",
             titlefont={"color": '#1f77b4'},
-            title="N [mm/h]",
+            title="N [mm/day]",
             type="linear",
             )
         )
     return fig
 
 
-def plot_input_output_state(modelObject, result_df, state_df):
+def plot_input_output_state(modelObject, result_df, state_df, **kwargs):
     parsed_input_data_df = modelObject.time_series_measured_data_df.loc[
         result_df.index.min():result_df.index.max()]
 
     fig = make_subplots(
         rows=6, cols=1,
-        subplot_titles=("Temperature", "Precipitation", "Streamflow", "EvapoTranspiration", "Snow Storage", "Soil+Reservoirs")
+        subplot_titles=("Temperature [°C]", "Precipitation [mm/day]", "Measured Streamflow [m^3/s]", \
+        "Evapotranspiration", "Snow Storage", "Soil Storage + Reservoirs"),
+        vertical_spacing=0.05
     )
 
     fig.add_trace(
         go.Scatter(
             x=parsed_input_data_df.index, y=parsed_input_data_df['temperature'],
             text=parsed_input_data_df['temperature'], 
-            name="Temperature"
+            mode='lines',
+            name="Temperature",
+            showlegend=False
         ), 
         row=1, col=1
     )
@@ -411,7 +415,8 @@ def plot_input_output_state(modelObject, result_df, state_df):
         go.Scatter(
             x=parsed_input_data_df.index, y=parsed_input_data_df['precipitation'],
             text=parsed_input_data_df['precipitation'], 
-            name="Precipitation"
+            name="Precipitation",
+            showlegend=False
         ), 
         row=2, col=1
     )
@@ -419,7 +424,10 @@ def plot_input_output_state(modelObject, result_df, state_df):
     fig.add_trace(
         go.Scatter(
             x=parsed_input_data_df.index, y=parsed_input_data_df['streamflow'],
-            name="Observed Streamflow"
+            name="Observed Streamflow",
+            mode='lines',
+            line=dict(dash='dashdot'),
+            showlegend=True,
         ),
         row=3, col=1
     )
@@ -427,24 +435,30 @@ def plot_input_output_state(modelObject, result_df, state_df):
         go.Scatter(
             x=result_df.index, y=result_df['Q_cms'],
             text=result_df['Q_cms'], 
-            name="Predicted Streamflow"
+            name="Predicted Streamflow",
+            showlegend=True,
         ), 
         row=3, col=1
     )
 
     fig.add_trace(
         go.Scatter(
-            x=result_df.index, y=result_df['AET'],
-            text=result_df['AET'], 
-            name="AET"
+            x=result_df.index, y=result_df['PET'],
+            text=result_df['PET'], 
+            name="Potential evapot.",  # "PET",
+            mode='lines',
+            line=dict(dash='dashdot'),
+            showlegend=True,
         ), 
         row=4, col=1
     )
+    
     fig.add_trace(
         go.Scatter(
-            x=result_df.index, y=result_df['PET'],
-            text=result_df['PET'], 
-            name="PET"
+            x=result_df.index, y=result_df['AET'],
+            text=result_df['AET'], 
+            name="Actual evapot.",  # name="AET",
+            showlegend=True,
         ), 
         row=4, col=1
     )
@@ -453,7 +467,8 @@ def plot_input_output_state(modelObject, result_df, state_df):
         go.Scatter(
             x=state_df.index, y=state_df['SWE'],
             text=state_df['SWE'], 
-            name="Snow Storage"
+            name="Snow storage",
+            showlegend=False,
         ), 
         row=5, col=1
     )
@@ -461,7 +476,8 @@ def plot_input_output_state(modelObject, result_df, state_df):
         go.Scatter(
             x=state_df.index, y=state_df['SMS'],
             text=state_df['SMS'], 
-            name="Soil Storage"
+            name="Soil storage",
+            showlegend=True,
         ), 
         row=6, col=1
     )
@@ -469,7 +485,10 @@ def plot_input_output_state(modelObject, result_df, state_df):
         go.Scatter(
             x=state_df.index, y=state_df['S1'],
             text=state_df['S1'], 
-            name="Fast Reservoir"
+            name="Fast reservoir",
+            mode='lines',
+            line=dict(dash='dashdot'),
+            showlegend=True,
         ), 
         row=6, col=1
     )
@@ -477,20 +496,26 @@ def plot_input_output_state(modelObject, result_df, state_df):
         go.Scatter(
             x=state_df.index, y=state_df['S2'],
             text=state_df['S2'], 
-            name="Slow Reservoir"
+            name="Slow reservoir",
+            mode='lines',
+            line=dict(dash='dot'),
+            showlegend=True,
         ), 
         row=6, col=1
     )
     fig.update_layout(
         height=1000, 
-        width=800, 
+        width=1100, 
         title_text="Detailed plot of most important time-series"
         )
 
+    title = kwargs.get("title")
+    if title is None:
+        title = f'HBV-SASK Model: Forcing, state, measured and predicted time series'
     fig.update_layout(
         # legend=dict(yanchor="bottom", y=0.01, xanchor="right", x=0.99),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        title=f'HBV-SASK Model: Predicted vs. Observed Streamflow',
+        title=title,
         showlegend=True,
         # template="plotly_white",
     )
@@ -867,7 +892,7 @@ def soil_storage_routing_module(ponding, SMS, S1, S2, AET, FC, beta, FRAC, K1, a
     *****  SMS: Soil Moisture Storage at time t - model state variable *****
     *****  S1: at time t*****
     *****  S2: at time t*****
-    *****  AET: Actual EvapoTranspiration at time t *****
+    *****  AET: Actual Evapotranspiration at time t *****
     *****  FC: Field Capacity - model parameter ---------
     *****  beta: Shape Parameter/Exponent - model parameter ---------
         This controls the relationship between soil infiltration and soil water release.
@@ -910,8 +935,8 @@ def soil_storage_routing_module(ponding, SMS, S1, S2, AET, FC, beta, FRAC, K1, a
 
 def evapotranspiration_module(SMS, T, monthly_average_T, monthly_average_PE, ETF, LP):
     """
-    The function should return AET - Actual EvapoTranspiration at time t,
-    PET - Potential EvapoTranspiration at time t
+    The function should return AET - Actual Evapotranspiration at time t,
+    PET - Potential Evapotranspiration at time t
     *****  SMS: Soil Moisture Storage at time t - model state variable *****
     *****  T: Temperature at time t - model forcing *****
     *****  monthly_average_T: *****

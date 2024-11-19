@@ -245,7 +245,7 @@ class HBVSASKStatistics(time_dependent_statistics.TimeDependentStatistics):
             column_to_draw = kwargs.get('temperature_df_column_to_draw', 'temperature')
             fig.add_trace(go.Scatter(x=self.forcing_df.index,
                                      y=self.forcing_df[column_to_draw],
-                                     name="Temperature", line_color='blue', mode='lines+markers'),
+                                     name="Temperature", line_color='blue', mode='lines'),
                           row=2, col=1)
 
             if reset_index_at_the_end:
@@ -361,7 +361,7 @@ class HBVSASKStatistics(time_dependent_statistics.TimeDependentStatistics):
                     fig.add_trace(go.Scatter(
                         x=pdTimesteps,
                         y=[self.result_dict[single_qoi_column][key]["Sobol_m"][i] for key in keyIter],
-                        name=name, legendgroup=self.labels[i], line_color=colors.COLORS[i], mode='lines+markers'),
+                        name=name, legendgroup=self.labels[i], line_color=colors.COLORS[i], mode='lines'),
                         row=starting_row, col=1)
                 dict_qoi_vs_plot_rows[single_qoi_column]["Sobol_m"] = starting_row
                 starting_row += 1
@@ -373,7 +373,7 @@ class HBVSASKStatistics(time_dependent_statistics.TimeDependentStatistics):
                     fig.add_trace(go.Scatter(
                         x=pdTimesteps,
                         y=[self.result_dict[single_qoi_column][key]["Sobol_m2"][i] for key in keyIter],
-                        name=name, legendgroup=self.labels[i], line_color=colors.COLORS[i], mode='lines+markers'),
+                        name=name, legendgroup=self.labels[i], line_color=colors.COLORS[i], mode='lines'),
                         row=starting_row, col=1)
                 dict_qoi_vs_plot_rows[single_qoi_column]["Sobol_m2"] = starting_row
                 starting_row += 1
@@ -385,7 +385,7 @@ class HBVSASKStatistics(time_dependent_statistics.TimeDependentStatistics):
                     fig.add_trace(go.Scatter(
                         x=pdTimesteps,
                         y=[self.result_dict[single_qoi_column][key]["Sobol_t"][i] for key in keyIter],
-                        name=name, legendgroup=self.labels[i], line_color=colors.COLORS[i], mode='lines+markers'),
+                        name=name, legendgroup=self.labels[i], line_color=colors.COLORS[i], mode='lines'),
                         row=starting_row, col=1)
                 dict_qoi_vs_plot_rows[single_qoi_column]["Sobol_t"] = starting_row
                 starting_row += 1
@@ -542,7 +542,7 @@ class HBVSASKStatistics(time_dependent_statistics.TimeDependentStatistics):
             column_to_draw = kwargs.get('temperature_df_column_to_draw', 'temperature')
             fig.add_trace(go.Scatter(x=self.forcing_df.index,
                                      y=self.forcing_df[column_to_draw],
-                                     name="Temperature", line_color='blue', mode='lines+markers',        
+                                     name="Temperature", line_color='blue', mode='lines',        
                                      showlegend=False),
                           row=2, col=1)
 
@@ -756,7 +756,6 @@ class HBVSASKStatistics(time_dependent_statistics.TimeDependentStatistics):
                              row=dict_plot_rows["generalized_sobol_total_index"], col=1)
             
         fig.update_layout(title_text=window_title)
-        fig.update_layout(xaxis=dict(type="date"))
         fig.update_layout(
             xaxis=dict(
                 rangemode='normal',
@@ -810,7 +809,7 @@ class HBVSASKStatistics(time_dependent_statistics.TimeDependentStatistics):
             go.Scatter(
                 x=self.forcing_df.index, y=self.forcing_df['temperature'],
                 text=self.forcing_df['temperature'],
-                name="Temperature", mode='lines+markers'
+                name="Temperature", mode='lines'
             ),
             row=2, col=1
         )
@@ -895,7 +894,7 @@ class HBVSASKStatistics(time_dependent_statistics.TimeDependentStatistics):
                 x=df.index, 
                 y=df[self.temperature_column_name],
                 text=df[self.temperature_column_name],
-                name="Temperature", mode='lines+markers',
+                name="Temperature", mode='lines',
                 showlegend=False
                 # marker_color='blue'
             ), row=n_rows, col=n_col

@@ -3651,7 +3651,7 @@ class TimeDependentStatistics(ABC, Statistics):
                     go.Scatter(
                         x=self.pdTimesteps, y=[self.result_dict[qoi_column][key][si_type][i] for key in keyIter],
                         name=self.labels[i], legendgroup=self.labels[i], line_color=colors.COLORS[i]),
-                        mode='lines+markers'
+                        mode='lines'
                         ) #self.timesteps (?)
             except KeyError as e:
                 print(f"Error in plot_si_indices_over_time_single_qoi - "

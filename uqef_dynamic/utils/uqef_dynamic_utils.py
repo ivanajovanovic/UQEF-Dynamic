@@ -2593,6 +2593,7 @@ def plot_parameters_sensitivity_indices_vs_temp_prec_measured_plotly(
     fig.update_layout(title=f"UQEF-Dynamic Scatter Plot -{si_type}", height=800, width=1000, showlegend=False)
     return fig
 
+
 def plot_forcing_mean_predicted_and_observed_all_qoi(statisticsObject, directory="./", fileName="simulation_big_plot.html"):
     """
     At the moment this is tailored for HBV model
@@ -2623,7 +2624,7 @@ def plot_forcing_mean_predicted_and_observed_all_qoi(statisticsObject, directory
         go.Scatter(
             x=statisticsObject.forcing_df.index, y=statisticsObject.forcing_df['temperature'],
             text=statisticsObject.forcing_df['temperature'],
-            name="Temperature", mode='lines+markers'
+            name="Temperature", mode='lines'
         ),
         row=2, col=1
     )
@@ -2663,6 +2664,12 @@ def plot_forcing_mean_predicted_and_observed_all_qoi(statisticsObject, directory
     fig.update_yaxes(autorange="reversed", row=1, col=1)
     fig.update_layout(height=600, width=800, title_text="Detailed plot of most important time-series")
     fig.update_layout(xaxis=dict(type="date"))
+    fig.update_layout(
+        # legend=dict(yanchor="bottom", y=0.01, xanchor="right", x=0.99),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1.0),
+        showlegend=True,
+        # template="plotly_white",
+    )
     fig.update_xaxes(
         tickformat='%b %y',            # Format dates as "Month Day" (e.g., "Jan 01")
         dtick="M1"                     # Set tick interval to 1 day for denser ticks
@@ -2850,7 +2857,26 @@ def plotting_function_single_qoi(
 
     fig.update_layout(height=600, width=800,
                       title_text=f"Detailed plot of most important time-series - QoI {single_qoi}")
-    #fig.update_layout(xaxis=dict(type="date"))
+    timesteps_min = min(df['TimeStamp'])
+    timesteps_max = max(df['TimeStamp'])
+    fig.update_layout(
+        xaxis=dict(
+            rangemode='normal',
+            range=[timesteps_min, timesteps_max],
+            type="date"
+        ),
+        yaxis=dict(
+            rangemode='normal',  # Ensures the range is not padded for markers
+            autorange=True       # Auto-range is enabled
+        )
+    )
+    fig.update_layout(
+        # legend=dict(yanchor="bottom", y=0.01, xanchor="right", x=0.99),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1.0),
+        showlegend=True,
+        # template="plotly_white",
+    )
+    fig.update_layout(xaxis=dict(type="date"))
     fig.update_xaxes(
         tickformat='%b %y',            # Format dates as "Month Day" (e.g., "Jan 01")
         dtick="M1"                     # Set tick interval to 1 day for denser ticks

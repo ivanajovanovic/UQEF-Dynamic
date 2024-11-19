@@ -511,7 +511,10 @@ class HBVSASKModel(object):
         )
         if "title" in kwargs:
             fig.update_layout(title=kwargs["title"])
-        plot_filename = self.workingDir / f"forcing_data.html"
+        fileName = kwargs.get('fileName')
+        if fileName is None or not fileName.endswith(".html"):
+            fileName = f"forcing_data.html"
+        plot_filename = self.workingDir / fileName
         plot(fig, filename=str(plot_filename), auto_open=False)
         return fig
 
