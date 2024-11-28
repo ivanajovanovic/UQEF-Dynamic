@@ -6,7 +6,7 @@
     "plotting": "False",
     "writing_results_to_a_file": "False",
     "options": {"surface form": "differential"},
-    "division_factor": 4,
+    "division_factor": 100,
     "current_ooi": "Current function [A]",
     "time_ooi": "Time [s]",
     "voltage_ooi": "Voltage [V]"
@@ -20,24 +20,97 @@
   },
   "parameters": [
     {
-      "name": "Negative electrode porosity",
+      "name": "Cation transference number",
       "distribution": "Uniform",
-      "lower": 0.25,
-      "upper": 0.5,
-      "default": 0.3
+      "lower": 0.3658898305084745,
+      "upper": 0.5095808383233533
     },
     {
-      "name": "Positive electrode porosity",
+      "name": "Electrolyte conductivity [S.m-1]",
       "distribution": "Uniform",
-      "lower": 0.2,
-      "upper": 0.65,
-      "default": 0.4
+      "lower": 0.044510385756680645,
+      "upper": 2.448071216617211
+    },   
+    {
+      "name": "Electrolyte diffusivity [m2.s-1]",
+      "distribution": "LogUniform",
+      "lower": -24.048750178123612,
+      "upper": -20.638010386659047,
+      "scale": 1, 
+      "shift": 0
+    },
+    {
+      "name": "Initial concentration in electrolyte [mol.m-3]",
+      "distribution": "Uniform",
+      "lower": 500,
+      "upper": 1500
+    },
+    {
+      "name": "Negative electrode Bruggeman coefficient (electrode)",
+      "distribution": "Uniform",
+      "lower": 1.5,
+      "upper": 4.1
+    },
+    {
+      "name": "Negative electrode porosity",
+      "distribution": "Uniform",
+      "lower": 0.1,
+      "upper": 0.9
+    },
+    {
+      "name": "Negative electrode conductivity [S.m-1]",
+      "distribution": "LogUniform",
+      "lower": -2.198225077669803,
+      "upper": 7.697938422053677,
+      "scale": 1, 
+      "shift": 0
     },
     {
       "name": "Negative electrode diffusivity [m2.s-1]",
       "distribution": "LogUniform",
-      "lower": -34.53877639, 
-      "upper": -25.32843602,
+      "lower": -36.14821430734479, 
+      "upper": -25.426048851801504,
+      "scale": 1, 
+      "shift": 0,
+      "default": -30
+    },
+    {
+      "name": "Negative electrode exchange-current density [A.m-2]",
+      "distribution": "LogUniform",
+      "lower": -25.328436022934504,
+      "upper": -5.809142990314028,
+      "scale": 1, 
+      "shift": 0
+    },
+    {
+      "name": "Negative electrode thickness [m]",
+      "distribution": "Uniform",
+      "lower": 4.6e-5,
+      "upper": 7.2e-5
+    },
+    {
+      "name": "Negative particle radius [m]",
+      "distribution": "Uniform",
+      "lower": 1e-6,
+      "upper": 1.26e-5
+    },
+    {
+      "name": "Positive electrode Bruggeman coefficient (electrode)",
+      "distribution": "Uniform",
+      "lower": 1.44,
+      "upper": 2.437
+    },
+    {
+      "name": "Positive electrode porosity",
+      "distribution": "Uniform",
+      "lower": 0.171,
+      "upper": 0.648
+    },
+    {
+      "name": "Positive electrode conductivity [S.m-1]",
+      "distribution": "LogUniform",
+      "lower": -12.166851932376892,
+      "upper": 6.907755278982137,
       "scale": 1, 
       "shift": 0,
       "default": -30
@@ -45,25 +118,66 @@
     {
       "name": "Positive electrode diffusivity [m2.s-1]",
       "distribution": "LogUniform",
-      "lower": -41.44653167,
-      "upper": -27.63102112,
+      "lower": -41.488656600193494, 
+      "upper": -26.710738362784856, 
       "scale": 1, 
-      "shift": 0,
-      "default": -30
+      "shift": 0
     },
     {
-      "name": "Negative particle radius [m]",
+      "name": "Positive electrode exchange-current density [A.m-2]",
+      "distribution": "LogUniform",
+      "lower": -26.88908377119917,
+      "upper": -10.633298717467666,
+      "scale": 1, 
+      "shift": 0
+    },
+    {
+      "name": "Positive electrode thickness [m]",
       "distribution": "Uniform",
-      "lower": 0.2e-5,
-      "upper": 1.2e-5,
-      "default": 0.8e-5
+      "lower": 6e-6,
+      "upper": 6.6e-5
     },
     {
       "name": "Positive particle radius [m]",
       "distribution": "Uniform",
-      "lower": 0.1e-5,
-      "upper": 1e-5,
-      "default": 1e-5
+      "lower": 5e-7,
+      "upper": 1e-5
+    },
+    {
+      "name": "Separator Bruggeman coefficient (electrolyte)",
+      "distribution": "Uniform",
+      "lower": 1.5,
+      "upper": 2.57
+    },
+    {
+      "name": "Separator porosity",
+      "distribution": "Uniform",
+      "lower": 0.37,
+      "upper": 0.6
+    },
+    {
+      "name": "Separator thickness [m]",
+      "distribution": "Uniform",
+      "lower": 1.6e-5,
+      "upper": 5e-5
+    },
+    {
+      "name": "Thermodynamic factor",
+      "distribution": "Uniform",
+      "lower": 1.0,
+      "upper": 1.864
+    },
+    {
+      "name": "Maximum concentration in negative electrode [mol.m-3]",
+      "distribution": "Uniform",
+      "lower": 16100.000000000002,
+      "upper": 31920.0
+    },
+    {
+      "name": "Maximum concentration in positive electrode [mol.m-3]",
+      "distribution": "Uniform",
+      "lower": 23900.0,
+      "upper": 51765.0
     }
   ]
 }

@@ -76,7 +76,7 @@ class pybammStatistics(time_dependent_statistics.TimeDependentStatistics):
         fig = make_subplots(rows=n_rows, cols=1,
                             print_grid=True,
                             shared_xaxes=True,
-                            vertical_spacing=0.1)
+                            vertical_spacing=0.04)
 
         dict_plot_rows = dict()
 
@@ -142,7 +142,7 @@ class pybammStatistics(time_dependent_statistics.TimeDependentStatistics):
                 fig.add_trace(go.Scatter(
                     x=pdTimesteps,
                     y=[dict_time_vs_qoi_stat[key]["Sobol_m"][i] for key in keyIter],
-                    name=name, legendgroup=self.labels[i], line_color=colors.COLORS[i], mode='lines'),
+                    name=name, legendgroup=self.labels[i], mode='lines', line_color=colors.COLORS[i]),
                     row=starting_row, col=1)
             dict_plot_rows["Sobol_m"] = starting_row
             starting_row += 1
@@ -153,7 +153,7 @@ class pybammStatistics(time_dependent_statistics.TimeDependentStatistics):
                 fig.add_trace(go.Scatter(
                     x=pdTimesteps,
                     y=[dict_time_vs_qoi_stat[key]["Sobol_m2"][i] for key in keyIter],
-                    name=name, legendgroup=self.labels[i], line_color=colors.COLORS[i], mode='lines'),
+                    name=name, legendgroup=self.labels[i], mode='lines', line_color=colors.COLORS[i]),
                     row=starting_row, col=1)
             dict_plot_rows["Sobol_m2"] = starting_row
             starting_row += 1
@@ -164,7 +164,7 @@ class pybammStatistics(time_dependent_statistics.TimeDependentStatistics):
                 fig.add_trace(go.Scatter(
                     x=pdTimesteps,
                     y=[dict_time_vs_qoi_stat[key]["Sobol_t"][i] for key in keyIter],
-                    name=name, legendgroup=self.labels[i], line_color=colors.COLORS[i], mode='lines'),
+                    name=name, legendgroup=self.labels[i], mode='lines', line_color=colors.COLORS[i]),
                     row=starting_row, col=1)
             dict_plot_rows["Sobol_t"] = starting_row
             starting_row += 1
@@ -184,7 +184,7 @@ class pybammStatistics(time_dependent_statistics.TimeDependentStatistics):
                 fig.add_trace(go.Scatter(
                     x=pdTimesteps,
                     y=y,
-                    name=name, legendgroup=self.labels[i], line_color=colors.COLORS[i], mode='lines'),
+                    name=name, legendgroup=self.labels[i], mode='lines', line_color=colors.COLORS[i]),
                     row=starting_row, col=1)
             dict_plot_rows["generalized_sobol_total_index"] = starting_row
             starting_row += 1

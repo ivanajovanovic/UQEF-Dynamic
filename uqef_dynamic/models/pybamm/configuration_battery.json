@@ -4,6 +4,7 @@
   },
   "model_settings": {
     "plotting": "False",
+    "printing": "True",
     "writing_results_to_a_file": "False",
     "options": {"surface form": "differential"},
     "division_factor": 4,
