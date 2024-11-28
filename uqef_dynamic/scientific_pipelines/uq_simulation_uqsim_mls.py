@@ -56,14 +56,14 @@ local_debugging = True
 if local_debugging:
     save_solver_results = False
 
-    uqsim.args.model = "hbvsask"  # "larsim" "hbvsask" "battery" "oscillator" "simple_oscillator"
+    uqsim.args.model = "battery"  # "larsim" "hbvsask" "battery" "oscillator" "simple_oscillator"
 
     uqsim.args.uncertain = "all"
     uqsim.args.chunksize = 1
 
     uqsim.args.uq_method = "mc"  # "sc" | "saltelli" | "mc" | "ensemble"
     
-    uqsim.args.mc_numevaluations = 3000
+    uqsim.args.mc_numevaluations = 3000 #7800
     uqsim.args.sampling_rule = "latin_hypercube"  # "random" | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
     
     uqsim.args.sc_q_order = 5  # 7 #10 3
@@ -72,7 +72,7 @@ if local_debugging:
 
     uqsim.args.read_nodes_from_file = False
     l = 5  # 10
-    dim = 10
+    dim = 6
     path_to_file = pathlib.Path("/work/ga45met/sparseSpACE/sparse_grid_nodes_weights")
     uqsim.args.parameters_file = path_to_file / f"KPU_d{dim}_l{l}.asc" # f"KPU_d7_l{l}.asc"
     uqsim.args.parameters_setup_file = None #pathlib.Path("/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic/data/configurations/KPU_HBV_d3.json")
@@ -96,11 +96,6 @@ if local_debugging:
     uqsim.args.outputResultDir = os.path.abspath(os.path.join('/work/ga45met/uqef_dynamic_runs/linear_damped_runs', 'trying_out_mc_1000_random')) 
     uqsim.args.config_file = '/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic/data/configurations/configuration_oscillator.json'
 
-    # Battery
-    uqsim.args.inputModelDir = pathlib.Path('/work/ga45met/anaconda3/envs/py3115_uq/lib/python3.11/site-packages/pybamm/input/drive_cycles')
-    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/work/ga45met/uqef_dynamic_runs/battery_results", 'kl10_p2_sg_l6'))  # mc_10000 mc_10000_terminal_voltage
-    uqsim.args.config_file = '/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic/data/configurations/configuration_battery.json'
-
     # Simple Oscillator
     uqsim.args.outputResultDir = os.path.abspath(os.path.join('/work/ga45met/uqef_dynamic_runs/simple_oscillator', 'trying_out_p4_sg_l5_generalized_over_time_N10')) 
     uqsim.args.config_file = '/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic/data/configurations/configuration_simple_oscillator.json'
@@ -111,6 +106,12 @@ if local_debugging:
     uqsim.args.outputResultDir = os.path.abspath(os.path.join('/work/ga45met/Hydro_Models/HBV-SASK-data', 'Oldman_Basin/model_runs', 'mc_6d_1000'))
     uqsim.args.outputResultDir = os.path.abspath(os.path.join('/work/ga45met/uqef_dynamic_runs/hbv_sask_runs/Oldman_Basin', 'mc10d_3000_regression_autoregressive'))
     uqsim.args.config_file = '/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic/data/configurations/configuration_hbv_10D_short.json'
+
+    # Battery
+    uqsim.args.inputModelDir = pathlib.Path('/work/ga45met/anaconda3/envs/py3115_uq/lib/python3.11/site-packages/pybamm/input/drive_cycles')
+    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/work/ga45met/uqef_dynamic_runs/battery_results", 'mc_gpcep3_ct07_3000_lhc_6d'))  # mc_10000 mc_10000_terminal_voltage
+    uqsim.args.config_file = '/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic/uqef_dynamic/models/pybamm/configuration_battery_24_shot_names.json'  # configuration_battery_24.json'
+    uqsim.args.config_file = '/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic/uqef_dynamic/models/pybamm/configuration_battery.json'  # configuration_battery_24.json'
 
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
 
@@ -140,13 +141,13 @@ if local_debugging:
 
 # TODO Eventually add these configurations to uqef.args
 utility.DEFAULT_DICT_WHAT_TO_PLOT = {
-    "E_minus_std": False, "E_plus_std": False, "E_minus_2std": True, "E_plus_2std":True, 
+    "E_minus_std": True, "E_plus_std": True, "E_minus_2std": False, "E_plus_2std":False, 
     "P10": False, "P90": False,
     "StdDev": True, "Skew": False, "Kurt": False, "Sobol_m": True, "Sobol_m2": False, "Sobol_t": True
 }
 utility.DEFAULT_DICT_STAT_TO_COMPUTE = {
     "Var": True, "StdDev": True, "P10": True, "P90": True,
-    "E_minus_std": False, "E_plus_std": False,
+    "E_minus_std": True, "E_plus_std": True,
     "Skew": False, "Kurt": False, "Sobol_m": True, "Sobol_m2": False, "Sobol_t": True
 }
 dict_stat_to_compute = utility.DEFAULT_DICT_STAT_TO_COMPUTE
@@ -157,14 +158,14 @@ if uqsim.args.uq_method == "mc" and uqsim.args.compute_Sobol_m:
 save_gpce_surrogate = True  # if True a gpce surrogate for each QoI for each time step is saved in a separate file
 compute_other_stat_besides_pce_surrogate = True  # This is relevant only when uq_method == "sc" 
 
-compute_kl_expansion_of_qoi = False
+compute_kl_expansion_of_qoi = True
 kl_expansion_order = 10
 compute_timewise_gpce_next_to_kl_expansion = False
 
-compute_generalized_sobol_indices = False
+compute_generalized_sobol_indices = True
 compute_generalized_sobol_indices_over_time = False
 
-compute_covariance_matrix_in_time = False
+compute_covariance_matrix_in_time = True
 
 allow_conditioning_results_based_on_metric = False
 
@@ -231,6 +232,7 @@ uqsim.models.update({"battery"         : (lambda: pybammmodel.pybammModelUQ(
     configurationObject=uqsim.configuration_object,
     inputModelDir=uqsim.args.inputModelDir,
     workingDir=uqsim.args.workingDir,
+    raise_exception_on_model_break=False,
 ))})
 uqsim.models.update({"simple_oscillator"         : (lambda: simpleOscillatorUQ(
     configurationObject=uqsim.configuration_object,

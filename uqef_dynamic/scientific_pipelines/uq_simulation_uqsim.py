@@ -177,7 +177,7 @@ kl_expansion_order = 10
 compute_timewise_gpce_next_to_kl_expansion = False
 
 compute_generalized_sobol_indices = True
-compute_generalized_sobol_indices_over_time = True
+compute_generalized_sobol_indices_over_time = False
 
 compute_covariance_matrix_in_time = False
 

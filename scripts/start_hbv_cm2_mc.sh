@@ -6,13 +6,14 @@
 # module load python/3.6_intel
 #module load anaconda3
 #cm2
-if [[ $HOSTNAME  == "mpp3"* ]]; then
-  module load mpi.intel/2019
-  #module load mpi.intel/2020
-elif [[ $HOSTNAME  == "cm2"* ]]; then
-  module unload intel-mpi
-  module load intel-mpi/2018-intel
-fi
+# module load mpi.intel/2019
+#if [[ $HOSTNAME  == "mpp3"* ]]; then
+#  module load mpi.intel/2019
+#  #module load mpi.intel/2020
+#elif [[ $HOSTNAME  == "cm2"* ]]; then
+#  module unload intel-mpi
+#  module load intel-mpi/2018-intel
+#fi
 
 start_uq_sim(){
     local sched_strut="$1"
@@ -112,16 +113,17 @@ echo "#!/bin/bash
 # load modules and activate the conda env
 module load slurm_setup
 source /etc/profile.d/modules.sh
-#module unload python
+# module unload python
 # module load python/3.6_intel
-#module load anaconda3
-if [[ $HOSTNAME  == "mpp3"* ]]; then
-  module load mpi.intel/2019
-  #module load mpi.intel/2020
-elif [[ $HOSTNAME  == "cm2"* ]]; then
-  module unload intel-mpi
-  module load intel-mpi/2019.8.254 #intel-mpi/2018-intel
-fi
+# module load anaconda3
+module load mpi.intel/2019
+# if [[ $HOSTNAME  == "mpp3"* ]]; then
+#   module load mpi.intel/2019
+#   #module load mpi.intel/2020
+# elif [[ $HOSTNAME  == "cm2"* ]]; then
+#   module unload intel-mpi
+#  module load intel-mpi/2019.8.254 #intel-mpi/2018-intel
+# fi
 source /dss/dsshome1/lxc0C/ga45met2/.conda/envs/$conda_env/bin/activate $conda_env
 
 # export num threads for OMP
@@ -134,7 +136,7 @@ echo "---- start HBV sim: \`date\`"
                             --outputResultDir $resultsPath \
                             --inputModelDir $modelMasterPath \
                             --sourceDir $baseSourcePath \
-                            --config_file $baseSourcePath/data/configurations/configuration_hbv_10D.json \
+                            --config_file $baseSourcePath/data/configurations/configuration_hbv_10D_single_qoi.json \
                             --model "$model" \
                             --uncertain "$uncertain" \
                             --opt_strategy "$strategy" --opt_algorithm "$algorithm" \
@@ -151,29 +153,28 @@ echo "---- start HBV sim: \`date\`"
                             --sc_quadrature_rule "$sc_quadrature_rule" \
                             --parameters_file "$parameters_file" \
                             --parameters_setup_file "$parameters_setup_file" \
-                            --cross_truncation 0.7\
                             $opt
 
 echo "---- end HBV sim: \`date\`"
 
-" > $baseSourcePath/hbv_uq_sc_10d_p3_sg_ct07_l6_2006_generalized.cmd
+" > $baseSourcePath/hbv_uq_mc_p4_lhs_10000_oldman_2005_2006.cmd
 
     #execute batch file
-    sbatch $baseSourcePath/hbv_uq_sc_10d_p3_sg_ct07_l6_2006_generalized.cmd
+    sbatch $baseSourcePath/hbv_uq_mc_p4_lhs_10000_oldman_2005_2006.cmd
 
 }
 
 model="hbvsask"
-opt_add="--parallel_statistics --sampleFromStandardDist --compute_Sobol_m --compute_Sobol_t --instantly_save_results_for_each_time_step --read_nodes_from_file --sc_poly_normed --save_all_simulations --store_gpce_surrogate_in_stat_dict"
+opt_add="--regression --parallel_statistics --sampleFromStandardDist --compute_Sobol_m --compute_Sobol_t --sc_poly_normed --save_all_simulations --store_gpce_surrogate_in_stat_dict" #--read_nodes_from_file --instantly_save_results_for_each_time_step
 nodes=4
 tasks_per_node=60  #22
 low_time="2:30:00"
-mid_time="24:00:00"
+mid_time="12:00:00"
 max_time="72:00:00"
-uq_method="sc"
+uq_method="mc"
 q_order=6
-p_order=3
-mc_numevaluations=200000
+p_order=4
+mc_numevaluations=10000
 uc="all"
 sampling_rule="latin_hypercube"
 sc_poly_rule="three_terms_recurrence"
