@@ -509,9 +509,9 @@ def plot_2d_matrix_static_from_list(simulationNodes_list, title="Plot nodes"):
         dfsimulationNodes = simulationNodes_list
 
     sns.set(style="ticks", color_codes=True)
-    g = sns.pairplot(dfsimulationNodes, vars=list(dfsimulationNodes.columns), corner=True)
+    pairplot = sns.pairplot(dfsimulationNodes, vars=list(dfsimulationNodes.columns), corner=True)
+    return pairplot.fig
     # plt.title(title, loc='left')
-    plt.show()
 
 
 def plot_3d_dynamic(dfsimulationNodes):
@@ -1000,6 +1000,8 @@ def parse_datetime_configuration(time_settings_config):
 
 
 def compute_previous_timestamp(timestamp, resolution, delta=1):
+    if timestamp is None:
+        return None
     if resolution == "daily":
         # pd.DateOffset(days=1)
         previous_timestamp = pd.to_datetime(timestamp) - pd.Timedelta(days=1)

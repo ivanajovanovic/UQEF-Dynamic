@@ -252,6 +252,7 @@ class TimeDependentModel(ABC, Model):
         This function should be used to setup the model. It is called in the constructor.
 
         """
+        self.default_par_info_dict = None
         self.set_attributes_based_on_dict_processed_simulation_settings_from_config_file(**kwargs)
         self._setup_model_related(**kwargs)
         self._timespan_setup(**kwargs)
@@ -533,7 +534,7 @@ class TimeDependentModel(ABC, Model):
         This function should return a dictionary of parameters to be used in the specific (i.e., single) 
         model run. This is the first argument of the model_run function.
 
-        Note: it should contain only uncertain parameters.
+        Note: it should contain only uncertain parameters!
         """
         parameters_dict = utility.configuring_parameter_values(
             parameters=parameters,

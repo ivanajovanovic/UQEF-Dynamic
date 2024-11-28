@@ -172,17 +172,20 @@ def create_and_extend_statistics_object(configurationObject, uqsim_args_dict, wo
 # ==============================================================================================================
 
 
-def get_df_statistics_and_df_si_from_saved_files(workingDir, inputModelDir=None, set_lower_predictions_to_zero=False, **kwargs):
+def get_df_statistics_and_df_si_from_saved_files(workingDir, inputModelDir=None, **kwargs):
     """
     Retrieves the statistics and sensitivity indices data from saved files.
 
     Args:
         workingDir (str): The working directory where the saved files are located.
         inputModelDir (str, optional): The input model directory. Defaults to None.
-        set_lower_predictions_to_zero (bool, optional): If True, sets the lower predictions ('E', 'P10') to zero. Defaults to False.
     Keyword Args:
         read_saved_simulations (bool, optional): If True, reads the saved simulations. Defaults to False.
         read_saved_states (bool, optional): If True, reads the saved states. Defaults to False.
+        set_lower_predictions_to_zero (bool, optional): If True, sets the lower predictions ('E', 'P10') to zero. Defaults to False.
+        set_mean_prediction_to_zero(bool, optional): If True, sets mean predicted values to zero; Defaults to False.
+        correct_sobol_indices (bool, optional): Set lower value to zero, defaults to False
+        instantly_save_results_for_each_time_step(bool, optional): Overwrite the same entry in uqsim_args_dict is different than None;  defaults to None
 
     Returns:
         tuple: A tuple containing the following:
@@ -197,14 +200,21 @@ def get_df_statistics_and_df_si_from_saved_files(workingDir, inputModelDir=None,
     Raises:
         FileNotFoundError: If any of the required files are not found.
     """
-    dict_output_file_paths = utility.get_dict_with_output_file_paths_based_on_workingDir(workingDir)
-    args_file = dict_output_file_paths.get("args_file")
-    configuration_object_file = dict_output_file_paths.get("configuration_object_file")
-    nodes_file = dict_output_file_paths.get("nodes_file")
-    df_all_index_parameter_file = dict_output_file_paths.get("df_all_index_parameter_file")
-    df_all_index_parameter_gof_file = dict_output_file_paths.get("df_all_index_parameter_gof_file")
-    df_all_simulations_file = dict_output_file_paths.get("df_all_simulations_file")
-    time_info_file = dict_output_file_paths.get("time_info_file")
+    # dict_output_file_paths = utility.get_dict_with_output_file_paths_based_on_workingDir(workingDir)
+    # args_file = dict_output_file_paths.get("args_file")
+    # configuration_object_file = dict_output_file_paths.get("configuration_object_file")
+    # nodes_file = dict_output_file_paths.get("nodes_file")
+    # df_all_index_parameter_file = dict_output_file_paths.get("df_all_index_parameter_file")
+    # df_all_index_parameter_gof_file = dict_output_file_paths.get("df_all_index_parameter_gof_file")
+    # df_all_simulations_file = dict_output_file_paths.get("df_all_simulations_file")
+    # time_info_file = dict_output_file_paths.get("time_info_file")
+
+    read_saved_simulations = kwargs.get('read_saved_simulations', False)
+    read_saved_states = kwargs.get('read_saved_states', False)
+    set_lower_predictions_to_zero = kwargs.get('set_lower_predictions_to_zero', False)
+    set_mean_prediction_to_zero = kwargs.get('set_mean_prediction_to_zero', False)
+    correct_sobol_indices = kwargs.get('correct_sobol_indices', False)
+    instantly_save_results_for_each_time_step = kwargs.get('instantly_save_results_for_each_time_step', None)
 
     args_files = utility.get_dict_with_output_file_paths_based_on_workingDir(workingDir)
     for key, value in args_files.items():
@@ -225,6 +235,10 @@ def get_df_statistics_and_df_si_from_saved_files(workingDir, inputModelDir=None,
         inputModelDir = uqsim_args_dict["inputModelDir"]
     inputModelDir = pathlib.Path(inputModelDir)
 
+    # just in certain situations it is necessary to update/overwrite instantly_save_results_for_each_time_step
+    if instantly_save_results_for_each_time_step is not None:
+        uqsim_args_dict["instantly_save_results_for_each_time_step"] = instantly_save_results_for_each_time_step
+    
     # with open(nodes_file, 'rb') as f:
     #     simulationNodes = pickle.load(f)
         
@@ -250,9 +264,6 @@ def get_df_statistics_and_df_si_from_saved_files(workingDir, inputModelDir=None,
 
     # df_nodes = utility.get_df_from_simulationNodes(simulationNodes, nodes_or_paramters="nodes", params_list=params_list)
     # df_nodes_params = utility.get_df_from_simulationNodes(simulationNodes, nodes_or_paramters="parameters",  params_list=params_list)
-
-    read_saved_simulations = kwargs.get('read_saved_simulations', False)
-    read_saved_states = kwargs.get('read_saved_states', False)
 
     if read_saved_simulations and df_simulations_file.is_file():
         df_simulation_result = pd.read_pickle(df_simulations_file, compression="gzip")
@@ -308,8 +319,25 @@ def get_df_statistics_and_df_si_from_saved_files(workingDir, inputModelDir=None,
             df_statistics_and_measured['E_minus_2std'] = df_statistics_and_measured['E_minus_2std'].apply(lambda x: max(0, x))        
         if 'P10' in df_statistics_and_measured:
             df_statistics_and_measured['P10'] = df_statistics_and_measured['P10'].apply(lambda x: max(0, x))
+    if set_mean_prediction_to_zero:
+        df_statistics_and_measured['E'] = df_statistics_and_measured['E'].apply(lambda x: max(0, x)) 
 
     si_t_df = statisticsObject.create_df_from_sensitivity_indices(si_type="Sobol_t")
     si_m_df = statisticsObject.create_df_from_sensitivity_indices(si_type="Sobol_m")
+
+    if si_m_df is not None:
+        si_m_df.sort_values(by=statisticsObject.time_column_name, ascending=True, inplace=True)
+        if correct_sobol_indices:
+            si_columns_to_plot = [x for x in si_m_df.columns.tolist() if x != 'measured' \
+                                        and x != 'measured_norm' and x != 'qoi' and x!= statisticsObject.time_column_name]
+            for single_column in si_columns_to_plot: 
+                si_m_df[single_column] = si_m_df[single_column].apply(lambda x: max(0, x))
+    if si_t_df is not None:
+        si_t_df.sort_values(by=statisticsObject.time_column_name, ascending=True, inplace=True)
+        if correct_sobol_indices:
+            si_columns_to_plot = [x for x in si_t_df.columns.tolist() if x != 'measured' \
+                                        and x != 'measured_norm' and x != 'qoi' and x!= statisticsObject.time_column_name]
+            for single_column in si_columns_to_plot: 
+                si_t_df[single_column] = si_t_df[single_column].apply(lambda x: max(0, x))
 
     return statisticsObject, df_statistics_and_measured, si_t_df, si_m_df, df_simulation_result, df_index_parameter_file, df_index_parameter_gof_file

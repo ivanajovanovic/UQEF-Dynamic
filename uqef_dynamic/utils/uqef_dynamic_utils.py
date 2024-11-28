@@ -205,6 +205,8 @@ def read_all_saved_uqef_dynamic_results_and_produce_dict_of_interest_single_qoi(
     for key, value in results_dict.items():
         globals()[key] = value
 
+    dim = simulationNodes.distNodes.shape[0]
+
     # Update dict with results of interest based on uqsim_args_dict - add variant, q_order, mc_numevaluations
     update_dict_with_results_of_interest_based_on_uqsim_args_dict(dict_with_results_of_interest, uqsim_args_dict)
 
@@ -2291,6 +2293,7 @@ def compute_df_statistics_columns_correlation(
 
     corr_df_statistics_and_measured_single_qoi_subset = df_statistics_and_measured_single_qoi_subset.corr()
     print(f"Correlation matrix: {corr_df_statistics_and_measured_single_qoi_subset} \n")
+    fig = None
     if plot:
         sns.set(style="darkgrid")
         mask = np.triu(np.ones_like(corr_df_statistics_and_measured_single_qoi_subset, dtype=bool))
@@ -2298,6 +2301,7 @@ def compute_df_statistics_columns_correlation(
         sns.heatmap(corr_df_statistics_and_measured_single_qoi_subset, mask=mask, square=True, annot=True,
                     linewidths=.5)
         plt.show()
+    return corr_df_statistics_and_measured_single_qoi_subset, fig
 
 
 def validate_condition(df, condition_results_based_on_metric, condition_results_based_on_metric_value):
@@ -2451,23 +2455,30 @@ def plot_heatmap_si_single_qoi(qoi_column, si_df, si_type="Sobol_t", uq_method="
         reset_index_at_the_end = True
 
     si_columns_to_plot = [x for x in si_df.columns.tolist() if x != 'measured' and x != 'measured_norm' and x != 'qoi']
-    si_columns_to_label = [single_column.split('_')[-1] for single_column in si_columns_to_plot]
+    si_columns_to_label = [single_column.split("_", 2)[2] for single_column in si_columns_to_plot]
 
     # fig = px.imshow(si_df[si_columns_to_plot].T, labels=dict(y='Parameters', x='Dates'))
 
     if 'qoi' in si_df.columns.tolist():
         fig = px.imshow(si_df.loc[si_df['qoi'] == qoi_column][si_columns_to_plot].T,
                         # color_continuous_scale='Inferno',
+                        y = si_columns_to_label,
                         labels=dict(y='Parameters', x='Dates'))
     else:
         fig = px.imshow(si_df[si_columns_to_plot].T,
                         # color_continuous_scale='Inferno',
+                        y = si_columns_to_label,
                         labels=dict(y='Parameters', x='Dates'))
 
     if reset_index_at_the_end:
         si_df.reset_index(inplace=True)
         si_df.rename(columns={si_df.index.name: time_column_name}, inplace=True)
 
+    fig.update_xaxes(
+        tickformat='%b %y',            # Format dates as "Month Day" (e.g., "Jan 01")
+        dtick="M1"                     # Set tick interval to 1 day for denser ticks
+    )
+    
     return fig
 
 
@@ -2487,6 +2498,175 @@ def plot_si_and_normalized_measured_time_signal_single_qoi(
     #     pass
     return fig
 
+
+def plotting_function_single_qoi(
+        df, single_qoi, subplot_titles=None, dict_what_to_plot=None, directory="./", fileName="simulation_big_plot"
+):
+
+    n_rows = 1
+    starting_row_for_predicted_data = 1
+
+    if dict_what_to_plot is None:
+        dict_what_to_plot = {
+            "E_minus_std": True, "E_plus_std": True, 
+            "E_minus_2std": True, "E_plus_2std": True,
+            "P10": True, "P90": True,
+            "StdDev": True, "Skew": False, "Kurt": False,
+        }
+
+    if dict_what_to_plot.get("StdDev", False) and 'StdDev' in df.columns:
+        n_rows += 1
+    if dict_what_to_plot.get("Skew", False) and 'Skew' in df.columns:
+        n_rows += 1
+    if dict_what_to_plot.get("Kurt", False) and 'Kurt' in df.columns:
+        n_rows += 1
+
+    if subplot_titles is None:
+        subplot_titles = ("Model Output",)
+        if dict_what_to_plot.get("StdDev", False) and 'StdDev' in df.columns:
+            subplot_titles = subplot_titles + ("Standard Deviation",)
+        if dict_what_to_plot.get("Skew", False) and 'Skew' in df.columns:
+            subplot_titles = subplot_titles + ("Skew",)
+        if dict_what_to_plot.get("Kurt", False) and 'Kurt' in df.columns:
+            subplot_titles = subplot_titles + ("Kurt",)
+
+    fig = make_subplots(
+        rows=n_rows, cols=1,
+        subplot_titles=subplot_titles,
+        shared_xaxes=True,
+        horizontal_spacing=0.01, vertical_spacing=0.03
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=df['TimeStamp'], y=df['E'],
+            text=df['E'],
+            name=f"Mean predicted {single_qoi}", mode='lines'
+        ),
+        row=starting_row_for_predicted_data, col=1
+    )
+
+    if dict_what_to_plot.get("E_minus_std", False) and 'E_minus_std' in df.columns:
+        fig.add_trace(
+            go.Scatter(
+                x=df['TimeStamp'], y=df['E_minus_std'],
+                name=f'E_minus_std',
+                text=df['E_minus_std'], mode='lines', showlegend=False, line_color='rgba(200, 200, 200, 0.4)', #line_color="grey",
+            ),
+            row=starting_row_for_predicted_data, col=1
+        )
+    if dict_what_to_plot.get("E_plus_std", False) and 'E_plus_std' in df.columns:
+        fig.add_trace(
+            go.Scatter(
+                x=df['TimeStamp'], y=df['E_plus_std'],
+                name=f'E+-std',
+                text=df['E_plus_std'],
+                mode='lines', fill='tonexty', showlegend=True, line_color='rgba(200, 200, 200, 0.4)', #line_color="grey",
+            ),
+            row=starting_row_for_predicted_data, col=1
+        )
+
+    if dict_what_to_plot.get("E_minus_2std", False) and 'E_minus_2std' in df.columns:
+        fig.add_trace(
+            go.Scatter(
+                x=df['TimeStamp'], y=df['E_minus_2std'],
+                name=f'E_minus_2std',
+                text=df['E_minus_2std'], mode='lines', showlegend=False, line_color='rgba(200, 200, 200, 0.4)', #line_color="grey",
+            ),
+            row=starting_row_for_predicted_data, col=1
+        )
+    if dict_what_to_plot.get("E_plus_2std", False) and 'E_plus_2std' in df.columns:
+        fig.add_trace(
+            go.Scatter(
+                x=df['TimeStamp'], y=df['E_plus_2std'],
+                name=f'E+-2std',
+                text=df['E_plus_2std'],
+                mode='lines', fill='tonexty', showlegend=True, line_color='rgba(200, 200, 200, 0.4)', #line_color="grey",
+            ),
+            row=starting_row_for_predicted_data, col=1
+        )
+
+    if dict_what_to_plot.get("P10", False) and 'P10' in df.columns:
+        fig.add_trace(go.Scatter(x=df['TimeStamp'], y=df["P10"],
+                                 name=f'P10',
+                                 line_color='rgba(255, 165, 0, 0.3)', mode='lines', showlegend=False),
+                      row=starting_row_for_predicted_data, col=1)
+    if dict_what_to_plot.get("P90", False) and 'P90' in df.columns:
+        fig.add_trace(go.Scatter(x=df['TimeStamp'], y=df["P90"],
+                                 name=f'P10-P90',
+                                 line_color='rgba(255, 165, 0, 0.3)', mode='lines', fill='tonexty', showlegend=True),
+                      row=starting_row_for_predicted_data, col=1)
+
+    starting_row_for_predicted_data += 1
+
+    if dict_what_to_plot.get("StdDev", False) and 'StdDev' in df.columns:
+        fig.add_trace(go.Scatter(x=df['TimeStamp'], y=df["StdDev"],
+                                 name=f'std. dev of {single_qoi}', line_color='darkviolet', mode='lines'),
+                      row=starting_row_for_predicted_data, col=1)
+        starting_row_for_predicted_data += 1
+
+    if dict_what_to_plot.get("Skew", False) and 'Skew' in df.columns:
+        fig.add_trace(
+            go.Scatter(
+                x=df['TimeStamp'], y=df['Skew'],
+                text=df['Skew'], name=f"Skewness of {single_qoi}", mode='markers'
+            ),
+            row=starting_row_for_predicted_data, col=1
+        )
+        starting_row_for_predicted_data += 1
+
+    if dict_what_to_plot.get("Kurt", False) and 'Kurt' in df.columns:
+        fig.add_trace(
+            go.Scatter(
+                x=df['TimeStamp'], y=df['Kurt'],
+                text=df['Kurt'], name=f"Kurtosis of {single_qoi}", mode='markers'
+            ),
+            row=starting_row_for_predicted_data, col=1
+        )
+        starting_row_for_predicted_data += 1
+
+    fig.update_layout(height=600, width=800,
+                      title_text=f"Detailed plot of most important time-series - QoI {single_qoi}")
+    timesteps_min = min(df['TimeStamp'])
+    timesteps_max = max(df['TimeStamp'])
+    fig.update_layout(
+        xaxis=dict(
+            rangemode='normal',
+            range=[timesteps_min, timesteps_max],
+            type="date"
+        ),
+        yaxis=dict(
+            rangemode='normal',  # Ensures the range is not padded for markers
+            autorange=True       # Auto-range is enabled
+        )
+    )
+    fig.update_layout(
+        # legend=dict(yanchor="bottom", y=0.01, xanchor="right", x=0.99),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1.0),
+        showlegend=True,
+        # template="plotly_white",
+    )
+    # fig.update_layout(xaxis=dict(type="date"))
+    # fig.update_xaxes(
+    #     tickformat='%b %y',            # Format dates as "Month Day" (e.g., "Jan 01")
+    #     dtick="M1"                     # Set tick interval to 1 day for denser ticks
+    # )
+    fig.update_layout(title=None)
+    fig.update_layout(
+        margin=dict(
+            t=10,  # Top margin
+            b=10,  # Bottom margin
+            l=20,  # Left margin
+            r=20   # Right margin
+        )
+    )
+    if not str(directory).endswith("/"):
+        directory = str(directory) + "/"
+    plot_filename = pathlib.Path(directory)  / f"{fileName}.pdf"
+    fig.write_image(str(plot_filename), format="pdf", width=1100,)
+    fileName = str(directory) + f"{fileName}.html"
+    pyo.plot(fig, filename=fileName, auto_open=False)
+
+    return fig
 # ============================================================================================
 # plotting functions for HBV model
 # ============================================================================================
@@ -2551,6 +2731,7 @@ def plot_parameters_sensitivity_indices_vs_temp_prec_measured(df_statistics, sin
     plt.setp(axs[0, 0], ylabel='measured')
     plt.setp(axs[1, 0], ylabel='precipitation')
     plt.setp(axs[2, 0], ylabel='temperature')
+    return fig
     # plt.setp(axs[0, :], xlabel='measured')
     # plt.setp(axs[1, :], xlabel='precipitation')
     # plt.setp(axs[2, :], xlabel='temperature')
@@ -2683,7 +2864,7 @@ def plot_forcing_mean_predicted_and_observed_all_qoi(statisticsObject, directory
     return fig, n_row
 
 
-def plotting_function_single_qoi(
+def plotting_function_single_qoi_hbv(
         df, single_qoi, qoi="Q", subplot_titles=None, dict_what_to_plot=None, directory="./", fileName="simulation_big_plot.html"
 ):
     """
@@ -2715,7 +2896,7 @@ def plotting_function_single_qoi(
         n_rows += 1
 
     if subplot_titles is None:
-        subplot_titles = ("Precipitation", "Temperature")
+        subplot_titles = ("Precipitation [mm/day]", "Temperature [°C]")
         if not isinstance(qoi, list) and qoi.lower() == "gof":
             subplot_titles = subplot_titles + ("Measured Streamflow",)
             subplot_titles = subplot_titles + ("Predicted",)
@@ -2732,40 +2913,45 @@ def plotting_function_single_qoi(
         rows=n_rows, cols=1,
         subplot_titles=subplot_titles,
         shared_xaxes=True,
+        horizontal_spacing=0.01, vertical_spacing=0.03
     )
 
     fig.add_trace(
         go.Bar(
             x=df['TimeStamp'], y=df['precipitation'],
             text=df['precipitation'],
-            name="Precipitation",
-            # marker_color='red'
+            name="Precipitation [mm/day]",
+            marker_color='red',
+            showlegend=False,
             # mode="lines",
             #         line=dict(
             #             color='LightSkyBlue')
         ),
         row=1, col=1
     )
-    fig.update_yaxes(autorange="reversed", row=1, col=1)
 
     fig.add_trace(
         go.Scatter(
             x=df['TimeStamp'], y=df['temperature'],
             text=df['temperature'],
-            name="Temperature", mode='lines+markers',
-            # marker_color='blue'
+            name="Temperature [°C]", mode='lines', #mode='lines+markers'
+            marker_color='blue',
+            showlegend=False,
         ),
         row=2, col=1
     )
 
-    fig.add_trace(
-        go.Scatter(
-            x=df['TimeStamp'], y=df['measured'],
-            name="Observed Streamflow ()", mode='lines',
-            # line=dict(color='green'),
-        ),
-        row=3, col=1
-    )
+    # Hardcoded
+    if not df['measured'].isna().all():
+    # if single_qoi == "Q_cms":
+        fig.add_trace(
+            go.Scatter(
+                x=df['TimeStamp'], y=df['measured'],
+                name="Measured Streamflow [m^3/s]", mode='lines',
+                # line=dict(color='green'),
+            ),
+            row=starting_row_for_predicted_data, col=1
+        )
 
     fig.add_trace(
         go.Scatter(
@@ -2855,6 +3041,7 @@ def plotting_function_single_qoi(
         )
         starting_row_for_predicted_data += 1
 
+    fig.update_yaxes(autorange="reversed", row=1, col=1)
     fig.update_layout(height=600, width=800,
                       title_text=f"Detailed plot of most important time-series - QoI {single_qoi}")
     timesteps_min = min(df['TimeStamp'])
@@ -2865,10 +3052,10 @@ def plotting_function_single_qoi(
             range=[timesteps_min, timesteps_max],
             type="date"
         ),
-        yaxis=dict(
-            rangemode='normal',  # Ensures the range is not padded for markers
-            autorange=True       # Auto-range is enabled
-        )
+        # yaxis=dict(
+        #     rangemode='normal',  # Ensures the range is not padded for markers
+        #     autorange=True       # Auto-range is enabled
+        # )
     )
     fig.update_layout(
         # legend=dict(yanchor="bottom", y=0.01, xanchor="right", x=0.99),
@@ -2876,13 +3063,13 @@ def plotting_function_single_qoi(
         showlegend=True,
         # template="plotly_white",
     )
-    fig.update_layout(xaxis=dict(type="date"))
+    # fig.update_layout(xaxis=dict(type="date"))
     fig.update_xaxes(
         tickformat='%b %y',            # Format dates as "Month Day" (e.g., "Jan 01")
         dtick="M1"                     # Set tick interval to 1 day for denser ticks
     )
     if not str(directory).endswith("/"):
         directory = str(directory) + "/"
-    fileName = directory + fileName
+    fileName = str(directory) + fileName
     pyo.plot(fig, filename=fileName, auto_open=False)
     return fig

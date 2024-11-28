@@ -156,7 +156,7 @@ class Samples(object):
                 else:
                     print(f"Samples INFO - run {index_run} returned None, and successful_run flag is False! This is expected!")    
                     self.list_index_run_with_None.append(index_run)
-                    continue
+                    # continue
             
             if parameters_dict is not None:
                 list_index_parameters_dict.append(parameters_dict)
@@ -331,9 +331,6 @@ class Samples(object):
             fileName = os.path.abspath(os.path.join(file_path, filename))
             with open(fileName, 'wb') as handle:
                 pickle.dump(self.dict_of_matrix_c_eigen_decomposition, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
-    def get_list_index_run_with_None(self):
-        return self.list_index_run_with_None
     
     def get_number_of_runs(self):
         if self.df_simulation_result is not None:
@@ -427,7 +424,7 @@ class TimeDependentStatistics(ABC, Statistics):
 
         self.compute_sobol_indices_with_samples = kwargs.get(
             'compute_sobol_indices_with_samples', False)
-        if self.uq_method == "mc" and self.compute_Sobol_t:
+        if self.uq_method == "mc" and self.compute_Sobol_m:
             self.compute_sobol_indices_with_samples = True
 
         if 'nodes_file' in kwargs:
@@ -450,7 +447,9 @@ class TimeDependentStatistics(ABC, Statistics):
         if self.compute_covariance_matrix_in_time and self.instantly_save_results_for_each_time_step:
             print(f"[STAT INFO]: Covariance Matrix will not be computed since since the fleg \
             instantly_save_results_for_each_time_step is set to True")
-        if self.compute_generalized_sobol_indices or self.compute_kl_expansion_of_qoi:
+        
+        if (self.uq_method == "quadrature" or self.uq_method =="pce" or self.uq_method == "sc" or self.uq_method == "kl") and \
+        (self.compute_generalized_sobol_indices or self.compute_kl_expansion_of_qoi):
             self.instantly_save_results_for_each_time_step = False
 
         if self.compute_kl_expansion_of_qoi:
@@ -1351,7 +1350,7 @@ class TimeDependentStatistics(ABC, Statistics):
 
         Parameters:
         - simulationNodes: UQEF Nodes object.
-        - numEvaluations (int): Number of evaluations for the Monte Carlo simulation. Can be refered from simulationNodes as well.
+        - numEvaluations (int): Number of evaluations for the Monte Carlo simulation. Can be infered from simulationNodes as well.
         - regression (bool, optional): Flag indicating whether gPCE+regression method is used. Defaults to False.
         - order (int, optional): Order of the polynomial. Only relevant if regression is True. Defaults to None.
         - poly_normed (bool, optional): Flag indicating whether the polynomial is normalized.  Only relevant if regression is True. Defaults to False.
@@ -3107,6 +3106,7 @@ class TimeDependentStatistics(ABC, Statistics):
             si_df["measured"] = np.nan
 
         si_df.set_index(self.time_column_name, inplace=True)
+        si_df.sort_index(ascending=True, inplace=True)
         return si_df
 
     # =================================================================================================
@@ -3610,7 +3610,7 @@ class TimeDependentStatistics(ABC, Statistics):
         si_columns_to_plot = [x for x in si_df.columns.tolist() if x != 'measured' \
                               and x != 'measured_norm' and x != 'qoi']
         
-        si_columns_to_label = [single_column.split('_')[-1] for single_column in si_columns_to_plot]
+        si_columns_to_label = [single_column.split("_", 2)[2] for single_column in si_columns_to_plot]
 
         if 'qoi' in si_df.columns.tolist():
             fig = px.imshow(si_df.loc[si_df['qoi'] == qoi_column][si_columns_to_plot].T,
@@ -3755,7 +3755,7 @@ class TimeDependentStatistics(ABC, Statistics):
         si_columns_to_plot = [x for x in si_df.columns.tolist() if x != 'measured' \
                               and x != 'measured_norm' and x != 'qoi']
 
-        si_columns_to_label = [single_column.split('_')[-1] for single_column in si_columns_to_plot]
+        si_columns_to_label = [single_column.split("_", 2)[2] for single_column in si_columns_to_plot]
         # fig = px.line(
         #     si_df, x=si_df.index, y=si_columns_to_plot) #mode='lines+markers' markers=True
         fig = go.Figure()

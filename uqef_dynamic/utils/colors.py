@@ -1,14 +1,23 @@
+# COLORS = [
+#     '#1f77b4',  # muted blue
+#     '#ff7f0e',  # safety orange
+#     '#2ca02c',  # cooked asparagus green
+#     '#d62728',  # brick red
+#     '#9467bd',  # muted purple
+#     '#8c564b',  # chestnut brown
+#     '#e377c2',  # raspberry yogurt pink
+#     '#7f7f7f',  # middle gray
+#     '#bcbd22',  # curry yellow-green
+#     '#17becf'   # blue-teal
+# ]
+
 COLORS = [
-    '#1f77b4',  # muted blue
-    '#ff7f0e',  # safety orange
-    '#2ca02c',  # cooked asparagus green
-    '#d62728',  # brick red
-    '#9467bd',  # muted purple
-    '#8c564b',  # chestnut brown
-    '#e377c2',  # raspberry yogurt pink
-    '#7f7f7f',  # middle gray
-    '#bcbd22',  # curry yellow-green
-    '#17becf'   # blue-teal
+    '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', 
+    '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf',
+    '#393b79', '#637939', '#8c6d31', '#843c39', '#7b4173',
+    '#3182bd', '#6baed6', '#9ecae1', '#c6dbef', '#e6550d',
+    '#fd8d3c', '#fdae6b', '#fdd0a2', '#31a354', '#74c476',
+    '#a1d99b', '#c7e9c0', '#756bb1', '#9e9ac8', '#bcbddc'
 ]
 
 s = '''
