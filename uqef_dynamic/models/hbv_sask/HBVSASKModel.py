@@ -1105,12 +1105,12 @@ class HBVSASKModel(object):
             new_column_name = "delta_" + single_qoi_column
             if self.list_read_measured_data[idx] and self.list_qoi_column_measured[idx] is not None:
                 single_qoi_column_measured = self.list_qoi_column_measured[idx]
+            else:
+                single_qoi_column_measured = None
+            if single_qoi_column_measured is not None and single_qoi_column_measured in flux_df.columns:
                 for timestamp in flux_df.index[1:]:
                     previous_timestamp = utility.compute_previous_timestamp(timestamp, self.resolution)
-                    flux_df.at[timestamp, new_column_name] = (
-                            flux_df.at[previous_timestamp, single_qoi_column_measured] -
-                            self.scale_factor_autoregressive_model_first_order*flux_df.at[timestamp, single_qoi_column]
-                    )
+                    flux_df.at[timestamp, new_column_name] = flux_df.at[timestamp, single_qoi_column] - self.scale_factor_autoregressive_model_first_order*flux_df.at[previous_timestamp, single_qoi_column_measured]
             else:
                 flux_df[new_column_name] = flux_df[single_qoi_column].diff()
         if reset_index:

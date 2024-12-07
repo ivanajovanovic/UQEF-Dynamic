@@ -894,7 +894,7 @@ class HBVSASKStatistics(time_dependent_statistics.TimeDependentStatistics):
                 x=df.index, 
                 y=df[self.temperature_column_name],
                 text=df[self.temperature_column_name],
-                name="Temperature", mode='lines',
+                name="Temperature", mode='lines+markers',
                 showlegend=False
                 # marker_color='blue'
             ), row=n_rows, col=n_col
