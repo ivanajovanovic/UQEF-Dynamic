@@ -73,6 +73,15 @@ def read_output_files_uqef_dynamic(workingDir, printing=False, **kwargs):
         - gof_list: list, list of goodness-of-fit (GOF) measures; None is missing
         - df_simulation_result: pandas DataFrame, simulation results; None is missing
         - df_state: pandas DataFrame, state; None is missing
+
+        - time_model_simulations: str, time for model simulations
+        - time_computing_statistics: str, time for computing statistics
+        - parameterNames: list, list of parameter names
+        - stochasticParameterNames: list, list of stochastic parameter names
+        - number_full_model_evaluations: int, number of full model evaluations
+        - full_number_quadrature_points
+        - plus extra entries from update_dict_with_results_of_interest_based_on_uqsim_args_dict
+
     """
     if not workingDir.is_dir():
         raise Exception(f"Directory {workingDir} does not exist!")
@@ -133,6 +142,7 @@ def read_output_files_uqef_dynamic(workingDir, printing=False, **kwargs):
     results_dict["simulation_settings_dict"]=simulation_settings_dict
     results_dict["time_info"]=time_info
     results_dict["simulationNodes"]=simulationNodes
+    results_dict["dim"]=dim
 
     if df_index_parameter_file.is_file():
         df_index_parameter = pd.read_pickle(df_index_parameter_file, compression="gzip")
@@ -186,18 +196,66 @@ def read_output_files_uqef_dynamic(workingDir, printing=False, **kwargs):
         df_state = None
     results_dict["df_state"]=df_state
 
+    # ========================================================
+    # Etra stuff as from read_all_saved_uqef_dynamic_results_and_produce_dict_of_interest
+    # Update dict with results of interest based on uqsim_args_dict - add variant, q_order, mc_numevaluations
+    update_dict_with_results_of_interest_based_on_uqsim_args_dict(results_dict, uqsim_args_dict)
+    
+    # Extra Timing information
+    for line in time_info:
+        if line.startswith("time_model_simulations"):
+            results_dict["time_model_simulations"] = line.split(':')[1].strip()
+        elif line.startswith("time_computing_statistics"):
+            results_dict["time_computing_statistics"] = line.split(':')[1].strip()
+
+    # whatch-out this might be tricky when not all params are regarded as uncertain!
+    param_labeles = utility.get_list_of_uncertain_parameters_from_configuration_dict(
+        configurationObject, raise_error=True, uq_method=uqsim_args_dict["uq_method"])
+    #print(f"Debugging - params_list: {params_list}; simulationNodes.nodeNames: {simulationNodes.nodeNames}; param_labeles: {param_labeles}")    
+    # results_dict["parameterNames"] = params_list  #not simulationNodes.nodeNames, instead better simulationNodes.orderdDistsNames
+    results_dict["stochasticParameterNames"] = param_labeles
+
+    simulation_parameters_file = args_files["simulation_parameters_file"]
+    if df_simulation_result is not None:
+        results_dict["number_full_model_evaluations"] = len(df_simulation_result)
+    elif simulation_parameters_file.is_file():
+        simulation_parameters = np.load(simulation_parameters_file,  allow_pickle=True)
+        #print(f"Debugging - simulation_parameters.shape: {simulation_parameters.shape}")
+        results_dict["number_full_model_evaluations"] = simulation_parameters.shape[0]
+    else:
+        if uqsim_args_dict["uq_method"]!="saltelli":
+            results_dict["number_full_model_evaluations"] = simulationNodes.nodes.shape[1]
+        else:
+            results_dict["number_full_model_evaluations"] = (uqsim_args_dict["mc_numevaluations"]) * (2 + dim)
+
+    if results_dict["variant"] not in ["m1", "m2"]:
+        results_dict["full_number_quadrature_points"] = \
+        (results_dict["q_order"] + 1) ** dim
+    
     # list_qoi_column = simulation_settings_dict.list_qoi_column
     # list_qoi_column = statisticsObject.list_qoi_column
+    # ========================================================
 
     return results_dict
 
-def read_all_saved_uqef_dynamic_results_and_produce_dict_of_interest_single_qoi(workingDir, **kwargs):
+
+def read_all_saved_uqef_dynamic_results_and_produce_dict_of_interest(workingDir, **kwargs):
     """
     This function builds on top of the read_output_files_uqef_dynamic function.
     It returns similar dictionary as read_all_saved_uqef_dynamic_results_and_produce_dict_of_interest_single_qoi_single_timestamp
     but for all the timestamps.
     Args:
     - workingDir: pathlib.Path object, path to the working directory
+
+    Returns:
+    - results_dict: dict, dictionary with the following keys / values:
+        - time_model_simulations: str, time for model simulations
+        - time_computing_statistics: str, time for computing statistics
+        - parameterNames: list, list of parameter names
+        - stochasticParameterNames: list, list of stochastic parameter names
+        - number_full_model_evaluations: int, number of full model evaluations
+        - full_number_quadrature_points
+        - plus extra entries from update_dict_with_results_of_interest_based_on_uqsim_args_dict
 
     """
     dict_with_results_of_interest = defaultdict()
@@ -242,6 +300,8 @@ def read_all_saved_uqef_dynamic_results_and_produce_dict_of_interest_single_qoi(
         (dict_with_results_of_interest["q_order"] + 1) ** dim
 
     return dict_with_results_of_interest
+
+# ============================================================================================
 
 
 def read_all_saved_uqef_dynamic_results_and_produce_dict_of_interest_single_qoi_single_timestamp(workingDir, 
@@ -619,9 +679,64 @@ timestamp, qoi_column_name=None, time_column_name=utility.TIME_COLUMN_NAME, plot
 
     return dict_with_results_of_interest
 
+def update_dict_with_method_variant_based_on_uqsim_args_dict(dict_with_results_of_interest, uqsim_args_dict):
+    variant = None
+    if uqsim_args_dict["regression"]:
+        variant = "m3"
+        if uqsim_args_dict["uq_method"]== "mc" or uqsim_args_dict["uq_method"]== "saltelli":
+            variant = "m3-mc"
+        else:
+            variant = "m3-sc"
+    elif uqsim_args_dict["uq_method"]== "mc":
+        variant = "m1"
+    elif uqsim_args_dict["uq_method"]=="saltelli":
+        variant = "m2"
+    elif uqsim_args_dict["uq_method"]=="sc":
+        """
+        [m4] gPCE+PSP with a full grid and polynomials of total-order
+        [m5] gPCE+PSP with sparse grid and polynomials of total-order
+        [m6] gPCE+PSP with a full grid and sparse polynomials (hyperbolic truncation)
+        [m7] gPCE+PSP with sparse grid and sparse polynomials (hyperbolic truncation)
+        """
+        if (not uqsim_args_dict["sc_sparse_quadrature"] and not uqsim_args_dict["read_nodes_from_file"]) and uqsim_args_dict["cross_truncation"]==1.0:
+            variant = "m4"
+        elif (uqsim_args_dict["sc_sparse_quadrature"] or uqsim_args_dict["read_nodes_from_file"]) and uqsim_args_dict["cross_truncation"]==1.0:
+            parameters_file = pathlib.Path(uqsim_args_dict["parameters_file"]).name
+            if uqsim_args_dict["sc_quadrature_rule"] == "KPU" or parameters_file.startswith('KPU'):
+                variant = "m5-kpu"
+            elif uqsim_args_dict["sc_quadrature_rule"] == "GQU" or parameters_file.startswith('GQU'):
+                variant = "m5-gqu"
+            else:
+                variant = "m5"
+        elif (not uqsim_args_dict["sc_sparse_quadrature"] and not uqsim_args_dict["read_nodes_from_file"]) and uqsim_args_dict["cross_truncation"]<1.0:
+            # ct = uqsim_args_dict["cross_truncation"]
+            # variant = f"m6-{ct}"
+            variant = f"m6"
+        elif (uqsim_args_dict["sc_sparse_quadrature"] or uqsim_args_dict["read_nodes_from_file"]) and uqsim_args_dict["cross_truncation"]<1.0:
+            parameters_file = pathlib.Path(uqsim_args_dict["parameters_file"]).name
+            if uqsim_args_dict["sc_quadrature_rule"] == "KPU" or parameters_file.startswith('KPU'):
+                variant = "m7-kpu"
+            elif uqsim_args_dict["sc_quadrature_rule"] == "GQU" or parameters_file.startswith('GQU'):
+                variant = "m7-gqu"
+            else:
+                variant = "m7"
+    dict_with_results_of_interest["variant"] = variant
+
 
 def update_dict_with_results_of_interest_based_on_uqsim_args_dict(dict_with_results_of_interest, uqsim_args_dict):
+    """
+    Update the dictionary with results of interest based on the given UQSim arguments dictionary.
+
+    Args:
+        dict_with_results_of_interest (dict): The dictionary to be updated with the results of interest.
+        uqsim_args_dict (dict): The UQSim arguments dictionary.
+
+    Add new entries to the dict_with_results_of_interest:
+    - variant
+    """
     variant = None
+    dict_with_results_of_interest["regression"] = uqsim_args_dict["regression"]
+    dict_with_results_of_interest["uq_method"] = uqsim_args_dict["uq_method"]
     if uqsim_args_dict["regression"]:
         variant = "m3"
         dict_with_results_of_interest["q_order"] = uqsim_args_dict["sc_q_order"]
@@ -657,7 +772,7 @@ def update_dict_with_results_of_interest_based_on_uqsim_args_dict(dict_with_resu
         if (not uqsim_args_dict["sc_sparse_quadrature"] and not uqsim_args_dict["read_nodes_from_file"]) and uqsim_args_dict["cross_truncation"]==1.0:
             variant = "m4"
         elif (uqsim_args_dict["sc_sparse_quadrature"] or uqsim_args_dict["read_nodes_from_file"]) and uqsim_args_dict["cross_truncation"]==1.0:
-            parameters_file = uqsim_args_dict["parameters_file"].name
+            parameters_file = pathlib.Path(uqsim_args_dict["parameters_file"]).name
             if uqsim_args_dict["sc_quadrature_rule"] == "KPU" or parameters_file.startswith('KPU'):
                 variant = "m5-kpu"
             elif uqsim_args_dict["sc_quadrature_rule"] == "GQU" or parameters_file.startswith('GQU'):
@@ -671,7 +786,7 @@ def update_dict_with_results_of_interest_based_on_uqsim_args_dict(dict_with_resu
             variant = f"m6"
         elif (uqsim_args_dict["sc_sparse_quadrature"] or uqsim_args_dict["read_nodes_from_file"]) and uqsim_args_dict["cross_truncation"]<1.0:
             dict_with_results_of_interest["cross_truncation"] = uqsim_args_dict["cross_truncation"]
-            parameters_file = uqsim_args_dict["parameters_file"].name
+            parameters_file = pathlib.Path(uqsim_args_dict["parameters_file"]).name
             if uqsim_args_dict["sc_quadrature_rule"] == "KPU" or parameters_file.startswith('KPU'):
                 variant = "m7-kpu"
             elif uqsim_args_dict["sc_quadrature_rule"] == "GQU" or parameters_file.startswith('GQU'):
