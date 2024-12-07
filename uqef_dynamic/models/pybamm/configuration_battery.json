@@ -1,0 +1,70 @@
+{
+  "time_settings": {
+    "resolution": "integer"
+  },
+  "model_settings": {
+    "plotting": "False",
+    "printing": "True",
+    "writing_results_to_a_file": "False",
+    "options": {"surface form": "differential"},
+    "division_factor": 4,
+    "current_ooi": "Current function [A]",
+    "time_ooi": "Time [s]",
+    "voltage_ooi": "Voltage [V]"
+  },
+  "model_paths": {
+    "model_file": "US06.csv"
+  },
+  "simulation_settings": {
+    "qoi":"V_sol",
+    "qoi_column":"V_sol"
+  },
+  "parameters": [
+    {
+      "name": "Negative electrode porosity",
+      "distribution": "Uniform",
+      "lower": 0.25,
+      "upper": 0.5,
+      "default": 0.3
+    },
+    {
+      "name": "Positive electrode porosity",
+      "distribution": "Uniform",
+      "lower": 0.2,
+      "upper": 0.65,
+      "default": 0.4
+    },
+    {
+      "name": "Negative electrode diffusivity [m2.s-1]",
+      "distribution": "LogUniform",
+      "lower": -34.53877639, 
+      "upper": -25.32843602,
+      "scale": 1, 
+      "shift": 0,
+      "default": -30
+    },
+    {
+      "name": "Positive electrode diffusivity [m2.s-1]",
+      "distribution": "LogUniform",
+      "lower": -41.44653167,
+      "upper": -27.63102112,
+      "scale": 1, 
+      "shift": 0,
+      "default": -30
+    },
+    {
+      "name": "Negative particle radius [m]",
+      "distribution": "Uniform",
+      "lower": 0.2e-5,
+      "upper": 1.2e-5,
+      "default": 0.8e-5
+    },
+    {
+      "name": "Positive particle radius [m]",
+      "distribution": "Uniform",
+      "lower": 0.1e-5,
+      "upper": 1e-5,
+      "default": 1e-5
+    }
+  ]
+}

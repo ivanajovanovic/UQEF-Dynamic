@@ -1,0 +1,158 @@
+{
+    "time_settings":
+    {
+      "start_day": 1,
+      "start_month": 10,
+      "start_year": 2002,
+      "start_hour": 0,
+      "start_minute": 0,
+
+      "end_day": 1,
+      "end_month": 10,
+      "end_year": 2006,
+      "end_hour": 0,
+      "end_minute": 0,
+
+      "run_full_timespan":"False",
+      "spin_up_length":1096,
+      "simulation_length": 23,
+      "resolution": "daily",
+      
+      "cut_runs": "False",
+      "timestep": 5
+    },
+  "model_settings": {
+    "basis": "Oldman_Basin",
+    "plotting": "False",
+    "writing_results_to_a_file": "False",
+    "corrupt_forcing_data": "False"
+  },
+  "model_paths": {
+    "hbv_model_path": "Hydro_Models/HBV-SASK-data"
+  },
+  "simulation_settings": {
+    "qoi":"Q_cms",
+    "qoi_column":"Q_cms",
+    "autoregressive_model_first_order":"True",
+    "scale_factor_autoregressive_model_first_order":0.8,
+    "transform_model_output":"None",
+    "read_measured_data": "True",
+    "qoi_column_measured":"streamflow",
+    "objective_function_qoi":["RMSE", "LogNSE", "KGE"],
+    "calculate_GoF":"False",
+    "objective_function":["MAE", "MSE", "RMSE", "NRMSE", "NSE", "LogNSE", "KGE"],
+    "mode":"continuous",
+    "interval": 31,
+    "min_periods": 31,
+    "method": "avrg",
+    "center": "center",
+    "compute_gradients":"False",
+    "eps_gradients": 0.01,
+    "gradient_method":"Forward Difference",
+    "gradient_analysis": "True",
+    "compute_active_subspaces": "False",
+    "save_gradient_related_runs": "True"
+  },
+  "parameters": [
+    {
+      "name": "TT",
+      "distribution": "Uniform",
+      "lower": -4.0,
+      "upper": 4.0,
+      "default": 0.0
+    },
+    {
+      "name": "C0",
+      "distribution": "Uniform",
+      "lower": 0.0,
+      "upper": 10.0,
+      "default": 0.5
+    },
+    {
+      "name": "ETF",
+      "distribution": "Uniform",
+      "lower": 0.0,
+      "upper": 1.0,
+      "default": 0.2
+    },    
+    {
+      "name": "FC",
+      "distribution": "Uniform",
+      "lower": 50.0,
+      "upper": 500.0,
+      "default": 250
+    },
+    {
+      "name": "beta",
+      "distribution": "Uniform",
+      "lower": 1.0,
+      "upper": 3.0,
+      "default": 2.0
+    },
+    {
+      "name": "FRAC",
+      "distribution": "Uniform",
+      "lower": 0.1,
+      "upper": 0.9,
+      "default": 0.3
+    },
+    {
+      "name": "K2",
+      "distribution": "Uniform",
+      "lower": 0.0,
+      "upper": 0.05,
+      "default": 0.05
+    },
+    {
+      "name": "LP",
+      "distribution": "Uniform",
+      "lower": 0.0,
+      "upper": 1.0,
+      "default": 0.5
+    },
+    {
+      "name": "K1",
+      "distribution": "Uniform",
+      "lower": 0.05,
+      "upper": 1.0,
+      "default": 0.5
+    },
+    {
+      "name": "alpha",
+      "distribution": "Uniform",
+      "lower": 1.0,
+      "upper": 3.0,
+      "default": 2.0
+    }
+  ],
+  "unused_parameters": [
+    {
+      "name": "M",
+      "distribution": "Uniform",
+      "lower": 0.9,
+      "upper": 1.0,
+      "default": 1.0
+    },
+    {
+      "name": "VAR_M",
+      "distribution": "Uniform",
+      "lower": 1e-5,
+      "upper": 1e-3,
+      "default": 1.0
+    },
+    {
+      "name": "UBAS",
+      "distribution": "None",
+      "lower": 1.0,
+      "upper": 3.0,
+      "default": 1.0
+    },
+    {
+      "name": "PM",
+      "distribution": "None",
+      "lower": 0.5,
+      "upper": 2.0,
+      "default": 1.0
+    }
+  ]
+}

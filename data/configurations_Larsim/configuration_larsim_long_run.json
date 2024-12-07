@@ -1,0 +1,52 @@
+{
+  "time_settings": {
+    "start_day": 1,
+    "start_month": 1,
+    "start_year": 2013,
+    "start_hour": 0,
+    "start_minute": 0,
+    "end_day": 1,
+    "end_month": 1,
+    "end_year": 2014,
+    "end_hour": 0,
+    "end_minute": 0,
+    "timestep": 31,
+    "cut_runs": "True",
+    "warm_up_duration": 53
+  },
+  "model_paths": {
+    "larsim_exe": "./Larsim-exe/larsim-linux-intel-1000.exe",
+    "larsim_model_dir": "WHM Regen",
+    "list_input_lila_files":
+    [
+      "station-wq.lila",
+      "station-n.lila",
+      "station-tlu.lila",
+      "station-xglob.lila",
+      "station-xludr.lila",
+      "station-zsos.lila",
+      "station-rflu.lila",
+      "station-ttau.lila",
+      "station-xwind.lila"
+    ],
+    "whms_dir": "var/WHM Regen WHMS",
+    "global_master_dir": "master_configuration",
+    "master_tape_10_path": "tape10_master",
+    "master_tape_35_path": "tape35",
+    "master_lanu_path": "lanu.par",
+    "list_input_master_lila_files":
+    [
+      "q_2003-11-01_2018-01-01.lila",
+      "n_2003-11-01_2018-01-01.lila",
+      "tlu_2003-11-01_2018-01-01.lila",
+      "xglob_2003-11-01_2018-01-01.lila",
+      "xludr_2003-11-01_2018-01-01.lila",
+      "zsos_2003-11-01_2018-01-01.lila",
+      "rflu_2003-11-01_2018-01-01.lila",
+      "ttau_2003-11-01_2018-01-01.lila",
+      "xwind_2003-11-01_2018-01-01.lila"
+    ],
+    "saved_data_dir": "data_files",
+    "ground_truth_file": "q_2003-11-01_2018-01-01_time_and_values_filtered.pkl"
+  }
+}

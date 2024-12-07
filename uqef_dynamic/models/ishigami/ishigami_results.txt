@@ -1,0 +1,101 @@
+Ishigami:
+Sobol_t: [0.5574/0.5576, 0.4424/0.4424, 0.2436/0.2437]
+Sobol_m: [0.3138/0.3139, 0.4424/0.4424, 0.0/0.0000]
+
+
+KPU L=8 p=7 #model=399
+E_qoi: 3.5000004877355337
+Var_qoi: 13.724846773796116
+StdDev_qoi: 3.7047060306853115
+Sobol_t_qoi: [0.56227576 0.43777562 0.24563088]
+Sobol_m_qoi: [0.316644270 0.437723771 4.73734273e-07]
+
+
+KPU L=18 p=7 #model=6413/4447
+E_qoi: 3.5000000649155183
+Var_qoi: 13.724744387119472
+StdDev_qoi: 3.70469221219786
+Sobol_t_qoi: [0.56227328 0.43772672 0.24562707]
+Sobol_m_qoi: [0.316646216 0.437726715 2.61497469e-13]
+
+
+-------Ishigami & SparsSpACE-----------
+-> Trapezoidal Integration
+polynomial_degree_max = 3
+lmax = 4
+max_evaluations=200
+------------------
+Number of refinements: 8
+Number of distinct points used during the refinement: 207
+Time used adaptive (s): 112.16107894852757
+Final error: 1.3263282532562601
+E: 3.4846161564551976, PCE Var: 10.824183508450815
+
+Sobol's Total Index for parameter x1 is:
+Sobol_t_qoi: [0.33577695, 0.33577695, 0.33577695]
+Sobol_m_qoi: [0.33088972, 0.33088972, 0.33088972]
+
+
+polynomial_degree_max = 3
+lmax = 4
+max_evaluations=1000
+------------------
+Number of refinements:
+Number of distinct points used during the refinement:
+Time used adaptive (s):
+Final error:
+E:
+
+Sobol's Total Index for parameter x1 is:
+
+
+-------Ishigami & UQEF/Larsim-UQ-----------
+
+IMPORTANT: With Saltelli only random works!!! [TODO check this]
+IMPORTANT: Saltelli sometimes still gives negative value when SI close to 0!!!
+
+Normalized polynomials; q=7; p=6, with transformation - sparse: - 1506 model runs
+    Sobol_t_qoi: [0.56426268 0.43615197 0.24227894]; shape:(3,)
+    Sobol_m_qoi: [0.32245707 0.43472401 0.00047616]; shape:(3,)
+
+Normalized polynomials; q=11; p=8, with transformation - sparse: -  9373 model runs
+    Sobol_t_qoi: [0.55759373 0.44240622 0.2435828 ]; shape:(3,)
+    Sobol_m_qoi: [3.14010980e-01 4.42406174e-01 2.03030331e-11]; shape:(3,)
+
+Normalized polynomials; q=11; p=8, with transformation - not-sparse: - 1728 model runs
+    Sobol_t_qoi: [0.55759382 0.44240623 0.24358284]; shape:(3,)
+    Sobol_m_qoi: [0.314010972 0.442406201 0.317265305e-23]; shape:(3,)
+
+Normalized polynomials; saltelli; 1000->5000, no transformation: - 5000 model runs - halton
+        WRONG!!!!
+	Sobol_t_qoi: [4.78774606e-02 4.14642486e-01 2.55410713e-04]; shape:(3,)
+	Sobol_m_qoi: [0.58560669 0.95160101 0.53939457]; shape:(3,)
+
+Normalized polynomials; saltelli; 2000->10000, no transformation: - 10000 model runs - random
+	Sobol_t_qoi: [0.57814693 0.44734212 0.24896176]; shape:(3,)
+	Sobol_m_qoi: [0.29420935 0.42089895 0.02740504]; shape:(3,)
+
+Normalized polynomials; saltelli; 1000->5000, no transformation: - 5000 model runs - random
+         code: 4(best); 3(negative m_3); 2(wrong); 1(negative total!!!);
+	Sobol_t_qoi: [0.53025562 0.46023587 0.22305464]; shape:(3,)
+	Sobol_m_qoi: [ 0.29382401  0.45745877 -0.00617224]; shape:(3,)
+
+Normalized polynomials; q=7; p=6, no transformation: - 512 model runs
+	Sobol_t_qoi: [0.56371626 0.43628374 0.24071006]; shape:(3,)
+	Sobol_m_qoi: [3.23006201e-01 4.36283741e-01 2.91779286e-30]; shape:(3,)
+
+Normalized polynomials; q=11; p=7, no transformation:
+	Sobol_t_qoi: [0.56227314 0.43772686 0.24562696]; shape:(3,)
+	Sobol_m_qoi: [0.316646178e 0.437726860e 0.0]; shape:(3,)
+
+Normalized polynomials; q=11; p=5, no transformation:
+	Sobol_t_qoi: [0.64550176 0.35449824 0.27563309]; shape:(3,)
+	Sobol_m_qoi: [3.69868674e-01 3.54498237e-01 7.46626291e-31]; shape:(3,)
+
+Normalized polynomials; q=7; p=5, no transformation:
+	Sobol_t_qoi: [0.64634036 0.35365964 0.27599102]; shape:(3,)
+	Sobol_m_qoi: [3.70349340e-01 3.53659641e-01 1.54124529e-30]; shape:(3,)
+
+Not-Normalized polynomials; q=7; p=5, no transformation:
+	Sobol_t_qoi: [0.64634036 0.35365964 0.27599102]; shape:(3,)
+	Sobol_m_qoi: [3.70349340e-01 3.53659641e-01 1.04090894e-30]; shape:(3,)

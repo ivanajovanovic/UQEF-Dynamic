@@ -1,15 +1,46 @@
 # Software tool for Efficient Forward Uncertainty Quantification of Dynamical Models
 
-This repository contains code for performing forward uncertainty quantification of the Larsim Model.
+## Introduction
 
-## Requirements
+This repository contains code for performing forward uncertainty quantification and global variance-based sensitivty indices. Special focus are model that produce time-dependent output.
+
+This repository contains supporting code for the paper...
+
+<!-- This code is licensed under the GNU Lesser General Public License version 3 or
+later, see `COPYING` and `COPYING.LESSER`. -->
+
+## Requirements/Dependencies
+
+The primary dependencies are UQEF and Chaospy tools/libraires. Secondary dependencies for pre and post-processing include various data analysis, plotting and statistical libraries. 
+
+The code is compatible with Python 3.11 and the dependencies are specified in the
+`requirements/requirements_py311.txt` file:
+
+    conda create -n uqef_env --file requirements_py311.txt
+    conda install -n uqef_env -c conda-forge nb_conda_kernels
+    conda install -n uqef_env -c conda-forge pyproj
+    conda activate uqef_env
+
+    $(which pip) install chaospy
+
+    cd UQEF/
+    git checkout parallel_statistics
+    $(which python) setup_new.py install
+    cd ../
+
+The file `requirements/requirements_py311-not-fixed.txt` contains the same dependencies without
+fixed version requirements.
+
+We refer the user to the followig script to help him/her set-up the conda environment `scripts/set_up_new_conda_env.sh`
 
 - Compatible with Python 3.6+
-- Access to Larsim_Utility_Set and UQEF library, as well as necessary data to run and stimulate the Larsim model.
-- Additional Software requirements:
+- Software requirements:
   - chaospy
   - Requirements of the UQEF library and UQEF library itself
+- Specific for the Larsim model
   - Requirements of the Larsim_Utility_Set library and Larsim_Utility_Set library itself
+- Access to data necessary to run and stimulate the models (e.g., Larsim model).
+
 
 ## How to Run the Code/Simulation
 
@@ -18,17 +49,21 @@ This repository contains code for performing forward uncertainty quantification 
 ## Running the Simulation on HPC
 
 *Details on how to run the simulation on HPC*
+All the simulations studies were executed on the Linux Cluster HPC systems. The
+launch scripts are specific to that cluster and are included in the
+`scripts/` subdirectory for reference. It would be necessary to modify
+these job launch scripts to run these studies on another cluster. Also, one might have to change accordingly the paths specified in some scripts under `uqef_dynamic/scientific_pipelines/` subdirectory.
 
 ## Pre-run Setup
 
 Before each run, perform the following steps:
 
-- Delete all subfolders in the `model_runs` folder.
-- Optionally, delete all whm and lila files inside `../Larsim-data/WHM Regen/master_configuration`.
+<!-- - Delete all subfolders in the `model_runs` folder.
+- Optionally, delete all whm and lila files inside `../Larsim-data/WHM Regen/master_configuration`. -->
 
 ## Paths Definitions
 
-### Paths Definitions from LarsimUtilityFunctions
+<!-- ### Paths Definitions from LarsimUtilityFunctions
 
 - home_dir
 - data_dir (the parent folder of the **Larsim-data** folder)
@@ -36,9 +71,9 @@ Before each run, perform the following steps:
 - sourceDir (folder where source code is)
 - working_dir
 - larsim_data_path
-- sim_folder
+- sim_folder -->
 
-### Paths Definitions from UQEF
+### Paths Definitions from UQEF-Dynamic
 
 - inputModelDir - larsim_data_path
 - outputModelDir - outputResultDir
@@ -47,6 +82,19 @@ Before each run, perform the following steps:
 - sourceDir - sourceDir
 
 ## Output Files
+- `uqsim_args.pkl`
+- `configurationObject`
+- `nodes.simnodes.zip`
+- `time_info.txt`
+- `df_all_index_parameter_values.pkl`
+- `df_state_results.pkl`
+[optional]
+- `df_all_index_parameter_gof_values.pkl`
+- `df_all_simulations.pkl`
+[one file for each QoI and each timestamp]
+- `statistics_dictionary_{qoi}_{timestamp}.pkl`
+- `statistics_dictionary_{qoi}_{timestamp}.pkl`
+- `gpce_coeffs_{qoi}_{timestamp}.npy`
 
 - outputResultDir/df_measured.pkl
 - outputResultDir/df_simulated.pkl
@@ -62,6 +110,7 @@ Before each run, perform the following steps:
 
 ## Input Arguments
 
+Detailed list of input arguments and their explanation is provided in `docs` subfolder
 
 ### Brief documentation for the input arguments:
 

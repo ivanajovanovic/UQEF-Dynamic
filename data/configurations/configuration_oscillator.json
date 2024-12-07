@@ -1,0 +1,56 @@
+{
+  "time_settings": {
+    "t_start": 0,
+    "t_end": 10,
+    "dt":  0.01, 
+    "t_interest": "None",
+    "resolution": "integer"
+  },
+  "model_settings": {
+    "plotting": "False",
+    "writing_results_to_a_file": "False"
+  },
+  "simulation_settings": {
+    "qoi": "displacement",
+    "qoi_column":"displacement"
+  },
+  "parameters": [
+    {
+      "name": "c",
+      "distribution": "Uniform",
+      "lower": 0.08,
+      "upper": 0.12,
+      "default": 0.1
+    },
+    {
+      "name": "k",
+      "distribution": "Uniform",
+      "lower": 0.03,
+      "upper": 0.04,
+      "default": 0.035
+    },
+    {
+      "name": "f",
+      "distribution": "Uniform",
+      "lower": 0.08,
+      "upper": 0.12,
+      "default": 0.1
+    },
+     {
+      "name": "y0",
+      "distribution": "Uniform",
+      "lower": 0.45,
+      "upper": 0.55,
+      "default": 0.5
+    },
+    {
+      "name": "y1",
+      "distribution": "Uniform",
+      "lower": -0.05,
+      "upper": 0.05,
+      "default": 0.0
+    }
+  ]
+}
+
+
