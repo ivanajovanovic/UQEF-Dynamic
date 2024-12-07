@@ -136,7 +136,7 @@ echo "---- start HBV sim: \`date\`"
                             --outputResultDir $resultsPath \
                             --inputModelDir $modelMasterPath \
                             --sourceDir $baseSourcePath \
-                            --config_file $baseSourcePath/data/configurations/configuration_hbv_10D_single_qoi.json \
+                            --config_file $baseSourcePath/data/configurations/configuration_hbv_10D.json \
                             --model "$model" \
                             --uncertain "$uncertain" \
                             --opt_strategy "$strategy" --opt_algorithm "$algorithm" \
@@ -153,28 +153,29 @@ echo "---- start HBV sim: \`date\`"
                             --sc_quadrature_rule "$sc_quadrature_rule" \
                             --parameters_file "$parameters_file" \
                             --parameters_setup_file "$parameters_setup_file" \
+                            --cross_truncation 0.7 \
                             $opt
 
 echo "---- end HBV sim: \`date\`"
 
-" > $baseSourcePath/hbv_uq_mc_p4_lhs_10000_oldman_2005_2006.cmd
+" > $baseSourcePath/hbv_uq_mc_150000_lhs_banff_2005_2006.cmd
 
     #execute batch file
-    sbatch $baseSourcePath/hbv_uq_mc_p4_lhs_10000_oldman_2005_2006.cmd
+    sbatch $baseSourcePath/hbv_uq_mc_150000_lhs_banff_2005_2006.cmd
 
 }
 
 model="hbvsask"
-opt_add="--regression --parallel_statistics --sampleFromStandardDist --compute_Sobol_m --compute_Sobol_t --sc_poly_normed --save_all_simulations --store_gpce_surrogate_in_stat_dict" #--read_nodes_from_file --instantly_save_results_for_each_time_step
+opt_add="--parallel_statistics --sampleFromStandardDist --compute_Sobol_m --compute_Sobol_t --sc_poly_normed --store_gpce_surrogate_in_stat_dict" #--save_all_simulations --regression  --read_nodes_from_file --instantly_save_results_for_each_time_step
 nodes=4
 tasks_per_node=60  #22
 low_time="2:30:00"
-mid_time="12:00:00"
+mid_time="3:00:00"
 max_time="72:00:00"
 uq_method="mc"
 q_order=6
 p_order=4
-mc_numevaluations=10000
+mc_numevaluations=150000
 uc="all"
 sampling_rule="latin_hypercube"
 sc_poly_rule="three_terms_recurrence"

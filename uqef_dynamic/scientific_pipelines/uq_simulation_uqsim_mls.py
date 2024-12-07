@@ -63,7 +63,7 @@ if local_debugging:
 
     uqsim.args.uq_method = "mc"  # "sc" | "saltelli" | "mc" | "ensemble"
     
-    uqsim.args.mc_numevaluations = 3000 #7800
+    uqsim.args.mc_numevaluations = 1000 #7800
     uqsim.args.sampling_rule = "latin_hypercube"  # "random" | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
     
     uqsim.args.sc_q_order = 5  # 7 #10 3
@@ -81,7 +81,7 @@ if local_debugging:
     uqsim.args.sc_poly_normed = True  # True
     uqsim.args.sc_sparse_quadrature = False  # False
     uqsim.args.regression = True
-    uqsim.args.cross_truncation = 0.7
+    uqsim.args.cross_truncation = 0.7  #0.7
 
     # paths, if necessary change them
     uqsim.args.inputModelDir = os.path.abspath(os.path.join('/work/ga45met/mnt/linux_cluster_2', 'UQEF-Dynamic'))
@@ -103,13 +103,14 @@ if local_debugging:
     # HBV-SASK
     uqsim.args.inputModelDir = pathlib.Path("/work/ga45met/Hydro_Models/HBV-SASK-data")
     uqsim.args.sourceDir = pathlib.Path("/work/ga45met/Hydro_Models/HBV-SASK-data")
-    uqsim.args.outputResultDir = os.path.abspath(os.path.join('/work/ga45met/Hydro_Models/HBV-SASK-data', 'Oldman_Basin/model_runs', 'mc_6d_1000'))
     uqsim.args.outputResultDir = os.path.abspath(os.path.join('/work/ga45met/uqef_dynamic_runs/hbv_sask_runs/Oldman_Basin', 'mc10d_3000_regression_autoregressive'))
     uqsim.args.config_file = '/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic/data/configurations/configuration_hbv_10D_short.json'
+    uqsim.args.outputResultDir = os.path.abspath(os.path.join('/work/ga45met/Hydro_Models/HBV-SASK-data', 'Oldman_Basin/model_runs', 'mc_10d_1000_conditioned_multiple'))
+    uqsim.args.config_file = '/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic/data/configurations/configuration_hbv_10D_single_qoi.json'
 
     # Battery
     uqsim.args.inputModelDir = pathlib.Path('/work/ga45met/anaconda3/envs/py3115_uq/lib/python3.11/site-packages/pybamm/input/drive_cycles')
-    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/work/ga45met/uqef_dynamic_runs/battery_results", 'mc_gpcep3_ct07_3000_lhc_6d'))  # mc_10000 mc_10000_terminal_voltage
+    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/work/ga45met/uqef_dynamic_runs/battery_results", 'mc_gpcep3_ct07_1000_lhc_6d'))  # mc_10000 mc_10000_terminal_voltage
     uqsim.args.config_file = '/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic/uqef_dynamic/models/pybamm/configuration_battery_24_shot_names.json'  # configuration_battery_24.json'
     uqsim.args.config_file = '/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic/uqef_dynamic/models/pybamm/configuration_battery.json'  # configuration_battery_24.json'
 
@@ -128,11 +129,11 @@ if local_debugging:
     uqsim.args.uqsim_store_to_file = False
 
     uqsim.args.compute_Sobol_m = True
-    uqsim.args.compute_Sobol_t = False
+    uqsim.args.compute_Sobol_t = True
 
     uqsim.args.num_cores = 1
 
-    uqsim.args.save_all_simulations = True  # True for sc
+    uqsim.args.save_all_simulations = False  # True for sc
     uqsim.args.store_qoi_data_in_stat_dict = False  # if set to True, the qoi_values entry is stored in the stat_dict 
     uqsim.args.store_gpce_surrogate_in_stat_dict = True
     uqsim.args.collect_and_save_state_data = False
@@ -158,6 +159,7 @@ if uqsim.args.uq_method == "mc" and uqsim.args.compute_Sobol_m:
 save_gpce_surrogate = True  # if True a gpce surrogate for each QoI for each time step is saved in a separate file
 compute_other_stat_besides_pce_surrogate = True  # This is relevant only when uq_method == "sc" 
 
+# TODO Currently we only support KL and final time generalized S.S.I computation
 compute_kl_expansion_of_qoi = True
 kl_expansion_order = 10
 compute_timewise_gpce_next_to_kl_expansion = False
@@ -169,9 +171,9 @@ compute_covariance_matrix_in_time = True
 
 allow_conditioning_results_based_on_metric = False
 
-condition_results_based_on_metric = 'NSE'
-condition_results_based_on_metric_value = 0.2
-condition_results_based_on_metric_sign = "greater_or_equal"
+condition_results_based_on_metric = ['NSE', 'KGE']
+condition_results_based_on_metric_value = [0.2, 0.0]
+condition_results_based_on_metric_sign = ["greater_or_equal", "greater_or_equal"]
 #####################################
 # additional path settings:
 #####################################

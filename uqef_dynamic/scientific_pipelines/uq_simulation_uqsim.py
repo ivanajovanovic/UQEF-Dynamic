@@ -166,7 +166,8 @@ utility.DEFAULT_DICT_STAT_TO_COMPUTE = {
 }
 dict_stat_to_compute = utility.DEFAULT_DICT_STAT_TO_COMPUTE
 compute_sobol_indices_with_samples = False  # This is only relevant in the mc-saltelli's approach
-if uqsim.args.uq_method == "mc" and uqsim.args.compute_Sobol_m:
+# TODO Think about when regression is True, what do you prefer gPCE-based indices or MC?
+if uqsim.args.uq_method == "mc" and not uqsim.args.regression and uqsim.args.compute_Sobol_m:
     compute_sobol_indices_with_samples = True
 
 save_gpce_surrogate = True  # if True a gpce surrogate for each QoI for each time step is saved in a separate file
@@ -177,7 +178,7 @@ kl_expansion_order = 10
 compute_timewise_gpce_next_to_kl_expansion = False
 
 compute_generalized_sobol_indices = True
-compute_generalized_sobol_indices_over_time = False
+compute_generalized_sobol_indices_over_time = True
 
 compute_covariance_matrix_in_time = False
 
