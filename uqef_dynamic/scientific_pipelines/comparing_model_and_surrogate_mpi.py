@@ -52,6 +52,11 @@ rank = comm.Get_rank()
 size = comm.Get_size()
 # num_threads = threading.active_count()
 
+# TODO Add option to evaluate surrogate in paralle over nodes
+# TODO Add option to evaluate over time Generalized S.S.I from the gPCE
+# TODO Add option to evaluate / run KL surrogate
+# TODO Extant such that it is not only plotted, but compared, via the sutable metric, with a ground-truth data / observed model runs...
+
 # Define a function to process a single date
 def evaluate_gPCE_model_single_date_old(single_date, single_qoi, nodes, gPCE_model_evaluated, result_dict=None, workingDir=None):
     if 'gPCE' in result_dict[single_qoi][single_date]:
@@ -64,7 +69,6 @@ def evaluate_gPCE_model_single_date_old(single_date, single_qoi, nodes, gPCE_mod
 
 def evaluate_gPCE_model_single_date(single_date, gPCE_model, nodes, gPCE_model_evaluated):
     gPCE_model_evaluated[single_date] = np.array(gPCE_model(*nodes))
-
 
 def evaluate_gPCE_surrogate_model_over_time_single_qoi(
     workingDir,  single_qoi="Value", number_of_samples=1000, sampling_rule="halton",
@@ -88,14 +92,23 @@ def evaluate_gPCE_surrogate_model_over_time_single_qoi(
             globals()[key] = value
         
         # This is due to the fact that sometimes instantly_save_results_for_each_time_step variable/fleg tends to be overwritten in the Statistics class, due to different set-ups
+        instantly_save_results_for_each_time_step = single_timestamp_single_file
         if single_timestamp_single_file is None:
             single_timestamp_single_file = uqsim_args_dict["instantly_save_results_for_each_time_step"] 
         uqsim_args_dict["instantly_save_results_for_each_time_step"] = single_timestamp_single_file
 
+        if inputModelDir_function_input_argument is not None:
+            if inputModelDir_function_input_argument != uqsim_args_dict["inputModelDir"]:
+                uqsim_args_dict["inputModelDir"] = pathlib.Path(inputModelDir_function_input_argument)
+        else:
+            inputModelDir_function_input_argument = uqsim_args_dict["inputModelDir"]
+        inputModelDir_function_input_argument = pathlib.Path(inputModelDir_function_input_argument)
+        inputModelDir = inputModelDir_function_input_argument
+
         statisticsObject = create_stat_object.create_and_extend_statistics_object(
             configurationObject, uqsim_args_dict, workingDir, model, 
             df_simulation_result=df_simulation_result
-            )
+        )
 
         # =============================================================
         # args_files = utility.get_dict_with_output_file_paths_based_on_workingDir(workingDir,)
@@ -212,6 +225,8 @@ def evaluate_gPCE_surrogate_model_over_time_single_qoi(
         else:
             nodes = parameters
 
+        print(f"DEBUGGING - nodes.shape={nodes.shape}")
+
         # =============================================================
 
         # statistics_result_dict = statisticsObject.result_dict  # statistics_dictionary
@@ -285,14 +300,6 @@ def evaluate_gPCE_surrogate_model_over_time_single_qoi(
             print(f"inputModelDir from model - {inputModelDir}; inputModelDir_function_input_argument-{inputModelDir_function_input_argument}")
             print(f"workingDir from model - {workingDir}; workingDir_function_input_argument-{workingDir_function_input_argument}")
 
-        if inputModelDir_function_input_argument is None:
-            inputModelDir_function_input_argument = inputModelDir
-
-        elif model == "hbvsask":
-            # This is hard-coded for HBV
-            basis = configurationObject['model_settings']['basis']
-            statisticsObject.inputModelDir_basis = inputModelDir_function_input_argument / basis
-
         # statisticsObject.get_measured_data(
         #     timestepRange=(statisticsObject.timesteps_min, statisticsObject.timesteps_max), 
         #     transform_mesured_data_as_original_model=True)
@@ -309,7 +316,8 @@ def evaluate_gPCE_surrogate_model_over_time_single_qoi(
         #     left_on=statisticsObject.time_column_name, right_index=True)
 
         df_statistics_and_measured = statisticsObject.merge_df_statistics_data_with_measured_and_forcing_data(
-            add_measured_data=add_measured_data, add_forcing_data=add_forcing_data)
+            add_measured_data=add_measured_data, add_forcing_data=add_forcing_data, transform_measured_data_as_original_model=True)
+
         # filter only relevant qoi
         df_statistics_and_measured_single_qoi = df_statistics_and_measured[df_statistics_and_measured["qoi"]==single_qoi]
 
@@ -475,6 +483,8 @@ def evaluate_gPCE_surrogate_model_over_time_single_qoi(
         temp_date = statisticsObject.pdTimesteps[-1]  # dates_to_process[-1]
         # print(f"temp_date - {temp_date}, {type(temp_date)}")
         temp_evaluation_of_surrogate = gPCE_model_evaluated[temp_date]
+        print(f"DEBUGGING type(temp_evaluation_of_surrogate)  - {type(temp_evaluation_of_surrogate)}")
+        print(f"DEBUGGING len(temp_evaluation_of_surrogate)  - {temp_evaluation_of_surrogate.shape}")
         print(f"gPCE_model_evaluated for date {temp_date} - {temp_evaluation_of_surrogate}")
         # # print(f"{type(gPCE_model_evaluated[gPCE_model_evaluated.keys()[0]])} \n {gPCE_model_evaluated[gPCE_model_evaluated.keys()[0]]}")
 
@@ -492,6 +502,7 @@ def evaluate_gPCE_surrogate_model_over_time_single_qoi(
 
         # Extract the lists from the dictionary
         lists = list(gPCE_model_evaluated.values())
+        print(f"DEBUGGING len(lists)={len(lists)}")
         # Use the zip function to transpose the lists into columns
         gPCE_model_evaluated_matrix = list(zip(*lists))
 
@@ -563,13 +574,35 @@ def evaluate_gPCE_surrogate_model_over_time_single_qoi(
         fig.update_yaxes(autorange="reversed", row=1, col=1)
         fig.update_yaxes(fixedrange=True)
         fig.update_layout(title_text="Detailed plot of most important time-series plus ensemble of surrogate (gPCE) evaluations")
-        fig.update_layout(xaxis=dict(type="date"))
-        fig.update_layout(xaxis_range=[min(statisticsObject.pdTimesteps),
-                                    max(statisticsObject.pdTimesteps)])
+        fig.update_layout(
+            xaxis=dict(
+            rangemode='normal',
+            range=[min(statisticsObject.pdTimesteps), max(statisticsObject.pdTimesteps)],
+            type="date")
+        )
+        fig.update_xaxes(
+            tickformat='%b %y',            # Format dates as "Month Day" (e.g., "Jan 01")
+            dtick="M2"                     # Set tick interval to 1 day for denser ticks
+        )
+        fig.update_layout(height=1100, width=1100)
+        fig.update_layout(title=None)
+        fig.update_layout(
+            margin=dict(
+                t=10,  # Top margin
+                b=10,  # Bottom margin
+                l=20,  # Left margin
+                r=20   # Right margin
+            )
+        )
+        # fig.update_layout(xaxis_range=[min(statisticsObject.pdTimesteps),
+        #                             max(statisticsObject.pdTimesteps)])
         # fig.update_layout(yaxis_type=scale, hovermode="x", spikedistance=-1)
         fileName = "datailed_plot_all_qois_plus_gpce_ensemble.html"
-        fileName = directory_for_saving_plots + fileName
+        fileName =str(directory_for_saving_plots) + fileName
         pyo.plot(fig, filename=fileName)
+        fileName = "datailed_plot_all_qois_plus_gpce_ensemble.pdf"
+        fileName =str(directory_for_saving_plots) + fileName
+        fig.write_image(str(fileName), format="pdf", width=1100,)
 
     # else:
     #     comm.Abort(0)  # 0 is the error code to indicate a successful shutdown
@@ -578,6 +611,8 @@ def evaluate_gPCE_surrogate_model_over_time_single_qoi(
 
 
 if __name__ == '__main__':
+    basis_workingDir = pathlib.Path('/work/ga45met/paper_uqef_dynamic_sim/hbvsask_runs_lxc_autumn_24')
+
     # 8D gPCE l=7, p=2 Q_cms 2006 - 155
     # workingDir = pathlib.Path('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/paper_hydro_uq_sim/hbv_uq_cm2.0155')
     # 6D gPCE l=, p= Q_cms 2006 - 173
@@ -586,20 +621,20 @@ if __name__ == '__main__':
     workingDir = pathlib.Path('/gpfs/scratch/pr63so/ga45met2/hbvsask_runs/pce_deltq_3d_longer_oldman')
     # 10D Sparse-gPCE l=6, p=4, ct=0.7 2006 Q_cms
     workingDir = pathlib.Path('/work/ga45met/mnt/hbv_uq_mpp3.0035')
-    # 10D Sparse-gPCE l=6, p=5, ct=0.7 2006 Q_cms
-    workingDir = pathlib.Path('/work/ga45met/mnt/hbv_uq_mpp3.0036')
+    # 10D Sparse-gPCE l=6, p=5, ct=0.7 2004-2005 Q_cms + generalized S.S.I 
+    workingDir =basis_workingDir / 'hbv_uq_mpp3.0053'
 
     # Parameters relevant for generating MC like samples to evaluate the surrogate gPCE model
-    sampling_rule = "halton"  # 'sobol' 'random'
+    sampling_rule = "latin_hypercube"  # 'sobol' 'random'
     number_of_samples = 100
     sample_new_nodes_from_standard_dist = False
 
     single_qoi="Q_cms"  # e.g., "Q_cms" 'delta_Q_cms'
 
     inputModelDir = pathlib.Path("/work/ga45met/Hydro_Models/HBV-SASK-data")
-    directory_for_saving_plots = pathlib.Path('/work/ga45met/paper_hydro_uq_sim/hbv_sask/gpce_p4_sgl6_ct07_generalized_2006_oldman')
-    directory_for_saving_plots = pathlib.Path('/work/ga45met/paper_hydro_uq_sim/hbv_sask/gpce_p5_sgl6_ct07_generalized_2006_oldman')
-
+    directory_for_saving_plots = pathlib.Path('/work/ga45met/paper_uqef_dynamic_sim/hbv_sask/gpce_p4_sgl6_ct07_generalized_2006_oldman')
+    directory_for_saving_plots = pathlib.Path('/work/ga45met/paper_uqef_dynamic_sim/hbv_sask/gpce_p5_sgl6_ct07_generalized_2006_oldman')
+    directory_for_saving_plots = pathlib.Path('/work/ga45met/paper_uqef_dynamic_sim/hbv_sask/gpce_p5_sgl6_ct07_generalized_2004_2007_oldmans')
     evaluate_gPCE_surrogate_model_over_time_single_qoi(
         workingDir, single_qoi=single_qoi, 
         sample_new_nodes_from_standard_dist=sample_new_nodes_from_standard_dist, 
