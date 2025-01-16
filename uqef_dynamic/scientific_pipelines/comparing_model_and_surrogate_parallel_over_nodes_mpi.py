@@ -72,11 +72,19 @@ def evaluate_gPCE_model_single_date(single_date, gPCE_model, nodes, gPCE_model_e
     gPCE_model_evaluated[single_date] = np.array(gPCE_model(*nodes))
 
 
-def evaluate_gPCE_model_multiple_nodes(gPCE_model, nodes, indices, gPCE_model_evaluated):
+def evaluate_gPCE_model_multiple_nodes(gPCE_model, dates_to_process, nodes, indices, gPCE_model_evaluated):
     my_nodes = nodes[:,indices]
-    my_model_evaluated = np.array(gPCE_model(*my_nodes))
+    my_model_evaluated = {}
+    for single_date in dates_to_process:
+        temp_model = gPCE_model[single_date]
+        my_model_evaluated[single_date] = np.array(temp_model(*my_nodes))
+    # gPCE_model_evaluated = {}
     for i, index in enumerate(indices):
-        gPCE_model_evaluated[index] = my_model_evaluated[i]
+        gPCE_model_evaluated[index] = []
+        for single_date in dates_to_process:
+            gPCE_model_evaluated[index].append(my_model_evaluated[single_date][i])
+        gPCE_model_evaluated[index] = np.array(gPCE_model_evaluated[index])
+    # return gPCE_model_evaluated
 
 
 def evaluate_gPCE_model_single_node(gPCE_model, single_node, single_index, gPCE_model_evaluated):
@@ -146,7 +154,7 @@ def evaluate_gPCE_surrogate_model_over_time_single_qoi(
 
         # statistics_result_dict = statisticsObject.result_dict  # statistics_dictionary
         statistics_pdTimesteps = statisticsObject.pdTimesteps
-        statistics_single_qois = statisticsObject.result_dict[single_qoi].keys()
+        # statistics_single_qois = statisticsObject.result_dict[single_qoi].keys()
 
         gpce_surrogate = None 
         gpce_coeffs = None
@@ -192,13 +200,14 @@ def evaluate_gPCE_surrogate_model_over_time_single_qoi(
 
         if statisticsObject.pdTimesteps!=list(gpce_surrogate.keys()):
             print("Watch-out - The timestamps of the statistics and the gPCE surrogate do not match!")
-        statistics_pdTimesteps = list(gpce_surrogate.keys())
+            statistics_pdTimesteps = list(gpce_surrogate.keys())
 
         if printing:
             temp = gpce_surrogate[statistics_pdTimesteps[0]]
-            print(f"gpce_surrogate - {gpce_surrogate}")
-            temp = gpce_coeffs[statistics_pdTimesteps[0]]
-            print(f"gpce_coeffs - {temp}")
+            print(f"gpce_surrogate for a first timestamp - {temp}")
+            if gpce_coeffs and gpce_coeffs is not None:
+                temp = gpce_coeffs[statistics_pdTimesteps[0]]
+                print(f"gpce_coeffs - {temp}")
 
         # =============================================================
 
@@ -239,7 +248,8 @@ def evaluate_gPCE_surrogate_model_over_time_single_qoi(
     workingDir = comm.bcast(workingDir, root=0)
     gpce_surrogate = comm.bcast(gpce_surrogate, root=0)
     gpce_coeffs = comm.bcast(gpce_coeffs, root=0)
-    polynomial_expansion = comm.bcast(polynomial_expansion, root=0)
+    polynomial_expansion = comm.bcast(polynomial_expansion, root=0)   
+    number_of_samples = comm.bcast(number_of_samples, root=0)
     # List of dates to process (assuming statisticsObject.pdTimesteps is a list)
     dates_to_process = statistics_pdTimesteps
     single_timestamp_single_file = single_timestamp_single_file
@@ -253,12 +263,15 @@ def evaluate_gPCE_surrogate_model_over_time_single_qoi(
     if nodes is None:
         raise Exception("Nodes are not defined!")
     dim  = nodes.shape[0]
-    number_of_samples = nodes.shape[1]
+    number_of_samples_generated = nodes.shape[1]
+    if number_of_samples_generated != number_of_samples:
+        print(f"INFO: Hmm, something strange, number of generated samples is different from initali set of number_of_samples")
+        number_of_samples = number_of_samples_generated
 
     # Things should be changed from this point on...
     # Split the dates among processes
-    chunk_size = len(number_of_samples) // size
-    remainder = len(number_of_samples) % size
+    chunk_size = number_of_samples // size
+    remainder = number_of_samples % size
     start_index = rank * chunk_size
     end_index = start_index + chunk_size if rank < size - 1 else number_of_samples
 
@@ -273,7 +286,7 @@ def evaluate_gPCE_surrogate_model_over_time_single_qoi(
     # =============================================================
 
     evaluate_gPCE_model_multiple_nodes(
-        gPCE_model=gpce_surrogate, nodes=nodes, indices=my_indices, gPCE_model_evaluated=gPCE_model_evaluated)
+        gPCE_model=gpce_surrogate, dates_to_process=dates_to_process, nodes=nodes, indices=my_indices, gPCE_model_evaluated=gPCE_model_evaluated)
     
     # # Process dates
     # for single_index in my_indices:
@@ -313,7 +326,7 @@ def evaluate_gPCE_surrogate_model_over_time_single_qoi(
         runtime = end - start
         print(f"MPI: Time needed for evaluating {number_of_samples} \
          gPCE model (qoi is {single_qoi}) for {len(statistics_pdTimesteps)} time steps is: {runtime}")
-        print(f"gPCE_model_evaluated at times - {gPCE_model_evaluated.keys()} \n")
+        print(f"gPCE_model_evaluated at - {gPCE_model_evaluated.keys()} \n")
 
         print(f"len(statisticsObject.pdTimesteps) - {len(statisticsObject.pdTimesteps)}")
         print(f"len(dates_to_process) - {len(dates_to_process)}")

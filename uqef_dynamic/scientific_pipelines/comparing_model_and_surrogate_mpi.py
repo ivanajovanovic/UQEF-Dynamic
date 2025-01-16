@@ -52,7 +52,6 @@ rank = comm.Get_rank()
 size = comm.Get_size()
 # num_threads = threading.active_count()
 
-# TODO Add option to evaluate surrogate in paralle over nodes
 # TODO Add option to evaluate over time Generalized S.S.I from the gPCE
 # TODO Add option to evaluate / run KL surrogate
 # TODO Extant such that it is not only plotted, but compared, via the sutable metric, with a ground-truth data / observed model runs...
