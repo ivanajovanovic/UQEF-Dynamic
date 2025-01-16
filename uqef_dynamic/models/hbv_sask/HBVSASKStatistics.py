@@ -520,7 +520,7 @@ class HBVSASKStatistics(time_dependent_statistics.TimeDependentStatistics):
         fig = make_subplots(rows=n_rows, cols=1,
                             print_grid=True,
                             shared_xaxes=True,
-                            vertical_spacing=0.1)
+                            vertical_spacing=0.04)
 
         # HBV - Specific plotting of observed data, i.e., forcing data and measured streamflow
         if forcing and self.forcing_data_fetched:
@@ -767,7 +767,7 @@ class HBVSASKStatistics(time_dependent_statistics.TimeDependentStatistics):
                 autorange=True       # Auto-range is enabled
             )
         )
-        fig.update_layout(height=1100, width=1100)
+        fig.update_layout(height=1100, width=1200)
         fig.update_layout(
                 # legend=dict(yanchor="bottom", y=0.01, xanchor="right", x=0.99),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1.0),
@@ -781,7 +781,17 @@ class HBVSASKStatistics(time_dependent_statistics.TimeDependentStatistics):
         print(f"[HVB STAT INFO] _plotStatisticsDict_plotly function for Qoi-{single_qoi_column} is almost over, just to save the plot!")
 
         # filename = pathlib.Path(filename)
+        fig.update_layout(
+            margin=dict(
+                t=10,  # Top margin
+                b=10,  # Bottom margin
+                l=20,  # Left margin
+                r=20   # Right margin
+            )
+        )
         plot(fig, filename=filename, auto_open=display)
+        new_filename = pathlib.Path(filename).with_suffix(".pdf")
+        # fig.write_image(str(new_filename), format="pdf", width=1200,)
         return fig
 
     def plot_forcing_mean_predicted_and_observed_all_qoi(self, directory="./", fileName="simulation_big_plot.html"):

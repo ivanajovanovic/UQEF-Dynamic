@@ -426,6 +426,8 @@ class TimeDependentStatistics(ABC, Statistics):
             'compute_sobol_indices_with_samples', False)
         if self.uq_method == "mc" and self.compute_Sobol_m:
             self.compute_sobol_indices_with_samples = True
+        if self.uq_method == "saltelli":
+            self.compute_sobol_indices_with_samples = False
 
         if 'nodes_file' in kwargs:
             self.nodes_file = kwargs['nodes_file']
@@ -862,13 +864,16 @@ class TimeDependentStatistics(ABC, Statistics):
             self.numTimesteps = self.N_quad = len(self.timesteps)
             if self.N_quad > 1:
                 # for now uniform weight in time are default
+                # TODO Think about 1 in num?
                 h = 1/(self.N_quad-1) #(t_final - t_starting)/(N_quad-1)
                 self.weights_time = [h for i in range(self.N_quad)]
                 self.weights_time[0] /= 2
                 self.weights_time[-1] /= 2
-                self.weights_time = np.asfarray(self.weights_time)
+                # self.weights_time = np.asfarray(self.weights_time)
+                self.weights_time = np.asarray(self.weights_time, dtype=np.float32)
             else:
-                self.weights_time = np.asfarray([1.0])
+                # self.weights_time = np.asfarray([1.0])
+                self.weights_time = np.asarray([1.0], dtype=np.float32)
             assert len(self.timesteps)==len(self.weights_time)
         else:
             self.numTimesteps = self.N_quad = None  
@@ -988,18 +993,22 @@ class TimeDependentStatistics(ABC, Statistics):
     def set_weights_time(self, weights_time=None):
         if weights_time is not None:
             self.weights_time = weights_time
-            self.weights_time = np.asfarray(self.weights_time)
+            #self.weights_time = np.asfarray(self.weights_time)
+            self.weights_time = np.asarray(self.weights_time, dtype=np.float32)
             self.N_quad = len(self.weights_time)
         elif self.timesteps is not None:
             self.N_quad = len(self.timesteps)
             if self.N_quad > 1:
-                h = 1/(self.N_quad-1) #(self.timesteps_max - self.timesteps_max)/(N_quad-1)
+                # TODO Think about 1 in num?
+                h = 1/(self.N_quad-1) #(self.timesteps_max - self.timesteps_min)/(N_quad-1)
                 self.weights_time = [h for i in range(self.N_quad)]
                 self.weights_time[0] /= 2
                 self.weights_time[-1] /= 2
-                self.weights_time = np.asfarray(self.weights_time)
+                #self.weights_time = np.asfarray(self.weights_time)
+                self.weights_time = np.asarray(self.weights_time, dtype=np.float32)
             else:
-                self.weights_time = np.asfarray([1.0])
+                #self.weights_time = np.asfarray([1.0])
+                self.weights_time = np.asarray([1.0], dtype=np.float32)
             assert len(self.timesteps)==len(self.weights_time)
         else:
             self.weights_time = None
@@ -1438,13 +1447,13 @@ class TimeDependentStatistics(ABC, Statistics):
         self.mc_set_initial_values(simulationNodes, numEvaluations, regression, order, poly_normed, poly_rule, cross_truncation)
         # if self.regression:
         #     self.handle_expansion_generation()
-        if self.compute_sobol_indices_with_samples:  # this is actually mc approach;
-            self.ensure_nodes_are_loaded()
-            self.handle_unsuccessful_runs()
-            if self.allow_conditioning_results_based_on_metric:
-                self.handle_conditioning_model_runs(kwargs)
-        else:
-            self.handle_unsuccessful_runs_psp_saltelli()
+        # if self.compute_sobol_indices_with_samples:  # this is actually mc approach;
+        #     self.ensure_nodes_are_loaded()
+        #     self.handle_unsuccessful_runs()
+        #     if self.allow_conditioning_results_based_on_metric:
+        #         self.handle_conditioning_model_runs(kwargs)
+        # else:
+        self.handle_unsuccessful_runs_psp_saltelli()
             
     # =================================================================================================
 
@@ -1618,19 +1627,45 @@ class TimeDependentStatistics(ABC, Statistics):
             None
         """
         if self.compute_kl_expansion_of_qoi and not self.instantly_save_results_for_each_time_step:
+            # Setting-up some variables
+            variance_integral = None
+            total_variance = None
+            total_variance_based_on_pce_coefficients = None
+
             # TODO  - think how to allow over time computation of KL surrogate and generalized Sobol indices
             eigenvalues, eigenvectors, f_kl_surrogate_dict, f_kl_surrogate_coefficients, Var_kl_approx \
             = self.compute_kl_expansion_single_qoi(single_qoi_column)
             # Generalized Sobol Indices (for now just for the final time-stamp)
+            last_time_step = max(self.result_dict[single_qoi_column].keys())  #last_time_step = list(self.result_dict[single_qoi_column].keys())[-1]
+
             if self.compute_generalized_sobol_indices:
                 fileName = self.workingDir / f"generalized_sobol_indices_{single_qoi_column}.pkl"
-                param_name_generalized_sobol_total_indices = utility.computing_generalized_sobol_total_indices_from_kl_expan(
-                    f_kl_surrogate_coefficients, self.polynomial_expansion, self.weights_time, self.labels, fileName, total_variance=Var_kl_approx)
+                param_name_generalized_sobol_total_indices, total_variance, total_variance_based_on_pce_coefficients = utility.computing_generalized_sobol_total_indices_from_kl_expan(
+                    f_kl_surrogate_coefficients=f_kl_surrogate_coefficients, 
+                    polynomial_expansion=self.polynomial_expansion, 
+                    weights=self.weights_time, 
+                    param_names=self.labels, 
+                    fileName=fileName, 
+                    total_variance=Var_kl_approx,
+                    compute_total_variance_based_on_pce_coefficients=True,
+                    )
                 print(f"INFO: computation of generalized S.S.I based on KL+gPCE(MC) finished...")
-                last_time_step = max(self.result_dict[single_qoi_column].keys())  #last_time_step = list(self.result_dict[single_qoi_column].keys())[-1]
                 for param_name in self.labels:
                     self.result_dict[single_qoi_column][last_time_step][f"generalized_sobol_total_index_{param_name}"] = \
                         param_name_generalized_sobol_total_indices[param_name]
+
+            # Comparing different Variances
+            # Comparing Var_kl_approx and time integral of self.result_dict[single_qoi_column][over_time_stamps]["Var"]
+            if "Var" in self.result_dict[single_qoi_column][last_time_step]:
+                variance_over_time_array = np.asarray([self.result_dict[single_qoi_column][time]["Var"] for time in self.result_dict[single_qoi_column].keys()], dtype=np.float64)
+                # TODO - Play with the weights_time
+                variance_integral = np.dot(variance_over_time_array, self.weights_time)
+            
+            print(f"INFO: Total Variance computed via eigenvalues: {Var_kl_approx} \
+                Total Variance integral over time: {variance_integral}; \
+                    Total Variance computed via PCE coefficients: {total_variance_based_on_pce_coefficients};\
+                         Total Variance returned by the computing_generalized_sobol_total_indices_from_kl_expan: {total_variance}")
+
         elif self.compute_generalized_sobol_indices and not self.instantly_save_results_for_each_time_step: 
             fileName = self.workingDir / f"generalized_sobol_indices_{single_qoi_column}.pkl"
             if self.compute_generalized_sobol_indices_over_time:
@@ -1977,7 +2012,8 @@ class TimeDependentStatistics(ABC, Statistics):
                 list_of_qoi_values_chunk,
                 chunks['weightsChunks'],
                 chunks['regressionChunks'],
-                chunks['store_qoi_data_in_stat_dict_Chunks']
+                chunks['store_qoi_data_in_stat_dict_Chunks'],
+                chunks['dict_stat_to_compute_Chunks'],
             )
         else:
             chunk_results_it = executor.map(
@@ -3023,6 +3059,22 @@ class TimeDependentStatistics(ABC, Statistics):
                 list_of_columns.append(sobol_t_time_series)
                 temp = "Sobol_t_" + self.labels[i]
                 list_of_columns_names.append(temp)
+
+        if f'generalized_sobol_total_index_{self.labels[0]}' in self.result_dict[qoi_column][keyIter[-1]]:
+            for i in range(len(self.labels)):
+                name = f"generalized_sobol_total_index_{self.labels[i]}"
+                generalized_sobol_total_index_values_temp = []
+                at_least_one_entry_found = False
+                for key in keyIter:
+                    if name in self.result_dict[qoi_column][key]:
+                        at_least_one_entry_found = True
+                        temp = self.result_dict[qoi_column][key][name]
+                        generalized_sobol_total_index_values_temp.append(temp)
+                if at_least_one_entry_found:
+                    list_of_columns_names.append(name)
+                    if len(generalized_sobol_total_index_values_temp)==1:
+                        generalized_sobol_total_index_values_temp = generalized_sobol_total_index_values_temp[0]*len(keyIter)
+                    list_of_columns.append(generalized_sobol_total_index_values_temp)
 
         if not list_of_columns:
             return None

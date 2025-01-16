@@ -29,7 +29,7 @@
     {
       "name": "$\\kappa$",
       "distribution": "Uniform",
-      "lower": 0.044510385756680645,
+      "lower": 0.0044510385756680645,
       "upper": 2.448071216617211
     },   
     {
@@ -92,7 +92,7 @@
     {
       "name": "$R_{neg}$",
       "distribution": "Uniform",
-      "lower": 1e-6,
+      "lower": 1e-5,
       "upper": 1.26e-5
     },
     {
@@ -147,8 +147,8 @@
     {
       "name": "$b_{sep}$",
       "distribution": "Uniform",
-      "lower": 1.5,
-      "upper": 2.57
+      "lower": 1.44,
+      "upper": 2.44
     },
     {
       "name": "$\\varepsilon_{l,sep}$",
