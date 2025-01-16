@@ -3,13 +3,13 @@
     {
       "start_day": 2,
       "start_month": 10,
-      "start_year": 2002,
+      "start_year": 2003,
       "start_hour": 0,
       "start_minute": 0,
 
       "end_day": 1,
       "end_month": 10,
-      "end_year": 2006,
+      "end_year": 2007,
       "end_hour": 0,
       "end_minute": 0,
 
@@ -22,7 +22,7 @@
       "timestep": 5
     },
   "model_settings": {
-    "basis": "Banff_Basin",
+    "basis": "Oldman_Basin",
     "plotting": "False",
     "writing_results_to_a_file": "False",
     "corrupt_forcing_data": "False"

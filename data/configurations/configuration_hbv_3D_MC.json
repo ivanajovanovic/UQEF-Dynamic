@@ -15,7 +15,7 @@
 
       "run_full_timespan":"False",
       "spin_up_length":1096,
-      "simulation_length": 60,
+      "simulation_length": 10,
       "resolution": "daily",
 
       "cut_runs": "False",
@@ -38,7 +38,7 @@
     "read_measured_data": "True",
     "qoi_column_measured":"streamflow",
     "objective_function_qoi":["RMSE", "LogNSE", "KGE"],
-    "calculate_GoF":"True",
+    "calculate_GoF":"False",
     "objective_function":["MAE", "MSE", "RMSE", "NRMSE", "NSE", "LogNSE", "KGE"],
     "mode":"continuous",
     "interval": 10,

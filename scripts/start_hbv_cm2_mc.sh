@@ -136,7 +136,7 @@ echo "---- start HBV sim: \`date\`"
                             --outputResultDir $resultsPath \
                             --inputModelDir $modelMasterPath \
                             --sourceDir $baseSourcePath \
-                            --config_file $baseSourcePath/data/configurations/configuration_hbv_10D.json \
+                            --config_file $baseSourcePath/data/configurations/configuration_hbv_10D_GoF.json \
                             --model "$model" \
                             --uncertain "$uncertain" \
                             --opt_strategy "$strategy" --opt_algorithm "$algorithm" \
@@ -158,15 +158,15 @@ echo "---- start HBV sim: \`date\`"
 
 echo "---- end HBV sim: \`date\`"
 
-" > $baseSourcePath/hbv_uq_mc_150000_lhs_banff_2005_2006.cmd
+" > $baseSourcePath/hbv_uq_mc_150000_lhs_oldman_2006_2007_gof_30days.cmd
 
     #execute batch file
-    sbatch $baseSourcePath/hbv_uq_mc_150000_lhs_banff_2005_2006.cmd
+    sbatch $baseSourcePath/hbv_uq_mc_150000_lhs_oldman_2006_2007_gof_30days.cmd
 
 }
 
 model="hbvsask"
-opt_add="--parallel_statistics --sampleFromStandardDist --compute_Sobol_m --compute_Sobol_t --sc_poly_normed --store_gpce_surrogate_in_stat_dict" #--save_all_simulations --regression  --read_nodes_from_file --instantly_save_results_for_each_time_step
+opt_add="--parallel_statistics --sampleFromStandardDist --compute_Sobol_m --compute_Sobol_t --sc_poly_normed --store_gpce_surrogate_in_stat_dict --save_all_simulations" #--save_all_simulations --regression --read_nodes_from_file --instantly_save_results_for_each_time_step
 nodes=4
 tasks_per_node=60  #22
 low_time="2:30:00"

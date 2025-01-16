@@ -1,20 +1,5 @@
 #!/bin/bash
 
-#export PYTHONPATH=$HOME/software/python/mpi4py.mpp2.git/build/lib.linux-x86_64-3.5:$PYTHONPATH
-#load modules
-#module unload python
-# module load python/3.6_intel
-#module load anaconda3
-#cm2
-# module load mpi.intel/2019
-#if [[ $HOSTNAME  == "mpp3"* ]]; then
-#  module load mpi.intel/2019
-#  #module load mpi.intel/2020
-#elif [[ $HOSTNAME  == "cm2"* ]]; then
-#  module unload intel-mpi
-#  module load intel-mpi/2018-intel
-#fi
-
 start_uq_sim(){
     local sched_strut="$1"
     local strategy="$2"
@@ -34,7 +19,6 @@ start_uq_sim(){
     local sc_poly_rule="${16}"
     local sc_quadrature_rule="${17}"
     local parameters_file="${18}"
-    local parameters_setup_file="${19}"
 
     #get counter
     counter=$((`cat counter` +1))
@@ -50,8 +34,8 @@ start_uq_sim(){
     counter="${counter: -4}"
 
     #print to the command line!
-    echo "$counter:mpp3: $@"
-    echo "$counter:mpp3: $@" >> started_jobs.txt
+    echo "$counter:cm4: $@"
+    echo "$counter:cm4: $@" >> started_jobs.txt
 
     # define paths
     basePath=$HOME/Repositories #'pwd'
@@ -59,14 +43,13 @@ start_uq_sim(){
     baseExecutionPath=$basePath/UQEF-Dynamic
     baseResultsPath=$WORK/hbvsask_runs #$SCRATCH/hbvsask_runs
     modelMasterPath=$WORK/HBV-SASK-data
-    # executionPath=$baseExecutionPath/hbv_uq_mpp3.$counter
-    resultsPath=$baseResultsPath/hbv_uq_mpp3.$counter
+    resultsPath=$baseResultsPath/hbv_uq_cm4.$counter
 
     conda_env=uq_env
     #conda_env="uq_env"
 
     if [ "$sched_strut" = "SWPT" -o "$sched_strut" = "SWPT_OPT" ] ; then
-        cpus=28
+        cpus=112
         threads=$cpus
         tasks=1
     else
@@ -79,14 +62,13 @@ start_uq_sim(){
     ntasks=$(($tasks * $cluster_nodes))
     echo $ntasks
 
-    # TODO
-    if [ $cluster_nodes -lt 4 ]; then
-        #partition="cm2_std" #"cm2_tiny"
-        partition="mpp3_batch" #"mpp3_batch"  # mpp3_inter
-    else
-        #partition="cm2_std"
-        partition="mpp3_batch" #"mpp3_batch"  # mpp3_inter
-    fi
+    #if [ $cluster_nodes -lt 4 ]; then
+    #    partition="cm4_std"
+    #else
+    #    partition="cm4_std"
+    #fi
+    partition="cm4_std" #"cm4_tiny" "cm4_inter" "teramem_inter"
+    clusters="cm4"  #"inter"
 
 #create batch file
 echo "#!/bin/bash
@@ -97,9 +79,9 @@ echo "#!/bin/bash
 #SBATCH -D $baseSourcePath
 #SBATCH -J hbv.$counter
 #SBATCH --get-user-env
-#SBATCH --clusters=mpp3
+#SBATCH --clusters=$clusters
 #SBATCH --partition=$partition
-###SBATCH --qos=$partition
+#SBATCH --qos=$partition
 #SBATCH --nodes=$cluster_nodes
 #SBATCH --cpus-per-task=$cpus
 #SBATCH --ntasks-per-node=$tasks
@@ -112,11 +94,17 @@ echo "#!/bin/bash
 
 # load modules and activate the conda env
 module load slurm_setup
+module load spack/23.1.0
 source /etc/profile.d/modules.sh
 # module unload python
 # module load python/3.6_intel
 # module load anaconda3
-module load mpi.intel/2019
+# module load intel
+# module load intel-mpi
+module load intel/2023.1.0
+module load intel-mpi/2021.11
+module load mpi.intel/2018
+# module load mpi.intel/2019
 # if [[ $HOSTNAME  == "mpp3"* ]]; then
 #   module load mpi.intel/2019
 #   #module load mpi.intel/2020
@@ -136,7 +124,7 @@ echo "---- start HBV sim: \`date\`"
                             --outputResultDir $resultsPath \
                             --inputModelDir $modelMasterPath \
                             --sourceDir $baseSourcePath \
-                            --config_file $baseSourcePath/data/configurations/configuration_hbv_10D_single_qoi.json \
+                            --config_file $baseSourcePath/data/configurations/configuration_hbv_10D.json \
                             --model "$model" \
                             --uncertain "$uncertain" \
                             --opt_strategy "$strategy" --opt_algorithm "$algorithm" \
@@ -152,38 +140,36 @@ echo "---- start HBV sim: \`date\`"
                             --sc_poly_rule "$sc_poly_rule" \
                             --sc_quadrature_rule "$sc_quadrature_rule" \
                             --parameters_file "$parameters_file" \
-                            --parameters_setup_file "$parameters_setup_file" \
                             --cross_truncation 0.7 \
                             $opt
 
 echo "---- end HBV sim: \`date\`"
 
-" > $baseSourcePath/hbv_uq_mc_gpce5_kpul6_ct07_banff_2006_2007.cmd
+" > $baseSourcePath/hbv_uq_mc_150000_lhs_p5_ct07_nse02_oldman_2005_2006.cmd
 
     #execute batch file
-    sbatch $baseSourcePath/hbv_uq_mc_gpce5_kpul6_ct07_banff_2006_2007.cmd
+    sbatch $baseSourcePath/hbv_uq_mc_150000_lhs_p5_ct07_nse02_oldman_2005_2006.cmd
 
 }
 
 model="hbvsask"
-opt_add="--parallel_statistics --read_nodes_from_file --sampleFromStandardDist --compute_Sobol_m --compute_Sobol_t --sc_poly_normed --store_gpce_surrogate_in_stat_dict --save_all_simulations" # --regression --instantly_save_results_for_each_time_step
+opt_add="--regression --parallel_statistics --save_all_simulations --sampleFromStandardDist --compute_Sobol_m --compute_Sobol_t --sc_poly_normed --store_gpce_surrogate_in_stat_dict --save_all_simulations" # --read_nodes_from_file --instantly_save_results_for_each_time_step
 nodes=4
-tasks_per_node=60  #22
+tasks_per_node=112  #22
 low_time="2:30:00"
-mid_time="24:00:00"
+mid_time="6:00:00"
 max_time="72:00:00"
-uq_method="sc"
+uq_method="mc"
 q_order=6
 p_order=5
-mc_numevaluations=10000
+mc_numevaluations=150000
 uc="all"
 sampling_rule="latin_hypercube"
 sc_poly_rule="three_terms_recurrence"
 sc_quadrature_rule="p" # "clenshaw_curtis" "genz_keister_24" "p"
 mpi_method="MpiPoolSolver"
 parameters_file="/dss/dsshome1/lxc0C/ga45met2/Repositories/sparse_grid_nodes_weights/KPU_d10_l6.asc"
-parameters_setup_file="/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/KPU_HBV_d10.json"
 
 # start_uq_sim "DWP" "DYNAMIC" "FCFS" saltelli 0 0 50 "$model" "$opt_add" "MpiPoolSolver" "$nodes" "$max_time" "$uc" "$sampling_rule"
 # start_uq_sim "DWP" "DYNAMIC" "FCFS" "$uq_method" 20 10 50 "$model" "$opt_add" "MpiPoolSolver" "$nodes" "$max_time" "$uc" "$sampling_rule"
-start_uq_sim "DWP" "DYNAMIC" "FCFS" "$uq_method" $q_order $p_order $mc_numevaluations "$model" "$opt_add" "$mpi_method" "$nodes" "$tasks_per_node" "$mid_time" "$uc" "$sampling_rule" "$sc_poly_rule" "$sc_quadrature_rule" "$parameters_file" "$parameters_setup_file"
+start_uq_sim "DWP" "DYNAMIC" "FCFS" "$uq_method" $q_order $p_order $mc_numevaluations "$model" "$opt_add" "$mpi_method" "$nodes" "$tasks_per_node" "$mid_time" "$uc" "$sampling_rule" "$sc_poly_rule" "$sc_quadrature_rule" "$parameters_file"

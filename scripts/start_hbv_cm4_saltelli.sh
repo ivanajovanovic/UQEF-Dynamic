@@ -1,20 +1,5 @@
 #!/bin/bash
 
-#export PYTHONPATH=$HOME/software/python/mpi4py.mpp2.git/build/lib.linux-x86_64-3.5:$PYTHONPATH
-#load modules
-#module unload python
-# module load python/3.6_intel
-#module load anaconda3
-#cm2
-# module load mpi.intel/2019
-#if [[ $HOSTNAME  == "mpp3"* ]]; then
-#  module load mpi.intel/2019
-#  #module load mpi.intel/2020
-#elif [[ $HOSTNAME  == "cm2"* ]]; then
-#  module unload intel-mpi
-#  module load intel-mpi/2018-intel
-#fi
-
 start_uq_sim(){
     local sched_strut="$1"
     local strategy="$2"
@@ -50,8 +35,8 @@ start_uq_sim(){
     counter="${counter: -4}"
 
     #print to the command line!
-    echo "$counter:mpp3: $@"
-    echo "$counter:mpp3: $@" >> started_jobs.txt
+    echo "$counter:cm4: $@"
+    echo "$counter:cm4: $@" >> started_jobs.txt
 
     # define paths
     basePath=$HOME/Repositories #'pwd'
@@ -59,14 +44,13 @@ start_uq_sim(){
     baseExecutionPath=$basePath/UQEF-Dynamic
     baseResultsPath=$WORK/hbvsask_runs #$SCRATCH/hbvsask_runs
     modelMasterPath=$WORK/HBV-SASK-data
-    # executionPath=$baseExecutionPath/hbv_uq_mpp3.$counter
-    resultsPath=$baseResultsPath/hbv_uq_mpp3.$counter
+    resultsPath=$baseResultsPath/hbv_uq_cm4.$counter
 
     conda_env=uq_env
     #conda_env="uq_env"
 
     if [ "$sched_strut" = "SWPT" -o "$sched_strut" = "SWPT_OPT" ] ; then
-        cpus=28
+        cpus=112
         threads=$cpus
         tasks=1
     else
@@ -79,14 +63,13 @@ start_uq_sim(){
     ntasks=$(($tasks * $cluster_nodes))
     echo $ntasks
 
-    # TODO
-    if [ $cluster_nodes -lt 4 ]; then
-        #partition="cm2_std" #"cm2_tiny"
-        partition="mpp3_batch" #"mpp3_batch"  # mpp3_inter
-    else
-        #partition="cm2_std"
-        partition="mpp3_batch" #"mpp3_batch"  # mpp3_inter
-    fi
+    #if [ $cluster_nodes -lt 4 ]; then
+    #    partition="cm4_std"
+    #else
+    #    partition="cm4_std"
+    #fi
+    partition="cm4_std" #"cm4_tiny" "cm4_inter" "teramem_inter"
+    clusters="cm4"  #"inter"
 
 #create batch file
 echo "#!/bin/bash
@@ -97,9 +80,9 @@ echo "#!/bin/bash
 #SBATCH -D $baseSourcePath
 #SBATCH -J hbv.$counter
 #SBATCH --get-user-env
-#SBATCH --clusters=mpp3
+#SBATCH --clusters=$clusters
 #SBATCH --partition=$partition
-###SBATCH --qos=$partition
+#SBATCH --qos=$partition
 #SBATCH --nodes=$cluster_nodes
 #SBATCH --cpus-per-task=$cpus
 #SBATCH --ntasks-per-node=$tasks
@@ -136,7 +119,7 @@ echo "---- start HBV sim: \`date\`"
                             --outputResultDir $resultsPath \
                             --inputModelDir $modelMasterPath \
                             --sourceDir $baseSourcePath \
-                            --config_file $baseSourcePath/data/configurations/configuration_hbv_10D_single_qoi.json \
+                            --config_file $baseSourcePath/data/configurations/configuration_hbv_10D_banff.json \
                             --model "$model" \
                             --uncertain "$uncertain" \
                             --opt_strategy "$strategy" --opt_algorithm "$algorithm" \
@@ -158,24 +141,24 @@ echo "---- start HBV sim: \`date\`"
 
 echo "---- end HBV sim: \`date\`"
 
-" > $baseSourcePath/hbv_uq_mc_gpce5_kpul6_ct07_banff_2006_2007.cmd
+" > $baseSourcePath/hbv_uq_saltelli_240000_lhs_banff_2009_2010.cmd
 
     #execute batch file
-    sbatch $baseSourcePath/hbv_uq_mc_gpce5_kpul6_ct07_banff_2006_2007.cmd
+    sbatch $baseSourcePath/hbv_uq_saltelli_240000_lhs_banff_2009_2010.cmd
 
 }
 
 model="hbvsask"
-opt_add="--parallel_statistics --read_nodes_from_file --sampleFromStandardDist --compute_Sobol_m --compute_Sobol_t --sc_poly_normed --store_gpce_surrogate_in_stat_dict --save_all_simulations" # --regression --instantly_save_results_for_each_time_step
+opt_add="--parallel_statistics --save_all_simulations --sampleFromStandardDist --compute_Sobol_m --compute_Sobol_t --sc_poly_normed --store_gpce_surrogate_in_stat_dict" # --regression --read_nodes_from_file --instantly_save_results_for_each_time_step
 nodes=4
-tasks_per_node=60  #22
+tasks_per_node=112  #22
 low_time="2:30:00"
-mid_time="24:00:00"
+mid_time="1:00:00"
 max_time="72:00:00"
-uq_method="sc"
+uq_method="saltelli"
 q_order=6
-p_order=5
-mc_numevaluations=10000
+p_order=4
+mc_numevaluations=20000
 uc="all"
 sampling_rule="latin_hypercube"
 sc_poly_rule="three_terms_recurrence"
