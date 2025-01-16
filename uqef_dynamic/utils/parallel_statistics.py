@@ -99,7 +99,7 @@ def parallel_calc_stats_for_SC(keyIter_chunk, qoi_values_chunk, dist, polynomial
 
 def parallel_calc_stats_for_KL(
         keyIter_chunk, qoi_values_chunk, weights=None,
-        regression=False, store_qoi_data_in_stat_dict=False):
+        regression=False, store_qoi_data_in_stat_dict=False, dict_stat_to_compute=utility.DEFAULT_DICT_STAT_TO_COMPUTE):
     """
     :return: results list, where each of the element is yet another list
     with key/timestep and statistics dictionary
@@ -107,20 +107,29 @@ def parallel_calc_stats_for_KL(
     - E (mean) is computed as a dot product of qoi_values and weights
     or as a mean of qoi_values if weights are None or regression is True   
     """
-    results = []
-    for ip in range(0, len(keyIter_chunk)):  # for each piece of work
-        timestamp = keyIter_chunk[ip]
-        print(f"Parallel computation for timestamp {timestamp}...")
-        qoi_values = qoi_values_chunk[ip]
-        local_result_dict = dict()
-        if store_qoi_data_in_stat_dict:
-            local_result_dict["qoi_values"] = qoi_values
-        if weights is None or regression:
-            local_result_dict["E"] = np.mean(qoi_values, 0)
-        else:
+    if weights is None or regression:
+        # TODO I can also propagate data for computing rank-based Sobol indices
+        return parallel_calc_stats_for_MC(
+            keyIter_chunk, qoi_values_chunk,
+            store_qoi_data_in_stat_dict=store_qoi_data_in_stat_dict, 
+            dict_stat_to_compute=dict_stat_to_compute,
+            numEvaluations=None, 
+            dim=None, 
+            compute_Sobol_m=False, 
+            compute_sobol_indices_with_samples=False, 
+            samples=None,)
+    else:
+        results = []
+        for ip in range(0, len(keyIter_chunk)):  # for each piece of work
+            timestamp = keyIter_chunk[ip]
+            print(f"Parallel computation for timestamp {timestamp}...")
+            qoi_values = qoi_values_chunk[ip]
+            local_result_dict = dict()
+            if store_qoi_data_in_stat_dict:
+                local_result_dict["qoi_values"] = qoi_values
             local_result_dict["E"] = np.dot(qoi_values, weights)
-        results.append([timestamp, local_result_dict])
-    return results
+            results.append([timestamp, local_result_dict])
+        return results
     
 
 def parallel_calc_stats_for_gPCE(
@@ -240,17 +249,17 @@ def calculate_stats_gpce(
             if isinstance(local_result_dict["P90"], list) and len(local_result_dict["P90"]) == 1:
                 local_result_dict["P90"] = local_result_dict["P90"][0]
 
-        if compute_Sobol_t:
+        if compute_Sobol_t or dict_stat_to_compute.get("Sobol_t", False):
             #start = time.time()
             local_result_dict["Sobol_t"] = cp.Sens_t(qoi_gPCE, dist)
             #end = time.time()
             #time_info_dict["duration_Sobol_t"] = end - start
-        if compute_Sobol_m:
+        if compute_Sobol_m or dict_stat_to_compute.get("Sobol_m", False):
             #start = time.time()
             local_result_dict["Sobol_m"] = cp.Sens_m(qoi_gPCE, dist)
             #end = time.time()
             #time_info_dict["duration_Sobol_m"] = end - start
-        if compute_Sobol_m2:
+        if compute_Sobol_m2 or dict_stat_to_compute.get("Sobol_m2", False):
             #start = time.time()
             local_result_dict["Sobol_m2"] = cp.Sens_m2(qoi_gPCE, dist) # second order sensitivity indices
             #end = time.time()

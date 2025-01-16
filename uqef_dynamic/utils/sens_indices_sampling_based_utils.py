@@ -60,7 +60,7 @@ def compute_sens_indices_based_on_samples_rank_based(samples, Y, D, N):
         numerator = (np.mean(Y * YN_j, axis=0) - mean**2)
         s_t_j = numerator[0] / denominator[0]
         s_t.append(s_t_j)
-    return np.asfarray(s_t)
+    return np.asarray(s_t, dtype=np.float32)
 
 
 # ====================================================
@@ -143,7 +143,7 @@ def compute_first_order_sens_indices(fA, fB, fAB, code_first, D, denominator):
             raise
         s_i_j = numerator[0] / denominator[0]
         s_i.append(s_i_j)
-    return np.asfarray(s_i)
+    return np.asarray(s_i, dtype=np.float32)
 
 
 def compute_total_order_sens_indices(fA, fB, fAB, code_total, D, denominator):
@@ -162,7 +162,7 @@ def compute_total_order_sens_indices(fA, fB, fAB, code_total, D, denominator):
             raise
         s_t_j = numerator[0] / denominator[0]
         s_t.append(s_t_j)
-    return np.asfarray(s_t)
+    return np.asarray(s_t, dtype=np.float32)
 
 
 def preparation_for_computing_sens_inidices_based_on_samples(Y, D, N, do_printing=False):
@@ -316,7 +316,7 @@ def Sens_m_sample(Y, D, N, code=3, do_printing=False):
         s_i_j = numerator[0] / denominator[0]
         s_i.append(s_i_j)
 
-    return np.asfarray(s_i)
+    return np.asarray(s_i, dtype=np.float32)
 
 
 def Sens_t_sample(Y, D, N, code=4, do_printing=False):
@@ -366,4 +366,4 @@ def Sens_t_sample(Y, D, N, code=4, do_printing=False):
         s_t_j = numerator[0] / denominator[0]
         s_t.append(s_t_j)
 
-    return np.asfarray(s_t)
+    return np.asarray(s_t, dtype=np.float32)

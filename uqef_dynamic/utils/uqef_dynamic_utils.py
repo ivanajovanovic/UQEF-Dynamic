@@ -66,7 +66,7 @@ def read_output_files_uqef_dynamic(workingDir, printing=False, **kwargs):
         - simulation_settings_dict: dict, dictionary with the simulation settings
            take a look at the function utility.read_simulation_settings_from_configuration_object
         - simulationNodes: object, UQEF simulation nodes
-        - time_info: str, time information
+        - time_info: str, time information; None if missing file
         - params_list: list, list of model uncertain parameters
         - df_index_parameter: pandas DataFrame, index parameter; None is missing
         - df_index_parameter_gof: pandas DataFrame, index parameter goodness-of-fit (GOF); None is missing
@@ -116,12 +116,17 @@ def read_output_files_uqef_dynamic(workingDir, printing=False, **kwargs):
     simulation_settings_dict = utility.read_simulation_settings_from_configuration_object(configurationObject)
 
     # Timing information
-    with open(time_info_file, 'r') as f:
-        time_info = f.read() #readlines()?
-    if printing:
-        print("INFO: time_info: ", time_info)
+    if time_info_file.is_file():
+        with open(time_info_file, 'r') as f:
+            time_info = f.read() #readlines()?
+        if printing:
+            print("INFO: time_info: ", time_info)
+    else:
+        time_info = None
 
     # Reading Nodes and Parameters
+    if not nodes_file.is_file():
+        print(f"INFO: simulationNodes file {nodes_file} is missing!!!")
     with open(nodes_file, 'rb') as f:
         simulationNodes = pickle.load(f)
     if printing:
@@ -197,16 +202,17 @@ def read_output_files_uqef_dynamic(workingDir, printing=False, **kwargs):
     results_dict["df_state"]=df_state
 
     # ========================================================
-    # Etra stuff as from read_all_saved_uqef_dynamic_results_and_produce_dict_of_interest
+    # Extra stuff as from read_all_saved_uqef_dynamic_results_and_produce_dict_of_interest
     # Update dict with results of interest based on uqsim_args_dict - add variant, q_order, mc_numevaluations
     update_dict_with_results_of_interest_based_on_uqsim_args_dict(results_dict, uqsim_args_dict)
     
     # Extra Timing information
-    for line in time_info:
-        if line.startswith("time_model_simulations"):
-            results_dict["time_model_simulations"] = line.split(':')[1].strip()
-        elif line.startswith("time_computing_statistics"):
-            results_dict["time_computing_statistics"] = line.split(':')[1].strip()
+    if time_info is not None:
+        for line in time_info:
+            if line.startswith("time_model_simulations"):
+                results_dict["time_model_simulations"] = line.split(':')[1].strip()
+            elif line.startswith("time_computing_statistics"):
+                results_dict["time_computing_statistics"] = line.split(':')[1].strip()
 
     # whatch-out this might be tricky when not all params are regarded as uncertain!
     param_labeles = utility.get_list_of_uncertain_parameters_from_configuration_dict(
@@ -269,11 +275,12 @@ def read_all_saved_uqef_dynamic_results_and_produce_dict_of_interest(workingDir,
     update_dict_with_results_of_interest_based_on_uqsim_args_dict(dict_with_results_of_interest, uqsim_args_dict)
 
     # Timing information
-    for line in time_info:
-        if line.startswith("time_model_simulations"):
-            dict_with_results_of_interest["time_model_simulations"] = line.split(':')[1].strip()
-        elif line.startswith("time_computing_statistics"):
-            dict_with_results_of_interest["time_computing_statistics"] = line.split(':')[1].strip()
+    if time_info is not None:
+        for line in time_info:
+            if line.startswith("time_model_simulations"):
+                dict_with_results_of_interest["time_model_simulations"] = line.split(':')[1].strip()
+            elif line.startswith("time_computing_statistics"):
+                dict_with_results_of_interest["time_computing_statistics"] = line.split(':')[1].strip()
 
     # whatch-out this might be tricky when not all params are regarded as uncertain!
     param_labeles = utility.get_list_of_uncertain_parameters_from_configuration_dict(
@@ -1021,6 +1028,183 @@ def read_all_saved_statistics_dict(workingDir, list_qoi_column, single_timestamp
         else:
             return None
     return statistics_dictionary
+
+# ===================================================================================================================
+# Saving statistics related data in the data frame
+# ===================================================================================================================
+
+
+def create_df_from_statistics_data(
+    stat_dict, list_qoi_columns, list_of_uncertain_variables, list_measured_qoi_columns,
+    set_lower_predictions_to_zero=False, list_measured_fetched=[], df_measured=None,
+    time_column_name=utility.TIME_COLUMN_NAME
+):
+    raise NotImplementedError("This method is not implemented yet!")
+
+
+def create_df_from_statistics_data_single_qoi(
+    stat_dict, qoi_column, list_of_uncertain_variables, measured_qoi_column, 
+    set_lower_predictions_to_zero=False, measured_fetched=False, df_measured=None,
+    time_column_name=utility.TIME_COLUMN_NAME):
+    """
+    Creates a pandas DataFrame from the statistics data for a single quantity of interest (qoi).
+
+    Args:
+        qoi_column (str): The column name of the quantity of interest.
+        set_lower_predictions_to_zero (bool, optional): Flag indicating whether to set lower predictions to zero. Defaults to False.
+
+    Returns:
+        pandas.DataFrame: The DataFrame containing the statistics data for the specified qoi.
+
+    Raises:
+
+    Note:
+        This method retrieves the statistics data from the result_dict attribute and constructs a DataFrame
+        with columns representing different statistical measures such as mean, standard deviation, percentiles, etc.
+        The DataFrame also includes the time column and the qoi column.
+
+        If measured data is available (i.e., df_measured is not Noe) the method addes measured data to the final 
+        data frame as well, and if compute_measured_normalized_data is True, the method computes
+        the normalized measured data and adds it as a column in the DataFrame.
+
+        If the unaltered_computed flag is True, the plan is to add it to the final df
+    """
+    if not stat_dict:
+        return None
+
+    if qoi_column not in stat_dict:
+        stat_dict = stat_dict[qoi_column]
+
+    keyIter = list(stat_dict.keys())  # timesteps (?)
+
+    list_of_columns = [keyIter, ]  # self.timesteps (?)
+    list_of_columns_names = [utility.TIME_COLUMN_NAME, ]
+
+    if utility.MEAN_ENTRY in stat_dict[keyIter[0]]:
+        mean_time_series = [stat_dict[key][utility.MEAN_ENTRY] for key in keyIter]
+        list_of_columns.append(mean_time_series)
+        list_of_columns_names.append(utility.MEAN_ENTRY)
+    if utility.PCE_COEFF_ENTRY in stat_dict[keyIter[0]]:
+        list_of_columns.append([stat_dict[key][utility.PCE_COEFF_ENTRY] for key in keyIter])
+        list_of_columns_names.append(utility.PCE_COEFF_ENTRY)
+    if utility.PCE_ENTRY in stat_dict[keyIter[0]]:
+        list_of_columns.append([stat_dict[key][utility.PCE_ENTRY] for key in keyIter])
+        list_of_columns_names.append(utility.PCE_ENTRY)
+    if utility.VAR_ENTRY in stat_dict[keyIter[0]]:
+        std_time_series = [stat_dict[key][utility.VAR_ENTRY] for key in keyIter]
+        list_of_columns.append(std_time_series)
+        list_of_columns_names.append(utility.VAR_ENTRY)
+    if utility.STD_DEV_ENTRY in stat_dict[keyIter[0]]:
+        std_time_series = [stat_dict[key][utility.STD_DEV_ENTRY] for key in keyIter]
+        list_of_columns.append(std_time_series)
+        list_of_columns_names.append(utility.STD_DEV_ENTRY)
+    if utility.P10_ENTRY in stat_dict[keyIter[0]]:
+        p10_time_series = [stat_dict[key][utility.P10_ENTRY] for key in keyIter]
+        list_of_columns.append(p10_time_series)
+        list_of_columns_names.append(utility.P10_ENTRY)
+    if utility.P90_ENTRY in stat_dict[keyIter[0]]:
+        p90_time_series = [stat_dict[key][utility.P90_ENTRY] for key in keyIter]
+        list_of_columns.append(p90_time_series)
+        list_of_columns_names.append(utility.P90_ENTRY)
+    if utility.SKEW_ENTRY in stat_dict[keyIter[0]]:
+        list_of_columns.append([stat_dict[key][utility.SKEW_ENTRY] for key in keyIter])
+        list_of_columns_names.append(utility.SKEW_ENTRY)
+    if utility.KURT_ENTRY in stat_dict[keyIter[0]]:
+        list_of_columns.append([stat_dict[key][utility.KURT_ENTRY] for key in keyIter])
+        list_of_columns_names.append(utility.KURT_ENTRY)
+    if utility.QOI_DIST_ENTR in stat_dict[keyIter[0]]:
+        list_of_columns.append([stat_dict[key][utility.QOI_DIST_ENTR] for key in keyIter])
+        list_of_columns_names.append(utility.QOI_DIST_ENTR)
+
+    # self._check_if_Sobol_t_computed(keyIter[0], qoi_column=qoi_column)
+    # self._check_if_Sobol_m_computed(keyIter[0], qoi_column=qoi_column)
+    is_Sobol_t_computed = utility.SOBOL_TOTAL_ORDER_ENTRY in stat_dict[keyIter[0]]
+    is_Sobol_m_computed = utility.SOBOL_FIRST_ORDER_ENTRY in stat_dict[keyIter[0]]
+    is_Sobol_m2_computed = utility.SOBOL_SECOND_ORDER_ENTRY in stat_dict[keyIter[0]]
+
+    if is_Sobol_m_computed:
+        for i in range(len(list_of_uncertain_variables)):
+            sobol_m_time_series = [stat_dict[key][utility.SOBOL_FIRST_ORDER_ENTRY][i] for key in keyIter]
+            list_of_columns.append(sobol_m_time_series)
+            temp = "Sobol_m_" + list_of_uncertain_variables[i]
+            list_of_columns_names.append(temp)
+    if is_Sobol_m2_computed:
+        for i in range(len(list_of_uncertain_variables)):
+            sobol_m2_time_series = [stat_dict[key][utility.SOBOL_SECOND_ORDER_ENTRY][i] for key in keyIter]
+            list_of_columns.append(sobol_m2_time_series)
+            temp = "Sobol_m2_" + list_of_uncertain_variables[i]
+            list_of_columns_names.append(temp)
+    if is_Sobol_t_computed:
+        for i in range(len(list_of_uncertain_variables)):
+            sobol_t_time_series = [stat_dict[key][utility.SOBOL_TOTAL_ORDER_ENTRY][i] for key in keyIter]
+            list_of_columns.append(sobol_t_time_series)
+            temp = "Sobol_t_" + list_of_uncertain_variables[i]
+            list_of_columns_names.append(temp)
+
+    if f'generalized_sobol_total_index_{list_of_uncertain_variables[0]}' in stat_dict[keyIter[-1]]:
+        for i in range(len(list_of_uncertain_variables)):
+            name = f"generalized_sobol_total_index_{list_of_uncertain_variables[i]}"
+            generalized_sobol_total_index_values_temp = []
+            at_least_one_entry_found = False
+            for key in keyIter:
+                if name in stat_dict[key]:
+                    at_least_one_entry_found = True
+                    temp = stat_dict[key][name]
+                    generalized_sobol_total_index_values_temp.append(temp)
+            if at_least_one_entry_found:
+                list_of_columns_names.append(name)
+                if len(generalized_sobol_total_index_values_temp)==1:
+                    generalized_sobol_total_index_values_temp = generalized_sobol_total_index_values_temp[0]*len(keyIter)
+                list_of_columns.append(generalized_sobol_total_index_values_temp)
+
+    if not list_of_columns:
+        return None
+
+    df_statistics_single_qoi = pd.DataFrame(list(zip(*list_of_columns)), columns=list_of_columns_names)
+    df_statistics_single_qoi[utility.QOI_ENTRY] = qoi_column
+
+    if utility.MEAN_ENTRY in df_statistics_single_qoi.columns:
+        if utility.STD_DEV_ENTRY in df_statistics_single_qoi.columns:
+            df_statistics_single_qoi["E_minus_std"] = df_statistics_single_qoi[utility.MEAN_ENTRY] - df_statistics_single_qoi[utility.STD_DEV_ENTRY]
+            df_statistics_single_qoi["E_plus_std"] = df_statistics_single_qoi[utility.MEAN_ENTRY] + df_statistics_single_qoi[utility.STD_DEV_ENTRY]
+            df_statistics_single_qoi["E_minus_2std"] = df_statistics_single_qoi[utility.MEAN_ENTRY] - 2*df_statistics_single_qoi[utility.STD_DEV_ENTRY]
+            df_statistics_single_qoi["E_plus_2std"] = df_statistics_single_qoi[utility.MEAN_ENTRY] + 2*df_statistics_single_qoi[utility.STD_DEV_ENTRY]
+        elif utility.VAR_ENTRY in df_statistics_single_qoi.columns:
+            df_statistics_single_qoi["E_minus_std"] = df_statistics_single_qoi[utility.MEAN_ENTRY] - np.sqrt(df_statistics_single_qoi[utility.VAR_ENTRY])
+            df_statistics_single_qoi["E_plus_std"] = df_statistics_single_qoi[utility.MEAN_ENTRY] + np.sqrt(df_statistics_single_qoi[utility.VAR_ENTRY])
+            df_statistics_single_qoi["E_minus_2std"] = df_statistics_single_qoi[utility.MEAN_ENTRY] - 2*np.sqrt(df_statistics_single_qoi[utility.VAR_ENTRY])
+            df_statistics_single_qoi["E_plus_2std"] = df_statistics_single_qoi[utility.MEAN_ENTRY] + 2*np.sqrt(df_statistics_single_qoi[utility.VAR_ENTRY])
+
+    if set_lower_predictions_to_zero:
+        if 'E_minus_std' in df_statistics_single_qoi:
+            df_statistics_single_qoi.loc[df_statistics_single_qoi["E_minus_std"] < 0, "E_minus_std"] = 0
+        if 'E_minus_2std' in df_statistics_single_qoi:
+            df_statistics_single_qoi.loc[df_statistics_single_qoi["E_minus_2std"] < 0, "E_minus_2std"] = 0
+        if 'P10' in df_statistics_single_qoi:
+            df_statistics_single_qoi['P10'] = df_statistics_single_qoi['P10'].apply(lambda x: max(0, x))
+
+    if measured_fetched and df_measured is not None:
+        if qoi_column in list(df_measured["qoi"].unique()):
+            # print(f"{qoi_column}")
+            df_measured_subset = df_measured.loc[df_measured["qoi"] == qoi_column][[
+                time_column_name, "measured"]]
+            # df_measured_subset.drop("qoi", inplace=True)
+            df_statistics_single_qoi = pd.merge(df_statistics_single_qoi, df_measured_subset,
+                                                on=[time_column_name, ], how='left')
+        elif measured_qoi_column in list(df_measured["qoi"].unique()):
+            df_measured_subset = df_measured.loc[
+                df_measured["qoi"] == measured_qoi_column][[
+                time_column_name, "measured"]]
+            # df_measured_subset.drop("qoi", inplace=True)
+            df_statistics_single_qoi = pd.merge(df_statistics_single_qoi, df_measured_subset,
+                                                on=[time_column_name, ], how='left')
+        else:
+            df_statistics_single_qoi["measured"] = np.nan
+    else:
+        df_statistics_single_qoi["measured"] = np.nan
+
+    return df_statistics_single_qoi
+
 
 # ===================================================================================================================
 # Functions for saving/reading the GPCE surrogate model
@@ -1834,7 +2018,7 @@ def compute_gPCE_for_uqef_dynamic_model(model, expansion_order: int, joint_dist,
                 gPCE_over_time[timestamps[idx]], coeff[timestamps[idx]] = cp.fit_quadrature(polynomial_expansion, nodes, weights_quad, model_runs[idx], retall=True)
             else:
                 gPCE_over_time[idx], coeff[idx] = cp.fit_quadrature(polynomial_expansion, nodes, weights_quad, model_runs[idx], retall=True)
-    return gPCE_over_time, polynomial_expansion, np.asfarray(norms), coeff
+    return gPCE_over_time, polynomial_expansion, np.asarray(norms, dtype=np.float64), coeff
 
 
 def compute_PSP_for_uqef_dynamic_model(model, joint_dist, \
@@ -1894,8 +2078,8 @@ def compute_PSP_for_uqef_dynamic_model(model, joint_dist, \
             gPCE_over_time[timestamps[idx]], coeff[timestamps[idx]] = cp.fit_quadrature(polynomial_expansion, nodes_quad, weights_quad, model_runs[idx], retall=True)
         else:
             gPCE_over_time[idx], coeff[idx] = cp.fit_quadrature(polynomial_expansion, nodes_quad, weights_quad, model_runs[idx], retall=True)
-    # return gPCE_over_time, polynomial_expansion, np.asfarray(norms), np.asfarray(coeff)
-    return gPCE_over_time, polynomial_expansion, np.asfarray(norms), coeff
+    # return gPCE_over_time, polynomial_expansion, np.asarray(norms), np.asarray(coeff)
+    return gPCE_over_time, polynomial_expansion, np.asarray(norms, dtype=np.float64), coeff
 
 
 def compute_PSP_for_uqef_dynamic_model_ionuts_approach(model, joint_dist, joint_dist_standard,\
@@ -1944,8 +2128,8 @@ def compute_PSP_for_uqef_dynamic_model_ionuts_approach(model, joint_dist, joint_
             gPCE_over_time[timestamps[idx]], coeff[timestamps[idx]]= cp.fit_quadrature(polynomial_expansion, nodes_quad, weights_quad, model_runs[idx], retall=True)
         else:
             gPCE_over_time[idx], coeff[idx] = cp.fit_quadrature(polynomial_expansion, nodes_quad, weights_quad, model_runs[idx], retall=True)
-    # return gPCE_over_time, polynomial_expansion, np.asfarray(norms), np.asfarray(coeff)
-    return gPCE_over_time, polynomial_expansion, np.asfarray(norms), coeff
+    # return gPCE_over_time, polynomial_expansion, np.asarray(norms), np.asarray(coeff)
+    return gPCE_over_time, polynomial_expansion, np.asarray(norms, dtype=np.float64), coeff
 
 
 # ==============================================================================================================
@@ -2591,7 +2775,7 @@ def plot_heatmap_si_single_qoi(qoi_column, si_df, si_type="Sobol_t", uq_method="
 
     fig.update_xaxes(
         tickformat='%b %y',            # Format dates as "Month Day" (e.g., "Jan 01")
-        dtick="M1"                     # Set tick interval to 1 day for denser ticks
+        dtick="M2"                     # Set tick interval to 1 day for denser ticks
     )
     
     return fig
@@ -2649,7 +2833,7 @@ def plotting_function_single_qoi(
         rows=n_rows, cols=1,
         subplot_titles=subplot_titles,
         shared_xaxes=True,
-        horizontal_spacing=0.01, vertical_spacing=0.03
+        horizontal_spacing=0.01, vertical_spacing=0.04
     )
     fig.add_trace(
         go.Scatter(
@@ -2870,7 +3054,7 @@ def plot_parameters_sensitivity_indices_vs_temp_prec_measured_plotly(
 
     # Create a subplot grid
     fig = make_subplots(rows=number_rows, cols=num_columns, shared_xaxes=True, shared_yaxes=True,
-                        horizontal_spacing=0.01, vertical_spacing=0.01)
+                        horizontal_spacing=0.01, vertical_spacing=0.04)
 
     # Populate the subplot grid with scatter plots
     for i, x_col in enumerate(forcing_measured_columns):
@@ -3028,7 +3212,7 @@ def plotting_function_single_qoi_hbv(
         rows=n_rows, cols=1,
         subplot_titles=subplot_titles,
         shared_xaxes=True,
-        horizontal_spacing=0.01, vertical_spacing=0.03
+        horizontal_spacing=0.01, vertical_spacing=0.04
     )
 
     fig.add_trace(
@@ -3181,7 +3365,7 @@ def plotting_function_single_qoi_hbv(
     # fig.update_layout(xaxis=dict(type="date"))
     fig.update_xaxes(
         tickformat='%b %y',            # Format dates as "Month Day" (e.g., "Jan 01")
-        dtick="M1"                     # Set tick interval to 1 day for denser ticks
+        dtick="M2"                     # Set tick interval to 1 day for denser ticks
     )
     if not str(directory).endswith("/"):
         directory = str(directory) + "/"
