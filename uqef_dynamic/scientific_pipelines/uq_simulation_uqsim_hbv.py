@@ -20,7 +20,8 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 pd.options.mode.chained_assignment = None
 
 # sys.path.insert(0, os.getcwd())
-sys.path.insert(0, '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic')
+# sys.path.insert(0, '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic')
+sys.path.insert(0, "/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic")
 
 from uqef_dynamic.utils import utility
 
@@ -56,6 +57,7 @@ if local_debugging:
     l = 5  # 10
     dim = 3
     path_to_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/sparse_grid_nodes_weights")  # this a path to the file where the nodes and weights are stored
+    path_to_file = pathlib.Path("/work/ga45met/sparseSpACE/sparse_grid_nodes_weights")
     uqsim.args.parameters_file = path_to_file / f"KPU_d{dim}_l{l}.asc" # f"KPU_d7_l{l}.asc"
     uqsim.args.parameters_setup_file = None  #pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/KPU_HBV_d3.json")
     
@@ -63,7 +65,7 @@ if local_debugging:
     uqsim.args.sc_poly_normed = True  # True
     uqsim.args.sc_sparse_quadrature = False  # False
     uqsim.args.regression = False
-    uqsim.args.cross_truncation = 0.7
+    uqsim.args.cross_truncation = 1.0
 
     # paths, if necessary change them
     uqsim.args.inputModelDir = pathlib.Path("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/HBV-SASK-data")
@@ -71,6 +73,12 @@ if local_debugging:
     uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs", 'sc_kl10_p3_l7_generalized_60days_3d_oldman_experimental'))
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
     uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/configuration_hbv_3D_MC.json'
+
+    uqsim.args.inputModelDir = pathlib.Path("/work/ga45met/Hydro_Models/HBV-SASK-data")
+    uqsim.args.sourceDir = pathlib.Path("/work/ga45met/Hydro_Models/HBV-SASK-data")
+    uqsim.args.outputResultDir = os.path.abspath(os.path.join('/work/ga45met/uqef_dynamic_runs/hbv_sask_runs/Oldman_Basin', 'gpce_d3_p3_l5_generalized'))
+    uqsim.args.outputModelDir = uqsim.args.outputResultDir
+    uqsim.args.config_file = '/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic/data/configurations/configuration_hbv_3D_MC.json'
 
     uqsim.args.sampleFromStandardDist = True  # False
 
@@ -84,12 +92,12 @@ if local_debugging:
     uqsim.args.instantly_save_results_for_each_time_step = False #False
     uqsim.args.uqsim_store_to_file = False
 
-    uqsim.args.compute_Sobol_t = False  # True False
+    uqsim.args.compute_Sobol_t = True  # True False
     uqsim.args.compute_Sobol_m = True  # True False
 
     uqsim.args.num_cores = 1
 
-    uqsim.args.save_all_simulations = True  # True for sc
+    uqsim.args.save_all_simulations = False  # True for sc
     uqsim.args.store_qoi_data_in_stat_dict = False  # if set to True, the qoi_values entry is stored in the stat_dict 
     uqsim.args.store_gpce_surrogate_in_stat_dict = True
     uqsim.args.collect_and_save_state_data = False # False 
@@ -98,11 +106,13 @@ if local_debugging:
 
 # TODO Eventually add these configurations to uqef.args
 utility.DEFAULT_DICT_WHAT_TO_PLOT = {
-    "E_minus_std": False, "E_plus_std": False, "P10": True, "P90": True,
-    "StdDev": True, "Skew": False, "Kurt": False, "Sobol_m": False, "Sobol_m2": False, "Sobol_t": True
+    "E_minus_std": True, "E_plus_std": True, "E_minus_2std": False, "E_plus_2std":False, 
+    "P10": False, "P90": False,
+    "StdDev": True, "Skew": False, "Kurt": False, "Sobol_m": True, "Sobol_m2": False, "Sobol_t": True
 }
 utility.DEFAULT_DICT_STAT_TO_COMPUTE = {
     "Var": True, "StdDev": False, "P10": True, "P90": True,
+    "E_minus_std": True, "E_plus_std": True,
     "Skew": False, "Kurt": False, "Sobol_m": True, "Sobol_m2": False, "Sobol_t": True
 }
 dict_stat_to_compute = utility.DEFAULT_DICT_STAT_TO_COMPUTE
@@ -114,13 +124,13 @@ save_gpce_surrogate = True  # if True a gpce surrogate for each QoI for each tim
 compute_other_stat_besides_pce_surrogate = True  # This is relevant only when uq_method == "sc" 
 
 compute_kl_expansion_of_qoi = False
-compute_timewise_gpce_next_to_kl_expansion = False
 kl_expansion_order = 10
+compute_timewise_gpce_next_to_kl_expansion = False
 
-compute_generalized_sobol_indices = False
-compute_generalized_sobol_indices_over_time = False
+compute_generalized_sobol_indices = True
+compute_generalized_sobol_indices_over_time = True
 
-compute_covariance_matrix_in_time = True
+compute_covariance_matrix_in_time = False
 
 allow_conditioning_results_based_on_metric = False
 
@@ -193,9 +203,9 @@ uqsim.statistics.update({"hbvsask"         : (lambda: HBVSASKStatistics.HBVSASKS
     compute_kl_expansion_of_qoi = compute_kl_expansion_of_qoi,
     index_column_name = "Index_run",
     allow_conditioning_results_based_on_metric=allow_conditioning_results_based_on_metric,
-    condition_results_based_on_metric = 'NSE',
-    condition_results_based_on_metric_value = 0.2,
-    condition_results_based_on_metric_sign = "greater_or_equal",
+    condition_results_based_on_metric = condition_results_based_on_metric,
+    condition_results_based_on_metric_value = condition_results_based_on_metric_value,
+    condition_results_based_on_metric_sign = condition_results_based_on_metric_sign,
     compute_timewise_gpce_next_to_kl_expansion=compute_timewise_gpce_next_to_kl_expansion,
     kl_expansion_order = kl_expansion_order,
     compute_generalized_sobol_indices = compute_generalized_sobol_indices,
@@ -214,17 +224,18 @@ uqsim.setup()
 if uqsim.is_master():
     simulationNodes_save_file = "nodes"
     uqsim.save_simulationNodes(fileName=simulationNodes_save_file)
-    number_full_model_evaluations = len(uqsim.simulationNodes.nodes.T)
+    number_full_model_evaluations = uqsim.get_simulation_parameters_shape()[0]
+    #number_full_model_evaluations = len(uqsim.simulationNodes.nodes.T)
 
 # save the dictionary with the arguments - once before the simulation
 if uqsim.is_master():
-    argsFileName = os.path.abspath(os.path.join(uqsim.args.outputResultDir, "uqsim_args.pkl"))
+    argsFileName = os.path.abspath(os.path.join(uqsim.args.outputResultDir, utility.ARGS_FILE))
     with open(argsFileName, 'wb') as handle:
         pickle.dump(uqsim.args, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 # save initially configurationObject if program breaks during simulation
 if uqsim.is_master():
-    fileName = pathlib.Path(uqsim.args.outputResultDir) / "configurationObject"
+    fileName = pathlib.Path(uqsim.args.outputResultDir) / utility.CONFIGURATION_OBJECT_FILE
     with open(fileName, 'wb') as f:
         dill.dump(uqsim.configuration_object, f)
 
@@ -241,22 +252,22 @@ time_model_simulations = end_time_model_simulations - start_time_model_simulatio
 #uqsim.save_simulation_parameters()
 if hasattr(uqsim.simulation, 'parameters') and uqsim.simulation.parameters is not None:
     df = pd.DataFrame({'parameters': [row for row in uqsim.simulation.parameters]})
-    df.to_pickle(os.path.abspath(os.path.join(uqsim.args.outputResultDir, "df_uqsim_simulation_parameters.pkl")), compression="gzip")
+    df.to_pickle(os.path.abspath(os.path.join(uqsim.args.outputResultDir, utility.DF_UQSIM_SIMULATION_PARAMETERS_FILE)), compression="gzip")
 
 if hasattr(uqsim.simulation, 'nodes') and uqsim.simulation.nodes is not None:
     df = pd.DataFrame({'nodes': [row for row in uqsim.simulation.nodes]})
-    df.to_pickle(os.path.abspath(os.path.join(uqsim.args.outputResultDir, "df_uqsim_simulation_nodes.pkl")), compression="gzip")
+    df.to_pickle(os.path.abspath(os.path.join(uqsim.args.outputResultDir, utility.DF_UQSIM_SIMULATION_NODES_FILE)), compression="gzip")
 
 if hasattr(uqsim.simulation, 'weights') and uqsim.simulation.weights is not None:
     df = pd.DataFrame({'weights': [row for row in uqsim.simulation.weights]})
-    df.to_pickle(os.path.abspath(os.path.join(uqsim.args.outputResultDir, "df_uqsim_simulation_weights.pkl")), compression="gzip")
+    df.to_pickle(os.path.abspath(os.path.join(uqsim.args.outputResultDir, utility.DF_UQSIM_SIMULATION_WEIGHTS_FILE)), compression="gzip")
 
 #####################################
 # re-save uqsim.configurationObject
 #####################################
 
 if uqsim.is_master():
-    fileName = pathlib.Path(uqsim.args.outputResultDir) / "configurationObject"
+    fileName = pathlib.Path(uqsim.args.outputResultDir) / utility.CONFIGURATION_OBJECT_FILE
     with open(fileName, 'wb') as f:
         dill.dump(uqsim.configuration_object, f)
 
@@ -276,7 +287,7 @@ uqsim.save_statistics()
 
 # save the dictionary with the arguments once again
 if uqsim.is_master():
-    time_infoFileName = os.path.abspath(os.path.join(uqsim.args.outputResultDir, f"time_info.txt"))
+    time_infoFileName = os.path.abspath(os.path.join(uqsim.args.outputResultDir, utility.TIME_INFO_FILE))
     with open(time_infoFileName, 'w') as fp:
         fp.write(f'number_full_model_runs: {number_full_model_evaluations}\n')
         fp.write(f'time_model_simulations: {time_model_simulations}\n')
