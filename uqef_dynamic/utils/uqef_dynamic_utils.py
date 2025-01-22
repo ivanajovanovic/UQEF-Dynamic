@@ -1072,7 +1072,7 @@ def create_df_from_statistics_data_single_qoi(
     if not stat_dict:
         return None
 
-    if qoi_column not in stat_dict:
+    if qoi_column in stat_dict:
         stat_dict = stat_dict[qoi_column]
 
     keyIter = list(stat_dict.keys())  # timesteps (?)
@@ -1154,7 +1154,8 @@ def create_df_from_statistics_data_single_qoi(
             if at_least_one_entry_found:
                 list_of_columns_names.append(name)
                 if len(generalized_sobol_total_index_values_temp)==1:
-                    generalized_sobol_total_index_values_temp = generalized_sobol_total_index_values_temp[0]*len(keyIter)
+                    generalized_sobol_total_index_values_temp = [generalized_sobol_total_index_values_temp[0],]*len(keyIter)
+                    # generalized_sobol_total_index_values_temp = generalized_sobol_total_index_values_temp[0]*len(keyIter)
                 list_of_columns.append(generalized_sobol_total_index_values_temp)
 
     if not list_of_columns:
@@ -1183,28 +1184,101 @@ def create_df_from_statistics_data_single_qoi(
         if 'P10' in df_statistics_single_qoi:
             df_statistics_single_qoi['P10'] = df_statistics_single_qoi['P10'].apply(lambda x: max(0, x))
 
-    if measured_fetched and df_measured is not None:
-        if qoi_column in list(df_measured["qoi"].unique()):
-            # print(f"{qoi_column}")
-            df_measured_subset = df_measured.loc[df_measured["qoi"] == qoi_column][[
-                time_column_name, "measured"]]
-            # df_measured_subset.drop("qoi", inplace=True)
-            df_statistics_single_qoi = pd.merge(df_statistics_single_qoi, df_measured_subset,
-                                                on=[time_column_name, ], how='left')
-        elif measured_qoi_column in list(df_measured["qoi"].unique()):
-            df_measured_subset = df_measured.loc[
-                df_measured["qoi"] == measured_qoi_column][[
-                time_column_name, "measured"]]
-            # df_measured_subset.drop("qoi", inplace=True)
-            df_statistics_single_qoi = pd.merge(df_statistics_single_qoi, df_measured_subset,
-                                                on=[time_column_name, ], how='left')
-        else:
-            df_statistics_single_qoi["measured"] = np.nan
-    else:
-        df_statistics_single_qoi["measured"] = np.nan
+    # if measured_fetched and df_measured is not None:
+    #     if qoi_column in list(df_measured[utility.QOI_ENTRY].unique()):
+    #         # print(f"{qoi_column}")
+    #         df_measured_subset = df_measured.loc[df_measured[utility.QOI_ENTRY] == qoi_column][[
+    #             time_column_name, "measured"]]
+    #         # df_measured_subset.drop(utility.QOI_ENTRY, inplace=True)
+    #         df_statistics_single_qoi = pd.merge(df_statistics_single_qoi, df_measured_subset,
+    #                                             on=[time_column_name, ], how='left')
+    #     elif measured_qoi_column in list(df_measured[utility.QOI_ENTRY].unique()):
+    #         df_measured_subset = df_measured.loc[
+    #             df_measured[utility.QOI_ENTRY] == measured_qoi_column][[
+    #             time_column_name, "measured"]]
+    #         # df_measured_subset.drop(utility.QOI_ENTRY, inplace=True)
+    #         df_statistics_single_qoi = pd.merge(df_statistics_single_qoi, df_measured_subset,
+    #                                             on=[time_column_name, ], how='left')
+    #     else:
+    #         df_statistics_single_qoi["measured"] = np.nan
+    # else:
+    #     df_statistics_single_qoi["measured"] = np.nan
+    add_measured_data_to_dataframe(
+        df_statistics_single_qoi, qoi_column, 
+        measured_qoi_column, measured_fetched, df_measured, time_column_name)
 
     return df_statistics_single_qoi
 
+
+def add_measured_data_to_dataframe(
+    df, qoi_column, measured_qoi_column=None, measured_fetched=False, df_measured=None,
+    time_column_name=utility.TIME_COLUMN_NAME):
+    if measured_fetched and df_measured is not None:
+        if qoi_column in list(df_measured[utility.QOI_ENTRY].unique()):
+            # print(f"{qoi_column}")
+            df_measured_subset = df_measured.loc[df_measured[utility.QOI_ENTRY] == qoi_column][[
+                time_column_name, "measured"]]
+            # df_measured_subset.drop(utility.QOI_ENTRY, inplace=True)
+            df = pd.merge(df, df_measured_subset,
+                                                on=[time_column_name, ], how='left')
+        elif measured_qoi_column is not None and measured_qoi_column in list(df_measured[utility.QOI_ENTRY].unique()):
+            df_measured_subset = df_measured.loc[
+                df_measured[utility.QOI_ENTRY] == measured_qoi_column][[
+                time_column_name, "measured"]]
+            # df_measured_subset.drop(utility.QOI_ENTRY, inplace=True)
+            df = pd.merge(df, df_measured_subset, on=[time_column_name, ], how='left')
+        else:
+            df["measured"] = np.nan
+    else:
+        df["measured"] = np.nan
+    # return df
+
+
+def create_df_from_generalized_total_sobol_indices_single_qoi(
+    stat_dict, qoi_column, list_of_uncertain_variables, measured_qoi_column=None, 
+    set_lower_predictions_to_zero=False, measured_fetched=False, df_measured=None,
+    time_column_name=utility.TIME_COLUMN_NAME):
+    if not stat_dict:
+        return None
+
+    df_single_qoi = None
+    if qoi_column in stat_dict:
+        stat_dict = stat_dict[qoi_column]
+
+    keyIter = list(stat_dict.keys())  # timesteps (?)
+    list_of_columns = [keyIter, ]  # self.timesteps (?)
+    list_of_columns_names = [utility.TIME_COLUMN_NAME, ]
+
+    if f'generalized_sobol_total_index_{list_of_uncertain_variables[0]}' in stat_dict[keyIter[-1]]:
+        for i in range(len(list_of_uncertain_variables)):
+            name = f"generalized_sobol_total_index_{list_of_uncertain_variables[i]}"
+            generalized_sobol_total_index_values_temp = []
+            at_least_one_entry_found = False
+            for key in keyIter:
+                if name in stat_dict[key]:
+                    at_least_one_entry_found = True
+                    temp = stat_dict[key][name]
+                    generalized_sobol_total_index_values_temp.append(temp)
+            if at_least_one_entry_found:
+                list_of_columns_names.append(name)
+                if len(generalized_sobol_total_index_values_temp)==1:
+                    generalized_sobol_total_index_values_temp = generalized_sobol_total_index_values_temp[0]*len(keyIter)
+                list_of_columns.append(generalized_sobol_total_index_values_temp)
+
+    if not list_of_columns:
+        return None
+
+    df_single_qoi = pd.DataFrame(list(zip(*list_of_columns)), columns=list_of_columns_names)
+    df_single_qoi[utility.QOI_ENTRY] = qoi_column
+
+    add_measured_data_to_dataframe(
+        df_single_qoi, qoi_column, 
+        measured_qoi_column, measured_fetched, df_measured, time_column_name)
+
+    # df_single_qoi.set_index(self.time_column_name, inplace=True)
+    # df_single_qoi.sort_index(ascending=True, inplace=True)
+
+    return df_single_qoi
 
 # ===================================================================================================================
 # Functions for saving/reading the GPCE surrogate model

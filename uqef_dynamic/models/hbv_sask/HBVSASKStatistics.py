@@ -714,6 +714,7 @@ class HBVSASKStatistics(time_dependent_statistics.TimeDependentStatistics):
                     y = [dict_time_vs_qoi_stat[key][name] for key in keyIter]
                 else:
                     y = [dict_time_vs_qoi_stat[keyIter[-1]][name]]*len(keyIter)
+                name = self.labels[i] + "_" + single_qoi_column + "generalized_S_t"
                 fig.add_trace(go.Scatter(
                     x=pdTimesteps,
                     y=y,

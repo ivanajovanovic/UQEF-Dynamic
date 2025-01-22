@@ -66,7 +66,7 @@ if local_debugging:
     uqsim.args.sampling_rule = "random"  # "random" | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
     
     uqsim.args.sc_q_order = 5  # 7 8 8 #10 3
-    uqsim.args.sc_p_order = 3  # 3, 3, 4 5, 6, 8
+    uqsim.args.sc_p_order = 5  # 3, 3, 4 5, 6, 8
     uqsim.args.sc_quadrature_rule = "g"  # "p" "genz_keister_24" "leja" "clenshaw_curtis"
 
     uqsim.args.read_nodes_from_file = False
@@ -123,7 +123,7 @@ if local_debugging:
     uqsim.args.inputModelDir = pathlib.Path('/dss/dsshome1/lxc0C/ga45met2/.conda/envs/my_uq_env/lib/python3.11/site-packages/pybamm/input/drive_cycles')
     #uqsim.args.inputModelDir = pathlib.Path('/dss/dsshome1/lxc0C/ga45met2/.conda/envs/uq_env/lib/python3.7/site-packages/pybamm/input/drive_cycles')
     #  /dss/dsshome1/lxc0C/ga45met2/.conda/envs/uq_env/lib/python3.7/site-packages/pybamm/input/drive_cycles
-    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/battery_runs", 'mc_kl10_p3_ct07_24d_10000_random'))
+    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/battery_runs", 'mc_kl10_p5_ct07_24d_10000_random'))
     uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/uqef_dynamic/models/pybamm/configuration_battery_24_shot_names.json' #configuration_battery.json' configuration_battery_24_shot_names.json
 
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
@@ -155,7 +155,7 @@ if local_debugging:
 # TODO Eventually add these configurations to uqef.args
 utility.DEFAULT_DICT_WHAT_TO_PLOT = {
     "E_minus_std": False, "E_plus_std": False, "E_minus_2std": True, "E_plus_2std":True, 
-    "P10": False, "P90": False,
+    "P10": True, "P90": True,
     "StdDev": True, "Skew": False, "Kurt": False, "Sobol_m": True, "Sobol_m2": False, "Sobol_t": True
 }
 utility.DEFAULT_DICT_STAT_TO_COMPUTE = {
@@ -166,7 +166,7 @@ utility.DEFAULT_DICT_STAT_TO_COMPUTE = {
 dict_stat_to_compute = utility.DEFAULT_DICT_STAT_TO_COMPUTE
 compute_sobol_indices_with_samples = False  # This is only relevant in the mc-saltelli's approach
 # TODO Think about when regression is True, what do you prefer gPCE-based indices or MC?
-if uqsim.args.uq_method == "mc" and not uqsim.args.regression and uqsim.args.compute_Sobol_m:
+if uqsim.args.uq_method == "mc" and uqsim.args.compute_Sobol_m:
     compute_sobol_indices_with_samples = True
 
 save_gpce_surrogate = True  # if True a gpce surrogate for each QoI for each time step is saved in a separate file

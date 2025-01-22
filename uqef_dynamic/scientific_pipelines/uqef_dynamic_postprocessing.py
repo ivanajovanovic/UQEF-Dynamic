@@ -44,6 +44,7 @@ from uqef_dynamic.utils import parallel_statistics
 from uqef_dynamic.utils import utility
 from uqef_dynamic.utils import uqef_dynamic_utils
 from uqef_dynamic.utils import create_stat_object
+from uqef_dynamic.utils import colors
 
 #####################################
 ### MPI infos:
@@ -71,12 +72,12 @@ def _postprocess_kl_expansion_or_generalized_sobol_indices_computation_from_resu
     """
     result_dict = {}
 
-    temp_structure_storing_gpce_and_coeff = {}
+    dict_with_gpce_coeff_and_generalized_indices = {}
     for single_time_stamp in gpce_coeff_dict.keys():
-        temp_structure_storing_gpce_and_coeff[single_time_stamp] = {}
-        temp_structure_storing_gpce_and_coeff[single_time_stamp][utility.PCE_COEFF_ENTRY] = gpce_coeff_dict[single_time_stamp]
+        dict_with_gpce_coeff_and_generalized_indices[single_time_stamp] = {}
+        dict_with_gpce_coeff_and_generalized_indices[single_time_stamp][utility.PCE_COEFF_ENTRY] = gpce_coeff_dict[single_time_stamp]
         # if gpce_surrogate_dict is not None and single_time_stamp in gpce_surrogate_dict:
-        #     temp_structure_storing_gpce_and_coeff[single_time_stamp][utility.PCE_ENTRY] = gpce_surrogate_dict[single_time_stamp]
+        #     dict_with_gpce_coeff_and_generalized_indices[single_time_stamp][utility.PCE_ENTRY] = gpce_surrogate_dict[single_time_stamp]
 
     if compute_generalized_sobol_indices_from_kl_expansion:
         raise Exception("Sorry, recomputation of the generalized sobol indices bas on kl expansion is still not implemented!")
@@ -87,36 +88,36 @@ def _postprocess_kl_expansion_or_generalized_sobol_indices_computation_from_resu
         # print(f"INFO: computation of generalized S.S.I based on KL+gPCE(MC) finished...")
         # last_time_step = max(gpce_coeff_dict.keys())  #last_time_step = list(gpce_coeff_dict.keys())[-1]
         # for param_name in labels:
-        #     temp_structure_storing_gpce_and_coeff[last_time_step][f"generalized_sobol_total_index_{param_name}"] = \
+        #     dict_with_gpce_coeff_and_generalized_indices[last_time_step][f"generalized_sobol_total_index_{param_name}"] = \
         #         param_name_generalized_sobol_total_indices[param_name]
     else: 
         fileName = workingDir / f"recomputed_generalized_sobol_indices_{single_qoi_column}.pkl"
         if compute_generalized_sobol_indices_over_time:
             utility.computing_generalized_sobol_total_indices_from_poly_expan_over_time(
-                result_dict_statistics=temp_structure_storing_gpce_and_coeff, 
+                result_dict_statistics=dict_with_gpce_coeff_and_generalized_indices, 
                 polynomial_expansion=polynomial_expansion, weights=weights_time, param_names=labels,
                 fileName=fileName, look_back_winodw_size=look_back_winodw_size, resolution=resolution)
             print(f"INFO: computation of (over time) generalized S.S.I based on PCE finished...")
         else:
             # the computation of the generalized Sobol indices is done only for the last time step
             utility.computing_generalized_sobol_total_indices_from_poly_expan(
-                result_dict_statistics=temp_structure_storing_gpce_and_coeff, 
+                result_dict_statistics=dict_with_gpce_coeff_and_generalized_indices, 
                 polynomial_expansion=polynomial_expansion, 
                 weights=weights_time, 
                 param_names=labels,
                 fileName=fileName)
             print(f"INFO: computation of (over time) generalized S.S.I based on PCE finished...")
-    for single_time_stamp in temp_structure_storing_gpce_and_coeff.keys():
-        del temp_structure_storing_gpce_and_coeff[single_time_stamp][utility.PCE_COEFF_ENTRY]
-    return temp_structure_storing_gpce_and_coeff
+    for single_time_stamp in dict_with_gpce_coeff_and_generalized_indices.keys():
+        del dict_with_gpce_coeff_and_generalized_indices[single_time_stamp][utility.PCE_COEFF_ENTRY]
+    return dict_with_gpce_coeff_and_generalized_indices
 
 
 # TODO - make difference between gPCE surrogate and KL+(gPCE) surrrogate
 def evaluate_gPCE_model_single_qoi_single_date(gPCE_model, nodes):
     return np.array(gPCE_model(*nodes))
 
-def main(workingDir=None, inputModelDir=None, directory_for_saving_plots=None,  
-    single_timestamp_single_file=False, printing=False, plotting=True, **kwargs):
+def main(workingDir=None, inputModelDir=None, directory_for_saving_plots=None, 
+    surrogate_type="pce", single_timestamp_single_file=False, printing=False, plotting=True, **kwargs):
     """
     Main function for computing the statistics for gPCE surrogate model
     The default is that the gPCE surrogate model and computed coefficients are saved in the corresponding files in the workingDir;  
@@ -125,6 +126,8 @@ def main(workingDir=None, inputModelDir=None, directory_for_saving_plots=None,
     if rank == 0:
         start = time.time()
 
+        dict_with_time_info = {}
+
         if workingDir is None:
             workingDir = pathlib.Path(os.getcwd())
         print(f"workingDir={workingDir}")
@@ -132,12 +135,15 @@ def main(workingDir=None, inputModelDir=None, directory_for_saving_plots=None,
         add_measured_data=kwargs.get('add_measured_data', False)
         add_forcing_data=kwargs.get('add_forcing_data', False)
         read_saved_simulations = kwargs.get('read_saved_simulations', False)
-
+        read_saved_states = kwargs.get('read_saved_states', False)
         recompute_gpce = kwargs.get('recompute_gpce', False)
         recompute_statistics = kwargs.get('recompute_statistics', False)
         reevaluate_surrogate = kwargs.get('reevaluate_surrogate', False)
         recompute_sobol_indices = kwargs.get('recompute_sobol_indices', False)
         recompute_generalized_sobol_indices = kwargs.get('recompute_generalized_sobol_indices', False)
+
+        replot_statistics_from_statistics_object = kwargs.get('replot_statistics_from_statistics_object', False)
+        dict_what_to_plot = kwargs.get('dict_what_to_plot', utility.DEFAULT_DICT_WHAT_TO_PLOT)
 
         inputModelDir_function_input_argument = inputModelDir  # This is because it will be overwritten by the inputModelDir from read_output_files_uqef_dynamic
         workingDir_function_input_argument = workingDir  # This is because it will be overwritten by the workingDir from read_output_files_uqef_dynamic, or maybe not
@@ -145,8 +151,18 @@ def main(workingDir=None, inputModelDir=None, directory_for_saving_plots=None,
         # Get all files /data/ dataframe / paths saved by UQEF-Dynamic        
         results_dict = uqef_dynamic_utils.read_output_files_uqef_dynamic(
             workingDir, read_saved_simulations=read_saved_simulations)
+
+        # This code will see the following variables retuned in results_dict:
+        # workingDir, args_files, uqsim_args_dict, model, inputModelDir, configurationObject
+        # simulation_settings_dict, simulationNodes, time_info, params_list, df_index_parameter, 
+        # df_index_parameter_gof, gof_list, df_simulation_result, df_state, time_model_simulations,
+        # time_computing_statistics, parameterNames, stochasticParameterNames, number_full_model_evaluations, 
+        # full_number_quadrature_points, ...
         for key, value in results_dict.items():
             globals()[key] = value
+
+        if printing:
+            print(f"TIME INFO FROM STATISTICS - {time_info}")
 
         # This is due to the fact that sometimes instantly_save_results_for_each_time_step variable/fleg tends to be overwritten in the Statistics class, due to different set-ups
         instantly_save_results_for_each_time_step = single_timestamp_single_file
@@ -162,14 +178,18 @@ def main(workingDir=None, inputModelDir=None, directory_for_saving_plots=None,
         inputModelDir_function_input_argument = pathlib.Path(inputModelDir_function_input_argument)
         inputModelDir = inputModelDir_function_input_argument
 
+        set_lower_predictions_to_zero = kwargs.get('set_lower_predictions_to_zero', False)
+        set_mean_prediction_to_zero = kwargs.get('set_mean_prediction_to_zero', False)
+        correct_sobol_indices = kwargs.get('correct_sobol_indices', False)
+
         statisticsObject = create_stat_object.create_and_extend_statistics_object(
             configurationObject, uqsim_args_dict, workingDir, model, 
             df_simulation_result=df_simulation_result
         )
 
         # print(f"DEBUGGING - statisticsObject.result_dict.keys()={statisticsObject.result_dict.keys()}")  # should be a list of list_qoi_column
-        for single_qoi in statisticsObject.list_qoi_column:
-            print(f"DEBUGGING - single_qoi={single_qoi}; statisticsObject.result_dict[single_qoi].keys()={statisticsObject.result_dict[single_qoi].keys()}")
+        # for single_qoi in statisticsObject.list_qoi_column:
+        #     print(f"DEBUGGING - single_qoi={single_qoi}; statisticsObject.result_dict[single_qoi].keys()={statisticsObject.result_dict[single_qoi].keys()}")
 
         # Add measured Data and/or forcing
         # This might be relevant for plotting in the end
@@ -178,15 +198,13 @@ def main(workingDir=None, inputModelDir=None, directory_for_saving_plots=None,
             print(f"workingDir from model - {workingDir}; workingDir_function_input_argument-{workingDir_function_input_argument}")
 
         df_statistics_and_measured = statisticsObject.merge_df_statistics_data_with_measured_and_forcing_data(
-            add_measured_data=add_measured_data, add_forcing_data=add_forcing_data, transform_measured_data_as_original_model=True)
+            add_measured_data=add_measured_data, 
+            add_forcing_data=add_forcing_data, 
+            transform_measured_data_as_original_model=True)
 
         statistics_pdTimesteps = statisticsObject.pdTimesteps
 
         # ==========================================
-        set_lower_predictions_to_zero = kwargs.get('set_lower_predictions_to_zero', False)
-        set_mean_prediction_to_zero = kwargs.get('set_mean_prediction_to_zero', False)
-        correct_sobol_indices = kwargs.get('correct_sobol_indices', False)
-
         if set_lower_predictions_to_zero:
             if 'E_minus_std' in df_statistics_and_measured:
                 df_statistics_and_measured['E_minus_std'] = df_statistics_and_measured['E_minus_std'].apply(lambda x: max(0, x))        
@@ -215,6 +233,22 @@ def main(workingDir=None, inputModelDir=None, directory_for_saving_plots=None,
                 for single_column in si_columns_to_plot: 
                     si_t_df[single_column] = si_t_df[single_column].apply(lambda x: max(0, x))
 
+        # ==========================================
+        # All above can be computed in this way as well..
+        # statisticsObject, df_statistics_and_measured,  si_t_df, si_m_df, df_simulation_result, df_index_parameter, _= \
+        #     create_stat_object.get_df_statistics_and_df_si_from_saved_files(
+        #         workingDir, 
+        #         inputModelDir=inputModelDir, 
+        #         set_lower_predictions_to_zero=set_lower_predictions_to_zero,
+        #         set_mean_prediction_to_zero=set_mean_prediction_to_zero,
+        #         correct_sobol_indices=correct_sobol_indices,
+        #         read_saved_simulations=read_saved_simulations, 
+        #         read_saved_states=read_saved_states, 
+        #         instantly_save_results_for_each_time_step=single_timestamp_single_file,
+        #         add_measured_data=add_measured_data,
+        #         add_forcing_data=add_forcing_data,
+        #         transform_measured_data_as_original_model=True,
+        #     )
         # ==========================================
 
         # if printing:
@@ -258,79 +292,170 @@ def main(workingDir=None, inputModelDir=None, directory_for_saving_plots=None,
             compute_Sobol_m = kwargs.get('compute_Sobol_m', False)
             compute_Sobol_m2 = kwargs.get('compute_Sobol_m2', False)
             dict_stat_to_compute = kwargs.get('dict_stat_to_compute', utility.DEFAULT_DICT_STAT_TO_COMPUTE)
+        
         # ========================================================
         # Read the gPCE surrogate model and its coefficients
         # ========================================================
         list_qois = statisticsObject.list_qoi_column
         gpce_surrogate_dict_over_qois= defaultdict(dict, {single_qoi:{} for single_qoi in list_qois})
         gpce_coeff_dict_over_qois = defaultdict(dict, {single_qoi:{} for single_qoi in list_qois})
+        # kl_surrogate_dict_over_qois = defaultdict(dict, {single_qoi:{} for single_qoi in list_qois})
+        kl_coeff_dict_over_qois = defaultdict(dict, {single_qoi:{} for single_qoi in list_qois})
+        kl_coeff_df_dict_over_qois = defaultdict(dict, {single_qoi:{} for single_qoi in list_qois})
+
+        statisticsObject.prepareForScStatistics(
+            simulationNodes, order=uqsim_args_dict['sc_p_order'], 
+            poly_normed=uqsim_args_dict['sc_poly_normed'], 
+            poly_rule=uqsim_args_dict['sc_poly_rule'], 
+            regression=uqsim_args_dict['regression'], 
+            cross_truncation=uqsim_args_dict['cross_truncation']
+        )
+        polynomial_expansion = statisticsObject.polynomial_expansion
+        polynomial_norms = statisticsObject.polynomial_norms
 
         for single_qoi in statisticsObject.list_qoi_column:
             gpce_surrogate = None
             gpce_coeffs = None
 
-            gpce_surrogate = uqef_dynamic_utils.fetch_gpce_surrogate_single_qoi(
-                qoi_column_name=single_qoi, workingDir=workingDir,
-                statistics_dictionary=statisticsObject.result_dict, 
-                throw_error=False, single_timestamp_single_file=single_timestamp_single_file)
-
-            if gpce_surrogate is None or recompute_generalized_sobol_indices:
-                gpce_coeffs = uqef_dynamic_utils.fetch_gpce_coeff_single_qoi(
+            if surrogate_type=='pce':
+                gpce_surrogate = uqef_dynamic_utils.fetch_gpce_surrogate_single_qoi(
                     qoi_column_name=single_qoi, workingDir=workingDir,
                     statistics_dictionary=statisticsObject.result_dict, 
                     throw_error=False, single_timestamp_single_file=single_timestamp_single_file)
+
+                if gpce_surrogate is None or recompute_generalized_sobol_indices:
+                    gpce_coeffs = uqef_dynamic_utils.fetch_gpce_coeff_single_qoi(
+                        qoi_column_name=single_qoi, workingDir=workingDir,
+                        statistics_dictionary=statisticsObject.result_dict, 
+                        throw_error=False, single_timestamp_single_file=single_timestamp_single_file)
+                    
+                    if gpce_surrogate is None and gpce_coeffs is None and recompute_generalized_sobol_indices:
+                        raise Exception(f"Error - not possible to recompute generalized_sobol_indices when both \
+                            gpce_surrogate and gpce_coeffs are missing")
+
+                    if gpce_surrogate is None and gpce_coeffs is not None:
+                        gpce_surrogate = utility.build_gpce_surrogate_from_coefficients(
+                            gpce_coeffs, polynomial_expansion, polynomial_norms)
+
+                    if recompute_generalized_sobol_indices:
+                        if gpce_coeffs is None:
+                            # TODO implement this
+                            # gpce_coeffs = utility.compute_gpce_coefficients(
+                            #     gpce_surrogate, polynomial_expansion, polynomial_norms)
+                            raise NotImplementedError
+                        if isinstance(gpce_coeffs, dict) and single_qoi in gpce_coeffs:
+                            gpce_coeffs = gpce_coeffs[single_qoi]
+                        gpce_coeff_dict_over_qois[single_qoi] = gpce_coeffs
+
+                if isinstance(gpce_surrogate, dict) and single_qoi in gpce_surrogate:
+                    gpce_surrogate = gpce_surrogate[single_qoi]
+
+                # Make sure that in the end gpce_surrogate is a dictionary ovet timestamps
+                if isinstance(gpce_surrogate, np.ndarray) or isinstance(gpce_surrogate, Polynomial):
+                    gpce_surrogate = {0: gpce_surrogate}  # {statistics_pdTimesteps[0]: gpce_surrogate}
+
+                if gpce_surrogate is None or not isinstance(gpce_surrogate, dict):
+                    raise Exception(f"Sorry but there is not gPCE model not saved or not of the required type!")
+
+                if statisticsObject.pdTimesteps!=list(gpce_surrogate.keys()):
+                    print("Watch-out - The timestamps of the statistics and the gPCE surrogate do not match!")
+                    statistics_pdTimesteps = list(gpce_surrogate.keys())
+
+                # if printing:
+                #     temp = gpce_surrogate[statistics_pdTimesteps[0]]
+                #     print(f"Qoi - {single_qoi}\n gpce_surrogate for a first timestamp - {temp} \n")
+                #     if gpce_coeffs and gpce_coeffs is not None:
+                #         temp = gpce_coeffs[statistics_pdTimesteps[0]]
+                #         print(f"Qoi - {single_qoi}\n gpce_coeffs - {temp} \n")
+
+                gpce_surrogate_dict_over_qois[single_qoi] = gpce_surrogate
+
+            elif surrogate_type=='kl+pce':
+                # read eigenvalues
+                fileName = f"eigenvalues_{single_qoi}.npy"
+                # fullFileName = os.path.abspath(os.path.join(str(workingDir), fileName))
+                fullFileName = workingDir / fileName
+                if fullFileName.is_file():
+                    eigenvalues = np.load(fullFileName)
+                    eigenvalues_real = np.asarray([element.real for element in eigenvalues], dtype=np.float64)
+                    eigenvalues_real_scaled = eigenvalues_real/eigenvalues_real[0]
+                else:
+                    eigenvalues = None
+                    eigenvalues_real = None
+                    eigenvalues_real_scaled = None
+
+                # read eigenvectors
+                fileName = f"eigenvectors_{single_qoi}.npy"
+                # fullFileName = os.path.abspath(os.path.join(str(workingDir), fileName))
+                fullFileName = workingDir / fileName
+                if fullFileName.is_file():
+                    eigenvectors = np.load(fullFileName)
+                else:
+                    eigenvectors = None
+
+                if eigenvalues is None or eigenvectors is None:
+                    raise Exception("Sorry, \
+                        evaluation of the  surrogate (type KL+PCE) can not be performed since eigenvalues or eigenvectors are not saved!")
+
+                # reading the coefficents of PCE approax of the KL 
+                fileName = f"f_kl_surrogate_coefficients_{single_qoi}.npy"
+                # fullFileName = os.path.abspath(os.path.join(str(workingDir), fileName))
+                fullFileName = workingDir / fileName
+                if fullFileName.is_file():
+                    gpce_coeffs = np.load(fullFileName, allow_pickle=True)
+                else:
+                    gpce_coeffs = None
+
+                if isinstance(gpce_coeffs, dict) and single_qoi in gpce_coeffs:
+                    gpce_coeffs = gpce_coeffs[single_qoi]
+                kl_coeff_dict_over_qois[single_qoi] = gpce_coeffs
+
+                # reading f_kl_surrogate_df
+                fileName = f"f_kl_surrogate_df_{single_qoi}.pkl"
+                # fullFileName = os.path.abspath(os.path.join(str(workingDir), fileName))
+                fullFileName = workingDir / fileName
+                if fullFileName.is_file():
+                    f_kl_surrogate_df = pd.read_pickle(fullFileName, compression="gzip")
+                    # Iterating with iterrows()
+                    f_kl_surrogate_df['eigenvectors'] = None  # Initially, set to None or np.nan
+                    f_kl_surrogate_df['eigenvectors'] = f_kl_surrogate_df['eigenvectors'].astype(object)  # Explicitly set dtype to object
+                    for index, row in f_kl_surrogate_df.iterrows():
+                        f_kl_surrogate_df.at[index, 'eigenvalues'] = eigenvalues[index]
+                        f_kl_surrogate_df.at[index, 'eigenvectors'] = np.array(eigenvectors[:,index]) #eigenvectors[index]
+                        # print(f"Index: {index}, gPCE: {type(row['gPCE'])}, gPCE: {row['gPCE'].shape}; gpce_coeff: {type(row['gpce_coeff'])} gpce_coeff: {row['gpce_coeff'].shape}")
+                else:
+                    f_kl_surrogate_df = None
+                    if gpce_coeffs is not None:
+                        pass
+                        # gpce_surrogate = utility.build_gpce_surrogate_from_coefficients(
+                        #     gpce_coeffs, polynomial_expansion, polynomial_norms)
+                        # TODO populate f_kl_surrogate_df 
+                kl_coeff_df_dict_over_qois[single_qoi] = f_kl_surrogate_df
                 
-                statisticsObject.prepareForScStatistics(
-                    simulationNodes, order=uqsim_args_dict['sc_p_order'], 
-                    poly_normed=uqsim_args_dict['sc_poly_normed'], 
-                    poly_rule=uqsim_args_dict['sc_poly_rule'], 
-                    regression=uqsim_args_dict['regression'], 
-                    cross_truncation=uqsim_args_dict['cross_truncation']
-                )
-                polynomial_expansion = statisticsObject.polynomial_expansion
-                polynomial_norms = statisticsObject.polynomial_norms
+                if gpce_coeffs is None and f_kl_surrogate_df is None:
+                    raise Exception("Sorry, \
+                        evaluation of the  surrogate (type KL+PCE) can not be performed since PCE surrogate of the KL modes and/or the coefficients were not saved!")
 
-                if gpce_surrogate is None and gpce_coeffs is None and recompute_generalized_sobol_indices:
-                    raise Exception(f"Error - not possible to recompute generalized_sobol_indices when both \
-                        gpce_surrogate and gpce_coeffs are missing")
+                # if printing:
+                #     if gpce_coeffs is not None:
+                #         print(f"kl_coeff_dict_over_qois[{single_qoi}] = {gpce_coeffs}")
+                #         print(f"kl_coeff_dict_over_qois[{single_qoi}].shape = {gpce_coeffs.shape}")
+                #     if f_kl_surrogate_df is not None:
+                #         print(f"kl_coeff_df_dict_over_qois[{single_qoi}] = {f_kl_surrogate_df}")
 
-                if gpce_surrogate is None and gpce_coeffs is not None:
-                    gpce_surrogate = utility.build_gpce_surrogate_from_coefficients(
-                        gpce_coeffs, polynomial_expansion, polynomial_norms)
+                # gpce_surrogate = utility.build_gpce_surrogate_from_coefficients(
+                #             gpce_coeffs, polynomial_expansion, polynomial_norms)
 
-                if recompute_generalized_sobol_indices:
-                    if gpce_coeffs is None:
-                        # TODO implement this
-                        # gpce_coeffs = utility.compute_gpce_coefficients(
-                        #     gpce_surrogate, polynomial_expansion, polynomial_norms)
-                        raise NotImplementedError
-                    if isinstance(gpce_coeffs, dict) and single_qoi in gpce_coeffs:
-                        gpce_coeffs = gpce_coeffs[single_qoi]
-                    gpce_coeff_dict_over_qois[single_qoi] = gpce_coeffs
+                # kl_surrogate_dict_over_qois[single_qoi] = gpce_surrogate
 
-            if isinstance(gpce_surrogate, dict) and single_qoi in gpce_surrogate:
-                gpce_surrogate = gpce_surrogate[single_qoi]
+        end_time_reading_all_saved_data = time.time()
+        dict_with_time_info["time_reading_all_saved_data"] = end_time_reading_all_saved_data - start
 
-            # Make sure that in the end gpce_surrogate is a dictionary ovet timestamps
-            if isinstance(gpce_surrogate, np.ndarray) or isinstance(gpce_surrogate, Polynomial):
-                gpce_surrogate = {0: gpce_surrogate}  # {statistics_pdTimesteps[0]: gpce_surrogate}
+        start_time_parallel_computing = time.time()
+        # ========================================================
+        # Read the KL+gPCE surrogate model and its coefficients
+        # ========================================================
 
-            if gpce_surrogate is None or not isinstance(gpce_surrogate, dict):
-                raise Exception(f"Sorry but there is not gPCE model not saved or not of the required type!")
-
-            if statisticsObject.pdTimesteps!=list(gpce_surrogate.keys()):
-                print("Watch-out - The timestamps of the statistics and the gPCE surrogate do not match!")
-                statistics_pdTimesteps = list(gpce_surrogate.keys())
-
-            if printing:
-                temp = gpce_surrogate[statistics_pdTimesteps[0]]
-                print(f"Qoi - {single_qoi}\n gpce_surrogate for a first timestamp - {temp} \n")
-                if gpce_coeffs and gpce_coeffs is not None:
-                    temp = gpce_coeffs[statistics_pdTimesteps[0]]
-                    print(f"Qoi - {single_qoi}\n gpce_coeffs - {temp} \n")
-
-            gpce_surrogate_dict_over_qois[single_qoi] = gpce_surrogate
-        
     else:
         list_qois = None
         gpce_surrogate_dict_over_qois= None
@@ -371,22 +496,27 @@ def main(workingDir=None, inputModelDir=None, directory_for_saving_plots=None,
 
     memory_usage_history = []
 
+    # ============================
+    # Computation to be done in parallel
+    # ============================
+
     if reevaluate_surrogate:
-        nodes = comm.bcast(nodes, root=0)
-        gpce_surrogate_evaluated_dict_over_qois = {single_qoi:{} for single_qoi in list_qois} #defaultdict(dict, {single_qoi:{} for single_qoi in list_qois})
+        if surrogate_type=='pce':
+            nodes = comm.bcast(nodes, root=0)
+            gpce_surrogate_evaluated_dict_over_qois = {single_qoi:{} for single_qoi in list_qois} #defaultdict(dict, {single_qoi:{} for single_qoi in list_qois})
 
-        # Monitor memory usage at regular intervals
-        # Process dates
-        for single_qoi in list_qois:
-            gpce_surrogate_evaluated_dict_over_qois[single_qoi] = {}
-            for date in my_dates:
-                gpce_surrogate_evaluated_dict_over_qois[single_qoi][date] = \
-                    evaluate_gPCE_model_single_qoi_single_date(
-                        gPCE_model=gpce_surrogate_dict_over_qois[single_qoi][date], nodes=nodes)
+            # Monitor memory usage at regular intervals
+            # Process dates
+            for single_qoi in list_qois:
+                gpce_surrogate_evaluated_dict_over_qois[single_qoi] = {}
+                for date in my_dates:
+                    gpce_surrogate_evaluated_dict_over_qois[single_qoi][date] = \
+                        evaluate_gPCE_model_single_qoi_single_date(
+                            gPCE_model=gpce_surrogate_dict_over_qois[single_qoi][date], nodes=nodes)
 
-        # Gather results from all processes
-        all_results_gpce_surrogate_evaluated = comm.gather(gpce_surrogate_evaluated_dict_over_qois, root=0)
-    
+            # Gather results from all processes
+            all_results_surrogate_evaluated = comm.gather(gpce_surrogate_evaluated_dict_over_qois, root=0)
+
     if recompute_statistics:
         jointDists = comm.bcast(jointDists, root=0)
         jointStandard = comm.bcast(jointStandard, root=0)
@@ -420,34 +550,99 @@ def main(workingDir=None, inputModelDir=None, directory_for_saving_plots=None,
     # Query memory usage and record it
     memory_usage = psutil.virtual_memory().used / (1024 * 1024)  # Memory usage in MB
     memory_usage_history.append(memory_usage)
+    
+    # ============================
+    # Combine results on rank 0; or do some computation on rank 0
+    # ============================
 
-    # Combine results on rank 0
     if rank == 0:
         # TODO Do modification to the mean and surrogate model evaluations
         #  if the autoregressive mode is activated
 
         if reevaluate_surrogate:
-            combined_results = {single_qoi:{} for single_qoi in statisticsObject.list_qoi_column} #defaultdict(dict, {single_qoi:{} for single_qoi in list_qois})
+            if surrogate_type=='pce':
+                combined_results = {single_qoi:{} for single_qoi in statisticsObject.list_qoi_column} #defaultdict(dict, {single_qoi:{} for single_qoi in list_qois})
 
-            for idx, result in enumerate(all_results_gpce_surrogate_evaluated):
+                for idx, result in enumerate(all_results_surrogate_evaluated):
+                    for single_qoi in statisticsObject.list_qoi_column:
+                        # print(f"{idx} - {single_qoi} - {list(result[single_qoi].keys())}")
+                        combined_results[single_qoi].update(result[single_qoi])
+
+                # surrogate_evaluated_dict_over_qois now contains the combined results for all dates processed in parallel on rank 0
+                surrogate_evaluated_dict_over_qois = combined_results
+
+                # TODO Add to model runs = Compare to model runs
+
+                # Create a new DataFrame with the evaluated surrogate model
+
+                # if printing:
+                #     for single_qoi in statisticsObject.list_qoi_column:
+                #         print(f"type(surrogate_evaluated_dict_over_qois[{single_qoi}]) = {type(surrogate_evaluated_dict_over_qois[single_qoi])}")
+                #         print(f"surrogate_evaluated_dict_over_qois[{single_qoi}] = {surrogate_evaluated_dict_over_qois[single_qoi]}")
+                #         print(f"{list(surrogate_evaluated_dict_over_qois[single_qoi].keys())}")
+                #         # print(f"surrogate_evaluated_dict_over_qois[{single_qoi}][{my_dates[0]}] = {surrogate_evaluated_dict_over_qois[single_qoi][my_dates[0]]}")
+                #         #Timestamp('2007-08-14 00:00:00')
+                end_time_parallel_computing = time.time()
+                dict_with_time_info["time_parallel_pce_surrogate_reevaluations"] = end_time_parallel_computing - start_time_parallel_computing
+
+            elif surrogate_type=='kl+pce':
+                surrogate_evaluated_dict_over_qois = {single_qoi:{} for single_qoi in list_qois}
                 for single_qoi in statisticsObject.list_qoi_column:
-                    # print(f"{idx} - {single_qoi} - {list(result[single_qoi].keys())}")
-                    combined_results[single_qoi].update(result[single_qoi])
+                    f_kl_surrogate_df = kl_coeff_df_dict_over_qois[single_qoi]
+                    if f_kl_surrogate_df is None:
+                        raise Exception(f"Error - kl_coeff_df_dict_over_qois[{single_qoi}] is None")
+                    surrogate_evaluated_dict_over_qois[single_qoi] = {}
+                    # matrix N_kl x N_nodes evaluation of the KL coefficents (PCE surrogates of the KL coefficents) at the nodes
+                    evaluation_of_kl_coefficients = np.empty((len(f_kl_surrogate_df), nodes.shape[1]))
+                    for index, row in f_kl_surrogate_df.iterrows():
+                        evaluation_of_kl_coefficients[index] = evaluate_gPCE_model_single_qoi_single_date(gPCE_model=row['gPCE'], nodes=nodes)
 
-            # gpce_surrogate_evaluated_dict_over_qois now contains the combined results for all dates processed in parallel on rank 0
-            gpce_surrogate_evaluated_dict_over_qois = combined_results
+                    for date_index, date in enumerate(statistics_pdTimesteps):
+                        list_of_values_over_nodes = []
+                        for node_idx in range(nodes.shape[1]):
+                            temp_value = df_statistics_and_measured.loc[\
+                        (df_statistics_and_measured[utility.QOI_ENTRY] == single_qoi) & (df_statistics_and_measured[utility.TIME_COLUMN_NAME] == date)][utility.MEAN_ENTRY].values[0]
+                            for index, row in f_kl_surrogate_df.iterrows():
+                                temp_value += evaluation_of_kl_coefficients[index, node_idx] * row['eigenvectors'][date_index]
+                                #temp_value += evaluation_of_kl_coefficients[index, node_idx] * row['eigenvectors'][date_index]*np.sqrt(row['eigenvalues'])
+                            list_of_values_over_nodes.append(temp_value)
+                        surrogate_evaluated_dict_over_qois[single_qoi][date] = np.array(list_of_values_over_nodes)
 
-            # TODO Add to model runs = Compare to model runs
+                # if printing:
+                #     for single_qoi in statisticsObject.list_qoi_column:
+                #         print(f"surrogate_evaluated_dict_over_qois[{single_qoi}] = {surrogate_evaluated_dict_over_qois[single_qoi]}")
+                #         keys_list = list(surrogate_evaluated_dict_over_qois[single_qoi].keys())
+                #         print(f"{list(surrogate_evaluated_dict_over_qois[single_qoi].keys())}")
+                #         print(f"surrogate_evaluated_dict_over_qois[{single_qoi}][keys[0]] = {surrogate_evaluated_dict_over_qois[single_qoi][keys_list[0]]}")
+                end_time_parallel_computing = time.time()
+                dict_with_time_info["time_kl_surrogate_reevaluations"] = end_time_parallel_computing - start_time_parallel_computing
 
-            # Create a new DataFrame with the evaluated surrogate model
-
+            list_of_single_qoi_dfs = []
+            for single_qoi in statisticsObject.list_qoi_column:
+                # create a df from surrogate_evaluated_dict_over_qois[single_qoi] (dictionary over dates) containing the following columns:
+                # utility.TIME_COLUMN_NAME, utility.INDEX_COLUMN_NAME, utility.QOI_COLUMN_NAME, utility.QOI_ENTRY
+                records = []
+                for date, array_of_values in surrogate_evaluated_dict_over_qois[single_qoi].items():
+                    for i, single_surrogate_eval in enumerate(array_of_values):
+                        records.append((date, i, single_surrogate_eval))
+                # Step 2: Create a DataFrame from the records
+                df_surrogate_reevaluated_single_qoi = pd.DataFrame(records, columns=[utility.TIME_COLUMN_NAME, utility.INDEX_COLUMN_NAME, utility.QOI_COLUMN_NAME])
+                if df_surrogate_reevaluated_single_qoi is not None:
+                    # Add qoi column if it does not exist
+                    if utility.QOI_ENTRY not in df_surrogate_reevaluated_single_qoi.columns:
+                        df_surrogate_reevaluated_single_qoi[utility.QOI_ENTRY] = single_qoi
+                    list_of_single_qoi_dfs.append(df_surrogate_reevaluated_single_qoi)
+            if list_of_single_qoi_dfs:
+                df_surrogate_reevaluated= pd.concat(list_of_single_qoi_dfs, axis=0)
+                df_surrogate_reevaluated.sort_values(by=utility.TIME_COLUMN_NAME, ascending=True, inplace=True)
+            else:
+                df_surrogate_reevaluated = None
             if printing:
-                for single_qoi in statisticsObject.list_qoi_column:
-                    print(f"type(gpce_surrogate_evaluated_dict_over_qois[{single_qoi}]) = {type(gpce_surrogate_evaluated_dict_over_qois[single_qoi])}")
-                    print(f"gpce_surrogate_evaluated_dict_over_qois[{single_qoi}] = {gpce_surrogate_evaluated_dict_over_qois[single_qoi]}")
-                    print(f"{list(gpce_surrogate_evaluated_dict_over_qois[single_qoi].keys())}")
-                    # print(f"gpce_surrogate_evaluated_dict_over_qois[{single_qoi}][{my_dates[0]}] = {gpce_surrogate_evaluated_dict_over_qois[single_qoi][my_dates[0]]}")
-                    #Timestamp('2007-08-14 00:00:00')
+                print(f"df_surrogate_reevaluated={df_surrogate_reevaluated}")
+
+            if df_surrogate_reevaluated is not None:
+                df_surrogate_reevaluated.to_pickle(
+                    os.path.abspath(os.path.join(str(directory_for_saving_plots), "df_surrogate_reevaluated.pkl")), compression="gzip")
 
         if recompute_statistics:
             combined_results = {single_qoi:{} for single_qoi in statisticsObject.list_qoi_column} #defaultdict(dict, {single_qoi:{} for single_qoi in list_qois})
@@ -473,18 +668,27 @@ def main(workingDir=None, inputModelDir=None, directory_for_saving_plots=None,
                     stat_dict=gpce_statistics_dict_over_qois, 
                     qoi_column=single_qoi, 
                     list_of_uncertain_variables=statisticsObject.labels, 
-                    measured_qoi_column=statisticsObject.dict_qoi_column_and_measured_info[single_qoi][],
+                    measured_qoi_column=statisticsObject.dict_qoi_column_and_measured_info[single_qoi][1],
                     set_lower_predictions_to_zero=set_lower_predictions_to_zero, 
-                    measured_fetched=statisticsObject.dict_qoi_column_and_measured_info[single_qoi][], 
+                    measured_fetched=statisticsObject.dict_qoi_column_and_measured_info[single_qoi][0], 
                     df_measured=statisticsObject.df_measured,
                     time_column_name=utility.TIME_COLUMN_NAME)
                 if df_recomputed_statistics_single_qoi is not None:
+                    if utility.QOI_ENTRY not in df_recomputed_statistics_single_qoi.columns:
+                        df_recomputed_statistics_single_qoi[utility.QOI_ENTRY] = single_qoi
                     list_of_single_qoi_dfs.append(df_recomputed_statistics_single_qoi)
             if list_of_single_qoi_dfs:
                 df_recomputed_statistics_and_measured = pd.concat(list_of_single_qoi_dfs, axis=0)
                 df_recomputed_statistics_and_measured.sort_values(by=utility.TIME_COLUMN_NAME, ascending=True, inplace=True)
             else:
                 df_recomputed_statistics_and_measured = None
+
+            if df_recomputed_statistics_and_measured is not None:
+                df_recomputed_statistics_and_measured.to_pickle(
+                    os.path.abspath(os.path.join(str(directory_for_saving_plots), "df_recomputed_statistics_and_measured.pkl")), compression="gzip")
+
+            end_time_parallel_computing = time.time()
+            dict_with_time_info["time_paralle_statistics_recomputation"] = end_time_parallel_computing - start_time_parallel_computing
 
         if recompute_generalized_sobol_indices:
             if statisticsObject.weights_time is None:
@@ -497,22 +701,55 @@ def main(workingDir=None, inputModelDir=None, directory_for_saving_plots=None,
             compute_generalized_sobol_indices_over_time = kwargs.get('compute_generalized_sobol_indices_over_time', False)
             look_back_winodw_size = kwargs.get('look_back_winodw_size', 'whole')
             resolution = statisticsObject.resolution  #kwargs.get('resolution', 'integer')
-            generalized_total_sobol_indices_dict = {single_qoi:{} for single_qoi in list_qois}
+            generalized_total_sobol_indices_dict_over_qois = {single_qoi:{} for single_qoi in list_qois}
+            
             if printing:
                 print(f"statisticsObject.weights_time-{statisticsObject.weights_time}")
                 print(f"statisticsObject.labels-{statisticsObject.labels}")
 
-            for single_qoi in list_qois:
+            list_of_single_qoi_dfs = []
+            for single_qoi in statisticsObject.list_qoi_column:
                 # for date in statistics_pdTimesteps:
-                temp_structure_storing_gpce_and_coeff = _postprocess_kl_expansion_or_generalized_sobol_indices_computation_from_results_single_qoi(
+                dict_with_generalized_indices = _postprocess_kl_expansion_or_generalized_sobol_indices_computation_from_results_single_qoi(
                     single_qoi, compute_generalized_sobol_indices_from_kl_expansion, compute_generalized_sobol_indices_over_time,
                     workingDir, gpce_coeff_dict_over_qois[single_qoi], gpce_surrogate_dict_over_qois[single_qoi], polynomial_expansion,
                     statisticsObject.weights_time, statisticsObject.labels, look_back_winodw_size, resolution
                 )
-                generalized_total_sobol_indices_dict[single_qoi] = temp_structure_storing_gpce_and_coeff
-
+                generalized_total_sobol_indices_dict_over_qois[single_qoi] = dict_with_generalized_indices
+                
+                df_with_generalized_indices_single_qoi = uqef_dynamic_utils.create_df_from_generalized_total_sobol_indices_single_qoi(
+                    stat_dict=dict_with_generalized_indices, 
+                    qoi_column=single_qoi, 
+                    list_of_uncertain_variables=statisticsObject.labels, 
+                    measured_qoi_column=statisticsObject.dict_qoi_column_and_measured_info[single_qoi][1],
+                    set_lower_predictions_to_zero=set_lower_predictions_to_zero, 
+                    measured_fetched=statisticsObject.dict_qoi_column_and_measured_info[single_qoi][0], 
+                    df_measured=statisticsObject.df_measured,
+                    time_column_name=utility.TIME_COLUMN_NAME)
+                
+                if df_with_generalized_indices_single_qoi is not None:
+                    if "qoi" not in df_with_generalized_indices_single_qoi.columns:
+                        df_with_generalized_indices_single_qoi["qoi"] = single_qoi
+                    list_of_single_qoi_dfs.append(df_with_generalized_indices_single_qoi)
+                
                 if printing:
-                    print(f"{single_qoi} - generalized_total_sobol_indices_dict - {temp_structure_storing_gpce_and_coeff}")
+                    print(f"generalized_total_sobol_indices_dict_over_qois for single qoi={single_qoi}- {dict_with_generalized_indices}")
+
+            if list_of_single_qoi_dfs:
+                df_generalized_total_sobol_indices_dict_and_measured = pd.concat(list_of_single_qoi_dfs, axis=0)
+                df_generalized_total_sobol_indices_dict_and_measured.sort_values(by=utility.TIME_COLUMN_NAME, ascending=True, inplace=True)
+            else:
+                df_generalized_total_sobol_indices_dict_and_measured = None
+
+            if printing:
+                print(f"df_generalized_total_sobol_indices_dict_and_measured={df_generalized_total_sobol_indices_dict_and_measured}")
+
+            if df_generalized_total_sobol_indices_dict_and_measured is not None:
+                df_generalized_total_sobol_indices_dict_and_measured.to_pickle(
+                    os.path.abspath(os.path.join(str(directory_for_saving_plots), "df_recomputed_generalized_total_sobol_indices_dict_and_measured.pkl")), compression="gzip")
+
+            end_time_parallel_computing = time.time()
+            dict_with_time_info["time_generalized_si_recomputation"] = end_time_parallel_computing - start_time_parallel_computing
 
             # Add (re-computed) generalized S.I to statisticsObject.result_dict      
             # if f'generalized_sobol_total_index_{self.labels[0]}' in self.result_dict[qoi_column][keyIter[-1]]:
@@ -538,37 +775,217 @@ def main(workingDir=None, inputModelDir=None, directory_for_saving_plots=None,
     if rank == 0:
         end = time.time()
         runtime = end - start
+        
+        dict_with_time_info["total_runtime"] = runtime
+
         print(f"INFO ABOUT THE RUNTIME - Number of MPI processes={size} runtime={runtime}")
+        print(f"INFO ABOUT ALL THE RUNTIME - Number of MPI processes={size} dict_with_time_info={dict_with_time_info}")
+
+        dict_with_time_info_path = directory_for_saving_plots / 'dict_with_time_info.txt'
+        with open(dict_with_time_info_path, 'w') as text_file:
+            for key, value in dict_with_time_info.items():
+                text_file.write(f'{key}: {value}\n')
 
         if plotting:
-            dict_what_to_plot = {
-                "E_minus_2std": False, "E_plus_2std": False,
-                "E_minus_std": False, "E_plus_std": False, 
-                "P10": True, "P90": True,
-                "StdDev": True, "Skew": False, "Kurt": False, "Sobol_m": False, "Sobol_m2": False, "Sobol_t": False
-            }
-            n_rows = len(list_qois)
-            subplot_titles = list_qois
+            if directory_for_saving_plots is None:
+                directory_for_saving_plots = workingDir
+
+            if replot_statistics_from_statistics_object:
+                for single_qoi in statisticsObject.list_qoi_column:
+                    filename = directory_for_saving_plots / f"reploted_statistics_{single_qoi}.html"
+                    fig = statisticsObject._plotStatisticsDict_plotly_single_qoi(
+                        single_qoi_column=single_qoi, dict_time_vs_qoi_stat=None, 
+                        window_title='Forward UQ & SA', 
+                        filename=str(filename), display=False,
+                        dict_what_to_plot=dict_what_to_plot)
+                        # filename = pathlib.Path(filename)
+                    filename_pdf = pathlib.Path(filename).with_suffix(".pdf")
+                    fig.write_image(str(filename_pdf), format="pdf", width=1000,)
+
+            if reevaluate_surrogate and df_surrogate_reevaluated is not None:
+
+                for single_qoi in statisticsObject.list_qoi_column:
+                    df_surrogate_reevaluated_single_qoi = df_surrogate_reevaluated.loc[df_surrogate_reevaluated[utility.QOI_ENTRY]==single_qoi]
+                    number_unique_surrogate_model_runs = df_surrogate_reevaluated_single_qoi[utility.INDEX_COLUMN_NAME].nunique()
+                    grouped = df_surrogate_reevaluated_single_qoi.groupby(utility.INDEX_COLUMN_NAME)
+                    groups = grouped.groups
+                    keyIter = list(groups.keys())
+                    subplot_titles = []
+                    n_rows = 1
+                    if df_statistics_and_measured is not None:
+                        n_rows += 1
+                        subplot_titles.append(f"Statistics {single_qoi}")
+                    if df_simulation_result is not None:
+                        n_rows += 1
+                        subplot_titles.append(f"Model Runs {single_qoi}")
+                    subplot_titles.append(f"Surrogate Model Runs {single_qoi}")
+                    # if n_rows > 1:
+                    fig = make_subplots(
+                            rows=n_rows, cols=1,
+                            subplot_titles=subplot_titles,
+                            shared_xaxes=False,
+                            vertical_spacing=0.07
+                    )
+                    # else:
+                    #     fig = go.Figure()
+                    #     window_title = f"Surrogate Model Runs {single_qoi}"
+                    #     fig.update_layout(title_text=window_title)
+                    counter = 0
+                    for key in keyIter:
+                        if counter < 1000:
+                            counter += 1
+                            df_surrogate_reevaluated_single_qoi_subset = df_surrogate_reevaluated_single_qoi.loc[groups[key].values]
+                            fig.add_trace(
+                                go.Scatter(
+                                    x=df_surrogate_reevaluated_single_qoi_subset[utility.TIME_COLUMN_NAME], 
+                                    y=df_surrogate_reevaluated_single_qoi_subset[utility.QOI_COLUMN_NAME],
+                                    line_color='LightSkyBlue', mode="lines", opacity=0.3, showlegend=False,
+                                ), row=n_rows, col=1
+                            )
+                        else:
+                            break
+
+                    if df_statistics_and_measured is not None:
+                        df_statistics_and_measured_subset = df_statistics_and_measured.loc[df_statistics_and_measured[utility.QOI_ENTRY] == single_qoi]
+                        # add mean data to each subgraph
+                        showlegend_mean = True
+                        for index_row in range(1, n_rows+1):
+                            fig.add_trace(
+                                go.Scatter(
+                                    x=df_statistics_and_measured_subset[utility.TIME_COLUMN_NAME], 
+                                    y=df_statistics_and_measured_subset[utility.MEAN_ENTRY],
+                                    name=f'E[{single_qoi}]',
+                                    line_color='Green', mode="lines", showlegend=showlegend_mean,
+                                ), row=index_row, col=1
+                            )
+                            showlegend_mean = False
+                        if dict_what_to_plot.get("E_minus_std", False) and "E_minus_std" in df_statistics_and_measured_subset:
+                            fig.add_trace(
+                                go.Scatter(
+                                    x=df_statistics_and_measured_subset[utility.TIME_COLUMN_NAME],
+                                    y=df_statistics_and_measured_subset[utility.E_MINUS_STD_ENTRY],
+                                    name='mean - std. dev', mode='lines', showlegend=False, line_color='rgba(200, 200, 200, 0.4)',), row=1, col=1
+                                )
+                        if dict_what_to_plot.get("E_plus_std", False) and "E_plus_std" in df_statistics_and_measured_subset:
+                            fig.add_trace(
+                                go.Scatter(
+                                    x=df_statistics_and_measured_subset[utility.TIME_COLUMN_NAME],
+                                    y=df_statistics_and_measured_subset[utility.E_MINUS_STD_ENTRY],
+                                    name='mean +- std. dev', mode='lines', fill='tonexty', showlegend=True, line_color='rgba(200, 200, 200, 0.4)',), row=1, col=1
+                                )
+                        if dict_what_to_plot.get("E_minus_2std", False) and "E_minus_2std" in df_statistics_and_measured_subset:
+                            fig.add_trace(
+                                go.Scatter(
+                                    x=df_statistics_and_measured_subset[utility.TIME_COLUMN_NAME],
+                                    y=df_statistics_and_measured_subset[utility.E_MINUS_2STD_ENTRY],
+                                    name='mean - std. dev', mode='lines', showlegend=False, line_color='rgba(200, 200, 200, 0.4)',), row=1, col=1
+                                )
+                        if dict_what_to_plot.get("E_plus_2std", False) and "E_plus_2std" in df_statistics_and_measured_subset:
+                            fig.add_trace(
+                                go.Scatter(
+                                    x=df_statistics_and_measured_subset[utility.TIME_COLUMN_NAME],
+                                    y=df_statistics_and_measured_subset[utility.E_PLUS_2STD_ENTRY],
+                                    name='mean +- 2*std. dev', mode='lines', fill='tonexty', showlegend=True, line_color='rgba(200, 200, 200, 0.4)',), row=1, col=1
+                                )
+                        if dict_what_to_plot.get("P10", False) and "P10" in df_statistics_and_measured_subset:
+                            fig.add_trace(
+                                go.Scatter(
+                                    x=df_statistics_and_measured_subset[utility.TIME_COLUMN_NAME],
+                                    y=df_statistics_and_measured_subset[utility.P10_ENTRY],
+                                    name='10th percentile', line_color='rgba(128,128,128, 0.3)', showlegend=False), row=1, col=1
+                                )
+                        if dict_what_to_plot.get("P90", False) and "P90" in df_statistics_and_measured_subset:
+                            fig.add_trace(
+                                go.Scatter(
+                                    x=df_statistics_and_measured_subset[utility.TIME_COLUMN_NAME],
+                                    y=df_statistics_and_measured_subset[utility.P90_ENTRY],
+                                    name='10th percentile-90th percentile', mode='lines', fill='tonexty', showlegend=True, line=dict(color='rgba(128,128,128, 0.3)'), fillcolor='rgba(128,128,128, 0.3)',), row=1, col=1
+                                )
+
+                    if df_simulation_result is not None:
+                        df_simulation_result_subset = df_simulation_result[[utility.TIME_COLUMN_NAME, utility.INDEX_COLUMN_NAME, single_qoi]]
+                        number_unique_model_runs = df_simulation_result_subset[utility.INDEX_COLUMN_NAME].nunique()
+                        grouped = df_simulation_result_subset.groupby(utility.INDEX_COLUMN_NAME)
+                        groups = grouped.groups
+                        keyIter = list(groups.keys())
+                        counter = 0
+                        for key in keyIter:
+                            if counter < 1000:
+                                counter += 1
+                                df_simulation_result_subset_subset = df_simulation_result_subset.loc[groups[key].values]
+                                fig.add_trace(
+                                    go.Scatter(
+                                        x=df_simulation_result_subset_subset[utility.TIME_COLUMN_NAME], 
+                                        y=df_simulation_result_subset_subset[single_qoi],
+                                        line_color='LightGreen', mode="lines", opacity=0.2, showlegend=False,
+                                    ), row=2, col=1
+                                )
+                            else:
+                                break
+                            
+                    fig.update_layout(width=1000)
+                    fig.update_layout(title_text="Model and Surrogate Model Runs")
+                    plot_filename = directory_for_saving_plots / f"surrogate_model_runs.html"
+                    pyo.plot(fig, filename=str(plot_filename), auto_open=False)
+                    plot_filename = directory_for_saving_plots / f"surrogate_model_runs.pdf"
+                    fig.write_image(str(plot_filename), format="pdf", width=1000,)
+
+            # plotting_generalized_indices = kwargs.get('plotting_generalized_indices', False)
+            # n_rows = len(list_qois)
+            # subplot_titles = list_qois
             # fig = make_subplots(
             #     rows=n_rows, cols=1,
             #     subplot_titles=subplot_titles,
             #     shared_xaxes=False,
             #     vertical_spacing=0.04
             # )
-            # relevant here  - 
-            # gpce_statistics_dict_over_qois; df_statistics_and_measured; statisticsObject.df_statistics/statisticsObject.result_dict
-            # si_t_df, si_t_df
-            for single_qoi in statisticsObject.list_qoi_column:
-                # df_statistics_single_qoi = statisticsObject.df_statistics.loc[
-                #     statisticsObject.df_statistics['qoi'] == single_qoi]
-                df = df_statistics_and_measured.loc[
-                    df_statistics_and_measured['qoi'] == single_qoi] 
-                print(f"dict_qoi_column_and_measured_info - {single_qoi} - {statisticsObject.dict_qoi_column_and_measured_info[single_qoi]}")
-                # TODO Plot - mean; mean+-std; measured; up to 100 realizations of the surrogate; 
-                # TODO Plot standard Sobol indices; if saved or re-computed (heatmaps)
-                # TODO Plot generazlied time-wise Sobol indices - generalized_total_sobol_indices_dict[single_qoi] (heatmaps?)
-                # TODO Plot re-computed generazlied time-wise Sobol indices with some other time window generalized_total_sobol_indices_dict (heatmaps?)
-        
+            # # relevant here  - 
+            # # df_statistics_and_measured; statisticsObject.df_statistics/statisticsObject.result_dict
+            # # gpce_statistics_dict_over_qois/df_recomputed_statistics_and_measured;
+            # # generalized_total_sobol_indices_dict_over_qois/df_generalized_total_sobol_indices_dict_and_measured
+            # # si_t_df, si_t_df
+            # qoi_idx = 0
+            # for single_qoi in statisticsObject.list_qoi_column:
+            #     showlegend = True
+            #     if qoi_idx > 0:
+            #         showlegend = False
+            #     # df_statistics_single_qoi = statisticsObject.df_statistics.loc[
+            #     #     statisticsObject.df_statistics['qoi'] == single_qoi]
+            #     # df = df_statistics_and_measured.loc[
+            #     #     df_statistics_and_measured['qoi'] == single_qoi] 
+            #     # print(f"dict_qoi_column_and_measured_info - {single_qoi} - {statisticsObject.dict_qoi_column_and_measured_info[single_qoi]}")
+            #     if plotting_generalized_indices and df_generalized_total_sobol_indices_dict_and_measured is not None:
+            #         df = df_generalized_total_sobol_indices_dict_and_measured.loc[
+            #             df_generalized_total_sobol_indices_dict_and_measured['qoi'] == single_qoi] 
+            #         df_generalized = df[[col for col in df.columns if col.startswith("generalized_sobol_total_index_")]]
+            #         substring = "generalized_sobol_total_index_"
+            #         for inx, single_column in enumerate(df_generalized.columns):
+            #             current_parameter_name = single_column.split(substring, 1)[1]
+            #             fig.add_trace(
+            #                 go.Scatter(
+            #                     x=df[utility.TIME_COLUMN_NAME], y=df_generalized[single_column],
+            #                     name=current_parameter_name, mode='lines',
+            #                     line=dict(color=colors.COLORS[inx]),
+            #                     showlegend=showlegend
+            #                 ),
+            #                 row=qoi_idx+1, col=1
+            #             )
+            #         qoi_idx +=1
+            #     # TODO Plot - mean; mean+-std; measured; up to 100 realizations of the surrogate; 
+            #     # TODO Plot standard Sobol indices; if saved or re-computed (heatmaps)
+            #     # TODO Plot generazlied time-wise Sobol indices - generalized_total_sobol_indices_dict_over_qois[single_qoi] (heatmaps?)
+            #     # TODO Plot re-computed generazlied time-wise Sobol indices with some other time window generalized_total_sobol_indices_dict_over_qois (heatmaps?)
+            # plot_filename = directory_for_saving_plots / f"SA_and_measured_data_total_generalized_60_days_look_back_winodw_size.pdf"
+            # fig.update_layout(title=None)
+            # fig.update_layout(
+            #     margin=dict(
+            #         t=20,  # Top margin
+            #         b=10,  # Bottom margin
+            #         l=20,  # Left margin
+            #         r=20   # Right margin
+            #     )
+            # )
+            # fig.write_image(str(plot_filename), format="pdf", width=1100,) 
         # =================================
         # All above - step-by-step
         # =================================
@@ -818,22 +1235,38 @@ def main(workingDir=None, inputModelDir=None, directory_for_saving_plots=None,
 
 if __name__ == '__main__':
 
+    # HBV-SASK model
     # 7D Sparse-gPCE l=7, p=2 2007 deltaQ_cms - 203
     workingDir = pathlib.Path('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/paper_hydro_uq_sim/hbv_uq_cm2.0220')
     # 3D Sparse-gPCE l=7, p=3 2005-2007 deltaQ_cms
     workingDir = pathlib.Path('/gpfs/scratch/pr63so/ga45met2/hbvsask_runs/pce_deltq_3d_short_oldman')
     workingDir = pathlib.Path('/gpfs/scratch/pr63so/ga45met2/hbvsask_runs/pce_deltq_3d_longer_oldman')
-
     basis_workingDir = pathlib.Path('/work/ga45met/paper_uqef_dynamic_sim/hbvsask_runs_lxc_autumn_24')
     workingDir = basis_workingDir / 'hbv_uq_cm4.0069'
     inputModelDir = pathlib.Path("/work/ga45met/Hydro_Models/HBV-SASK-data")
     directory_for_saving_plots = pathlib.Path('/work/ga45met/paper_uqef_dynamic_sim/hbv_sask/mc_gpce_p4_ct07_100000_lhc_nse02_2004_2007_oldman')
+    add_measured_data=True
+    add_forcing_data=True
+    single_timestamp_single_file = False
+
+    # battery model
+    workingDir = pathlib.Path('/work/ga45met/uqef_dynamic_runs/battery_results/cm4_runs/mc_kl10_p4_ct07_24d_10000_random')
+    workingDir = pathlib.Path('/work/ga45met/uqef_dynamic_runs/battery_results/cm4_runs/mc_kl10_p4_ct07_24d_100000_random')
+    # workingDir = pathlib.Path('/work/ga45met/uqef_dynamic_runs/battery_results/cm4_runs/mc_kl10_p5_ct07_24d_10000_random')
+
+    inputModelDir = pathlib.Path('/dss/dsshome1/lxc0C/ga45met2/.conda/envs/my_uq_env/lib/python3.11/site-packages/pybamm/input/drive_cycles')
+    directory_for_saving_plots = workingDir
+    add_measured_data=False
+    add_forcing_data=False
+    single_timestamp_single_file = False
 
     recompute_gpce = False
     recompute_statistics = False
-    reevaluate_surrogate = False
+    reevaluate_surrogate = True
     recompute_sobol_indices = False
-    recompute_generalized_sobol_indices = True
+    recompute_generalized_sobol_indices = False
+
+    read_saved_simulations = True
 
     compute_other_stat_besides_pce_surrogate = True
     compute_Sobol_t = True
@@ -842,22 +1275,38 @@ if __name__ == '__main__':
     dict_stat_to_compute = {
          "Var": True, "StdDev": True, "P10": True, "P90": True,
          "E_minus_std": False, "E_plus_std": False,
-         "Skew": False, "Kurt": False, "Sobol_m": True, "Sobol_m2": False, "Sobol_t": True
+         "Skew": False, "Kurt": False, "Sobol_m": compute_Sobol_m, "Sobol_m2": compute_Sobol_m2, "Sobol_t": compute_Sobol_t
          }
 
     compute_generalized_sobol_indices_from_kl_expansion = False
-    compute_generalized_sobol_indices_over_time = True
-    look_back_winodw_size = 'whole'
+    compute_generalized_sobol_indices_over_time = False
+    look_back_winodw_size = 60 #'whole'
+
+    printing = True
+    plotting = True
+    replot_statistics_from_statistics_object = True
+    dict_what_to_plot = {
+            "E_minus_2std": True, "E_plus_2std": True,
+            "E_minus_std": False, "E_plus_std": False, 
+            "P10": True, "P90": True,
+            "StdDev": True, "Skew": False, "Kurt": False, "Sobol_m": compute_Sobol_m, "Sobol_m2": compute_Sobol_m2, "Sobol_t": compute_Sobol_t
+    }
+    plotting_generalized_indices = True
 
     main(
         workingDir=workingDir,
         inputModelDir=inputModelDir,
         directory_for_saving_plots=directory_for_saving_plots,
-        single_timestamp_single_file=False,
-        add_measured_data=True,
-        add_forcing_data=True,
-        read_saved_simulations=True,
-        printing=True, plotting=True,
+        surrogate_type='kl+pce',
+        single_timestamp_single_file=single_timestamp_single_file,
+        add_measured_data=add_measured_data,
+        add_forcing_data=add_forcing_data,
+        read_saved_simulations=read_saved_simulations,
+        printing=printing, 
+        plotting=plotting,
+        replot_statistics_from_statistics_object=replot_statistics_from_statistics_object,
+        plotting_generalized_indices=plotting_generalized_indices,
+        dict_what_to_plot=dict_what_to_plot,
         recompute_gpce = recompute_gpce,
         recompute_statistics = recompute_statistics,
         reevaluate_surrogate = reevaluate_surrogate,

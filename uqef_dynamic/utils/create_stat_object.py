@@ -186,7 +186,9 @@ def get_df_statistics_and_df_si_from_saved_files(workingDir, inputModelDir=None,
         set_mean_prediction_to_zero(bool, optional): If True, sets mean predicted values to zero; Defaults to False.
         correct_sobol_indices (bool, optional): Set lower value to zero, defaults to False
         instantly_save_results_for_each_time_step(bool, optional): Overwrite the same entry in uqsim_args_dict is different than None;  defaults to None
-
+        add_measured_data (bool, optional): If True, adds measured data to the DataFrame. Defaults to False.
+        add_forcing_data (bool, optional): If True, adds forcing data to the DataFrame. Defaults to False.
+        transform_measured_data_as_original_model (bool, optional): If True, transforms the measured data as the original model. Defaults to False.
     Returns:
         tuple: A tuple containing the following:
             - statisticsObject: The statistics object.
@@ -217,6 +219,10 @@ def get_df_statistics_and_df_si_from_saved_files(workingDir, inputModelDir=None,
     set_mean_prediction_to_zero = kwargs.get('set_mean_prediction_to_zero', False)
     correct_sobol_indices = kwargs.get('correct_sobol_indices', False)
     instantly_save_results_for_each_time_step = kwargs.get('instantly_save_results_for_each_time_step', None)
+
+    add_measured_data = kwargs.get('add_measured_data', False)
+    add_forcing_data = kwargs.get('add_forcing_data', False)
+    transform_measured_data_as_original_model = kwargs.get('transform_measured_data_as_original_model', False)
 
     args_files = utility.get_dict_with_output_file_paths_based_on_workingDir(workingDir)
     for key, value in args_files.items():
@@ -312,7 +318,7 @@ def get_df_statistics_and_df_si_from_saved_files(workingDir, inputModelDir=None,
         configurationObject, uqsim_args_dict, workingDir, model, 
         df_simulation_result=df_simulation_result, printing=False)
     df_statistics_and_measured = statisticsObject.merge_df_statistics_data_with_measured_and_forcing_data(
-    add_measured_data=True, add_forcing_data=True, transform_measured_data_as_original_model=True)
+    add_measured_data=add_measured_data, add_forcing_data=add_forcing_data, transform_measured_data_as_original_model=transform_measured_data_as_original_model)
 
     if set_lower_predictions_to_zero:
         if 'E_minus_std' in df_statistics_and_measured:

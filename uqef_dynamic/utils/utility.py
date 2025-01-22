@@ -84,6 +84,10 @@ PCE_ENTRY = 'gPCE'
 PCE_COEFF_ENTRY = 'gpce_coeff'
 QOI_DIST_ENTR = 'qoi_dist'
 MEAN_ENTRY = 'E'
+E_MINUS_STD_ENTRY = 'E_minus_std'
+E_PLUS_STD_ENTRY = 'E_plus_std'
+E_MINUS_2STD_ENTRY = 'E_minus_2std'
+E_PLUS_2STD_ENTRY = 'E_plus_2std'
 VAR_ENTRY = 'Var'
 STD_DEV_ENTRY = 'StdDev'
 SOBOL_FIRST_ORDER_ENTRY = 'Sobol_m'
@@ -3688,7 +3692,7 @@ def computing_generalized_sobol_total_indices_from_kl_expan(
             dict_of_num[idx].append(np.sum(coefficients[index_local] ** 2, axis=0))
 
     if compute_total_variance_based_on_pce_coefficients or total_variance is None:
-        variance_over_kl_terms = np.asfarray(variance_over_kl_terms)
+        variance_over_kl_terms = np.asarray(variance_over_kl_terms, dtype=np.float64)
         total_variance_based_on_pce_coefficients = np.sum(variance_over_kl_terms)
         if total_variance is None:
             denum = total_variance_based_on_pce_coefficients

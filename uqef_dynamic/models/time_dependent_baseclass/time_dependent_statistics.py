@@ -424,6 +424,7 @@ class TimeDependentStatistics(ABC, Statistics):
 
         self.compute_sobol_indices_with_samples = kwargs.get(
             'compute_sobol_indices_with_samples', False)
+        # if self.uq_method == "mc" and not self.regression and self.compute_Sobol_m:
         if self.uq_method == "mc" and self.compute_Sobol_m:
             self.compute_sobol_indices_with_samples = True
         if self.uq_method == "saltelli":
@@ -1665,6 +1666,11 @@ class TimeDependentStatistics(ABC, Statistics):
                 Total Variance integral over time: {variance_integral}; \
                     Total Variance computed via PCE coefficients: {total_variance_based_on_pce_coefficients};\
                          Total Variance returned by the computing_generalized_sobol_total_indices_from_kl_expan: {total_variance}")
+            fileName = self.workingDir / f"total_variance.txt"
+            with open(fileName, 'w') as fp:
+                fp.write(f'Total Variance computed via eigenvalues: {Var_kl_approx}\n')
+                fp.write(f'Total Variance integral over time: {variance_integral}\n')
+                fp.write(f'Total Variance computed via PCE coefficients: {total_variance_based_on_pce_coefficients}')
 
         elif self.compute_generalized_sobol_indices and not self.instantly_save_results_for_each_time_step: 
             fileName = self.workingDir / f"generalized_sobol_indices_{single_qoi_column}.pkl"
@@ -3073,7 +3079,9 @@ class TimeDependentStatistics(ABC, Statistics):
                 if at_least_one_entry_found:
                     list_of_columns_names.append(name)
                     if len(generalized_sobol_total_index_values_temp)==1:
-                        generalized_sobol_total_index_values_temp = generalized_sobol_total_index_values_temp[0]*len(keyIter)
+                        # print(f"[DEBUGGING] {type(generalized_sobol_total_index_values_temp)}; {len(generalized_sobol_total_index_values_temp)}")
+                        generalized_sobol_total_index_values_temp = [generalized_sobol_total_index_values_temp[0],]*len(keyIter)
+                        # print(f"[DEBUGGING] {type(generalized_sobol_total_index_values_temp)}; {len(generalized_sobol_total_index_values_temp)}")
                     list_of_columns.append(generalized_sobol_total_index_values_temp)
 
         if not list_of_columns:
