@@ -62,10 +62,14 @@ PARAMETERS_FILE = "parameters.pkl"
 TIME_INFO_FILE = "time_info.txt"
 # Files produced by UQEF-Dynamic.Statistics and Samples class
 DF_SIMULATIONS_FILE = "df_simulations.pkl"
+DF_SIMULATIONS_CONDITIONED_FILE = "df_simulations_conditioned.pkl"
+
 # DF_SIMULATIONS_FILE = "df_all_simulations.pkl"  # old one
 DF_STATE_FILE = "df_state.pkl"
 DF_INDEX_PARAMETER_FILE = "df_index_parameter.pkl"
+DF_INDEX_PARAMETER_CONDITIONED_FILE = "df_index_parameter_conditioned.pkl"
 DF_INDEX_PARAMETER_GOF_FILE = "df_index_parameter_gof.pkl"
+DF_INDEX_PARAMETER_GOF_CONDITIONED_FILE = "df_index_parameter_gof_conditioned.pkl"
 # Active Subspaces and gradient analysis related files
 DICT_APPROX_MATRIX_C_FILE = "dict_approx_matrix_c.pkl"
 DICT_MATRIX_C_EIGEN_DECOMPOSITION_FILE = "dict_matrix_c_eigen_decomposition.pkl"
@@ -3639,7 +3643,7 @@ def computing_generalized_sobol_total_indices_from_kl_expan(
     polynomial_expansion: cp.polynomial,
     weights: np.ndarray,
     param_names: List[str],
-    fileName: str,
+    fileName: Union[str, pathlib.PosixPath],
     total_variance=None,
     compute_total_variance_based_on_pce_coefficients=False
 ):
@@ -3720,7 +3724,7 @@ def computing_generalized_sobol_total_indices_from_poly_expan(
     polynomial_expansion: cp.polynomial,
     weights: np.ndarray,
     param_names: List[str],
-    fileName: str,
+    fileName: Union[str, pathlib.PosixPath],
     total_variance=None
 ):
     """
@@ -3792,9 +3796,9 @@ def computing_generalized_sobol_total_indices_from_poly_expan_over_time(
     polynomial_expansion: cp.polynomial,
     weights: np.ndarray,
     param_names: List[str],
-    fileName: str,
+    fileName: Union[str, pathlib.PosixPath],
     total_variance=None,
-    look_back_winodw_size: Union[str, int]='whole',
+    look_back_window_size: Union[str, int]='whole',
     resolution: str = "integer",
 ):
     for time_stamp in result_dict_statistics.keys():
@@ -3803,7 +3807,7 @@ def computing_generalized_sobol_total_indices_from_poly_expan_over_time(
         print(f"DEBUGGING INFO : {qoi_time_stamp} {fileName_new}")
         computing_generalized_sobol_total_indices_from_poly_expan_single_timesample(
             qoi_time_stamp, result_dict_statistics, polynomial_expansion, weights, param_names, fileName_new, total_variance=None,
-            look_back_winodw_size=look_back_winodw_size, resolution=resolution,
+            look_back_window_size=look_back_window_size, resolution=resolution,
         )
     
     
@@ -3813,9 +3817,9 @@ def computing_generalized_sobol_total_indices_from_poly_expan_single_timesample(
     polynomial_expansion: cp.polynomial,
     weights: np.ndarray,
     param_names: List[str],
-    fileName: str,
+    fileName: Union[str, pathlib.PosixPath],
     total_variance=None,
-    look_back_winodw_size: Union[str, int] = 'whole',
+    look_back_window_size: Union[str, int] = 'whole',
     resolution: str = "integer"
 ):
     """
@@ -3832,7 +3836,7 @@ def computing_generalized_sobol_total_indices_from_poly_expan_single_timesample(
         weights (np.ndarray): An array of weights for time quadratures.
         param_names (List[str]): A list of parameter names.
         fileName (str): The name of the file to write the results to.
-        look_back_winodw_size (Union[str, int], optional): The look back window size. Defaults to 'whole'.
+        look_back_window_size (Union[str, int], optional): The look back window size. Defaults to 'whole'.
         resolution (str, optional): The resolution of the time stamps. Defaults to "integer".
 
     Returns:
@@ -3864,37 +3868,12 @@ def computing_generalized_sobol_total_indices_from_poly_expan_single_timesample(
     if qoi_time_stamp not in result_dict_statistics.keys():
         raise ValueError(f"The time stamp {qoi_time_stamp} is not in the dictionary of statistics!")
 
-    def is_time_stamp_in_look_back_window(time_stamp, qoi_time_stamp, look_back_winodw_size, resolution):
-        if resolution == "integer":
-            if qoi_time_stamp - time_stamp > look_back_winodw_size:
-                return False
-        elif resolution in ["daily", "hourly", "minute"]:
-            qoi_time_stamp_pdTimestamp = pd.Timestamp(qoi_time_stamp)
-            time_stamp_pdTimestamp = pd.Timestamp(time_stamp)
-            difference = qoi_time_stamp_pdTimestamp - time_stamp_pdTimestamp
-            if resolution == "daily":
-                if difference.days > look_back_winodw_size:
-                    return False
-            elif resolution == "hourly":
-                total_seconds = difference.total_seconds()
-                total_hours = total_seconds // 3600  # Total hours
-                if total_hours > look_back_winodw_size:
-                    return False
-            elif resolution == "minute":
-                total_seconds = difference.total_seconds()
-                total_minutes = total_seconds // 60  # Total minutes
-                if total_minutes > look_back_winodw_size:
-                    return False
-        else:
-            raise ValueError(f"Unknown resolution - {resolution}")
-        return True
-
     for time_stamp in result_dict_statistics.keys():
         if time_stamp > qoi_time_stamp:
             continue
-        if look_back_winodw_size!='whole':
+        if look_back_window_size!='whole':
             take_current_time_stamp_into_account = True
-            take_current_time_stamp_into_account = is_time_stamp_in_look_back_window(time_stamp, qoi_time_stamp, look_back_winodw_size, resolution)
+            take_current_time_stamp_into_account = is_time_stamp_in_look_back_window(time_stamp, qoi_time_stamp, look_back_window_size, resolution)
             if not take_current_time_stamp_into_account:
                 continue
         number_of_timestamps += 1
@@ -3909,19 +3888,21 @@ def computing_generalized_sobol_total_indices_from_poly_expan_single_timesample(
         raise ValueError(f"No time stamp is found in the dictionary of statistics for the time stamp {qoi_time_stamp}")
     
     # update the weights over time
+    # TODO - change this eventually
     total_variance = None
-    if total_number_of_weights!=number_of_timestamps:
-        if number_of_timestamps==1:
-            h = 1
-            weights = [1,]
-        else:
-            # TODO Think about 1 in num?
-            h = 1/(number_of_timestamps-1)
-            weights = [h for i in range(number_of_timestamps)]
-            assert number_of_timestamps==len(weights)
-            weights[0] /= 2
-            weights[-1] /= 2
-        weights = np.asarray(weights, dtype=np.float64)
+    # if total_number_of_weights!=number_of_timestamps:
+    if number_of_timestamps==1:
+        h = 1
+        weights = [1,]
+    else:
+        # TODO Think about 1 in num?
+        h = 1/(number_of_timestamps-1)
+        weights = [h for i in range(number_of_timestamps)]
+        assert number_of_timestamps==len(weights)
+    if len(weights) >= 3:
+        weights[0] /= 2
+        weights[-1] /= 2
+    weights = np.asarray(weights, dtype=np.float64)
 
     variance_over_time_array = np.asarray(variance_over_time_array, dtype=np.float64)
 
@@ -3941,6 +3922,30 @@ def computing_generalized_sobol_total_indices_from_poly_expan_single_timesample(
         #     file.write(f'{param_name}: {s_tot_generalized}\n')
 
 
+def is_time_stamp_in_look_back_window(time_stamp, qoi_time_stamp, look_back_window_size, resolution):
+    if resolution == "integer":
+        if qoi_time_stamp - time_stamp > look_back_window_size:
+            return False
+    elif resolution in ["daily", "hourly", "minute"]:
+        qoi_time_stamp_pdTimestamp = pd.Timestamp(qoi_time_stamp)
+        time_stamp_pdTimestamp = pd.Timestamp(time_stamp)
+        difference = qoi_time_stamp_pdTimestamp - time_stamp_pdTimestamp
+        if resolution == "daily":
+            if difference.days > look_back_window_size:
+                return False
+        elif resolution == "hourly":
+            total_seconds = difference.total_seconds()
+            total_hours = total_seconds // 3600  # Total hours
+            if total_hours > look_back_window_size:
+                return False
+        elif resolution == "minute":
+            total_seconds = difference.total_seconds()
+            total_minutes = total_seconds // 60  # Total minutes
+            if total_minutes > look_back_window_size:
+                return False
+    else:
+        raise ValueError(f"Unknown resolution - {resolution}")
+    return True
 # =================================================================================================
 # Utility for SG analysis
 # =================================================================================================
@@ -4045,7 +4050,9 @@ def generate_table_over_rules_orders_for_single_dim(rules, dist, dim, q_orders, 
 # MISC - Different set of utility functions
 # =================================================================================================
 
-
+def find_overlap(lists):
+    return list(set.intersection(*map(set, lists)))
+    
 def extend_filename_with_timestamp(file_path, time_stamp):
     file_path = pathlib.Path(file_path)
     directory_structure = file_path.parent
