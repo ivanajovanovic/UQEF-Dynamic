@@ -24,13 +24,13 @@ class pybammModelUQ(TimeDependentModel):
 
     def _setup_model_related(self, **kwargs):
         if self.dict_config_model_settings and self.dict_config_model_settings is not None:
-            self.options = self.dict_config_model_settings.get("options", {'surface form': 'differential'})
+            #self.options = self.dict_config_model_settings.get("options", {'surface form': 'differential'})
             self.division_factor = self.dict_config_model_settings.get("division_factor", 100.0) # 4
             self.current_ooi = self.dict_config_model_settings.get("current_ooi", "Current function [A]")
             self.time_ooi = self.dict_config_model_settings.get("time_ooi", "Time [s]")
             self.voltage_ooi = self.dict_config_model_settings.get("voltage_ooi", "Voltage [V]")  # "Voltage [V]" 'Local voltage [V]', 'Battery voltage [V]', 'Terminal voltage [V]'
         else:
-            self.options = {'surface form': 'differential'}
+            #self.options = {'surface form': 'differential'}
             self.division_factor = 100.0 #4
             self.current_ooi = "Current function [A]"
             self.time_ooi = "Time [s]"
@@ -42,7 +42,7 @@ class pybammModelUQ(TimeDependentModel):
         else:
             input_file = self.inputModelDir / "US06.csv"
         
-        self.dfn = pybamm.lithium_ion.DFN(options=self.options)
+        self.dfn = pybamm.lithium_ion.DFN() #pybamm.lithium_ion.DFN(options=self.options)
         self.model_params = self.dfn.default_parameter_values
         self.drive_cycle = pd.read_csv(
             input_file , comment="#", header=None

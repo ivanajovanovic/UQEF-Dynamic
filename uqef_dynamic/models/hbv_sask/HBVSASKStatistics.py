@@ -710,10 +710,16 @@ class HBVSASKStatistics(time_dependent_statistics.TimeDependentStatistics):
         if plot_generalized_sobol_indices:  
             for i in range(len(self.labels)):
                 name = f"generalized_sobol_total_index_{self.labels[i]}"
-                if self.compute_generalized_sobol_indices_over_time:
-                    y = [dict_time_vs_qoi_stat[key][name] for key in keyIter]
-                else:
-                    y = [dict_time_vs_qoi_stat[keyIter[-1]][name]]*len(keyIter)
+                y = []
+                for key in keyIter:
+                    if name in dict_time_vs_qoi_stat[key]:
+                        y.append(dict_time_vs_qoi_stat[key][name])
+                if len(y)==1: 
+                    y = [y[0],]*len(keyIter)  #[y[0],]*len(pdTimesteps)
+                # if self.compute_generalized_sobol_indices_over_time:
+                #     y = [dict_time_vs_qoi_stat[key][name] for key in keyIter]
+                # else:
+                #     y = [dict_time_vs_qoi_stat[keyIter[-1]][name]]*len(keyIter)
                 name = self.labels[i] + "_" + single_qoi_column + "generalized_S_t"
                 fig.add_trace(go.Scatter(
                     x=pdTimesteps,

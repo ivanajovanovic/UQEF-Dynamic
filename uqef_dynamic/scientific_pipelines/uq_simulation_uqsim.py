@@ -164,7 +164,7 @@ utility.DEFAULT_DICT_STAT_TO_COMPUTE = {
     "Skew": False, "Kurt": False, "Sobol_m": True, "Sobol_m2": False, "Sobol_t": True
 }
 dict_stat_to_compute = utility.DEFAULT_DICT_STAT_TO_COMPUTE
-compute_sobol_indices_with_samples = True  # This is only relevant in the mc-saltelli's approach
+compute_sobol_indices_with_samples = False  # This is only relevant in the mc-saltelli's approach
 # TODO Think about when regression is True, what do you prefer gPCE-based indices or MC?
 if uqsim.args.uq_method == "mc" and uqsim.args.compute_Sobol_m:
     compute_sobol_indices_with_samples = True
@@ -181,7 +181,7 @@ compute_generalized_sobol_indices_over_time = True
 
 compute_covariance_matrix_in_time = False
 
-allow_conditioning_results_based_on_metric = True
+allow_conditioning_results_based_on_metric = False
 
 condition_results_based_on_metric = 'NSE'
 condition_results_based_on_metric_value = 0.2
