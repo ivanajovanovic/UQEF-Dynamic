@@ -2873,8 +2873,11 @@ def plot_si_and_normalized_measured_time_signal_single_qoi(
 
 
 def plotting_function_single_qoi(
-        df, single_qoi, subplot_titles=None, dict_what_to_plot=None, directory="./", fileName="simulation_big_plot"
-):
+    df, single_qoi, subplot_titles=None, dict_what_to_plot=None, directory="./", fileName="simulation_big_plot"
+    ):
+    """
+        Important assumption - df is alredy filtered such that it only containes data for a spesific qoi (i.e., single_qoi)
+    """
 
     n_rows = 1
     starting_row_for_predicted_data = 1
@@ -3038,8 +3041,19 @@ def plotting_function_single_qoi(
     fig.write_image(str(plot_filename), format="pdf", width=1100,)
     fileName = str(directory) + f"{fileName}.html"
     pyo.plot(fig, filename=fileName, auto_open=False)
-
+ 
     return fig
+
+
+def plotting_function_single_qoi_from_df(
+    df, single_qoi, model=None, subplot_titles=None, dict_what_to_plot=None, directory="./", fileName="simulation_big_plot"
+):
+    if model=='':
+        return plotting_function_single_qoi_hbv(\
+            df, single_qoi, qoi="Q", subplot_titles=subplot_titles, dict_what_to_plot=dict_what_to_plot, directory=directory, fileName=fileName)
+    else:
+        return plotting_function_single_qoi(df, single_qoi, subplot_titles, dict_what_to_plot, directory, fileName)
+
 # ============================================================================================
 # plotting functions for HBV model
 # ============================================================================================
@@ -3243,12 +3257,23 @@ def plotting_function_single_qoi_hbv(
     """
     At the moment this is tailored for HBV model
 
+    Important assumption - df is alredy filtered such that it only containes data for a spesific qoi (i.e., single_qoi)
+
     Note: qoi argument is relevant only when == "GoF"/"gof"
     :param df:
     :return:
     """
-    n_rows = 3
-    starting_row_for_predicted_data = 3
+    n_rows = 1
+    starting_row_for_predicted_data = 1
+    row_for_plotting_measured_data = 1
+    if 'precipitation' in df.columns:
+        n_rows += 1
+        starting_row_for_predicted_data += 1
+        row_for_plotting_measured_data += 1
+    if 'temperature' in df.columns:
+        n_rows += 1
+        starting_row_for_predicted_data += 1
+        row_for_plotting_measured_data += 1
 
     if dict_what_to_plot is None:
         dict_what_to_plot = {
@@ -3256,9 +3281,9 @@ def plotting_function_single_qoi_hbv(
             "StdDev": False, "Skew": False, "Kurt": False
         }
 
-    if not isinstance(qoi, list) and qoi.lower() == "gof":
+    if 'measured' in df.columns and not isinstance(qoi, list) and qoi.lower() == "gof":
         n_rows += 1
-        starting_row_for_predicted_data = 4
+        starting_row_for_predicted_data += 1
         # subplot_titles = ("Precipitation", "Temperature", "Measured Streamflow", "Mean", "Skew", "Kurt")
 
     if dict_what_to_plot.get("StdDev", False) and 'StdDev' in df.columns:
@@ -3269,8 +3294,12 @@ def plotting_function_single_qoi_hbv(
         n_rows += 1
 
     if subplot_titles is None:
-        subplot_titles = ("Precipitation [mm/day]", "Temperature [°C]")
-        if not isinstance(qoi, list) and qoi.lower() == "gof":
+        subplot_titles = ()
+        if 'precipitation' in df.columns:
+            subplot_titles = subplot_titles + ("Precipitation [mm/day]",) 
+        if 'temperature' in df.columns:
+            subplot_titles = subplot_titles + ("Temperature [°C]",)
+        if 'measured' in df.columns and not isinstance(qoi, list) and qoi.lower() == "gof":
             subplot_titles = subplot_titles + ("Measured Streamflow",)
             subplot_titles = subplot_titles + ("Predicted",)
         else:
@@ -3289,33 +3318,35 @@ def plotting_function_single_qoi_hbv(
         horizontal_spacing=0.01, vertical_spacing=0.04
     )
 
-    fig.add_trace(
-        go.Bar(
-            x=df['TimeStamp'], y=df['precipitation'],
-            text=df['precipitation'],
-            name="Precipitation [mm/day]",
-            marker_color='red',
-            showlegend=False,
-            # mode="lines",
-            #         line=dict(
-            #             color='LightSkyBlue')
-        ),
-        row=1, col=1
-    )
+    if 'precipitation' in df.columns:
+        fig.add_trace(
+            go.Bar(
+                x=df['TimeStamp'], y=df['precipitation'],
+                text=df['precipitation'],
+                name="Precipitation [mm/day]",
+                marker_color='red',
+                showlegend=False,
+                # mode="lines",
+                #         line=dict(
+                #             color='LightSkyBlue')
+            ),
+            row=1, col=1
+        )
 
-    fig.add_trace(
-        go.Scatter(
-            x=df['TimeStamp'], y=df['temperature'],
-            text=df['temperature'],
-            name="Temperature [°C]", mode='lines', #mode='lines+markers'
-            marker_color='blue',
-            showlegend=False,
-        ),
-        row=2, col=1
-    )
+    if 'temperature' in df.columns:
+        fig.add_trace(
+            go.Scatter(
+                x=df['TimeStamp'], y=df['temperature'],
+                text=df['temperature'],
+                name="Temperature [°C]", mode='lines', #mode='lines+markers'
+                marker_color='blue',
+                showlegend=False,
+            ),
+            row=2, col=1
+        )
 
     # Hardcoded
-    if not df['measured'].isna().all():
+    if 'measured' in df.columns and not df['measured'].isna().all():
     # if single_qoi == "Q_cms":
         fig.add_trace(
             go.Scatter(
@@ -3323,7 +3354,7 @@ def plotting_function_single_qoi_hbv(
                 name="Measured Streamflow [m^3/s]", mode='lines',
                 # line=dict(color='green'),
             ),
-            row=starting_row_for_predicted_data, col=1
+            row=row_for_plotting_measured_data, col=1
         )
 
     fig.add_trace(
@@ -3441,8 +3472,11 @@ def plotting_function_single_qoi_hbv(
         tickformat='%b %y',            # Format dates as "Month Day" (e.g., "Jan 01")
         dtick="M2"                     # Set tick interval to 1 day for denser ticks
     )
+
     if not str(directory).endswith("/"):
         directory = str(directory) + "/"
-    fileName = str(directory) + fileName
+    plot_filename = pathlib.Path(directory)  / f"{fileName}.pdf"
+    fig.write_image(str(plot_filename), format="pdf", width=1100,)
+    fileName = str(directory) + f"{fileName}.html"
     pyo.plot(fig, filename=fileName, auto_open=False)
     return fig

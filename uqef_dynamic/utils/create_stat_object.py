@@ -198,6 +198,8 @@ def get_df_statistics_and_df_si_from_saved_files(workingDir, inputModelDir=None,
             - df_simulation_result: The DataFrame containing the simulation results.
             - df_index_parameter: The DataFrame containing the index parameter file.
             - df_index_parameter_gof: The DataFrame containing the index parameter goodness-of-fit file.
+            - uqsim_args_dict: The UQSim arguments dictionary.
+            - simulationNodes: The simulation nodes.
 
     Raises:
         FileNotFoundError: If any of the required files are not found.
@@ -247,8 +249,8 @@ def get_df_statistics_and_df_si_from_saved_files(workingDir, inputModelDir=None,
     if instantly_save_results_for_each_time_step is not None:
         uqsim_args_dict["instantly_save_results_for_each_time_step"] = instantly_save_results_for_each_time_step
     
-    # with open(nodes_file, 'rb') as f:
-    #     simulationNodes = pickle.load(f)
+    with open(nodes_file, 'rb') as f:
+        simulationNodes = pickle.load(f)
         
     if df_index_parameter_file.is_file():
         df_index_parameter = pd.read_pickle(df_index_parameter_file, compression="gzip")
@@ -348,7 +350,7 @@ def get_df_statistics_and_df_si_from_saved_files(workingDir, inputModelDir=None,
             for single_column in si_columns_to_plot: 
                 si_t_df[single_column] = si_t_df[single_column].apply(lambda x: max(0, x))
 
-    return statisticsObject, df_statistics_and_measured, si_t_df, si_m_df, df_simulation_result, df_index_parameter, df_index_parameter_gof
+    return statisticsObject, df_statistics_and_measured, si_t_df, si_m_df, df_simulation_result, df_index_parameter, df_index_parameter_gof, uqsim_args_dict, simulationNodes
 
 
 def get_dict_with_dfs_from_statistics_and_other_relevant_data(

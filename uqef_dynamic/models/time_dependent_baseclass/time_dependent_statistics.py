@@ -903,6 +903,7 @@ class TimeDependentStatistics(ABC, Statistics):
     def set_result_dict(self, result_dict):
         self.result_dict = result_dict
         # TODO Should I update self.timesteps self.pdTimesteps self.numTimesteps based on self.result_dict??/
+        #self.set_timesteps()
 
     # def _compute_previous_timestep(self, timestamp):
     #     if self.resolution == "daily":
@@ -1267,10 +1268,10 @@ class TimeDependentStatistics(ABC, Statistics):
             print(f"Caught an exception: {e}")
 
         # Save updated DataFrames
-        self.samples.save_index_parameter_values(self.workingDir, filename="df_index_parameter_conditioned.pkl")
-        self.samples.save_index_parameter_gof_values(self.workingDir, filename="df_index_parameter_gof_conditioned.pkl")
+        self.samples.save_index_parameter_values(self.workingDir, filename=utility.DF_INDEX_PARAMETER_CONDITIONED_FILE)
+        self.samples.save_index_parameter_gof_values(self.workingDir, filename=utility.DF_INDEX_PARAMETER_GOF_CONDITIONED_FILE)
         if self.save_all_simulations:
-            self.samples.save_simulation_results_to_file(self.workingDir, filename="df_simulations_conditioned.pkl")
+            self.samples.save_simulation_results_to_file(self.workingDir, filename=utility.DF_SIMULATIONS_CONDITIONED_FILE)
 
         self.set_number_of_unique_index_runs()
 
