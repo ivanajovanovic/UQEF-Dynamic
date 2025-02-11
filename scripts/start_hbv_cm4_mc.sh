@@ -145,10 +145,10 @@ echo "---- start HBV sim: \`date\`"
 
 echo "---- end HBV sim: \`date\`"
 
-" > $baseSourcePath/hbv_uq_mc_150000_lhs_p5_ct07_nse02_oldman_2005_2006.cmd
+" > $baseSourcePath/hbv_uq_mc_150000_random_p5_ct07_nse02_oldman_2006_2007.cmd
 
     #execute batch file
-    sbatch $baseSourcePath/hbv_uq_mc_150000_lhs_p5_ct07_nse02_oldman_2005_2006.cmd
+    sbatch $baseSourcePath/hbv_uq_mc_150000_random_p5_ct07_nse02_oldman_2006_2007.cmd
 
 }
 
@@ -157,14 +157,14 @@ opt_add="--regression --parallel_statistics --save_all_simulations --sampleFromS
 nodes=4
 tasks_per_node=112  #22
 low_time="2:30:00"
-mid_time="6:00:00"
+mid_time="3:00:00"
 max_time="72:00:00"
 uq_method="mc"
 q_order=6
 p_order=5
 mc_numevaluations=150000
 uc="all"
-sampling_rule="latin_hypercube"
+sampling_rule="random"
 sc_poly_rule="three_terms_recurrence"
 sc_quadrature_rule="p" # "clenshaw_curtis" "genz_keister_24" "p"
 mpi_method="MpiPoolSolver"
