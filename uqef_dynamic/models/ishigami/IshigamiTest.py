@@ -38,7 +38,7 @@ import chaospy as cp
 sys.path.insert(0, '/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic')
 
 from uqef_dynamic.utils import utility
-from uqef_dynamic.utils import uqef_dynamic_utils as uqpp_utils
+from uqef_dynamic.utils import uqef_dynamic_utils
 
 from uqef_dynamic.models.ishigami import IshigamiModel
 from uqef_dynamic.models.ishigami import IshigamiStatistics
@@ -85,7 +85,7 @@ if __name__ == "__main__":
     ###################################
     # Examples of reading some saved Runs/Files and printing the dictionary with all the relevant information
     # Relevant for producing convergence graphs...
-    dict_with_results_of_interest = uqpp_utils.read_all_saved_uqef_dynamic_results_and_produce_dict_of_interest_single_qoi_single_timestamp(
+    dict_with_results_of_interest = uqef_dynamic_utils.read_all_saved_uqef_dynamic_results_and_produce_dict_of_interest_single_qoi_single_timestamp(
         workingDir=workingDir, 
         timestamp=timestamp, 
         qoi_column_name=qoi_column_name,
@@ -198,7 +198,7 @@ if __name__ == "__main__":
     print(f"Checking - ishigamiModelObject.index_column_name - {ishigamiModelObject.index_column_name}")
 
     # processing the collected result
-    df_simulation_result, df_index_parameter_values, _, _, _, _ =  uqpp_utils.uqef_dynamic_model_run_results_array_to_dataframe(results, 
+    df_simulation_result, df_index_parameter_values, _, _, _, _ =  uqef_dynamic_utils.uqef_dynamic_model_run_results_array_to_dataframe(results, 
     extract_only_qoi_columns=False, qoi_columns=ishigamiModelObject.list_qoi_column, 
     time_column_name= ishigamiModelObject.time_column_name, index_column_name= ishigamiModelObject.index_column_name)
     print(f"Final df_index_parameter_values - {df_index_parameter_values}")
@@ -209,7 +209,7 @@ if __name__ == "__main__":
     ###################################
 
     sampleFromStandardDist = True
-    gPCE_over_time, polynomial_expansion, norms, coeff = uqpp_utils.compute_PSP_for_uqef_dynamic_model(
+    gPCE_over_time, polynomial_expansion, norms, coeff = uqef_dynamic_utils.compute_PSP_for_uqef_dynamic_model(
     ishigamiModelObject, joint_dist, \
     quadrature_order=14, expansion_order=7, 
     sampleFromStandardDist=sampleFromStandardDist,
@@ -268,7 +268,7 @@ if __name__ == "__main__":
     sampleFromStandardDist = True
     E_over_time, Var_over_time, StdDev_over_time, \
     Skew_over_time, Kurt_over_time, P10_over_time, P90_over_time, sobol_m_over_time = \
-    uqpp_utils.run_uq_mc_sim_and_compute_mc_stat_for_uqef_dynamic_model(
+    uqef_dynamic_utils.run_uq_mc_sim_and_compute_mc_stat_for_uqef_dynamic_model(
         model=ishigamiModelObject,
         jointDists=joint_dist, jointStandard=joint_dist_standard, numSamples=1000, rule="R",
         sampleFromStandardDist=sampleFromStandardDist,

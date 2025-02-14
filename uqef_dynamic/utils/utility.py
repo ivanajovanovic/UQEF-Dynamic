@@ -51,7 +51,7 @@ from uqef_dynamic.utils import sens_indices_sampling_based_utils
 # definition of some 'static' variables, names, etc.
 TIME_COLUMN_NAME="TimeStamp"
 INDEX_COLUMN_NAME = "Index_run"
-QOI_COLUMN_NAME = "model"  # "Value"
+QOI_COLUMN_NAME = "Value"  # "model"
 QOI_COLUMN_NAME_CENTERED = QOI_COLUMN_NAME + "_centered"
 
 ARGS_FILE = 'uqsim_args.pkl'
@@ -2595,7 +2595,7 @@ def running_the_model_and_generating_df(
     model_runs = running_the_model_over_time_and_parameters(model, t, parameters)
     list_of_single_df = []
     for idx, single_node in enumerate(parameters.T):
-        df_temp = pd.DataFrame(model_runs[idx], columns=['model'])
+        df_temp = pd.DataFrame(model_runs[idx], columns=[QOI_COLUMN_NAME])
         df_temp[time_column_name] = t
         df_temp[index_column_name] = idx
         tuple_column = [tuple(single_node)] * len(df_temp)
@@ -2645,7 +2645,7 @@ def running_model_in_parallel_and_generating_df(
     for index_run, y_t_model, parameter_value in process_particles_concurrently(\
     zip(parameters.T, list_unique_index_model_run_list)):
         model_runs[index_run] = y_t_model
-        df_temp = pd.DataFrame(y_t_model, columns=['model'])
+        df_temp = pd.DataFrame(y_t_model, columns=[QOI_COLUMN_NAME])
         df_temp[time_column_name] = t
         df_temp[index_column_name] = index_run
         tuple_column = [tuple(parameter_value)] * len(df_temp)
@@ -2799,6 +2799,7 @@ def build_gpce_surrogate_from_coefficients(gpce_coeffs, polynomial_expansion, po
     else:
         raise Exception("gpce_coeffs should be either a dictionary or a numpy array")
     return gpce_surrogate
+
 # =================================================================================================
 # Functions for computing statistics over time
 # =================================================================================================
@@ -3280,10 +3281,10 @@ def computing_gpce_statistics_simple(
     numPercSamples = 10 ** 5
 
     if store_gpce_surrogate_in_stat_dict:
-        result_dict["gPCE"] = qoi_gPCE
-        result_dict["gpce_coeff"] = coeff  # gpce_coeff
+        result_dict[PCE_ENTRY] = qoi_gPCE
+        result_dict[PCE_COEFF_ENTRY] = coeff  # gpce_coeff
 
-    mean = result_dict["E"] = float(cp.E(qoi_gPCE, dist))  # TODO I can as well compute the mean from the samples
+    mean = result_dict[MEAN_ENTRY] = float(cp.E(qoi_gPCE, dist))  # TODO I can as well compute the mean from the samples
     result_dict["E_quad"] = np.dot(qoi_values, weights)
     
     if df_simulation_result is not None and val_indices is not None:
@@ -3291,34 +3292,34 @@ def computing_gpce_statistics_simple(
         df_simulation_result.loc[val_indices, single_qoi_column_centered] = df_simulation_result.loc[val_indices, single_qoi_column] - mean
 
     if not compute_only_gpce:
-        dict_stat_to_compute['Sobol_t'] = compute_Sobol_t
-        dict_stat_to_compute['Sobol_m'] = compute_Sobol_m
-        dict_stat_to_compute['Sobol_m2'] = compute_Sobol_m2
+        dict_stat_to_compute[SOBOL_TOTAL_ORDER_ENTRY] = compute_Sobol_t
+        dict_stat_to_compute[SOBOL_FIRST_ORDER_ENTRY] = compute_Sobol_m
+        dict_stat_to_compute[SOBOL_SECOND_ORDER_ENTRY] = compute_Sobol_m2
 
-        if dict_stat_to_compute.get("Var", False):
-            result_dict["Var"] = float(cp.Var(qoi_gPCE, dist))
-        if dict_stat_to_compute.get("StdDev", False):
-            result_dict["StdDev"] = float(cp.Std(qoi_gPCE, dist))
-        if dict_stat_to_compute.get("Skew", False):
-            result_dict["Skew"] = cp.Skew(qoi_gPCE, dist).round(4)
-        if dict_stat_to_compute.get("Kurt", False):
-            result_dict["Kurt"] = cp.Kurt(qoi_gPCE, dist)
-        if dict_stat_to_compute.get("qoi_dist", False):
-            result_dict["qoi_dist"] = cp.QoI_Dist(qoi_gPCE, dist)
-        if dict_stat_to_compute.get("P10", False):
-            result_dict["P10"] = float(cp.Perc(qoi_gPCE, 10, dist, numPercSamples))
-            if isinstance(result_dict["P10"], list) and len(result_dict["P10"]) == 1:
-                result_dict["P10"] = result_dict["P10"][0]
-        if dict_stat_to_compute.get("P90", False):
-            result_dict["P90"] = float(cp.Perc(qoi_gPCE, 90, dist, numPercSamples))
-            if isinstance(result_dict["P90"], list) and len(result_dict["P90"]) == 1:
-                result_dict["P90"] = result_dict["P90"][0]
+        if dict_stat_to_compute.get(VAR_ENTRY, False):
+            result_dict[VAR_ENTRY] = float(cp.Var(qoi_gPCE, dist))
+        if dict_stat_to_compute.get(STD_DEV_ENTRY, False):
+            result_dict[STD_DEV_ENTRY] = float(cp.Std(qoi_gPCE, dist))
+        if dict_stat_to_compute.get(SKEW_ENTRY, False):
+            result_dict[SKEW_ENTRY] = cp.Skew(qoi_gPCE, dist).round(4)
+        if dict_stat_to_compute.get(KURT_ENTRY, False):
+            result_dict[KURT_ENTRY] = cp.Kurt(qoi_gPCE, dist)
+        if dict_stat_to_compute.get(QOI_DIST_ENTR, False):
+            result_dict[QOI_DIST_ENTR] = cp.QoI_Dist(qoi_gPCE, dist)
+        if dict_stat_to_compute.get(P10_ENTRY, False):
+            result_dict[P10_ENTRY] = float(cp.Perc(qoi_gPCE, 10, dist, numPercSamples))
+            if isinstance(result_dict[P10_ENTRY], list) and len(result_dict[P10_ENTRY]) == 1:
+                result_dict[P10_ENTRY] = result_dict[P10_ENTRY][0]
+        if dict_stat_to_compute.get(P90_ENTRY, False):
+            result_dict[P90_ENTRY] = float(cp.Perc(qoi_gPCE, 90, dist, numPercSamples))
+            if isinstance(result_dict[P90_ENTRY], list) and len(result_dict[P90_ENTRY]) == 1:
+                result_dict[P90_ENTRY] = result_dict[P90_ENTRY][0]
         if compute_Sobol_t:
-            result_dict["Sobol_t"] = cp.Sens_t(qoi_gPCE, dist)
+            result_dict[SOBOL_TOTAL_ORDER_ENTRY] = cp.Sens_t(qoi_gPCE, dist) #np.squeeze(cp.Sens_t(qoi_gPCE, dist))
         if compute_Sobol_m:
-            result_dict["Sobol_m"] = cp.Sens_m(qoi_gPCE, dist)
+            result_dict[SOBOL_FIRST_ORDER_ENTRY] = cp.Sens_m(qoi_gPCE, dist) #np.squeeze(cp.Sens_m(qoi_gPCE, dist))
         if compute_Sobol_m2:
-            result_dict["Sobol_m2"] = cp.Sens_m2(qoi_gPCE, dist)
+            result_dict[SOBOL_SECOND_ORDER_ENTRY] = cp.Sens_m2(qoi_gPCE, dist) #np.squeeze(cp.Sens_m2(qoi_gPCE, dist))
     return result_dict
 
 
@@ -4053,6 +4054,7 @@ def generate_table_over_rules_orders_for_single_dim(rules, dist, dim, q_orders, 
 def find_overlap(lists):
     return list(set.intersection(*map(set, lists)))
     
+
 def extend_filename_with_timestamp(file_path, time_stamp):
     file_path = pathlib.Path(file_path)
     directory_structure = file_path.parent
