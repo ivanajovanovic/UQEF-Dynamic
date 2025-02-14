@@ -1929,6 +1929,27 @@ def uqef_dynamic_model_run_results_array_to_dataframe(results_array,
     dict_of_approx_matrix_c, dict_of_matrix_c_eigen_decomposition, df_state_results
 
 
+def uqef_dynamic_model_run_results_array_to_dataframe_simple(
+    results_array, extract_only_qoi_columns=False, qoi_columns=[utility.QOI_COLUMN_NAME], time_column_name: str = utility.TIME_COLUMN_NAME, index_column_name: str = utility.INDEX_COLUMN_NAME):
+    """
+    This function is the same as uqef_dynamic_model_run_results_array_to_dataframe
+    But only intereseted in 
+    """
+    list_of_single_df = []
+    for index_run, single_result_tuple in enumerate(results_array, ):        
+        result_dict = single_result_tuple[0]
+        if "result_time_series" in result_dict:
+            df_result = result_dict["result_time_series"]
+            # TODO Not sure if this work in case process_df_simulation_result returns pd.Series?
+            df_result = process_df_simulation_result(df_result, extract_only_qoi_columns, qoi_columns, time_column_name)
+            list_of_single_df.append(df_result)
+    if list_of_single_df:
+        df_simulation_result = pd.concat(list_of_single_df, ignore_index=True, sort=False, axis=0)
+    else:
+        df_simulation_result = None
+    return df_simulation_result
+
+
 def process_df_simulation_result(
     df_result, extract_only_qoi_columns=False, qoi_columns=[utility.QOI_COLUMN_NAME,], time_column_name: str = utility.TIME_COLUMN_NAME):
     if isinstance(df_result, pd.DataFrame) and df_result.index.name == time_column_name:
