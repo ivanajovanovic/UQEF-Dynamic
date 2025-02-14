@@ -6,8 +6,8 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 import pybamm
-from typing import List, Optional, Dict, Any, Union
 import time
+from typing import List, Optional, Dict, Any, Union
 
 # import matplotlib.pyplot as plt
 # import seaborn as sns

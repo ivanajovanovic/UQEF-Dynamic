@@ -67,7 +67,7 @@ if local_debugging:
 
     uqsim.args.inputModelDir = None
     uqsim.args.sourceDir = None
-    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/work/ga45met", "ishigami_runs", "simulations_sep_2024", 'sc_full_p9_291_regression'))
+    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/work/ga45met", "uqef_dynamic_runs", "ishigami_runs", "simulations_sep_2024", 'sc_full_p9_291_regression'))
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
     uqsim.args.config_file = '/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic/data/configurations/configuration_ishigami.json'
 
