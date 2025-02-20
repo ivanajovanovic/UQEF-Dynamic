@@ -1,7 +1,11 @@
+import dill
+import numpoly
 import numpy as np
+import pickle
 import pathlib
 import os
 import time
+import warnings
 
 import sparseSpACE
 from sparseSpACE.Function import *
@@ -24,6 +28,17 @@ from sparseSpACE.Integrator import *
 # Error modification - ErrorCalculator; 
 # Extracting basis functions and computing 1D analytical integrals
 # Leja points and b-splines...
+
+def set_up_filenames_for_printing_spatially_adaptive(combiObject, do_plot, directory_for_saving_plots, **kwargs):
+    if do_plot:
+        filename_contour_plot = kwargs.get('filename_contour_plot', str(directory_for_saving_plots / "output_contour_plot.png"))
+        filename_combi_scheme_plot = kwargs.get('filename_combi_scheme_plot', str(directory_for_saving_plots / "output_combi_scheme.png"))
+        filename_refinement_graph = kwargs.get('filename_refinement_graph', str(directory_for_saving_plots / "output_refinement_graph.png"))
+        filename_sparse_grid_plot = kwargs.get('filename_sparse_grid_plot', str(directory_for_saving_plots / "output_sg_graph.png"))
+        combiObject.filename_contour_plot = filename_contour_plot
+        combiObject.filename_refinement_graph = filename_refinement_graph
+        combiObject.filename_combi_scheme_plot = filename_combi_scheme_plot
+        combiObject.filename_sparse_grid_plot = filename_sparse_grid_plot
 
 
 def sparsespace_integration_pipeline(a, b, model=None, dim=2, 
@@ -51,16 +66,16 @@ directory_for_saving_plots='./', do_plot=True,  **kwargs):
         maximum_level: maximum level of the grid; Default: 3
         modified_basis: flag indicating whether to use modified basis or not; Default: False
         boundary: flag indicating whether to include boundary points or not; Default: True
-        norm: norm to use for error calculation; Default: np.inf; 2 | np.inf
+        norm: norm to use for error calculation; Default: 2; 2 | np.inf (Note - default in sparsespace is np.inf!)
         p_bsplines: degree of B-splines; Default: 3
         rebalancing: flag indicating whether to perform rebalancing or not; Default: True
         version: version of the spatially adaptive single dimensions algorithm; Default: 6; 6 | 9 | 2
         margin: margin parameter for spatially adaptive single dimensions algorithm; Default: 0.9
         grid_surplusses: grid surplusses for spatially adaptive single dimensions algorithm; If different from None grid object will 
                          be propagated to the spatially adaptive single dimensions algorithm to compute surplusses error bases on
-                         ; if None then GlobalTrapezoidalGrid is used to compute surpluses; Default: None
+                         ; if None then GlobalTrapezoidalGrid is used to compute surpluses; Options: None | 'grid'; Default: 'grid'
         max_evaluations: maximum number of evaluations for spatially adaptive single dimensions algorithm; Default: 100
-        tol: tolerance for spatially adaptive single dimensions algorithm; Default: 10**-5
+        tol: tolerance for spatially adaptive single dimensions algorithm; Default: 10**-6
         writing_results_to_a_file: flag indicating whether to write results to a file or not; Default: True
     
     :return: SparseSpACE combiObject, number of full model evaluations, dictionary with time information
@@ -75,14 +90,6 @@ directory_for_saving_plots='./', do_plot=True,  **kwargs):
         dim = 2
         a = np.zeros(dim)
         b = np.ones(dim)
-
-        # a = np.zeros(dim)
-        # b = np.ones(dim)
-        # midpoint = np.ones(dim) * 0.5
-        # coefficients = np.array([ 10**0 * (d+1) for d in range(dim)])
-        # coefficients = np.array([ 10**1 * (d+1) for d in range(dim)])
-        # model = GenzDiscontinious(border=midpoint,coeffs=coefficients)
-        # model = GenzC0(midpoint=midpoint, coeffs=coefficients)
 
     # reference integral solution for calculating errors - if available
     reference_solution = model.getAnalyticSolutionIntegral(a,b)
@@ -118,28 +125,34 @@ directory_for_saving_plots='./', do_plot=True,  **kwargs):
     
     # Operation
     operation = Integration(f=model, grid=grid, dim=dim, reference_solution=reference_solution)  # there is Interpolation(Integration)
-    
+    # operation = Integration(f=model, grid=grid, dim=dim)  # there is Interpolation(Integration)
+
+    scheme = None
+    refinement = None
+
     # Combination Tehnique
     minimum_level = kwargs.get('minimum_level', 1)
     maximum_level = kwargs.get('maximum_level', 3)
     max_evaluations = kwargs.get('max_evaluations', 100) # 0, 22,
-    tol = kwargs.get('tol', 10**-5)   # 0.3*10**-1, 10**-4
-    norm = kwargs.get('norm', np.inf) # 2, np.inf
+    tol = kwargs.get('tol', 10**-6)   # 0.3*10**-1, 10**-4
+    norm = kwargs.get('norm', 2) # 2, np.inf
     start_time_building_sg_surrogate = time.time()
     if method.lower() == 'standard_combi':
         # combiObject = StandardCombi(np.ones(dim) * a, np.ones(dim) * b, operation=operation, norm=2)
         combiObject = StandardCombi(a=a, b=b, operation=operation)
         combiObject.set_combi_parameters(lmin=minimum_level, lmax=maximum_level)
-        combi_scheme, error, combi_result = combiObject.perform_operation(lmin=minimum_level, lmax=maximum_level)
+        scheme, error, combi_result = combiObject.perform_operation(lmin=minimum_level, lmax=maximum_level)
+        print(f"CT - scheme-{scheme};\n error-{error};\n combi_result-{combi_result};\n")
     elif method.lower() == 'dim_adaptive_combi':
         combiObject = DimAdaptiveCombi(a=a, b=b, operation=operation)
         scheme, abs_error, combiintegral, errors, num_points = combiObject.perform_combi(minv=minimum_level, maxv=maximum_level, tolerance=tol)
+        print(f"DACT - scheme-{scheme};\n abs_error-{abs_error};\n combiintegral-{combiintegral};\n errors-{errors};\n num_points-{num_points}\n")
     elif method.lower() == 'dim_wise_spat_adaptive_combi':
         rebalancing = kwargs.get('rebalancing', True)
         version = kwargs.get('version', 6)  #9, 2
-        margin = kwargs.get('margin', 0.9)  #0.5
+        margin = kwargs.get('margin', 0.8)  #0.5
         errorOperator = ErrorCalculatorSingleDimVolumeGuided()
-        grid_surplusses = kwargs.get('grid_surplusses', None)
+        grid_surplusses = kwargs.get('grid_surplusses', 'grid')
         if grid_surplusses is None:
             # grid used will be GlobalTrapezoidalGrid!!!
             # a = np.ones(dim) * a, b = np.ones(dim) * b ?
@@ -154,8 +167,11 @@ directory_for_saving_plots='./', do_plot=True,  **kwargs):
                 operation=operation, version=version, 
                 norm=norm,
                 rebalancing=rebalancing, margin=margin, grid_surplusses=grid)
+        set_up_filenames_for_printing_spatially_adaptive(combiObject, do_plot, directory_for_saving_plots)
         refinement, scheme, lmax, combi_result, number_of_evaluations, error_array, num_point_array, surplus_error_array, interpolation_error_arrayL2, interpolation_error_arrayMax = \
             combiObject.performSpatiallyAdaptiv(lmin=minimum_level, lmax=maximum_level, errorOperator=errorOperator, tol=tol, max_evaluations=max_evaluations, do_plot=False)
+        print(f"SACT - refinement-{refinement};\n scheme-{scheme};\n lmax-{lmax};\n combi_result-{combi_result};\n number_of_evaluations-{number_of_evaluations};\n"
+        f"error_array-{error_array};\n num_point_array-{num_point_array};\n surplus_error_array-{surplus_error_array};\n interpolation_error_arrayL2-{interpolation_error_arrayL2};\n interpolation_error_arrayMax-{interpolation_error_arrayMax};\n")
         # combiObject.continue_adaptive_refinement(3 * 10**-1)  # 2 * 10**-1, 1.9 * 10**-1, ...
     else:
         raise Exception(f"{method} yet not supported!")
@@ -164,44 +180,46 @@ directory_for_saving_plots='./', do_plot=True,  **kwargs):
 
     number_full_model_evaluations = combiObject.get_total_num_points()
     print(f"Needed time for building SG surrogate is: {time_building_sg_surrogate} \n"
-          f"for {number_full_model_evaluations} number of full model runs;")
+          f"for {number_full_model_evaluations} number of full model runs;\n")
+
+    # # Temporary - code snippet showing functionalities with combiObject and component_grid!
+    # for component_grid in combiObject.scheme:
+    #     gridPointCoordsAsStripes, grid_point_levels, children_indices = combiObject.get_point_coord_for_each_dim(
+    #         component_grid.levelvector)
+    #     points = combiObject.get_points_component_grid(component_grid.levelvector)
+    #     keyLevelvector = component_grid.levelvector
+    #     cn[n] = cn[n] + component_grid.coefficient * integralCompGrid
 
     if do_plot:
-        filename_contour_plot = kwargs.get('filename_contour_plot', str(outputModelDir / "output_contour_plot.png"))
-        filename_combi_scheme_plot = kwargs.get('filename_combi_scheme_plot', str(outputModelDir / "output_combi_scheme.png"))
-        filename_refinement_graph = kwargs.get('filename_refinement_graph', str(outputModelDir / "output_refinement_graph.png"))
-        filename_sparse_grid_plot = kwargs.get('filename_sparse_grid_plot', str(outputModelDir / "output_sg_graph.png"))
-        combiObject.filename_contour_plot = filename_contour_plot
-        combiObject.filename_refinement_graph = filename_refinement_graph
-        combiObject.filename_combi_scheme_plot = filename_combi_scheme_plot
-        combiObject.filename_sparse_grid_plot = filename_sparse_grid_plot
-
-        filename = os.path.abspath(os.path.join(str(directory_for_saving_plots), "hierarchical_subspaces.pdf"))
-        combiObject.print_subspaces(sparse_grid_spaces=False, ticks=False, fade_full_grid=False, filename=filename)
-        filename = os.path.abspath(os.path.join(str(directory_for_saving_plots), "sparsegrid_subspaces.pdf"))
-        combiObject.print_subspaces(sparse_grid_spaces=False, ticks=False, fade_full_grid=True, filename=filename)
-        filename = os.path.abspath(os.path.join(str(directory_for_saving_plots), "combi.pdf"))
-        combiObject.print_resulting_combi_scheme(ticks=False, filename=filename, show_border=True, fill_boundary_points=True, fontsize=60)
-        # filename = os.path.abspath(os.path.join(str(directory_for_saving_plots), "sparsegrid.pdf"))
-        # combiObject.print_resulting_sparsegrid(ticks=False, show_border=True, filename=filename)
-        if method.lower() == 'dim_wise_spat_adaptive_combi':
-            filename = os.path.abspath(os.path.join(str(directory_for_saving_plots), "standard_combi.pdf"))
-            combiObject.print_resulting_combi_scheme(filename=filename, show_border=True, markersize=20, ticks=False)
-            # filename = os.path.abspath(os.path.join(str(directory_for_saving_plots), "standard_sparse_grid.pdf"))
-            # combiObject.print_resulting_sparsegrid(filename=filename, show_border=True, markersize=40, ticks=False)
-            filename = os.path.abspath(os.path.join(str(directory_for_saving_plots), "standard_combi.svg"))
-            combiObject.print_resulting_combi_scheme(filename=filename, show_border=True, markersize=20, ticks=False)
-            # filename = os.path.abspath(os.path.join(str(directory_for_saving_plots), "standard_sparse_grid.svg"))
-            # combiObject.print_resulting_sparsegrid(filename=filename, show_border=True, markersize=40, ticks=False)
-            filename = os.path.abspath(os.path.join(str(directory_for_saving_plots), "refinement_tree_start.pdf"))
-            combiObject.draw_refinement_trees(filename=filename, single_dim=0, fontsize=60)
-            filename = os.path.abspath(os.path.join(str(directory_for_saving_plots), "refinement_tree_start.svg"))
-            combiObject.draw_refinement_trees(filename=filename, single_dim=0, fontsize=60)
-            filename = os.path.abspath(os.path.join(str(directory_for_saving_plots), "refinement_start.pdf"))
-            combiObject.draw_refinement(filename=filename, single_dim=0, fontsize=60)
-            filename = os.path.abspath(os.path.join(str(directory_for_saving_plots), "refinement_start.svg"))
-            combiObject.draw_refinement(filename=filename, single_dim=0, fontsize=60)
-
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=UserWarning)
+            if method.lower() == 'standard_combi':
+                filename = os.path.abspath(os.path.join(str(directory_for_saving_plots), "hierarchical_subspaces.pdf"))
+                combiObject.print_subspaces(sparse_grid_spaces=False, ticks=False, fade_full_grid=False, filename=filename)
+                filename = os.path.abspath(os.path.join(str(directory_for_saving_plots), "sparsegrid_subspaces.pdf"))
+                combiObject.print_subspaces(sparse_grid_spaces=False, ticks=False, fade_full_grid=True, filename=filename)
+                filename = os.path.abspath(os.path.join(str(directory_for_saving_plots), "combi.pdf"))
+                combiObject.print_resulting_combi_scheme(ticks=False, filename=filename, show_border=True, fill_boundary_points=True, fontsize=60)
+            # filename = os.path.abspath(os.path.join(str(directory_for_saving_plots), "sparsegrid.pdf"))
+            # combiObject.print_resulting_sparsegrid(ticks=False, show_border=True, filename=filename)
+            if method.lower() == 'dim_wise_spat_adaptive_combi':
+                filename = os.path.abspath(os.path.join(str(directory_for_saving_plots), "standard_combi.pdf"))
+                combiObject.print_resulting_combi_scheme(filename=filename, show_border=True, markersize=20, ticks=False)
+                # filename = os.path.abspath(os.path.join(str(directory_for_saving_plots), "standard_sparse_grid.pdf"))
+                # combiObject.print_resulting_sparsegrid(filename=filename, show_border=True, markersize=40, ticks=False)
+                filename = os.path.abspath(os.path.join(str(directory_for_saving_plots), "standard_combi.svg"))
+                combiObject.print_resulting_combi_scheme(filename=filename, show_border=True, markersize=20, ticks=False)
+                # filename = os.path.abspath(os.path.join(str(directory_for_saving_plots), "standard_sparse_grid.svg"))
+                # combiObject.print_resulting_sparsegrid(filename=filename, show_border=True, markersize=40, ticks=False)
+                filename = os.path.abspath(os.path.join(str(directory_for_saving_plots), "refinement_tree_start.pdf"))
+                combiObject.draw_refinement_trees(filename=filename, single_dim=0, fontsize=60)
+                filename = os.path.abspath(os.path.join(str(directory_for_saving_plots), "refinement_tree_start.svg"))
+                combiObject.draw_refinement_trees(filename=filename, single_dim=0, fontsize=60)
+                filename = os.path.abspath(os.path.join(str(directory_for_saving_plots), "refinement_start.pdf"))
+                combiObject.draw_refinement(filename=filename, single_dim=0, fontsize=60)
+                filename = os.path.abspath(os.path.join(str(directory_for_saving_plots), "refinement_start.svg"))
+                combiObject.draw_refinement(filename=filename, single_dim=0, fontsize=60)
+    
     writing_results_to_a_file = kwargs.get('writing_results_to_a_file', True)
     if writing_results_to_a_file:
         fileName = f"results.txt"
@@ -215,8 +233,246 @@ directory_for_saving_plots='./', do_plot=True,  **kwargs):
     dict_info["number_full_model_evaluations"] = number_full_model_evaluations
     dict_info["time_building_sg_surrogate"] = time_building_sg_surrogate
     
+    combiObject_file_name = 'combi_object.pkl'
+    combiObject_file_name = os.path.abspath(os.path.join(str(directory_for_saving_plots), combiObject_file_name))
+    with open(combiObject_file_name, 'wb') as handle:
+        dill.dump(combiObject, handle)
+        # pickle.dump(combiObject, handle, protocol=pickle.DEFAULT_PROTOCOL)  #pickle.HIGHEST_PROTOCOL
+     
+    # Save combiObject; scheme; refinement
+    if refinement is not None:
+        # print(f"DEBUGGING type(refinement) - {type(refinement)}")
+        refinement_file_name = 'refinement.pkl'
+        refinement_file_name = os.path.abspath(os.path.join(str(directory_for_saving_plots), refinement_file_name))
+        with open(refinement_file_name, 'wb') as handle:
+            dill.dump(refinement, handle)
+            # pickle.dump(refinement, handle, protocol=pickle.DEFAULT_PROTOCOL)  #pickle.HIGHEST_PROTOCOL
+        
+    if scheme is not None:
+        # print(f"DEBUGGING type(scheme) - {type(scheme)}")
+        # if isinstance(scheme, list):
+        #     print(f"DEBUGGING type(scheme[0]) - {type(scheme[0])}")
+        scheme_file_name = 'scheme.pkl'
+        scheme_file_name = os.path.abspath(os.path.join(str(directory_for_saving_plots), scheme_file_name))
+        with open(scheme_file_name, 'wb') as handle:
+            dill.dump(scheme, handle)
+            # pickle.dump(scheme, handle, protocol=pickle.DEFAULT_PROTOCOL)  #pickle.HIGHEST_PROTOCOL
+        
     # TODO Can I save model evaluations somewhere...
+    # TODO Can I evaluate the scheme in new points!!!
+    # TODO Can I save coefficients, c_l
+
     return combiObject, number_full_model_evaluations, dict_info
+
+
+# ============================================================================================
+# 1D Integration of basis function, i.e., utility functions for Ionut's approachv...
+# ============================================================================================
+
+# TODO Check validity of this code
+#calculate mean, variance, sobol indices from gPCE coefficients step-by-step
+def calculate_MeanVarianceSobol(gPCE_coefficients, polynomial_degrees, dim):
+    """
+    This function should compute basic statistics and Sobol SI based on the gPCE coefficients
+    without relying on chaospy
+    :param gPCE_coefficients:
+    :param polynomial_degrees:
+    :param dim:
+    :return:
+    """
+    vari = 0
+    for i in range(1, len(gPCE_coefficients)):
+        vari += gPCE_coefficients[i] ** 2  # under assumption that polynomials were normalized
+    mean = gPCE_coefficients[0]
+    # vari = np.sum(gPCE_coefficients**2, axis=0)-mean**2  # https://github.com/sandialabs/pyapprox/blob/master/pyapprox/surrogates/polychaos/gpc.py
+
+    first_order_sobol = [0 for _ in range(dim)]
+    total_order_sobol = [0 for _ in range(dim)]
+
+    # TODO Validate this code!
+    indices = numpoly.glexindex(
+        start=0, stop=polynomial_degrees + 1, dimensions=dim,
+        graded=True, reverse=True, cross_truncation=1.0)
+    for d in range(dim):
+        for i, ind in enumerate(indices):
+            correct = True
+            if ind[d] == 0:
+                correct = False
+            for d_other in range(dim):
+                if d_other != d and ind[d_other] != 0:
+                    correct = False
+            if correct:
+                first_order_sobol[d] += gPCE_coefficients[i]**2 / vari
+    
+    for d in range(dim):
+        for i, ind in enumerate(indices):
+            if not ind[d] == 0:
+                total_order_sobol[d] += gPCE_coefficients[i] ** 2 / vari
+    print("expected: ", mean, ", variance: ", vari, ", first order sobol indices: \n", first_order_sobol,
+          ", total order sobol indices: ", total_order_sobol)
+
+    return mean, vari, first_order_sobol, total_order_sobol
+
+# #compute gPCE coefficients analytically on a piecewise linear interpolant constructed with standard CT or the single
+# dimension refinement strategy
+# def analytica_integration_with_surrogate(model, param_names, dists, dim, a, b,
+#                              surrogate_model_of_interest="gPCE", plotting=False,
+#                              writing_results_to_a_file=False, outputModelDir="./", gridName="Trapezoidal",
+#                              lmax=2, max_evals=2000, tolerance=10 ** -5, modified_basis=False,
+#                              boundary_points=False, spatiallyAdaptive=False, p=6,
+#                              build_sg_for_e_and_var=True, parallelIntegrator=False, **kwargs):
+#
+#    #compute the one-dimensional integral
+#     def computeIntegral(point_d, neighbours, distributions_d, pce_poly_1d, d):
+#         if point_d <= 0 or max(0, neighbours[0]) >= min(1, point_d):
+#             integralLeft = 0
+#         elif (not boundary) and neighbours[0] == 0:
+#             hatFunctionLeft = lambda x: 1
+#             integrandLeft = lambda x: pce_poly_1d(function_info.ppfs[d](x)) * hatFunctionLeft(x)
+#             integralLeft = integrate.fixed_quad(integrandLeft, max(0, neighbours[0]), min(1, point_d), n=7)[0]
+#         else:
+#             hatFunctionLeft = lambda x: (x - neighbours[0]) / (point_d - neighbours[0])
+#             integrandLeft = lambda x: pce_poly_1d(function_info.ppfs[d](x)) * hatFunctionLeft(x)
+#             integralLeft = integrate.fixed_quad(integrandLeft, max(0, neighbours[0]), min(1, point_d), n=7)[0]
+#         if point_d >= 1 or max(0, point_d) >= min(1, neighbours[1]):
+#             integralRight = 0
+#         elif (not boundary) and neighbours[1] == 1:
+#             hatFunctionRight = lambda x: 1
+#             integrandRight = lambda x: pce_poly_1d(function_info.ppfs[d](x)) * hatFunctionRight(x)
+#             integralRight = integrate.fixed_quad(integrandRight, max(0, point_d), min(1, neighbours[1]), n=7)[0]
+#         else:
+#             hatFunctionRight = lambda x: max(0,((x - neighbours[1]) / (point_d - neighbours[1]))[0])
+#             hatFunctionRight = lambda x: (x - neighbours[1]) / (point_d - neighbours[1])
+#             integrandRight = lambda x: pce_poly_1d(function_info.ppfs[d](x)) * hatFunctionRight(x)
+#             integralRight = integrate.fixed_quad(integrandRight, max(0, point_d), min(1, neighbours[1]), n=7)[0]
+#         return integralLeft + integralRight
+#
+#     def standard_hatfunction1D(u):
+#         return [max(1 - abs(ui), 0) for ui in u]
+#
+#     def hatfunction_level1D_position(u, l, x):
+#         return standard_hatfunction1D((u - x) / float(2) ** (-l))
+#
+#     f = function_info.function_unitCube
+#     a = np.array([0 for d in range(function_info.dim)])
+#     b = np.array([1 for d in range(function_info.dim)])
+#     if adaptive:
+#         errorOperator = ErrorCalculatorSingleDimVolumeGuided()
+#         grid = GlobalTrapezoidalGrid(a=a, b=b, modified_basis = not boundary, boundary=boundary)
+#         operation = Integration(f=f, grid=grid, dim=function_info.dim)
+#         combiObject = StandardCombi(a, b, operation=operation)
+#         combiObject = SpatiallyAdaptiveSingleDimensions2(np.ones(function_info.dim) * a, np.ones(function_info.dim) * b, operation=operation, margin=0.8)
+#         tolerance = 0
+#         plotting = False
+#         if function_info.dim > 3:
+#             maxim_level = 2
+#         else:
+#             maxim_level = 3
+#         combiObject.performSpatiallyAdaptiv(1, maxim_level, errorOperator, tol=tolerance, do_plot=plotting,
+#                                             max_evaluations=max_evals)
+#         #combiObject.draw_refinement()
+#         combiObject.print_resulting_combi_scheme(markersize=5)
+#         print(operation.integral)
+#         dictIntegrals_adaptive = {}
+#         dictEvaluations = {}
+#
+#         #for adaptive
+#         def getNeighbours(combiObject, coordinates1d, x):
+#             if coordinates1d[0] > 0:
+#                 print("leftest: ", coordinates1d[0])
+#             left_right = [0, 1]
+#             index = np.where(coordinates1d == x)[0][0]
+#             if not (index == 0):
+#                 left_right[0] = coordinates1d[index - 1]
+#             if not (index == len(coordinates1d) - 1):
+#                 left_right[1] = coordinates1d[index + 1]
+#             return left_right
+#
+#     else:
+#         grid = TrapezoidalGrid(a=np.array([0 for d in range(function_info.dim)]), b=np.array([1 for d in range(function_info.dim)]), modified_basis=not boundary, boundary=boundary)
+#         operation = Integration(f=f, grid=grid, dim=function_info.dim)
+#         combiObject = StandardCombi(a=np.array([0 for d in range(function_info.dim)]), b=np.array([1 for d in range(function_info.dim)]), operation=operation)
+#         minimum_level = 1
+#         combiObject.perform_operation(minimum_level, maximum_level)
+#         print("expectation: ", operation.integral)
+#         dictIntegrals_not_adaptive = {}
+#         dictEvaluations = {}
+#
+#     # extract the onedimensional orthogonal polynomials and order them in the same way chaospy does
+#     number_points = combiObject.get_total_num_points()
+#     expansion = chaospy.generate_expansion(polynomial_degrees, function_info.joint_distributions, normed=True)
+#     pce_polys_1D = [None] * function_info.dim
+#     for d in range(function_info.dim):
+#         pce_polys_1D[d] = chaospy.expansion.stieltjes(polynomial_degrees, function_info.distributions[d], normed=True)
+#     indices = numpoly.glexindex(start=0, stop=polynomial_degrees + 1, dimensions=function_info.dim,
+#                                 graded=True, reverse=True,
+#                                 cross_truncation=1.0)
+#     polys = [None] * len(indices)
+#     for i in range(len(indices)):
+#         polys[i] = [pce_polys_1D[d][indices[i][d]] for d in range(function_info.dim)]
+#
+#     cn = [np.zeros(function_info.function.output_length()) for _ in polys]
+#     for n, pce_poly in enumerate(polys):
+#         for component_grid in combiObject.scheme:
+#             if adaptive:
+#                 gridPointCoordsAsStripes, grid_point_levels, children_indices = combiObject.get_point_coord_for_each_dim(
+#                     component_grid.levelvector)
+#                 points = combiObject.get_points_component_grid(component_grid.levelvector)
+#                 keyLevelvector = component_grid.levelvector
+#                 if keyLevelvector in dictEvaluations:
+#                     evals = dictEvaluations[keyLevelvector]
+#                 else:
+#                     evals = [function_info.function_unitCube(poin) for poin in points]
+#                     dictEvaluations[keyLevelvector] = evals
+#                 integralCompGrid = 0
+#             else:
+#                 points = combiObject.get_points_component_grid(component_grid.levelvector)
+#                 keyLevelvector = tuple(component_grid.levelvector.tolist())
+#                 if keyLevelvector in dictEvaluations:
+#                     evals = dictEvaluations[keyLevelvector]
+#                 else:
+#                     evals = combiObject(points)
+#                     dictEvaluations[keyLevelvector] = evals
+#                 integralCompGrid = 0
+#             for i, point in enumerate(points):
+#                 product = 1
+#                 for d in range(0, function_info.dim):
+#                     if adaptive:
+#                         neighbours = getNeighbours(combiObject, gridPointCoordsAsStripes[d], point[d])
+#                         if (point[d], tuple(neighbours), indices[n][
+#                             d], d) in dictIntegrals_adaptive:
+#                             onedimensionalIntegral = dictIntegrals_adaptive[(point[d], tuple(neighbours), indices[n][d], d)]
+#                         else:
+#                             onedimensionalIntegral = computeIntegral(point[d],
+#                                                                      neighbours, function_info.distributions[d],
+#                                                                      pce_poly[d], d)
+#                             dictIntegrals_adaptive[(point[d], tuple(neighbours), indices[n][d], d)] = onedimensionalIntegral
+#                     else:
+#                         if (point[d], component_grid.levelvector[d], indices[n][
+#                             d], d) in dictIntegrals_not_adaptive:
+#                             onedimensionalIntegral = dictIntegrals_not_adaptive[
+#                                 (point[d], component_grid.levelvector[d], indices[n][d], d)]
+#                         else:
+#                             neighbours = [max(0, point[d]-float(2)**(-component_grid.levelvector[d])), min(1, point[d]+float(2)**(-component_grid.levelvector[d]))]
+#                             onedimensionalIntegral = computeIntegral(point[d], neighbours, function_info.distributions[d], pce_poly[d], d)
+#                             dictIntegrals_not_adaptive[
+#                                 (point[d], component_grid.levelvector[d], indices[n][d], d)] = onedimensionalIntegral
+#                     product = product * onedimensionalIntegral
+#                 integralCompGrid = integralCompGrid + product * evals[i]
+#             cn[n] = cn[n] + component_grid.coefficient * integralCompGrid
+#
+#     expected, variance, first_order_sobol_indices = calculate_MeanVarianceSobol(cn, polynomial_degrees, function_info.dim)
+#     print("variance: ", variance)
+#     if store_result and not time_Series:
+#         entry = (number_points, expected, variance, *first_order_sobol_indices)
+#         storeResult(entry, 6 if adaptive else 5, function_info)
+#     if time_Series:
+#         plot_Times_series(function_info, variance, expected, first_order_sobol_indices)
+#
+
+# ============================================================================================
+# 1D Integration of basis function, i.e., utility functions for Ionut's approachv...
+# ============================================================================================
 
 
 if __name__ == "__main__":
@@ -225,10 +481,22 @@ if __name__ == "__main__":
     # Example
     a = np.zeros(2)
     b = np.ones(2)
+    dim = 2
     model = FunctionExpVar()
-    combiObject, number_full_model_evaluations, dict_info = sparsespace_integration_pipeline(a, b, model=model, dim=2, 
+
+    # Example 2.0
+    # dim = 5
+    # a = np.zeros(dim)
+    # b = np.ones(dim)
+    # midpoint = np.ones(dim) * 0.5
+    # coefficients = np.array([ 10**0 * (d+1) for d in range(dim)])
+    # coefficients = np.array([ 10**1 * (d+1) for d in range(dim)])
+    # model = GenzDiscontinious(border=midpoint,coeffs=coefficients)
+    # model = GenzC0(midpoint=midpoint, coeffs=coefficients)
+
+    combiObject, number_full_model_evaluations, dict_info = sparsespace_integration_pipeline(a, b, model=model, dim=dim, 
     grid_type='trapezoidal', method='standard_combi',
-    directory_for_saving_plots='./', do_plot=True,  **kwargs)
+    directory_for_saving_plots='./', do_plot=True)
     # total_points, total_weights = combiObject.get_points_and_weights()
     # total_surplusses = combiObject.get_surplusses()
     print(f"combiObject: {combiObject}, number_full_model_evaluations: {number_full_model_evaluations}, dict_info: {dict_info}")

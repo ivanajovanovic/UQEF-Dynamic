@@ -464,12 +464,11 @@ class TimeDependentModel(ABC, Model):
                 number_of_uncertain_params = 1
             else:
                 number_of_uncertain_params = 0
-
+            
             parameters_dict = self._parameters_configuration(parameters=parameter, take_direct_value=take_direct_value)
             
             if printing:
                 print(f"{unique_run_index} parameters_dict - {parameters_dict} \n")
-            else:
                 print(f"model execution run id - {unique_run_index}...")
 
             # create local directory for this particular run

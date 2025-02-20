@@ -21,6 +21,46 @@ from uqef_dynamic.models.ishigami import IshigamiModel
 # from uqef_dynamic.models.hbv_sask import HBVSASKModelUQ
 # from uqef_dynamic.models.hbv_sask import HBVSASKStatistics
 
+# class IshigamiFunction(Function, IshigamiModel.IshigamiModel):
+#     def __init__(self, configurationObject=None, inputModelDir=None, workingDir=None, *args, **kwargs):
+#         super().__init__(configurationObject=configurationObject, inputModelDir=inputModelDir, 
+#         workingDir=workingDir, *args, **kwargs)
+
+#     def __call__(self, coordinates: Union[Tuple[float, ...], Sequence[Tuple[float]]]) -> Sequence[float]:
+#         # return self.eval_vectorized(coordinates)
+#         return super().__call__(coordinates)
+
+#     def __call__(self, i_s: Optional[List[int]] = [0, ], parameters: Optional[Union[Dict[str, Any], List[Any]]] = None, 
+#     raise_exception_on_model_break: Optional[Union[bool, Any]] = None, *args, **kwargs):
+#         # return self.run(i_s=i_s, parameters=parameters, raise_exception_on_model_break=raise_exception_on_model_break, *args, **kwargs)
+#         return super().__call__(i_s=i_s, parameters=parameters, raise_exception_on_model_break=raise_exception_on_model_break, *args, **kwargs)
+
+#     def eval(self, coordinates: Tuple[float, ...]) -> float:
+#         return super().eval(coordinates)
+
+#     def eval_vectorized(self, coordinates: Sequence[Tuple[float]]) -> Sequence[float]:
+#         return super().eval_vectorized(coordinates)
+
+
+#     def get_analytical_sobol_indices(self, **kwargs):
+#         return super().get_analytical_sobol_indices()
+
+#     def get_expectation(self):
+#         return super().get_expectation()
+    
+#     def get_variance(self):
+#         return super().get_variance()
+
+#     def get_first_order_sobol_indices(self):
+#         return super().get_first_order_sobol_indices()
+
+#     def getAnalyticSolutionIntegral(self, start, end):
+#         return super().getAnalyticSolutionIntegral(start, end)
+
+#     def getAnalyticSolutionIntegral(self, start: Tuple[float, ...], end: Tuple[float, ...]) -> float:
+#         return super().getAnalyticSolutionIntegral(start, end)
+
+
 
 class IshigamiFunction(Function):
     def __init__(self):
@@ -32,7 +72,7 @@ class IshigamiFunction(Function):
         self.global_eval_counter = 0
         self.dim = 3
 
-    def output_length(self):
+    def output_length(self) -> int:
         return 1
 
     def eval(self, coordinates):
@@ -40,32 +80,48 @@ class IshigamiFunction(Function):
         self.global_eval_counter += 1
         results = self.ishigamiModelObject(
             i_s=[self.global_eval_counter, ],
-            parameters=[coordinates, ]
+            parameters=[coordinates, ],
+            raise_exception_on_model_break=True,
         )
         # alternatively
         # value_of_interest = results[0][0]['result_time_series'][self.ishigamiModelObject.qoi_column].values[0]
         # return value_of_interest  # np.array(value_of_interest)
-        df_simulation_result =  uqef_dynamic_utils.uqef_dynamic_model_run_results_array_to_dataframe_simple(
+        df_simulation_result = uqef_dynamic_utils.uqef_dynamic_model_run_results_array_to_dataframe_simple(
             results, extract_only_qoi_columns=True, 
         )
         result = np.array(df_simulation_result[self.ishigamiModelObject.qoi_column].values)
         return result[0]
 
     def eval_vectorized(self, coordinates: Sequence[Sequence[float]]):
-        # result = np.zeros(np.shape(coordinates)[:-1])
-        results = self.ishigamiModelObject(
-            i_s=range(coordinates.shape[0]), parameters=coordinates) 
-        # results = self.ishigamiModelObject(
-        #     i_s=range(coordinates.shape[1]), parameters=coordinates.T) #TODO because of np.zeros(np.shape(coordinates)[:-1]) it seems to expact Nxdim
-        # df_simulation_result, _, _, _, _, _ =  uqef_dynamic_utils.uqef_dynamic_model_run_results_array_to_dataframe(
-        #     results, extract_only_qoi_columns=True, 
-        # )
-        # print(f"Original full df_simulation_result-{df_simulation_result}")
-        df_simulation_result =  uqef_dynamic_utils.uqef_dynamic_model_run_results_array_to_dataframe_simple(
-            results, extract_only_qoi_columns=True, 
-        )
-        result = np.array(df_simulation_result[self.ishigamiModelObject.qoi_column].values)
-        return result
+        # f_values = np.empty((*np.shape(coordinates)[:-1], self.output_length()))
+
+        # print(f"DEBUG: coordinates-{coordinates}")
+        # print(f"DEBUG: coordinates.shape-{coordinates.shape}")
+        # print(f"DEBUG: type(coordinates)-{type(coordinates)}")
+        # print(f"DEBUG: coordinates[0].shape-{coordinates[0].shape}")
+        # print(f"DEBUG: type(coordinates[0])-{type(coordinates[0])}")
+
+        ndim = coordinates.ndim
+        if ndim > 2:
+            # for i, coordinate in enumerate(coordinates):
+            return self.eval_vectorized(coordinates.reshape(-1, self.dim)).reshape(coordinates.shape[:-1] + (self.output_length(),))
+        else:
+            results = self.ishigamiModelObject(
+                i_s=range(coordinates.shape[0]), 
+                parameters=coordinates,
+                raise_exception_on_model_break=True,
+            ) 
+            # df_simulation_result, _, _, _, _, _ =  uqef_dynamic_utils.uqef_dynamic_model_run_results_array_to_dataframe(
+            #     results, extract_only_qoi_columns=True, 
+            # )
+            # print(f"Original full df_simulation_result-{df_simulation_result}")
+            df_simulation_result = uqef_dynamic_utils.uqef_dynamic_model_run_results_array_to_dataframe_simple(
+                results, extract_only_qoi_columns=True, 
+            )
+            result = np.array(df_simulation_result[self.ishigamiModelObject.qoi_column].values)
+            return result
+
+    # def getAnalyticSolutionIntegral(self, start, end): assert "Not implemented"
 
     # @staticmethod
     def get_analytical_sobol_indices(self, **kwargs):
@@ -75,7 +131,16 @@ class IshigamiFunction(Function):
 #################
 # Set of functions from SparseSpACE
 #################
-
+def generate_and_scale_coeff_and_weights(dim, b, w_norm=1, anisotropic=False):
+    coeffs = cp.Uniform(0, 1).sample(dim)  # TODO Think of using some quasiMC method
+    l1 = np.linalg.norm(coeffs, 1)
+    coeffs = coeffs * b / l1
+    if anisotropic:
+        coeffs = np.array([coeff*np.exp(i/dim) for coeff, i in zip(coeffs, range(1,dim+1))])  # less isotropic
+    weights = cp.Uniform(0,1).sample(dim)
+    l1 = np.linalg.norm(weights, 1)
+    weights = weights * w_norm / l1
+    return coeffs, weights
 
 # g-function of Sobol: https://www.sfu.ca/~ssurjano/gfunc.html
 class GFunction(Function):

@@ -11,4 +11,5 @@ conda activate $conda_env
 export OMP_NUM_THREADS=1
 #mpiexec -n 10 python3 "$HOME/Repositories/UQEFPP/uq_simulation_uqsim.py"
 #mpiexec -n 12 /dss/dsshome1/lxc0C/ga45met2/.conda/envs/$conda_env/bin/python "$HOME/Repositories/UQEF-Dynamic/uqef_dynamic/scientific_pipelines/uq_simulation_uqsim.py"
-mpiexec -n 100 /dss/dsshome1/lxc0C/ga45met2/.conda/envs/my_uq_env/bin/python "$HOME/Repositories/UQEF-Dynamic/uqef_dynamic/scientific_pipelines/uq_simulation_uqsim_debug_lc.py"
+# mpiexec -n 100 /dss/dsshome1/lxc0C/ga45met2/.conda/envs/my_uq_env/bin/python "$HOME/Repositories/UQEF-Dynamic/uqef_dynamic/scientific_pipelines/uq_simulation_uqsim_debug_cluster.py"
+mpiexec -n 110 /dss/dsshome1/lxc0C/ga45met2/.conda/envs/my_uq_env/bin/python "$HOME/Repositories/UQEF-Dynamic/uqef_dynamic/scientific_pipelines/uq_simulation_uqsim_debug_cluster.py"

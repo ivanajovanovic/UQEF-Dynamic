@@ -153,7 +153,7 @@ def main_routine(model, current_output_folder, **kwargs):
         # TODO manual setup of params, param_names, dim, distributions, a, b; change this eventually.
         #  Hard-coded to Uniform dist!
         if model.lower() == "ishigami":
-            param_names = ["x0", "x1", "x2"]
+            param_names = ["x1", "x2", "x3"]
             a = [-math.pi, -math.pi, -math.pi]
             b = [math.pi, math.pi, math.pi]
         elif model.lower() == "gfunction":
@@ -175,7 +175,7 @@ def main_routine(model, current_output_folder, **kwargs):
             # a = [0.0, 0.0, 0.0]
             # b = [1.0, 1.0, 1.0]
             # dim = 3
-            # coeffs, _ = generate_and_scale_coeff_and_weights(dim, b_3)
+            # coeffs, _ = sparsespace_functions.generate_and_scale_coeff_and_weights(dim, b_3)
             param_names = ["x0", "x1", "x2", "x3", "x4"]
             a = [0.0, 0.0, 0.0, 0.0, 0.0]
             b = [1.0, 1.0, 1.0, 1.0, 1.0]
@@ -186,7 +186,7 @@ def main_routine(model, current_output_folder, **kwargs):
                 if "weights" in kwargs:
                     weights = kwargs["weights"]
             else:
-                coeffs, weights = generate_and_scale_coeff_and_weights(dim=dim, b=b_3, anisotropic=anisotropic)
+                coeffs, weights = sparsespace_functions.generate_and_scale_coeff_and_weights(dim=dim, b=b_3, anisotropic=anisotropic)
             # coeffs = [float(1) for _ in range(dim)]
             can_model_evaluate_all_vector_nodes = True
             dictionary_with_inf_about_the_run["coeffs"] = coeffs
@@ -209,22 +209,22 @@ def main_routine(model, current_output_folder, **kwargs):
         raise ValueError(f"Model {model} is not yet supported!")
 
     # params for SparseSpACE
-    grid_type = kwargs.get("grid_type", "trapezoidal")
-    method = kwargs.get("method", "standard_combi")
+    grid_type = kwargs.get("grid_type", "trapezoidal")  # 'trapezoidal', 'chebyshev', 'leja', 'bspline_p3'; For spetical adaptive single dimensions algorithm: 'globa_trapezoidal', 'trapezoidal' and 'bspline_p3'
+    method = kwargs.get("method", "standard_combi")  # 'standard_combi', 'dim_adaptive_combi', 'dim_wise_spat_adaptive_combi'
 
-    # optional parameters
+    # optional parameters - their default values match ones from sparsespace_utils
     minimum_level = kwargs.get("minimum_level", kwargs.get("lmin", 1))  # used to be lmin
     maximum_level = kwargs.get("maximum_level", kwargs.get("lmax", 3))  # used to be lmax
     max_evaluations = kwargs.get("max_evaluations", kwargs.get("max_evals", 100)) # 0, 22, used to be max_evals
-    tol = kwargs.get("tol", kwargs.get("tolerance", 10**-5))   # 0.3*10**-1, 10**-4  # used to be tolerance
+    tol = kwargs.get("tol", kwargs.get("tolerance", 10**-6))   # 0.3*10**-1, 10**-4  # used to be tolerance
     modified_basis = kwargs.get("modified_basis", False)
     boundary = kwargs.get("boundary", kwargs.get("boundary_points", True))  # used to be boundary_points
-    norm = kwargs.get("norm", np.inf)
+    norm = kwargs.get("norm", 2)  #np.inf
     p_bsplines = kwargs.get("p_bsplines", 3)
     rebalancing = kwargs.get("rebalancing", True)
     version = kwargs.get("version", 6)
     margin = kwargs.get("margin", 0.9)
-    grid_surplusses = kwargs.get("grid_surplusses", None)
+    grid_surplusses = kwargs.get("grid_surplusses", 'grid')
     # Collect all the above local variables into kwargs
     kwargs_sparsespace_integration_pipeline = {
         key: value for key, value in locals().items() if key in \
@@ -239,13 +239,30 @@ def main_routine(model, current_output_folder, **kwargs):
     )
     # total_points, total_weights = combiObject.get_points_and_weights()
     # total_surplusses = combiObject.get_surplusses()
-    print(f"combiObject: {combiObject}, number_full_model_evaluations: {number_full_model_evaluations}, dict_info: {dict_info}")
+    print(f"combiObject: {combiObject},\n number_full_model_evaluations: {number_full_model_evaluations},\n dict_info: {dict_info}")
 
 
 if __name__ == "__main__":
+    # main_routine(
+    #     model='ishigami', current_output_folder='standard_combi_trapez_lmin1_lmax2_tol_10-5_maxeval1000', \
+    #         grid_type='trapezoidal', method='standard_combi', minimum_level=1, maximum_level=2, max_evaluations=1000, tol=10**-5, modified_basis=False, boundary=True, norm=2, p_bsplines=3, rebalancing=True, version=6, margin=0.9, grid_surplusses=None)
+
+    # main_routine(
+    #     model='ishigami', current_output_folder='dact_trapez_lmin1_lmax2_tol_10-5_maxeval1000', \
+    #         grid_type='trapezoidal', method='dim_adaptive_combi', minimum_level=1, maximum_level=2, max_evaluations=1000, tol=10**-5, modified_basis=False, boundary=True, norm=2, p_bsplines=3, rebalancing=True, version=6, margin=0.9, grid_surplusses=None)
+
+    # Observations  - max_evaluations is dominant! 
+    # CT with the same max level as SACT leades to many more runs
+    # DACT allowes lmax to be max 2
+    # DACT needs reference_solution/real_integral!!!
     main_routine(
-        model='ishigami', current_output_folder='standard_combi_trapez_lmin1_lmax2_tol_10-5_maxeval1000', \
-            grid_type='trapezoidal', method='standard_combi', minimum_level=1, maximum_level=2, max_evaluations=1000, tol=10**-5, modified_basis=False, boundary=True, norm=2, p_bsplines=3, rebalancing=True, version=6, margin=0.9, grid_surplusses=None)
+        model='ishigami', current_output_folder='ct_trapez_lmax2_tol_10-6_maxeval1000_bound_nomodify_norm2', \
+            grid_type='trapezoidal', method='dim_adaptive_combi', minimum_level=1, maximum_level=2, 
+            max_evaluations=1000, tol=10**-6, modified_basis=False, boundary=True, norm=2, p_bsplines=3, 
+            rebalancing=True, version=6, margin=0.8, grid_surplusses='grid')
+
+    # TODO Compare original model vs SGSurrogate
+    # TODO - Add Gans functions; Add HBV-RMSE; Add HBV-Timewise; Add PCE Part and computation of Stat
 
     # # Example
     # a = np.zeros(2)
