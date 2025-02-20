@@ -313,7 +313,7 @@ uqsim.statistics.update({"hbvsask"         : (lambda: HBVSASKStatistics.HBVSASKS
     save_gpce_surrogate=save_gpce_surrogate,
     compute_other_stat_besides_pce_surrogate=compute_other_stat_besides_pce_surrogate,
     compute_kl_expansion_of_qoi = compute_kl_expansion_of_qoi,
-    index_column_name = "Index_run",
+    index_column_name = utility.INDEX_COLUMN_NAME,
     allow_conditioning_results_based_on_metric=allow_conditioning_results_based_on_metric,
     condition_results_based_on_metric = condition_results_based_on_metric,
     condition_results_based_on_metric_value = condition_results_based_on_metric_value,

@@ -567,6 +567,10 @@ class HBVSASKModel(object):
     def timesteps(self):
         return list(self.full_data_range)
 
+    def __call__(self, i_s: Optional[List[int]]=[0, ], parameters: Optional[Union[Dict[str, Any], List[Any]]]=None, 
+        raise_exception_on_model_break: Optional[Union[bool, Any]] = None, *args, **kwargs):
+        return self.run(i_s=i_s, parameters=parameters, raise_exception_on_model_break=raise_exception_on_model_break, *args, **kwargs)
+
     def run(
             self, i_s: Optional[List[int]] = [0, ], 
             parameters: Optional[Union[Dict[str, Any], List[Any]]] = None,

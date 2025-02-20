@@ -60,10 +60,10 @@ if local_debugging:
     uqsim.args.uncertain = "all"
     uqsim.args.chunksize = 1
 
-    uqsim.args.uq_method = "mc"  # "sc" | "saltelli" | "mc" | "ensemble"
+    uqsim.args.uq_method = "saltelli"  # "sc" | "saltelli" | "mc" | "ensemble"
     
-    uqsim.args.mc_numevaluations = 100 #10000
-    uqsim.args.sampling_rule = "sobol"  # "random" | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
+    uqsim.args.mc_numevaluations = 1000 #10000
+    uqsim.args.sampling_rule = "random"  # "random" | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
     
     uqsim.args.sc_q_order = 5  # 7 8 8 #10 3
     uqsim.args.sc_p_order = 5  # 3, 3, 4 5, 6, 8
@@ -123,7 +123,7 @@ if local_debugging:
     uqsim.args.inputModelDir = pathlib.Path('/dss/dsshome1/lxc0C/ga45met2/.conda/envs/my_uq_env/lib/python3.11/site-packages/pybamm/input/drive_cycles')
     #uqsim.args.inputModelDir = pathlib.Path('/dss/dsshome1/lxc0C/ga45met2/.conda/envs/uq_env/lib/python3.7/site-packages/pybamm/input/drive_cycles')
     #  /dss/dsshome1/lxc0C/ga45met2/.conda/envs/uq_env/lib/python3.7/site-packages/pybamm/input/drive_cycles
-    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/battery_runs", 'sobol_100'))  #'mc_kl10_p5_ct07_24d_10000_random'
+    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/battery_runs", 'saltelli_1000_random'))  #'mc_kl10_p5_ct07_24d_10000_random'
     uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/uqef_dynamic/models/pybamm/configuration_battery_24_shot_names.json' #configuration_battery.json' configuration_battery_24_shot_names.json
 
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
@@ -134,7 +134,7 @@ if local_debugging:
     uqsim.args.mpi_method = "MpiPoolSolver"  # "LinearSolver"
 
     uqsim.args.disable_statistics = False
-    uqsim.args.disable_calc_statistics = True
+    uqsim.args.disable_calc_statistics = False
     uqsim.args.parallel_statistics = True
 
     uqsim.args.instantly_save_results_for_each_time_step = False

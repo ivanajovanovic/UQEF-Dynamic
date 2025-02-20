@@ -20,8 +20,8 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 pd.options.mode.chained_assignment = None
 
 # sys.path.insert(0, os.getcwd())
-# sys.path.insert(0, '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic')
-sys.path.insert(0, "/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic")
+sys.path.insert(0, '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic')
+# sys.path.insert(0, "/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic")
 
 from uqef_dynamic.utils import utility
 
@@ -44,16 +44,16 @@ if local_debugging:
     uqsim.args.uncertain = "all"
     uqsim.args.chunksize = 1
 
-    uqsim.args.uq_method = "sc"  # "sc" | "saltelli" | "mc" | "ensemble"
+    uqsim.args.uq_method = "mc"  # "sc" | "saltelli" | "mc" | "ensemble"
     
-    uqsim.args.mc_numevaluations = 1000
+    uqsim.args.mc_numevaluations = 10000
     uqsim.args.sampling_rule = "latin_hypercube"  # "random" | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
     
     uqsim.args.sc_q_order = 5  # 7 #10 3
     uqsim.args.sc_p_order = 3  # 4, 5, 6, 8
     uqsim.args.sc_quadrature_rule = "g"  # "p" "genz_keister_24" "leja" "clenshaw_curtis"
  
-    uqsim.args.read_nodes_from_file = True
+    uqsim.args.read_nodes_from_file = False
     l = 5  # 10
     dim = 3
     path_to_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/sparse_grid_nodes_weights")  # this a path to the file where the nodes and weights are stored
@@ -64,21 +64,21 @@ if local_debugging:
     uqsim.args.sc_poly_rule = "three_terms_recurrence"  # "gram_schmidt" | "three_terms_recurrence" | "cholesky"
     uqsim.args.sc_poly_normed = True  # True
     uqsim.args.sc_sparse_quadrature = False  # False
-    uqsim.args.regression = False
+    uqsim.args.regression = True
     uqsim.args.cross_truncation = 1.0
 
     # paths, if necessary change them
     uqsim.args.inputModelDir = pathlib.Path("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/HBV-SASK-data")
     uqsim.args.sourceDir = pathlib.Path("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/HBV-SASK-data")
-    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs", 'sc_kl10_p3_l7_generalized_60days_3d_oldman_experimental'))
+    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/hbvsask_runs", 'mc_kl40_gpce_10d_p3_ct10_10000lhc_oldman_2007'))
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
-    uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/configuration_hbv_3D_MC.json'
+    uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/configuration_hbv_10D.json'
 
-    uqsim.args.inputModelDir = pathlib.Path("/work/ga45met/Hydro_Models/HBV-SASK-data")
-    uqsim.args.sourceDir = pathlib.Path("/work/ga45met/Hydro_Models/HBV-SASK-data")
-    uqsim.args.outputResultDir = os.path.abspath(os.path.join('/work/ga45met/uqef_dynamic_runs/hbv_sask_runs/Oldman_Basin', 'gpce_d3_p3_l5_generalized'))
-    uqsim.args.outputModelDir = uqsim.args.outputResultDir
-    uqsim.args.config_file = '/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic/data/configurations/configuration_hbv_3D_MC.json'
+    # uqsim.args.inputModelDir = pathlib.Path("/work/ga45met/Hydro_Models/HBV-SASK-data")
+    # uqsim.args.sourceDir = pathlib.Path("/work/ga45met/Hydro_Models/HBV-SASK-data")
+    # uqsim.args.outputResultDir = os.path.abspath(os.path.join('/work/ga45met/uqef_dynamic_runs/hbv_sask_runs/Oldman_Basin', 'gpce_d3_p3_l5_generalized'))
+    # uqsim.args.outputModelDir = uqsim.args.outputResultDir
+    # uqsim.args.config_file = '/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic/data/configurations/configuration_hbv_3D_MC.json'
 
     uqsim.args.sampleFromStandardDist = True  # False
 
@@ -123,12 +123,12 @@ if uqsim.args.uq_method == "mc" and uqsim.args.compute_Sobol_m:
 save_gpce_surrogate = True  # if True a gpce surrogate for each QoI for each time step is saved in a separate file
 compute_other_stat_besides_pce_surrogate = True  # This is relevant only when uq_method == "sc" 
 
-compute_kl_expansion_of_qoi = False
-kl_expansion_order = 10
+compute_kl_expansion_of_qoi = True
+kl_expansion_order = 40
 compute_timewise_gpce_next_to_kl_expansion = False
 
 compute_generalized_sobol_indices = True
-compute_generalized_sobol_indices_over_time = True
+compute_generalized_sobol_indices_over_time = False
 
 compute_covariance_matrix_in_time = False
 
@@ -201,7 +201,7 @@ uqsim.statistics.update({"hbvsask"         : (lambda: HBVSASKStatistics.HBVSASKS
     save_gpce_surrogate=save_gpce_surrogate,
     compute_other_stat_besides_pce_surrogate=compute_other_stat_besides_pce_surrogate,
     compute_kl_expansion_of_qoi = compute_kl_expansion_of_qoi,
-    index_column_name = "Index_run",
+    index_column_name = utility.INDEX_COLUMN_NAME,
     allow_conditioning_results_based_on_metric=allow_conditioning_results_based_on_metric,
     condition_results_based_on_metric = condition_results_based_on_metric,
     condition_results_based_on_metric_value = condition_results_based_on_metric_value,
@@ -287,12 +287,14 @@ uqsim.save_statistics()
 
 # save the dictionary with the arguments once again
 if uqsim.is_master():
+    size = uqsim.get_size()
     time_infoFileName = os.path.abspath(os.path.join(uqsim.args.outputResultDir, utility.TIME_INFO_FILE))
     with open(time_infoFileName, 'w') as fp:
         fp.write(f'number_full_model_runs: {number_full_model_evaluations}\n')
         fp.write(f'time_model_simulations: {time_model_simulations}\n')
         # fp.write(f'time_producing_gpce: {time_producing_gpce}\n')
-        fp.write(f'time_computing_statistics: {time_computing_statistics}')
+        fp.write(f'time_computing_statistics: {time_computing_statistics}\n')
+        fp.write(f'number_mpi_processes: {size}')
 
 #####################################
 # tear down
