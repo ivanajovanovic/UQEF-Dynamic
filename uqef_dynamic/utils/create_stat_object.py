@@ -4,16 +4,72 @@ import pickle
 import pathlib
 import pandas as pd
 
+from uqef_dynamic.models.larsim import LarsimModelUQ
+from uqef_dynamic.models.linearDampedOscillator import LinearDampedOscillatorModel
+from uqef_dynamic.models.ishigami import IshigamiModel
+from uqef_dynamic.models.productFunction import ProductFunctionModel
+from uqef_dynamic.models.hbv_sask import HBVSASKModelUQ
+from uqef_dynamic.models.pybamm import pybammModelUQ as pybammmodel
+from uqef_dynamic.models.simpleOscilator.simple_oscillator_model import simpleOscillatorUQ
+
 from uqef_dynamic.models.larsim import LarsimStatistics
 from uqef_dynamic.models.linearDampedOscillator import LinearDampedOscillatorStatistics
 from uqef_dynamic.models.ishigami import IshigamiStatistics
 from uqef_dynamic.models.productFunction import ProductFunctionStatistics
 from uqef_dynamic.models.hbv_sask import HBVSASKStatistics
 from uqef_dynamic.models.pybamm import pybammStatistics
+from uqef_dynamic.models.simpleOscilator.simple_oscillator_statistics import simpleOscillatorStatistics
+
 from uqef_dynamic.utils import utility
 from uqef_dynamic.utils import uqef_dynamic_utils
 # from uqef_dynamic.models.time_dependent_baseclass import time_dependent_statistics
 
+def create_model_object(configuration_object, uqsim_args_dict, workingDir, model=None, **kwargs):
+    """
+    Note: hardcoded for a couple of currently (more complex) supported models
+    :param configuration_object:
+    :param uqsim_args_dict:
+    :param workingDir:
+    :param model: "larsim" | "hbvsask" | "oscillator" | "battery"
+    :return:
+    """
+    if model is None:
+        if 'model' in uqsim_args_dict:
+            model = uqsim_args_dict['model']
+        else:
+            raise ValueError("Model, for which the statistics object shoudl be re-created, is not provided!")
+    if model.lower() == "larsim":
+        modelObject = LarsimModelUQ.LarsimModelUQ(
+            configurationObject=configuration_object,
+            inputModelDir=uqsim_args_dict["inputModelDir"],
+            workingDir=workingDir,
+            sourceDir=uqsim_args_dict["sourceDir"],
+            disable_statistics=uqsim_args_dict["disable_statistics"],
+            uq_method=uqsim_args_dict["uq_method"],
+            **kwargs)
+    elif model.lower() == "ishigami":
+        modelObject = IshigamiModel.IshigamiModel(
+            configurationObject=configuration_object,
+            workingDir=workingDir,**kwargs)
+    elif model.lower() == "hbvsask":
+        modelObject = HBVSASKModelUQ.HBVSASKModelUQ(
+            configurationObject=configuration_object,
+            inputModelDir=uqsim_args_dict["inputModelDir"],
+            workingDir=workingDir,
+            disable_statistics=uqsim_args_dict["disable_statistics"],
+            uq_method=uqsim_args_dict["uq_method"],**kwargs)
+    elif model.lower() == "battery":
+        modelObject = pybammmodel.pybammModelUQ(
+            configurationObject=configuration_object,
+            inputModelDir=uqsim_args_dict["inputModelDir"],
+            workingDir=workingDir,**kwargs)
+    elif model.lower() == "simple_oscillator":
+        modelObject = simpleOscillatorUQ(
+            configurationObject=configuration_object,
+            workingDir=workingDir,**kwargs)
+    else:
+        raise ValueError("Model not supported")
+    return modelObject
 
 def create_statistics_object(configuration_object, uqsim_args_dict, workingDir, model=None, **kwargs):
     """

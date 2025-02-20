@@ -3676,7 +3676,7 @@ def computing_generalized_sobol_total_indices_from_kl_expan(
         expons = np.array([key for key, value in dic.items() if value[idx]])
         alphas.append(tuple(expons[np.argmax(expons.sum(1))]))
 
-    index = np.array([any(alpha) for alpha in alphas])
+    index = np.array([any(alpha) for alpha in alphas])  # list of non-constant terms from poly expans
 
     dict_of_num = defaultdict(list)
     for idx in range(len(alphas[0])):
@@ -3694,6 +3694,13 @@ def computing_generalized_sobol_total_indices_from_kl_expan(
             variance_over_kl_terms.append(variance)
         for idx in range(len(alphas[0])):
             index_local = np.array([alpha[idx] > 0 for alpha in alphas])  # Compute the total Sobol indices
+            # TODO add for the first order
+            # index_local = np.array(
+            #     [
+            #         bool(alpha[idx] and not any(alpha[:idx] + alpha[idx + 1 :]))
+            #         for alpha in alphas
+            #     ]
+            # )
             dict_of_num[idx].append(np.sum(coefficients[index_local] ** 2, axis=0))
 
     if compute_total_variance_based_on_pce_coefficients or total_variance is None:
@@ -3773,6 +3780,13 @@ def computing_generalized_sobol_total_indices_from_poly_expan(
         variance_over_time_array.append(variance)
         for idx in range(len(alphas[0])):
             index_local = np.array([alpha[idx] > 0 for alpha in alphas])      # Compute the total Sobol indices
+            # TODO add for the first order
+            # index_local = np.array(
+            #     [
+            #         bool(alpha[idx] and not any(alpha[:idx] + alpha[idx + 1 :]))
+            #         for alpha in alphas
+            #     ]
+            # )
             dict_of_num[idx].append(np.sum(coefficients[index_local] ** 2, axis=0))  # scaling with norm of the polynomial corresponding to the index_local
 
     variance_over_time_array = np.asarray(variance_over_time_array, dtype=np.float64)
@@ -3883,6 +3897,13 @@ def computing_generalized_sobol_total_indices_from_poly_expan_single_timesample(
         variance_over_time_array.append(variance)
         for idx in range(len(alphas[0])):
             index_local = np.array([alpha[idx] > 0 for alpha in alphas])      # Compute the total Sobol indices
+            # TODO add for the first order
+            # index_local = np.array(
+            #     [
+            #         bool(alpha[idx] and not any(alpha[:idx] + alpha[idx + 1 :]))
+            #         for alpha in alphas
+            #     ]
+            # )
             dict_of_num[idx].append(np.sum(coefficients[index_local] ** 2, axis=0))  # scaling with norm of the polynomial corresponding to the index_local
     
     if number_of_timestamps==0:
@@ -3921,6 +3942,27 @@ def computing_generalized_sobol_total_indices_from_poly_expan_single_timesample(
         # with open(fileName, 'a') as file:
         #     # Write each variable to the file followed by a newline character
         #     file.write(f'{param_name}: {s_tot_generalized}\n')
+
+
+def compute_difference_between_two_time_stamps(end_timestamp, start_timestamp, resolution):
+    if resolution == "integer":
+        return end_timestamp - start_timestamp
+    elif resolution in ["daily", "hourly", "minute"]:
+        end_timestamp_pdTimestamp = pd.Timestamp(end_timestamp)
+        start_timestamp_pdTimestamp = pd.Timestamp(start_timestamp)    
+        difference = end_timestamp_pdTimestamp - start_timestamp_pdTimestamp
+        if resolution == "daily": 
+            return difference.days
+        elif resolution == "hourly":
+            total_seconds = difference.total_seconds()
+            total_hours = total_seconds // 3600  # Total hours
+            return total_hours
+        elif resolution == "minute":
+            total_seconds = difference.total_seconds()
+            total_minutes = total_seconds // 60  # Total minutes
+            return total_minutes
+    else:
+        raise ValueError(f"Unknown resolution - {resolution}")
 
 
 def is_time_stamp_in_look_back_window(time_stamp, qoi_time_stamp, look_back_window_size, resolution):
@@ -4050,6 +4092,35 @@ def generate_table_over_rules_orders_for_single_dim(rules, dist, dim, q_orders, 
 # =================================================================================================
 # MISC - Different set of utility functions
 # =================================================================================================
+def process_dict_set_predictions_to_zero(dict_set_predictions_to_zero, list_qois):
+    if not isinstance(dict_set_predictions_to_zero, dict) or not dict_set_predictions_to_zero:
+        if isinstance(dict_set_predictions_to_zero, bool):
+            bool_dict_set_predictions_to_zero = dict_set_predictions_to_zero
+            dict_set_predictions_to_zero = {}
+            for single_qoi in list_qois:
+                dict_set_predictions_to_zero[single_qoi] = bool_dict_set_predictions_to_zero
+        else:
+            dict_set_predictions_to_zero = {}
+            for single_qoi in list_qois:
+                dict_set_predictions_to_zero[single_qoi] = False
+    for single_qoi in list_qois:
+        if single_qoi not in dict_set_predictions_to_zero:
+            dict_set_predictions_to_zero[single_qoi] = False
+    return dict_set_predictions_to_zero
+
+
+def write_dict_to_file(d, filename, indent=0):
+    with open(filename, 'w') as f:
+        def write_item(d, indent):
+            for key, value in d.items():
+                if isinstance(value, dict):
+                    f.write(" " * indent + f"{key}: {{\n")
+                    write_item(value, indent + 4)
+                    f.write(" " * indent + "}\n")
+                else:
+                    f.write(" " * indent + f"{key}: {value}\n")
+        write_item(d, indent)
+
 
 def find_overlap(lists):
     return list(set.intersection(*map(set, lists)))
