@@ -865,8 +865,9 @@ class TimeDependentStatistics(ABC, Statistics):
             self.numTimesteps = self.N_quad = len(self.timesteps)
             if self.N_quad > 1:
                 # for now uniform weight in time are default
-                # TODO Think about 1 in num?
-                h = 1/(self.N_quad-1) #(t_final - t_starting)/(N_quad-1)
+                difference_between_two_time_stamps = utility.compute_difference_between_two_time_stamps(
+                    end_timestamp=self.timesteps_max, start_timestamp=self.timesteps_min, resolution=self.resolution)
+                h = (difference_between_two_time_stamps)/(self.N_quad-1) #1/(self.N_quad-1) #
                 self.weights_time = [h for i in range(self.N_quad)]
                 self.weights_time[0] /= 2
                 self.weights_time[-1] /= 2
@@ -999,10 +1000,17 @@ class TimeDependentStatistics(ABC, Statistics):
             self.weights_time = np.asarray(self.weights_time, dtype=np.float32)
             self.N_quad = len(self.weights_time)
         elif self.timesteps is not None:
+            if self.timesteps_max is None:
+                self.set_timesteps_max()
+            if self.timesteps_min is None:
+                self.set_timesteps_min()
+            if self.timesteps_max is None or self.timesteps_min is None:
+                raise Exception("[STAT ERROR] - in set_weights_time() - self.timesteps_max or self.timesteps_min are missing/None")
             self.N_quad = len(self.timesteps)
             if self.N_quad > 1:
-                # TODO Think about 1 in num?
-                h = 1/(self.N_quad-1) #(self.timesteps_max - self.timesteps_min)/(N_quad-1)
+                difference_between_two_time_stamps = utility.compute_difference_between_two_time_stamps(
+                    end_timestamp=self.timesteps_max, start_timestamp=self.timesteps_min, resolution=self.resolution)
+                h = (difference_between_two_time_stamps)/(self.N_quad-1) #1/(self.N_quad-1) #
                 self.weights_time = [h for i in range(self.N_quad)]
                 self.weights_time[0] /= 2
                 self.weights_time[-1] /= 2
@@ -1455,7 +1463,8 @@ class TimeDependentStatistics(ABC, Statistics):
         #     if self.allow_conditioning_results_based_on_metric:
         #         self.handle_conditioning_model_runs(kwargs)
         # else:
-        self.handle_unsuccessful_runs_psp_saltelli()
+        self.handle_unsuccessful_runs()  # TODO - let's try this...
+        # self.handle_unsuccessful_runs_psp_saltelli()
             
     # =================================================================================================
 
@@ -1635,6 +1644,7 @@ class TimeDependentStatistics(ABC, Statistics):
             total_variance_based_on_pce_coefficients = None
 
             # TODO  - think how to allow over time computation of KL surrogate and generalized Sobol indices
+            # Var_kl_approx is sum of the eigenvalues
             eigenvalues, eigenvectors, f_kl_surrogate_dict, f_kl_surrogate_coefficients, Var_kl_approx \
             = self.compute_kl_expansion_single_qoi(single_qoi_column)
             # Generalized Sobol Indices (for now just for the final time-stamp)
@@ -1667,7 +1677,7 @@ class TimeDependentStatistics(ABC, Statistics):
                 Total Variance integral over time: {variance_integral}; \
                     Total Variance computed via PCE coefficients: {total_variance_based_on_pce_coefficients};\
                          Total Variance returned by the computing_generalized_sobol_total_indices_from_kl_expan: {total_variance}")
-            fileName = self.workingDir / f"total_variance.txt"
+            fileName = self.workingDir / f"total_variance_{single_qoi_column}.txt"
             with open(fileName, 'w') as fp:
                 fp.write(f'Total Variance computed via eigenvalues: {Var_kl_approx}\n')
                 fp.write(f'Total Variance integral over time: {variance_integral}\n')

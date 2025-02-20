@@ -213,6 +213,10 @@ def read_output_files_uqef_dynamic(workingDir, printing=False, **kwargs):
                 results_dict["time_model_simulations"] = line.split(':')[1].strip()
             elif line.startswith("time_computing_statistics"):
                 results_dict["time_computing_statistics"] = line.split(':')[1].strip()
+    if "time_model_simulations" not in results_dict:
+        results_dict["time_model_simulations"] = None
+    if "time_computing_statistics" not in results_dict:
+        results_dict["time_computing_statistics"] = None
 
     # whatch-out this might be tricky when not all params are regarded as uncertain!
     param_labeles = utility.get_list_of_uncertain_parameters_from_configuration_dict(
@@ -1883,21 +1887,26 @@ def uqef_dynamic_model_run_results_array_to_dataframe(results_array,
         
         if "result_time_series" in result_dict:
             df_result = result_dict["result_time_series"]
-            df_result = process_df_simulation_result(df_result, extract_only_qoi_columns, qoi_columns, time_column_name)
-            list_of_single_df.append(df_result)
+            if df_result is not None:
+                df_result = process_df_simulation_result(df_result, extract_only_qoi_columns, qoi_columns, time_column_name)
+                list_of_single_df.append(df_result)
         if "parameters_dict" in result_dict:
             parameters_dict = result_dict["parameters_dict"]
-            list_index_parameters_dict.append(parameters_dict)
+            if parameters_dict is not None:
+                list_index_parameters_dict.append(parameters_dict)
         if "gof_df" in result_dict:
             gof_df = result_dict["gof_df"]
-            list_of_single_index_parameter_gof_df.append(gof_df)
+            if gof_df is not None:
+                list_of_single_index_parameter_gof_df.append(gof_df)
         if "grad_matrix" in result_dict:
             gradient_matrix_dict = result_dict["grad_matrix"]
-            list_of_gradient_matrix_dict.append(gradient_matrix_dict)
+            if gradient_matrix_dict is not None:
+                list_of_gradient_matrix_dict.append(gradient_matrix_dict)
         if "state_df" in result_dict:
             state_df = result_dict["state_df"]
-            state_df = process_df_simulation_result(state_df, time_column_name=time_column_name)
-            list_of_single_state_df.append(state_df)
+            if state_df is not None:
+                state_df = process_df_simulation_result(state_df, time_column_name=time_column_name)
+                list_of_single_state_df.append(state_df)
 
     if list_of_single_df:
         df_simulation_result = pd.concat(list_of_single_df, ignore_index=True, sort=False, axis=0)
@@ -1940,9 +1949,10 @@ def uqef_dynamic_model_run_results_array_to_dataframe_simple(
         result_dict = single_result_tuple[0]
         if "result_time_series" in result_dict:
             df_result = result_dict["result_time_series"]
-            # TODO Not sure if this work in case process_df_simulation_result returns pd.Series?
-            df_result = process_df_simulation_result(df_result, extract_only_qoi_columns, qoi_columns, time_column_name)
-            list_of_single_df.append(df_result)
+            if df_result is not None:
+                # TODO Not sure if this work in case process_df_simulation_result returns pd.Series?
+                df_result = process_df_simulation_result(df_result, extract_only_qoi_columns, qoi_columns, time_column_name)
+                list_of_single_df.append(df_result)
     if list_of_single_df:
         df_simulation_result = pd.concat(list_of_single_df, ignore_index=True, sort=False, axis=0)
     else:
@@ -1952,6 +1962,8 @@ def uqef_dynamic_model_run_results_array_to_dataframe_simple(
 
 def process_df_simulation_result(
     df_result, extract_only_qoi_columns=False, qoi_columns=[utility.QOI_COLUMN_NAME,], time_column_name: str = utility.TIME_COLUMN_NAME):
+    # Perform deep copy of df_result
+    df_result = df_result.copy(deep=True)  # Create an independent deep copy
     if isinstance(df_result, pd.DataFrame) and df_result.index.name == time_column_name:
         df_result = df_result.reset_index()
         df_result.rename(columns={df_result.index.name: time_column_name}, inplace=True)
