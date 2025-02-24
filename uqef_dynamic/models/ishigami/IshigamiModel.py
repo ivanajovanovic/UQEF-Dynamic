@@ -63,6 +63,7 @@ class IshigamiModel(TimeDependentModel):
     def _timespan_setup(self, **kwargs):
         self.t = self.t_sol = [0.0, ]
         self.t_starting = self.t_final = self.t_interest = 0.0
+        self.simulation_range = self.t
 
     # def timesteps(self):
     #     return self.t

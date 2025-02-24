@@ -253,6 +253,23 @@ class HBVSASKModel(object):
                 self.streamflow_column_name = self.qoi_column_measured
 
         #####################################
+        # Parameters related set-up part
+        #####################################
+        # TODO Move this to HBVSASKModelConfigurations eventually
+        self.nodeNames = [] # list of uncertain parameter names
+        try:
+            list_of_parameters = self.configurationObject["parameters"]
+        except KeyError as e:
+            print(f"Statistics: parameters key does "
+                  f"not exists in the configurationObject{e}")
+            raise
+        for i in list_of_parameters:
+            if self.uq_method == "ensemble" or i["distribution"] != "None":
+                self.nodeNames.append(i["name"])
+        self.dim = len(self.nodeNames)  # this should be equal to number of uncertain parameters and dim = simulationNodes.distNodes.shape[0]
+        self.labels = [nodeName.strip() for nodeName in self.nodeNames]
+
+        #####################################
 
         self._timespan_setup(**kwargs)
         self._input_and_measured_data_setup(time_column_name=self.time_column_name,
@@ -631,6 +648,13 @@ class HBVSASKModel(object):
         printing = kwargs.get("printing", self.printing)
         corrupt_forcing_data = kwargs.get("corrupt_forcing_data", self.corrupt_forcing_data)
 
+        evaluate_surrogate = kwargs.get("evaluate_surrogate", False)
+        surrogate_model = kwargs.get("surrogate_model", None)
+        if evaluate_surrogate and surrogate_model is not None:
+            single_qoi_column_surrogate = kwargs.get("single_qoi_column_surrogate", None)
+            if single_qoi_column_surrogate is None:
+                single_qoi_column_surrogate = self.list_qoi_column[0]
+
         # TODO Think if merge_output_with_measured_data should always be True
         merge_output_with_measured_data = kwargs.get("merge_output_with_measured_data", False)
         # TODO - add an extra opion when autoregressive_model_first_order is set to True to choose between measred data and previous model output
@@ -721,8 +745,8 @@ class HBVSASKModel(object):
             )
 
             if printing:
-                print(f"[HVBSASK INFO] {i_s} parameters_dict - {parameters_dict} \n")
-            else:
+                print(f"[HVBSASK INFO] {unique_run_index} parameters_dict - {parameters_dict} \n")
+            # else:
                 print(f"model execution run id - {unique_run_index}...")
 
             start = time.time()
@@ -736,19 +760,23 @@ class HBVSASKModel(object):
 
             # Running the model
             try:
-                flux, state = hbv.HBV_SASK(
-                    forcing=forcing,
-                    long_term=long_term,
-                    par_values_dict=parameters_dict,
-                    initial_condition_df=initial_condition_df,
-                    printing=False,
-                    time_column_name=self.time_column_name,
-                    precipitation_column_name=self.precipitation_column_name,
-                    temperature_column_name=self.temperature_column_name,
-                    long_term_precipitation_column_name=self.long_term_precipitation_column_name,
-                    long_term_temperature_column_name=self.long_term_temperature_column_name,
-                    corrupt_forcing_data=corrupt_forcing_data
-                )
+                if evaluate_surrogate and surrogate_model is not None:
+                    flux = surrogate_model(parameter)
+                    state = None
+                else:
+                    flux, state = hbv.HBV_SASK(
+                        forcing=forcing,
+                        long_term=long_term,
+                        par_values_dict=parameters_dict,
+                        initial_condition_df=initial_condition_df,
+                        printing=False,
+                        time_column_name=self.time_column_name,
+                        precipitation_column_name=self.precipitation_column_name,
+                        temperature_column_name=self.temperature_column_name,
+                        long_term_precipitation_column_name=self.long_term_precipitation_column_name,
+                        long_term_temperature_column_name=self.long_term_temperature_column_name,
+                        corrupt_forcing_data=corrupt_forcing_data
+                    )
             except:
                 if raise_exception_on_model_break:
                     raise Exception(f"Model broke for unique_run_index {unique_run_index}")
@@ -763,13 +791,17 @@ class HBVSASKModel(object):
                     results_array.append((result_dict, runtime))
                     continue
 
-            assert len(list(time_series_list)) == len(flux["Q_cms"]), "Error in HBVSASKModel - flux and time_series_list have different lengths"
             ######################################################################################################
             # Processing model output
             ######################################################################################################
 
             # Create a final df - flux
-            flux_df = self._create_flux_df(flux, time_series_list)
+            if evaluate_surrogate and surrogate_model is not None:
+                flux_df = self._create_flux_df_from_surrogate_run(flux, \
+                    time_series_list=time_series_list, single_qoi_column=single_qoi_column_surrogate)
+            else:
+                assert len(list(time_series_list)) == len(flux["Q_cms"]), "Error in HBVSASKModel - flux and time_series_list have different lengths"
+                flux_df = self._create_flux_df(flux, time_series_list)
 
             if corrupt_forcing_data and "precipitation" in flux:
                 flux_df['precipitation'] = flux["precipitation"]
@@ -780,19 +812,20 @@ class HBVSASKModel(object):
             flux_df = flux_df[flux_df.index.isin(simulation_range)]  # Sample only the simulation_range
 
             # Create a final df - state
-            last_date = time_series_list[-1]
-            time_series_list_plus_one_day = time_series_list.copy()
-            # time_series_list_plus_one_day.append(pd.to_datetime(last_date) + pd.DateOffset(days=1))
-            time_series_list_plus_one_day.append(pd.to_datetime(last_date) + pd.Timedelta(days=1))
-            state_df = pd.DataFrame(
-                list(zip(time_series_list_plus_one_day, state["SWE"], state["SMS"], state["S1"], state["S2"])),
-                columns=[self.time_column_name, 'SWE', 'SMS', 'S1', 'S2', ]
-            )
-            state_df['WatershedArea_km2'] = self.initial_condition_df["WatershedArea_km2"].values[0]
-            state_df['Index_run'] = unique_run_index
-            # Parse state_df between start_date_predictions, end_date + 1
-            state_df.set_index(self.time_column_name, inplace=True)
-            state_df = state_df[start_date_predictions:]  #  state_df = state_df[simulation_range]
+            if state_df is not None:
+                last_date = time_series_list[-1]
+                time_series_list_plus_one_day = time_series_list.copy()
+                # time_series_list_plus_one_day.append(pd.to_datetime(last_date) + pd.DateOffset(days=1))
+                time_series_list_plus_one_day.append(pd.to_datetime(last_date) + pd.Timedelta(days=1))
+                state_df = pd.DataFrame(
+                    list(zip(time_series_list_plus_one_day, state["SWE"], state["SMS"], state["S1"], state["S2"])),
+                    columns=[self.time_column_name, 'SWE', 'SMS', 'S1', 'S2', ]
+                )
+                state_df['WatershedArea_km2'] = self.initial_condition_df["WatershedArea_km2"].values[0]
+                state_df['Index_run'] = unique_run_index
+                # Parse state_df between start_date_predictions, end_date + 1
+                state_df.set_index(self.time_column_name, inplace=True)
+                state_df = state_df[start_date_predictions:]  #  state_df = state_df[simulation_range]
     
             # Append measured data to flux_df, i.e., merge flux_df and self.time_series_measured_data_df[self.qoi_column_measured]
             if merge_output_with_measured_data:
@@ -984,8 +1017,9 @@ class HBVSASKModel(object):
             if writing_results_to_a_file and curr_working_dir is not None:
                 file_path = curr_working_dir / f"flux_df_{unique_run_index}.pkl"
                 flux_df.to_pickle(file_path, compression="gzip")
-                file_path = curr_working_dir / f"state_df_{unique_run_index}.pkl"
-                state_df.to_pickle(file_path, compression="gzip")
+                if state_df is not None:
+                    file_path = curr_working_dir / f"state_df_{unique_run_index}.pkl"
+                    state_df.to_pickle(file_path, compression="gzip")
                 if index_run_and_parameters_dict is not None:  # TODO seems as parameters_dict is never None!
                     file_path = curr_working_dir / f"parameters_HBVSASK_run_{unique_run_index}.pkl"
                     with open(file_path, 'wb') as f:
@@ -1078,6 +1112,13 @@ class HBVSASKModel(object):
                      "ponding"]
         )
         # results.set_index(self.time_column_name, inplace=True)
+        return results
+
+    def _create_flux_df_from_surrogate_run(self, model_output_flux_array, time_series_list, single_qoi_column):
+        results = pd.DataFrame(
+            list(zip(time_series_list, model_output_flux_array)), 
+            columns=[self.time_column_name, single_qoi_column],
+            )
         return results
 
     def _dropna_from_df_and_update_simulation_range(self, df, update_simulation_range=False):

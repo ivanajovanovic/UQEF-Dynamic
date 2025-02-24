@@ -238,6 +238,11 @@ if __name__ == "__main__":
     # plt.title(title, loc='left')
     #plt.show()
 
+    # =================================
+    # this also happend in read_all_saved_uqef_dynamic_results_and_produce_dict_of_interest_single_qoi_single_timestamp
+    # when surrogate is a gpce model...
+    # =================================
+
     # Generating new samples to compare the gpce-based surrogate and the original model
     numSamples = 1000 #5**dim #10**dim  # Note: Big Memory problem when more than 10**4 points?
     rule = 'r'

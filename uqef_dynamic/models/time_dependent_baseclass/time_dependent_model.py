@@ -362,6 +362,9 @@ class TimeDependentModel(ABC, Model):
     def _get_full_time_span(self):
         raise NotImplementedError
 
+    def get_simulation_range(self):
+        return self.simulation_range
+        
     def prepare(self, *args, **kwargs):
         """
         This function should be used to prepare the model for the execution.
@@ -438,7 +441,15 @@ class TimeDependentModel(ABC, Model):
         printing = kwargs.get("printing", self.printing)
         plotting = kwargs.get("plotting", self.plotting)
 
+        evaluate_surrogate = kwargs.get("evaluate_surrogate", False)
+        surrogate_model = kwargs.get("surrogate_model", None)
+        if evaluate_surrogate and surrogate_model is not None:
+            single_qoi_column_surrogate = kwargs.get("single_qoi_column_surrogate", None)
+            if single_qoi_column_surrogate is None:
+                single_qoi_column_surrogate = self.list_qoi_column[0]
+
         results_array = []
+
         # parameter = None  # Initialize parameter here
         for ip in range(0, len(i_s)):  # for each piece of work
             start = time.time()
@@ -482,7 +493,15 @@ class TimeDependentModel(ABC, Model):
                 curr_working_dir = None
 
             try:
-                model_output = self._model_run(parameters_dict=parameters_dict)
+                if evaluate_surrogate and surrogate_model is not None:
+                    parameter = np.array(parameter).reshape(-1, 1)
+                    print(f"DEBUGGING parameter- {parameter}")
+                    print(f"DEBUGGING parameter.shape- {parameter.shape}")
+                    model_output = surrogate_model(parameter.T)[0]
+                    print(f"DEBUGGING surrogate model eval - {model_output}")
+                    print(f"DEBUGGING evaluate_surrogate.shape - {model_output.shape}")
+                else:
+                    model_output = self._model_run(parameters_dict=parameters_dict)
             except:
                 result_df = None
                 index_run_and_parameters_dict = {**id_dict, **parameters_dict, "successful_run": False}
@@ -616,16 +635,23 @@ class TimeDependentModel(ABC, Model):
         # if not any(self.list_read_measured_data):
         #     merge_output_with_measured_data = False
 
+        evaluate_surrogate = kwargs.get("evaluate_surrogate", False)
+        surrogate_model = kwargs.get("surrogate_model", None)
+        if evaluate_surrogate and surrogate_model is not None:
+            single_qoi_column_surrogate = kwargs.get("single_qoi_column_surrogate", None)
+            if single_qoi_column_surrogate is None:
+                single_qoi_column_surrogate = self.list_qoi_column[0]
+
         results_array = []
         for ip in range(0, len(i_s)):  # for each peace of work
-            i = i_s[ip]  # i is unique index run
+            unique_run_index = i_s[ip]  # i is unique index run
 
             if parameters is not None:
                 parameter = parameters[ip]
             else:
                 parameter = None  # an unaltered run will be executed
 
-            id_dict = {"index_run": i}
+            id_dict = {"index_run": unique_run_index}
 
             # this indeed represents the number of parameters considered to be uncertain, later on parameters_dict might
             # be extanded with fixed parameters that occure in configurationObject
@@ -644,7 +670,7 @@ class TimeDependentModel(ABC, Model):
             # create local directory for this particular run
             if self.workingDir is not None:
                 if createNewFolder:
-                    curr_working_dir = self.workingDir / f"run_{i}"
+                    curr_working_dir = self.workingDir / f"run_{unique_run_index}"
                     curr_working_dir.mkdir(parents=True, exist_ok=True)
                 else:
                     curr_working_dir = self.workingDir
@@ -652,8 +678,12 @@ class TimeDependentModel(ABC, Model):
                 curr_working_dir = None
 
             # Running the model
-            model_output, state = self._model_run(
-                par_values_dict=parameters_dict, printing=False, corrupt_forcing_data=corrupt_forcing_data)
+            if evaluate_surrogate and surrogate_model is not None:
+                model_output = surrogate_model(parameter)
+                state = None
+            else:
+                model_output, state = self._model_run(
+                    par_values_dict=parameters_dict, printing=False, corrupt_forcing_data=corrupt_forcing_data)
 
             ######################################################################################################
             # Processing model output
@@ -723,23 +753,23 @@ class TimeDependentModel(ABC, Model):
             results_array.append((result_dict, runtime))
 
             if writing_results_to_a_file and curr_working_dir is not None:
-                file_path = curr_working_dir / f"model_output_df_{i}.pkl"
+                file_path = curr_working_dir / f"model_output_df_{unique_run_index}.pkl"
                 model_output_df.to_pickle(file_path, compression="gzip")
-                file_path = curr_working_dir / f"state_df_{i}.pkl"
+                file_path = curr_working_dir / f"state_df_{unique_run_index}.pkl"
                 state_df.to_pickle(file_path, compression="gzip")
                 if index_run_and_parameters_dict is not None:  # TODO seems as parameters_dict is never None!
-                    file_path = curr_working_dir / f"parameters_run_{i}.pkl"
+                    file_path = curr_working_dir / f"parameters_run_{unique_run_index}.pkl"
                     with open(file_path, 'wb') as f:
                         dill.dump(index_run_and_parameters_dict, f)
 
                 # if self.calculate_GoF or self.qoi == "GoF":
                 # if condition_for_computing_index_parameter_gof_DF:
                 if index_parameter_gof_DF is not None:
-                    file_path = curr_working_dir / f"gof_{i}.pkl"
+                    file_path = curr_working_dir / f"gof_{unique_run_index}.pkl"
                     index_parameter_gof_DF.to_pickle(file_path, compression="gzip")
 
                 if self.compute_gradients and self.compute_active_subspaces and not len(gradient_matrix_dict) == 0:
-                    file_path = curr_working_dir / f"gradient_matrix_dict_run_{i}.pkl"
+                    file_path = curr_working_dir / f"gradient_matrix_dict_run_{unique_run_index}.pkl"
                     with open(file_path, 'wb') as f:
                         dill.dump(gradient_matrix_dict, f)
 
