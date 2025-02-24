@@ -108,7 +108,7 @@ def setup_nodes_via_config_file_or_parameters_file(
     return simulationNodes
 
 
-def compute_numpy_array_errors(results_array_surrogate_model, results_array_original_model):
+def compute_numpy_array_errors(results_array_surrogate_model, results_array_original_model, printing=False):
     """
     Compute various error metrics between the results of a surrogate model and the results of an original model.
 
@@ -135,9 +135,10 @@ def compute_numpy_array_errors(results_array_surrogate_model, results_array_orig
     # average L1 error per element
     mean_l1_error = np.mean(np.abs(error))
 
-    print(f"Overall errors: RMSE={overall_rmse}; linf={overall_linf};"
-    f"l2_scaled={overall_l2_scaled}; L2_error={l2_error}; L1_error={l1_error}; mean_L1_error={mean_l1_error}")
-    
+    if printing:
+        print(f"Overall errors: RMSE={overall_rmse}; linf={overall_linf};"
+        f"l2_scaled={overall_l2_scaled}; L2_error={l2_error}; L1_error={l1_error}; mean_L1_error={mean_l1_error}")
+        
     resul_dict = {}
     resul_dict['rmse_over_time'] = rmse_over_time
     resul_dict['overall_rmse'] = overall_rmse
@@ -152,6 +153,28 @@ def compute_numpy_array_errors(results_array_surrogate_model, results_array_orig
 def evaluate_chunk_model(problem_function, chunk):
     # return np.array([problem_function(parameter) for parameter in chunk])
     return np.array(problem_function(coordinates=chunk))
+
+
+def evaluate_chunk_model_run_function(problem_function, parameter, i_s, surrogate_object, single_qoi):
+    print(f"DEBUGGING evaluate_chunk_model_run_function:parameter.shape-{parameter.shape}")
+    print(f"DEBUGGING evaluate_chunk_model_run_function:i_s-{i_s}")
+    results_list = problem_function.run(
+        i_s=i_s, 
+        parameters=parameter, 
+        raise_exception_on_model_break=True,
+        evaluate_surrogate=True, 
+        surrogate_model=surrogate_object,
+        single_qoi_column_surrogate=single_qoi,
+    )
+    # results_list = problem_function.run(
+    #     i_s=[i_s,], 
+    #     parameters=[parameter,], 
+    #     raise_exception_on_model_break=True,
+    #     evaluate_surrogate=True, 
+    #     surrogate_model=surrogate_object,
+    #     single_qoi_column_surrogate=single_qoi,
+    # )
+    return results_list
 
 
 def main_routine(model, current_output_folder, **kwargs):
@@ -651,10 +674,10 @@ def main_routine(model, current_output_folder, **kwargs):
 
     if compare_surrogate_and_original_model_runs:
         # Compute the element-wise error
-        resul_dict = compute_numpy_array_errors(results_array_surrogate_model, results_array_original_model)
+        resul_dict = compute_numpy_array_errors(results_array_surrogate_model, results_array_original_model, printing=True)
         dictionary_with_inf_about_the_run.update(resul_dict)
         if results_array_intermediate_surrogate_model is not None:
-            resul_dict = compute_numpy_array_errors(results_array_intermediate_surrogate_model, results_array_original_model)
+            resul_dict = compute_numpy_array_errors(results_array_intermediate_surrogate_model, results_array_original_model, printing=True)
             resul_dict_update = {f"intermediate_{key}": value for key, value in resul_dict.items()}
             dictionary_with_inf_about_the_run.update(resul_dict_update)
    
@@ -783,6 +806,22 @@ def main_routine(model, current_output_folder, **kwargs):
     # Simulate
     start_time_evaluationg_surrogate = time.time()
     problem_function.uq_method = uq_method
+    ## multiprocessing
+    # list_of_unique_index_runs =range(parameters.T.shape[0])
+    # num_cores = multiprocessing.cpu_count()
+    # parameter_chunks = np.array_split(parameters.T, num_cores)
+    # list_of_unique_index_runs_chunks = np.array_split(list_of_unique_index_runs, num_cores)
+    # list_of_unique_index_runs_chunks = [chunk.tolist() for chunk in list_of_unique_index_runs_chunks]
+    # surrogate_object_chunks = [surrogate_object]*num_cores
+    # results_list = []
+    # def process_nodes_concurrently(parameter_chunks):
+    #     with multiprocessing.Pool(processes=num_cores) as pool:
+    #         for result in pool.starmap(evaluate_chunk_model_run_function, \
+    #             [(problem_function, parameter, i_s, surrogate_object, problem_function.single_qoi) for (parameter, i_s) in zip(parameter_chunks, list_of_unique_index_runs_chunks)]):
+    #             yield result
+    # for result in process_nodes_concurrently(parameter_chunks):
+    #     results_list.append(result)
+    ## version withour parallelization
     results_list = problem_function.run(
         i_s=range(parameters.T.shape[0]), 
         parameters=parameters.T, 
@@ -791,10 +830,12 @@ def main_routine(model, current_output_folder, **kwargs):
         surrogate_model=surrogate_object,
         single_qoi_column_surrogate=problem_function.single_qoi,
     )
-    print(f"DEBUGGING - results_list evaluating combiinstance surrogate model model={results_list}")
+
+    # print(f"DEBUGGING - results_list evaluating combiinstance surrogate model model={results_list}")
     end_time_evaluationg_surrogate = time.time()
     time_evaluationg_intermediate_surrogate  = end_time_evaluationg_surrogate - start_time_evaluationg_surrogate
     dictionary_with_inf_about_the_run_uqef["time_evaluationg_intermediate_surrogate"] = time_evaluationg_intermediate_surrogate
+    print(f"time_evaluationg_intermediate_surrogate={dictionary_with_inf_about_the_run_uqef['time_evaluationg_intermediate_surrogate']}\n")
 
     start_time_evalauting_original_model_uqef = time.time()
     results_list_original_model = problem_function.run(
@@ -802,10 +843,11 @@ def main_routine(model, current_output_folder, **kwargs):
         parameters=parameters.T, 
         raise_exception_on_model_break=True,
     )
-    print(f"DEBUGGING - results_list_original_model evaluating combiinstance surrogate model model={results_list_original_model}")
+    # print(f"DEBUGGING - results_list_original_model evaluating combiinstance surrogate model model={results_list_original_model}")
     end_time_evalauting_original_model_uqef = time.time()
     time_evalauting_original_model_uqef = end_time_evalauting_original_model_uqef - start_time_evalauting_original_model_uqef
     dictionary_with_inf_about_the_run_uqef["time_evalauting_original_model_uqef"] = time_evalauting_original_model_uqef
+    print(f"time_evalauting_original_model_uqef={dictionary_with_inf_about_the_run_uqef['time_evalauting_original_model_uqef']}\n")
 
     # Statistics
     problem_statistics = None
@@ -828,8 +870,9 @@ def main_routine(model, current_output_folder, **kwargs):
     start_time_computing_statistics = time.time()
     # uqsim.prepare_statistics()
     # uqsim.calc_statistics()
+    rawSamples = [single_results_dict for (single_results_dict, _) in results_list]
     if problem_statistics is not None:
-        problem_statistics.prepare(results_list)
+        problem_statistics.prepare(rawSamples)
         if uq_method == "mc":
             numEvaluations = nodes.shape[1] # simulationNodes.numSamples
             problem_statistics.prepareForMcStatistics(
@@ -872,6 +915,7 @@ def main_routine(model, current_output_folder, **kwargs):
     end_time_computing_statistics = time.time()
     time_computing_statistics = end_time_computing_statistics - start_time_computing_statistics
     dictionary_with_inf_about_the_run_uqef["time_computing_statistics"] = time_computing_statistics
+    print(f"time_computing_statistics={dictionary_with_inf_about_the_run_uqef['time_computing_statistics']}\n")
 
     dictionary_with_inf_about_the_run.update(dictionary_with_inf_about_the_run_uqef)
 

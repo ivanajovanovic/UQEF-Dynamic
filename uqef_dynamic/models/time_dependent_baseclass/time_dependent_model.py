@@ -495,11 +495,7 @@ class TimeDependentModel(ABC, Model):
             try:
                 if evaluate_surrogate and surrogate_model is not None:
                     parameter = np.array(parameter).reshape(-1, 1)
-                    print(f"DEBUGGING parameter- {parameter}")
-                    print(f"DEBUGGING parameter.shape- {parameter.shape}")
                     model_output = surrogate_model(parameter.T)[0]
-                    print(f"DEBUGGING surrogate model eval - {model_output}")
-                    print(f"DEBUGGING evaluate_surrogate.shape - {model_output.shape}")
                 else:
                     model_output = self._model_run(parameters_dict=parameters_dict)
             except:

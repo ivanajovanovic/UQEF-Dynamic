@@ -229,7 +229,7 @@ def read_output_files_uqef_dynamic(workingDir, printing=False, **kwargs):
     # whatch-out this might be tricky when not all params are regarded as uncertain!
     param_labeles = utility.get_list_of_uncertain_parameters_from_configuration_dict(
         configurationObject, raise_error=True, uq_method=uqsim_args_dict["uq_method"])
-    if dim is not None:
+    if dim is None:
         dim = len(param_labeles)
         results_dict["dim"]=dim
     #print(f"Debugging - params_list: {params_list}; simulationNodes.nodeNames: {simulationNodes.nodeNames}; param_labeles: {param_labeles}")    
