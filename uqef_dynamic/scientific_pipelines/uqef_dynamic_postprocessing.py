@@ -550,7 +550,7 @@ def main(workingDir=None, inputModelDir=None, directory_for_saving_plots=None,
             # time_computing_statistics, parameterNames, stochasticParameterNames, number_full_model_evaluations, 
             # full_number_quadrature_points, ...
             for key, value in results_dict.items():
-                print(f"DEBUGGING {key}-{value}")
+                # print(f"DEBUGGING {key}-{value}")
                 # globals()[key] = value
                 # locals()[key] = value
                 workingDir = results_dict['workingDir']
@@ -861,6 +861,8 @@ def main(workingDir=None, inputModelDir=None, directory_for_saving_plots=None,
             print(f"Done with recomputing the statistics...")
             dict_with_time_info["time_paralle_statistics_recomputation"] = end_time_recompute_statistics - start_time_recompute_statistics
 
+    # ============================
+
     # TODO This will change in case workingDir is a list
     if reevaluate_original_model:
         if rank == 0:
@@ -900,6 +902,8 @@ def main(workingDir=None, inputModelDir=None, directory_for_saving_plots=None,
         #     if surrogate_type=='pce':
         #         print(f"Reevaluating the surrogate model...")
         #         # TODO Populate all_results_surrogate_evaluated
+
+    # ============================
 
     if reevaluate_surrogate:  #and not reevaluate_original_model
         if rank == 0:
@@ -963,6 +967,7 @@ def main(workingDir=None, inputModelDir=None, directory_for_saving_plots=None,
         if reevaluate_original_model and reevaluate_surrogate and df_model_reevaluated is not None:
             compare_surrogate_and_original_model_runs = True
 
+        dict_with_errors_over_qois = {}
         if reevaluate_surrogate:
             if surrogate_type=='pce':
                 combined_results = {single_qoi:{} for single_qoi in list_qois} #defaultdict(dict, {single_qoi:{} for single_qoi in list_qois})
@@ -1004,7 +1009,6 @@ def main(workingDir=None, inputModelDir=None, directory_for_saving_plots=None,
                 raise Exception(f"Sorry, the surrogate type {surrogate_type} is not implemented; it can be either 'pce' or 'kl+pce'!")
                 
             # Create a new DataFrame with the evaluated surrogate model
-            dict_with_errors_over_qois = {}
             list_of_single_qoi_dfs = []
             for single_qoi in list_qois:
                 # create a df from surrogate_evaluated_dict_over_qois[single_qoi] (dictionary over dates) containing the following columns:
@@ -1762,7 +1766,7 @@ if __name__ == '__main__':
     recompute_gpce = False
     recompute_statistics = False
     reevaluate_original_model = True 
-    reevaluate_surrogate = True
+    reevaluate_surrogate = False
     recompute_sobol_indices = False
     recompute_generalized_sobol_indices = False
 

@@ -95,6 +95,8 @@ def read_output_files_uqef_dynamic(workingDir, printing=False, **kwargs):
         globals()[key] = value
 
     # Load the UQSim args dictionary
+    if not args_file.is_file():
+        raise Error(f"File {args_file} is missing!")
     uqsim_args_dict = utility.load_uqsim_args_dict(args_file)
     if printing:
         print("INFO: uqsim_args_dict: ", uqsim_args_dict)
@@ -110,6 +112,8 @@ def read_output_files_uqef_dynamic(workingDir, printing=False, **kwargs):
     inputModelDir = uqsim_args_dict["inputModelDir"]
 
     # Load the configuration object
+    if not configuration_object_file.is_file():
+        raise Error(f"File {configuration_object_file} is missing!")
     configurationObject = utility.load_configuration_object(configuration_object_file)
     if printing:
         print("configurationObject: ", configurationObject)
@@ -127,16 +131,19 @@ def read_output_files_uqef_dynamic(workingDir, printing=False, **kwargs):
     # Reading Nodes and Parameters
     if not nodes_file.is_file():
         print(f"INFO: simulationNodes file {nodes_file} is missing!!!")
-    with open(nodes_file, 'rb') as f:
-        simulationNodes = pickle.load(f)
-    if printing:
-        print("INFO: simulationNodes: ", simulationNodes)
-    dim = simulationNodes.distNodes.shape[0]
-    # number_model_runs = simulationNodes.nodes.shape[1]  # this is actually, not a final number of model runs for saltelli's simulation
-    distStandard = simulationNodes.joinedStandardDists
-    dist = simulationNodes.joinedDists
-    if printing:
-        print(f"INFO: model-{model}; dim - {dim};")
+        simulationNodes = None
+        distStandard  = None
+        dist = None
+        dim = None
+    else:
+        with open(nodes_file, 'rb') as f:
+            simulationNodes = pickle.load(f)
+        if printing:
+            print("INFO: simulationNodes: ", simulationNodes)
+        dim = simulationNodes.distNodes.shape[0]
+        # number_model_runs = simulationNodes.nodes.shape[1]  # this is actually, not a final number of model runs for saltelli's simulation
+        distStandard = simulationNodes.joinedStandardDists
+        dist = simulationNodes.joinedDists
 
     results_dict["workingDir"]=workingDir
     results_dict["args_files"]=args_files
@@ -206,6 +213,7 @@ def read_output_files_uqef_dynamic(workingDir, printing=False, **kwargs):
     # Update dict with results of interest based on uqsim_args_dict - add variant, q_order, mc_numevaluations
     update_dict_with_results_of_interest_based_on_uqsim_args_dict(results_dict, uqsim_args_dict)
     
+    # ========================================================
     # Extra Timing information
     if time_info is not None:
         for line in time_info:
@@ -221,9 +229,15 @@ def read_output_files_uqef_dynamic(workingDir, printing=False, **kwargs):
     # whatch-out this might be tricky when not all params are regarded as uncertain!
     param_labeles = utility.get_list_of_uncertain_parameters_from_configuration_dict(
         configurationObject, raise_error=True, uq_method=uqsim_args_dict["uq_method"])
+    if dim is not None:
+        dim = len(param_labeles)
+        results_dict["dim"]=dim
     #print(f"Debugging - params_list: {params_list}; simulationNodes.nodeNames: {simulationNodes.nodeNames}; param_labeles: {param_labeles}")    
     # results_dict["parameterNames"] = params_list  #not simulationNodes.nodeNames, instead better simulationNodes.orderdDistsNames
     results_dict["stochasticParameterNames"] = param_labeles
+
+    if printing:
+        print(f"INFO: model-{model}; dim - {dim};")
 
     simulation_parameters_file = args_files["simulation_parameters_file"]
     if df_simulation_result is not None:
@@ -232,11 +246,12 @@ def read_output_files_uqef_dynamic(workingDir, printing=False, **kwargs):
         simulation_parameters = np.load(simulation_parameters_file,  allow_pickle=True)
         #print(f"Debugging - simulation_parameters.shape: {simulation_parameters.shape}")
         results_dict["number_full_model_evaluations"] = simulation_parameters.shape[0]
+    elif uqsim_args_dict["uq_method"]!="saltelli" and simulationNodes is not None:
+        results_dict["number_full_model_evaluations"] = simulationNodes.nodes.shape[1]
+    elif uqsim_args_dict["uq_method"]=="saltelli":
+        results_dict["number_full_model_evaluations"] = (uqsim_args_dict["mc_numevaluations"]) * (2 + dim)
     else:
-        if uqsim_args_dict["uq_method"]!="saltelli":
-            results_dict["number_full_model_evaluations"] = simulationNodes.nodes.shape[1]
-        else:
-            results_dict["number_full_model_evaluations"] = (uqsim_args_dict["mc_numevaluations"]) * (2 + dim)
+        results_dict["number_full_model_evaluations"] = None
 
     if results_dict["variant"] not in ["m1", "m2"]:
         results_dict["full_number_quadrature_points"] = \
@@ -365,14 +380,15 @@ timestamp, qoi_column_name=None, time_column_name=utility.TIME_COLUMN_NAME, plot
     simulation_settings_dict = utility.read_simulation_settings_from_configuration_object(configurationObject)
 
     # Timing information
-    with open(time_info_file) as f:
-        lines = f.readlines()
-        for line in lines:
-            #print(line)
-            if line.startswith("time_model_simulations"):
-                dict_with_results_of_interest["time_model_simulations"] = line.split(':')[1].strip()
-            elif line.startswith("time_computing_statistics"):
-                dict_with_results_of_interest["time_computing_statistics"] = line.split(':')[1].strip()
+    if time_info_file.is_file():
+        with open(time_info_file) as f:
+            lines = f.readlines()
+            for line in lines:
+                #print(line)
+                if line.startswith("time_model_simulations"):
+                    dict_with_results_of_interest["time_model_simulations"] = line.split(':')[1].strip()
+                elif line.startswith("time_computing_statistics"):
+                    dict_with_results_of_interest["time_computing_statistics"] = line.split(':')[1].strip()
 
     ########################################################
     # Reading Simulation Nodes / Parameters
@@ -613,6 +629,9 @@ timestamp, qoi_column_name=None, time_column_name=utility.TIME_COLUMN_NAME, plot
 
         # TODO Check if file with data on comparison of surrogate and full model already exists
 
+        ########################################################
+        # TODO Hmm, it is a question if this fits here... is this a function for reading saved data or for producing some new results...
+        ########################################################
         compare_surrogate_and_original_model = kwargs.get('compare_surrogate_and_original_model', False)
 
         if 'gPCE' in statistics_dictionary:
@@ -686,11 +705,13 @@ timestamp, qoi_column_name=None, time_column_name=utility.TIME_COLUMN_NAME, plot
                 print("Comparison of surrogate and full model is not performed becuase, either (an original) model is not provided or gpce_surrogate is None \
                 or compare_surrogate_and_original_model variable was set to False!")
 
-    ########################################################
-
     return dict_with_results_of_interest
 
+########################################################
+
+
 def update_dict_with_method_variant_based_on_uqsim_args_dict(dict_with_results_of_interest, uqsim_args_dict):
+    # TODO Extand with SparseSpace story
     variant = None
     if uqsim_args_dict["regression"]:
         variant = "m3"
@@ -745,6 +766,7 @@ def update_dict_with_results_of_interest_based_on_uqsim_args_dict(dict_with_resu
     Add new entries to the dict_with_results_of_interest:
     - variant
     """
+    # TODO Extand with SparseSpace story
     variant = None
     dict_with_results_of_interest["regression"] = uqsim_args_dict["regression"]
     dict_with_results_of_interest["uq_method"] = uqsim_args_dict["uq_method"]

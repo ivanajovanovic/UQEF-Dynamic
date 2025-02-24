@@ -92,7 +92,10 @@ directory_for_saving_plots='./', do_plot=True,  **kwargs):
         b = np.ones(dim)
 
     # reference integral solution for calculating errors - if available
-    reference_solution = model.getAnalyticSolutionIntegral(a,b)
+    try:
+        reference_solution = model.getAnalyticSolutionIntegral(a,b)
+    except NotImplementedError:
+        reference_solution = None
 
     # Grid
     modified_basis = kwargs.get('modified_basis', False)
@@ -124,8 +127,10 @@ directory_for_saving_plots='./', do_plot=True,  **kwargs):
         raise Exception(f"{grid_type} yet not supported!")
     
     # Operation
-    operation = Integration(f=model, grid=grid, dim=dim, reference_solution=reference_solution)  # there is Interpolation(Integration)
-    # operation = Integration(f=model, grid=grid, dim=dim)  # there is Interpolation(Integration)
+    if reference_solution is not None:
+        operation = Integration(f=model, grid=grid, dim=dim, reference_solution=reference_solution)  # there is Interpolation(Integration)
+    else:
+        operation = Integration(f=model, grid=grid, dim=dim)  # there is Interpolation(Integration)
 
     scheme = None
     refinement = None
