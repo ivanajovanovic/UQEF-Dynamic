@@ -52,6 +52,7 @@ from uqef_dynamic.utils import sens_indices_sampling_based_utils
 TIME_COLUMN_NAME="TimeStamp"
 INDEX_COLUMN_NAME = "Index_run"
 QOI_COLUMN_NAME = "Value"  # "model"
+GOF = "GOF"
 QOI_COLUMN_NAME_CENTERED = QOI_COLUMN_NAME + "_centered"
 
 ARGS_FILE = 'uqsim_args.pkl'
@@ -207,7 +208,7 @@ def get_home_directory():
 ###################################################################################################################
 
 
-def get_dict_with_qoi_name_specific_output_file_paths_based_on_workingDir(workingDir, qoi_string="Value", **kwargs):
+def get_dict_with_qoi_name_specific_output_file_paths_based_on_workingDir(workingDir, qoi_string=QOI_COLUMN_NAME, **kwargs):
     statistics_dictionary_file = workingDir / f"statistics_dictionary_qoi_{qoi_string}.pkl"
     f_kl_surrogate_coefficients_file = workingDir / f"f_kl_surrogate_coefficients_{qoi_string}.npy"
     f_kl_surrogate_df_file = workingDir / f"f_kl_surrogate_df_{qoi_string}.pkl"
@@ -227,7 +228,7 @@ def get_dict_with_qoi_name_specific_output_file_paths_based_on_workingDir(workin
         }
 
 
-def get_dict_with_qoi_name_timestamp_specific_output_file_paths_based_on_workingDir(workingDir, qoi_string="Value", timestamp=0.0, **kwargs):
+def get_dict_with_qoi_name_timestamp_specific_output_file_paths_based_on_workingDir(workingDir, qoi_string=QOI_COLUMN_NAME, timestamp=0.0, **kwargs):
     gpce_surrogate_file = workingDir / f"gpce_surrogate_{qoi_string}_{timestamp}.pkl"
     gpce_coeffs_file = workingDir / f"gpce_coeffs_{qoi_string}_{timestamp}.npy"
     generalized_sobol_indices_file = workingDir / f"generalized_sobol_indices_{qoi_string}_{timestamp}.pkl"
@@ -238,13 +239,13 @@ def get_dict_with_qoi_name_timestamp_specific_output_file_paths_based_on_working
         }
 
 
-def get_dict_with_output_file_paths_based_on_workingDir(workingDir, qoi_string="Value", **kwargs):
+def get_dict_with_output_file_paths_based_on_workingDir(workingDir, qoi_string=QOI_COLUMN_NAME, **kwargs):
     """
     Returns a dictionary containing output file paths based on the working directory.
 
     Parameters:
     - workingDir (str): The working directory.
-    - qoi_string (str): The quality of interest string. Default is "Value".
+    - qoi_string (str): The quality of interest string. Default is QOI_COLUMN_NAME="Value".
     - **kwargs: Additional keyword arguments.
 
     Returns:
@@ -301,13 +302,13 @@ def get_dict_with_output_file_paths_based_on_workingDir(workingDir, qoi_string="
     }
 
 
-def update_output_file_paths_based_on_workingDir(workingDir, qoi_string="Value", **kwargs):
+def update_output_file_paths_based_on_workingDir(workingDir, qoi_string=QOI_COLUMN_NAME, **kwargs):
     """
     Update the output file paths based on the working directory.
 
     Args:
         workingDir (str): The working directory.
-        qoi_string (str, optional): The quality of interest string. Defaults to "Value".
+        qoi_string (str, optional): The quality of interest string. Defaults to QOI_COLUMN_NAME="Value".
         **kwargs: Additional keyword arguments for specifying file paths.
 
     Returns:
@@ -364,7 +365,7 @@ class UQOutputPaths(object):
         self.workingDir = workingDir
         self._update_other_paths_based_on_workingDir(workingDir)
 
-    def _update_other_paths_based_on_workingDir(self, workingDir, qoi_string="Value", **kwargs):
+    def _update_other_paths_based_on_workingDir(self, workingDir, qoi_string=QOI_COLUMN_NAME, **kwargs):
         # 'global' files
 
         self.nodes_file = workingDir / kwargs.get("nodes_file", NODES_FILE)
@@ -1145,7 +1146,7 @@ def handle_multiple_qoi(qoi, qoi_column, result_dict):
     """
     multiple_qoi = False
     number_of_qois = 1
-    if (isinstance(qoi, list) and isinstance(qoi_column, list)) or (qoi == "GoF" and isinstance(qoi_column, list)):
+    if (isinstance(qoi, list) and isinstance(qoi_column, list)) or (qoi == GOF and isinstance(qoi_column, list)):
         multiple_qoi = True
         number_of_qois = len(qoi_column)
     return multiple_qoi, number_of_qois
@@ -1191,7 +1192,7 @@ def read_simulation_settings_from_configuration_object_refactored(configurationO
     if "qoi_column" in kwargs:
         qoi_column = kwargs['qoi_column']
     else:
-        qoi_column = dict_config_simulation_settings.get("qoi_column", "Value")
+        qoi_column = dict_config_simulation_settings.get("qoi_column", QOI_COLUMN_NAME)
     result_dict["qoi_column"] = qoi_column
 
     multiple_qoi, number_of_qois = handle_multiple_qoi(qoi, qoi_column, result_dict)
@@ -1257,14 +1258,14 @@ def read_simulation_settings_from_configuration_object(configurationObject: Unio
     if "qoi_column" in kwargs:
         qoi_column = kwargs['qoi_column']
     else:
-        qoi_column = dict_config_simulation_settings.get("qoi_column", "Value")
+        qoi_column = dict_config_simulation_settings.get("qoi_column", QOI_COLUMN_NAME)
     result_dict["qoi_column"] = qoi_column
 
     # temp = result_dict["qoi_column"]
 
     # multiple_qoi = False
     # number_of_qois = 1
-    # if (isinstance(qoi, list) and isinstance(qoi_column, list)) or (qoi == "GoF" and isinstance(qoi_column, list)):
+    # if (isinstance(qoi, list) and isinstance(qoi_column, list)) or (qoi == GOF and isinstance(qoi_column, list)):
     #     multiple_qoi = True
     #     number_of_qois = len(qoi_column)
     # result_dict["multiple_qoi"] = multiple_qoi
@@ -1366,7 +1367,7 @@ def read_simulation_settings_from_configuration_object(configurationObject: Unio
     objective_function_names_qoi = None
     list_objective_function_qoi = None
     list_objective_function_names_qoi = None
-    if result_dict["qoi"] == "GoF":
+    if result_dict["qoi"] == GOF:
         # take only those Outputs of Interest that have measured data
         if result_dict["multiple_qoi"]:
             updated_qoi_column = []
@@ -1407,7 +1408,7 @@ def read_simulation_settings_from_configuration_object(configurationObject: Unio
     result_dict["list_objective_function_names_qoi"] = list_objective_function_names_qoi
 
     # Create a list version of some configuration parameters which might be needed when computing GoF
-    # if self.qoi.lower() == "gof" or self.calculate_GoF:
+    # if self.qoi.lower() == GOF.lower() or self.calculate_GoF:
     if not isinstance(qoi_column, list):
         list_qoi_column = [qoi_column, ]
     else:
