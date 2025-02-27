@@ -26,7 +26,7 @@ from sparseSpACE.RefinementContainer import RefinementContainer
 from sparseSpACE.RefinementObject import RefinementObject
 from sparseSpACE.Utils import *
 
-class UncertaintyQuantificationREfactored(Integration):
+class UncertaintyQuantificationREfactored(Integration):  #UncertaintyQuantificationREfactored(UncertaintyQuantification)
     # TODO Ivana - get_result what does it return ?
     # The constructor resembles Integration's constructor;
     # it has an additional parameter:
@@ -416,8 +416,8 @@ def set_up_filenames_for_printing_spatially_adaptive(combiObject, do_plot, direc
         combiObject.filename_sparse_grid_plot = filename_sparse_grid_plot
 
 
-def sparsespace_integration_pipeline(a, b, model=None, dim=2, 
-grid_type='trapezoidal', method='standard_combi',
+def sparsespace_pipeline(a, b, model=None, dim=2, 
+grid_type: str='trapezoidal', method: str='standard_combi', operation_str: str='integration',
 directory_for_saving_plots='./', do_plot=True,  **kwargs):
     """
     Var 2 - Compute gPCE coefficients by integrating the (SG) surrogate
@@ -426,17 +426,18 @@ directory_for_saving_plots='./', do_plot=True,  **kwargs):
     :param a: lower bounds of the integration domain
     :param b: upper bounds of the integration domain
     :param model: SparseSpACE function - an object with evaluation operator!
+    :param operation_str: operation to perform; supported operations: 'integration', 'uq'/'uncertainty quantification'
     :param dim: dimension of the model
     :param grid_type: type of grid to use for sparse grid construction
-                    Supported grid types: 'trapezoidal', 'chebyshev', 'leja', 'bspline_p3'
-                    For spetical adaptive single dimensions algorithm: 'globa_trapezoidal', 'trapezoidal' and 'bspline_p3'
+                    Supported grid types: 'trapezoidal', 'chebyshev', 'leja', 'bspline_p3', 'gauss_legendre', 'gauss_hermite'
+                    For spatial adaptive single dimensions algorithm: 'globa_trapezoidal', 'trapezoidal' and 'bspline_p3',  'gauss_legendre', 'gauss_hermite'
     :param method: combination technique to use for sparse grid construction
                     Supported methods: 'standard_combi', 'dim_adaptive_combi', 'dim_wise_spat_adaptive_combi'
     :param directory_for_saving_plots: directory for saving plots
     :param do_plot: flag indicating whether to generate plots or not
     :param kwargs: optional keyword arguments
     
-    Optional Keyword Arguments:
+    Optional Keyword Arguments propagated via kwargs:
         minimum_level: minimum level of the grid; Default: 1
         maximum_level: maximum level of the grid; Default: 3
         modified_basis: flag indicating whether to use modified basis or not; Default: False
@@ -451,6 +452,8 @@ directory_for_saving_plots='./', do_plot=True,  **kwargs):
                          ; if None then GlobalTrapezoidalGrid is used to compute surpluses; Options: None | 'grid'; Default: 'grid'
         max_evaluations: maximum number of evaluations for spatially adaptive single dimensions algorithm; Default: 100
         tol: tolerance for spatially adaptive single dimensions algorithm; Default: 10**-6
+        distributions: Necessary for operation='uq'; distributions for uncertainty quantification; Default: None
+        polynomial_degree_max: maximum polynomial degree for PCE; Default: 2
         writing_results_to_a_file: flag indicating whether to write results to a file or not; Default: True
     
     :return: SparseSpACE combiObject, number of full model evaluations, dictionary with time information
@@ -472,6 +475,18 @@ directory_for_saving_plots='./', do_plot=True,  **kwargs):
     except NotImplementedError:
         reference_solution = None
 
+    operation_uq = False
+    if operation_str.lower() == "uq" or operation_str.lower() == "uncertainty quantification" or operation_str.lower() == "uncertaintyquantification" :
+        operation_uq = True
+        distributions = kwargs.get('distributions', None)
+        if distributions is None:
+            raise Exception(f"Distributions are required for operation={operation}!")
+
+    # Operation
+    operation = None
+    if operation_uq:
+        operation = UncertaintyQuantification(f=model, distributions=distributions, a=a, b=b, dim=dim, reference_solution=reference_solution)
+
     # Grid
     modified_basis = kwargs.get('modified_basis', False)
     boundary = kwargs.get('boundary', True)
@@ -481,12 +496,14 @@ directory_for_saving_plots='./', do_plot=True,  **kwargs):
             grid = GlobalBSplineGrid(a=a, b=b, modified_basis=modified_basis, boundary=boundary, p=p_bsplines)
         elif grid_type.lower() == 'globa_trapezoidal' or grid_type.lower() == 'trapezoidal':
             grid = GlobalTrapezoidalGrid(a=a, b=b, modified_basis=modified_basis, boundary=boundary)
-        elif grid_type.lower() == 'trapezoidal_weighted':
-            raise NotImplementedError
-            #     distributionsForSparseSpace = ..
-            #     operation_uq = UncertaintyQuantification(f=f, distributions=distributionsForSparseSpace, a=a, b=b, dim=dim)
-            #     grid = GlobalTrapezoidalGridWeighted(a=a, b=b, uq_operation=operation_uq,
-            #                                          modified_basis=modified_basis, boundary=boundary)
+        elif grid_type.lower() == 'trapezoidal_weighted' or (operation_uq and (grid_type.lower() == 'trapezoidal' or grid_type.lower() == 'global_trapezoidal')):
+            grid = GlobalTrapezoidalGridWeighted(a=a, b=b, uq_operation=operation, modified_basis=modified_basis, boundary=boundary)
+        elif grid_type.lower() == 'gauss_legendre':
+            raise Exception(f"{grid_type} is yet not supported when method={method}!")
+            # boundary = False
+            # grid = GaussLegendreGrid(a=a, b=b, normalize=True)  # TODO try with normalize=False what is default
+        elif grid_type.lower() == 'gauss_hermite':
+            raise Exception(f"{grid_type} is yet not supported when method={method}!")
         else:
             raise Exception(f"{grid_type} is yet not supported when method={method}!")
     elif grid_type.lower() == 'trapezoidal':
@@ -498,14 +515,32 @@ directory_for_saving_plots='./', do_plot=True,  **kwargs):
     elif grid_type.lower() == 'bspline_p3':
         p_bsplines = kwargs.get('p_bsplines', 3)
         grid = BSplineGrid(a=a, b=b, boundary=boundary, p=p_bsplines)
+    elif grid_type.lower() == 'gauss_legendre':
+        boundary = False
+        grid = GaussLegendreGrid(a=a, b=b, normalize=True)  # TODO try with normalize=False what is default
+    elif grid_type.lower() == 'gauss_hermite':
+        boundary = False
+        expectations = kwargs.get('expectations', 1)  # TODO extract from distributions
+        standard_deviations = kwargs.get('standard_deviations', 1)  # TODO extract from distributions
+        grid = GaussHermiteGrid(expectations=expectations, standard_deviations=standard_deviations, integrator=None) 
     else:
         raise Exception(f"{grid_type} yet not supported!")
-    
-    # Operation
-    if reference_solution is not None:
-        operation = Integration(f=model, grid=grid, dim=dim, reference_solution=reference_solution)  # there is Interpolation(Integration)
+
+    # Setting Operation
+    if operation_str.lower() == 'integration':
+        operation = Integration(f=model, grid=grid, dim=dim, reference_solution=reference_solution)
+    elif operation_str.lower() == 'interpolation':
+        operation = Interpolation(f=model, grid=grid, dim=dim, reference_solution=reference_solution)
+    elif operation_uq:
+        operation.set_grid(grid)  # TODO do I need this, or I have already done this...!?
     else:
-        operation = Integration(f=model, grid=grid, dim=dim)  # there is Interpolation(Integration)
+        raise Exception(f"{operation_str} is yet not supported!")  
+
+    # TODO Ask extra questions for this; There is no need to do any of this!?
+    # if operation_uq:
+        # operation.set_expectation_variance_Function()  
+        # polynomial_degree_max = kwargs.get('polynomial_degree_max', 2)
+        # operation.set_PCE_Function(polynomial_degree_max)  #this is if you want to optimize for pce coeff. integrals
 
     scheme = None
     refinement = None
@@ -546,7 +581,7 @@ directory_for_saving_plots='./', do_plot=True,  **kwargs):
                 a=a, b=b, 
                 operation=operation, version=version, 
                 norm=norm,
-                rebalancing=rebalancing, margin=margin, grid_surplusses=grid)
+                rebalancing=rebalancing, margin=margin, grid_surplusses=operation.get_grid())  #or grid_surplusses=grid
         set_up_filenames_for_printing_spatially_adaptive(combiObject, do_plot, directory_for_saving_plots)
         refinement, scheme, lmax, combi_result, number_of_evaluations, error_array, num_point_array, surplus_error_array, interpolation_error_arrayL2, interpolation_error_arrayMax = \
             combiObject.performSpatiallyAdaptiv(lmin=minimum_level, lmax=maximum_level, errorOperator=errorOperator, tol=tol, max_evaluations=max_evaluations, do_plot=False)
@@ -569,6 +604,22 @@ directory_for_saving_plots='./', do_plot=True,  **kwargs):
     #     points = combiObject.get_points_component_grid(component_grid.levelvector)
     #     keyLevelvector = component_grid.levelvector
     #     cn[n] = cn[n] + component_grid.coefficient * integralCompGrid
+
+    # TODO Some of these function should be called before adaptivity
+    # Options one can do with uncertainty quantification operation
+    # if operation_uq:  
+    #     (E,), (Var,) = operation.calculate_expectation_and_variance(combiinstance, use_combiinstance_solution=Fals)
+    #     (E,), (Var,) = operation.calculate_expectation_and_variance(combiinstance, use_combiinstance_solution=True)
+    #     integral = operation.get_result()
+    #     operation._set_pce_polys(polynomial_degrees)
+    #     operation._set_nodes_weights_evals(combiinstance, scale_weights=False)
+    #     integral = operation._get_combiintegral(combiinstance, scale_weights=False)
+    #     operation.calculate_PCE(
+    #         polynomial_degrees, combiinstance, restrict_degrees=False, use_combiinstance_solution=True, scale_weights=False)
+    #     operation.f_evals
+    #     operation.gPCE / operation.get_gPCE
+    #     operation.pce_polys / operation.pce_polys_norms
+    #     operation.get_total_order_sobol_indices() / operation.get_first_order_sobol_indices() / operation.get_Percentile_PCE()
 
     if do_plot:
         with warnings.catch_warnings():
@@ -610,6 +661,7 @@ directory_for_saving_plots='./', do_plot=True,  **kwargs):
         fp.close()
 
     dict_info = {}
+    dict_info["operation_str"] = operation_str
     dict_info["number_full_model_evaluations"] = number_full_model_evaluations
     dict_info["time_building_sg_surrogate"] = time_building_sg_surrogate
     
