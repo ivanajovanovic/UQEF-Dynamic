@@ -1,11 +1,16 @@
 import dill
 import numpoly
 import numpy as np
+from numpy import linalg as LA
+from math import isclose, isinf
 import pickle
 import pathlib
 import os
 import time
 import warnings
+import scipy.stats as sps
+
+import chaospy as cp
 
 import sparseSpACE
 from sparseSpACE.Function import *
@@ -16,6 +21,376 @@ from sparseSpACE.ErrorCalculator import *
 from sparseSpACE.GridOperation import *
 from sparseSpACE.DimAdaptiveCombi import *
 from sparseSpACE.Integrator import *
+from sparseSpACE.BasisFunctions import *
+from sparseSpACE.RefinementContainer import RefinementContainer
+from sparseSpACE.RefinementObject import RefinementObject
+from sparseSpACE.Utils import *
+
+class UncertaintyQuantificationREfactored(Integration):
+    # TODO Ivana - get_result what does it return ?
+    # The constructor resembles Integration's constructor;
+    # it has an additional parameter:
+    # distributions can be a list, tuple or string
+    def __init__(self, f, distributions, a: Sequence[float], b: Sequence[float],
+                 dim: int = None, grid=None, reference_solution=None,
+                 print_level: int = print_levels.NONE, log_level: int = log_levels.INFO):
+        dim = dim or len(a)
+        super().__init__(f, grid, dim, reference_solution)
+        self.f_model = f
+        # If distributions is not a list, it specifies the same distribution
+        # for every dimension
+        if not isinstance(distributions, list):
+            distributions = [distributions for _ in range(dim)]
+
+        # Setting the distribution to a string is a short form when
+        # no parameters are given
+        for d in range(dim):
+            if isinstance(distributions[d], str):
+                distributions[d] = (distributions[d],)
+
+        self._prepare_distributions(distributions, a, b)
+        self.f_evals = None
+        self.gPCE = None
+        self.pce_polys = None
+        self.log_util = LogUtility(log_level=log_level, print_level=print_level)
+        self.log_util.set_print_prefix('UncertaintyQuantification')
+        self.log_util.set_log_prefix('UncertaintyQuantification')
+
+    def set_grid(self, grid):
+        self.grid = grid
+
+    def set_reference_solution(self, reference_solution):
+        self.reference_solution = reference_solution
+
+    # From the user provided information about distributions, this function
+    # creates the distributions list which contains Chaospy distributions
+    def _prepare_distributions(self, distris, a: Sequence[float],
+                               b: Sequence[float]):
+        self.distributions = []
+        self.distribution_infos = distris
+        chaospy_distributions = []
+        known_distributions = dict()
+        for d in range(self.dim):
+            distr_info = distris[d]
+            distr_known = distr_info in known_distributions
+            if distr_known:
+                # Reuse the same distribution objects for multiple dimensions
+                d_prev = known_distributions[distr_info]
+                self.distributions.append(self.distributions[d_prev])
+            else:
+                known_distributions[distr_info] = d
+
+            distr_type = distr_info[0]
+            if distr_type == "Uniform":
+                distr = cp.Uniform(a[d], b[d])
+                chaospy_distributions.append(distr)
+                if not distr_known:
+                    self.distributions.append(UQDistribution.from_chaospy(distr))
+            elif distr_type == "Triangle":
+                midpoint = distr_info[1]
+                assert isinstance(midpoint, float), "invalid midpoint"
+                distr = cp.Triangle(a[d], midpoint, b[d])
+                chaospy_distributions.append(distr)
+                if not distr_known:
+                    self.distributions.append(UQDistribution.from_chaospy(distr))
+            elif distr_type == "Normal":
+                mu = distr_info[1]
+                sigma = distr_info[2]
+                cp_distr = cp.Normal(mu=mu, sigma=sigma)
+                chaospy_distributions.append(cp_distr)
+                if not distr_known:
+                    # The chaospy normal distribution does not work with big values
+                    def pdf(x, _mu=mu, _sigma=sigma):
+                        return sps.norm.pdf(x, loc=_mu, scale=_sigma)
+
+                    def cdf(x, _mu=mu, _sigma=sigma):
+                        return sps.norm.cdf(x, loc=_mu, scale=_sigma)
+
+                    def ppf(x, _mu=mu, _sigma=sigma):
+                        return sps.norm.ppf(x, loc=_mu, scale=_sigma)
+
+                    self.distributions.append(UQDistribution(pdf, cdf, ppf))
+            elif distr_type == "Laplace":
+                mu = distr_info[1]
+                scale = distr_info[2]
+                cp_distr = cp.Laplace(mu=mu, scale=scale)
+                chaospy_distributions.append(cp_distr)
+                if not distr_known:
+                    def pdf(x, _mu=mu, _scale=scale):
+                        return sps.laplace.pdf(x, loc=_mu, scale=_scale)
+
+                    def cdf(x, _mu=mu, _scale=scale):
+                        return sps.laplace.cdf(x, loc=_mu, scale=_scale)
+
+                    def ppf(x, _mu=mu, _scale=scale):
+                        return sps.laplace.ppf(x, loc=_mu, scale=_scale)
+
+                    self.distributions.append(UQDistribution(pdf, cdf, ppf))
+            else:
+                assert False, "Distribution not implemented: " + distr_type
+        self.distributions_chaospy = chaospy_distributions
+        self.distributions_joint = cp.J(*chaospy_distributions)
+        self.all_uniform = all(k[0] == "Uniform" for k in known_distributions)
+        self.a = a
+        self.b = b
+
+    def get_surplus_width(self, d: int, right_parent: float, left_parent: float) -> float:
+        # Approximate the width with the probability
+        cdf = self.distributions[d].cdf
+        return cdf(right_parent) - cdf(left_parent)
+
+    # This function exchanges the operation's function so that the adaptive
+    # refinement can use a different function than the operation's function
+    def set_function(self, f=None):
+        if f is None:
+            self.f = self.f_actual
+            self.f_actual = None
+        else:
+            assert self.f_actual is None
+            self.f_actual = self.f
+            self.f = f
+
+    def update_function(self, f):
+        self.f = f
+
+    def get_distributions(self):
+        return self.distributions
+
+    def get_distributions_chaospy(self):
+        return self.distributions_chaospy
+
+    # This function returns boundaries for distributions which have an infinite
+    # domain, such as normal distribution
+    def get_boundaries(self, tol: float) -> Tuple[Sequence[float], Sequence[float]]:
+        assert 1.0 - tol < 1.0, "Tolerance is too small"
+        a = []
+        b = []
+        for d in range(self.dim):
+            dist = self.distributions[d]
+            a.append(dist.ppf(tol))
+            b.append(dist.ppf(1.0 - tol))
+        return a, b
+
+    def _set_pce_polys(self, polynomial_degrees):
+        if self.pce_polys is not None and self.polynomial_degrees == polynomial_degrees:
+            return
+        self.polynomial_degrees = polynomial_degrees
+        if not hasattr(polynomial_degrees, "__iter__"):
+            # self.pce_polys, self.pce_polys_norms = cp.orth_ttr(polynomial_degrees, self.distributions_joint,
+            #                                                    retall=True)
+            self.pce_polys, self.pce_polys_norms = cp.generate_expansion(
+                polynomial_degrees, self.distributions_joint, retall=True)    
+            # Markus
+            # self.pce_polys, self.pce_polys_norms = cp.expansion.stieltjes(polynomial_degrees, self.distributions_joint, retall=True)
+            # self.polys1D, self.norms1D = [None] * self.dim, [None] * self.dim
+            # for d in range(self.dim):
+            #     self.polys1D[d], self.norms1D[d] = cp.expansion.stieltjes(polynomial_degrees,
+            #                                                                        self.distributions_chaospy[d],
+            #                                                                        retall=True)
+            # indices = numpoly.glexindex(start=0, stop=polynomial_degrees + 1, dimensions=self.dim,
+            #                             graded=True, reverse=True,
+            #                             cross_truncation=1.0)
+            # self.indices = indices                                             
+            return
+        # Chaospy does not support different degrees for each dimension, so
+        # the higher degree polynomials are removed afterwards
+        # polys, norms = cp.orth_ttr(max(polynomial_degrees), self.distributions_joint, retall=True)
+        polys, norms = cp.generate_expansion(max(polynomial_degrees), self.distributions_joint, retall=True)
+        # self.pce_polys, self.pce_polys_norms = cp.expansion.stieltjes(polynomial_degrees, self.distributions_joint, retall=True)
+        polys_filtered, norms_filtered = [], []
+        for i, poly in enumerate(polys):
+            max_exponents = [max(exps) for exps in poly.exponents.T]
+            if any([max_exponents[d] > deg_max for d, deg_max in enumerate(polynomial_degrees)]):
+                continue
+            polys_filtered.append(poly)
+            norms_filtered.append(norms[i])
+        self.pce_polys = cp.Poly(polys_filtered)
+        self.pce_polys_norms = norms_filtered
+        # self.polys1D, self.norms1D = [None] * self.dim, [None] * self.dim
+        # for d in range(self.dim):
+        #     self.polys1D[d], self.norms1D[d] = cp.expansion.stieltjes(polynomial_degrees[d],
+        #                                                                        self.distributions_chaospy[d],
+        #                                                                        retall=True)
+        # indices = numpoly.glexindex(start=0, stop=polynomial_degrees + 1, dimensions=self.dim,
+        #                             graded=True, reverse=True,
+        #                             cross_truncation=1.0)
+        # self.indices = indices   
+
+    def _scale_values(self, values):
+        assert self.all_uniform, "Division by the domain volume should be used for uniform distributions only"
+        div = 1.0 / np.prod([self.b[i] - v_a for i, v_a in enumerate(self.a)])
+        return values * div
+
+    def _set_nodes_weights_evals(self, combiinstance, scale_weights=False):
+        self.nodes, self.weights = combiinstance.get_points_and_weights()
+        assert len(self.nodes) == len(self.weights)
+        if scale_weights:
+            assert combiinstance.has_basis_grid(), "scale_weights should only be needed for basis grids"
+            self.weights = self._scale_values(self.weights)
+            # ~ self.f_evals = combiinstance.get_surplusses()
+            # Surpluses are required here..
+            # TODO Ivana - but don't you already have f_model evaluated at nodes!?
+            self.f_evals = [self.f_model(coord) for coord in self.nodes]
+        else:
+            self.f_evals = [self.f_model(coord) for coord in self.nodes]
+
+    def _get_combiintegral(self, combiinstance, scale_weights=False):
+        integral = self.get_result()
+        if scale_weights:
+            assert combiinstance.has_basis_grid(), "scale_weights should only be needed for basis grids"
+            return self._scale_values(integral)
+        return integral
+
+    def calculate_moment(self, combiinstance, k: int = None,
+                         use_combiinstance_solution=True, scale_weights=False):
+        if use_combiinstance_solution:
+            mom = self._get_combiintegral(combiinstance, scale_weights=scale_weights)
+            assert len(mom) == self.f_model.output_length()
+            return mom
+        self._set_nodes_weights_evals(combiinstance)
+        vals = [self.f_evals[i] ** k * self.weights[i] for i in range(len(self.f_evals))]
+        return sum(vals)
+
+    def calculate_expectation(self, combiinstance, use_combiinstance_solution=True):
+        return self.calculate_moment(combiinstance, k=1, use_combiinstance_solution=use_combiinstance_solution)
+
+    @staticmethod
+    def moments_to_expectation_variance(mom1: Sequence[float],
+                                        mom2: Sequence[float]) -> Tuple[Sequence[float], Sequence[float]]:
+        expectation = mom1
+        variance = [mom2[i] - ex * ex for i, ex in enumerate(expectation)]
+        for i, v in enumerate(variance):
+            if v < 0.0:
+                # When the variance is zero, it can be set to something negative
+                # because of numerical errors
+                variance[i] = -v
+        return expectation, variance
+
+    def calculate_expectation_and_variance(self, combiinstance, use_combiinstance_solution=True, scale_weights=False):
+        if use_combiinstance_solution:
+            integral = self._get_combiintegral(combiinstance, scale_weights=scale_weights)
+            output_dim = len(integral) // 2
+            expectation = integral[:output_dim]
+            expectation_of_squared = integral[output_dim:]
+        else:
+            expectation = self.calculate_moment(combiinstance, k=1, use_combiinstance_solution=False)
+            expectation_of_squared = self.calculate_moment(combiinstance, k=2, use_combiinstance_solution=False)
+        return self.moments_to_expectation_variance(expectation, expectation_of_squared)
+
+    def calculate_PCE(self, polynomial_degrees, combiinstance, restrict_degrees=False, use_combiinstance_solution=True,
+                      scale_weights=False):
+        if use_combiinstance_solution:
+            assert self.pce_polys is not None
+            assert not restrict_degrees
+            integral = self._get_combiintegral(combiinstance, scale_weights=scale_weights)
+            num_polys = len(self.pce_polys)
+            output_dim = len(integral) // num_polys
+            coefficients = integral.reshape((num_polys, output_dim))
+            self.gPCE = np.transpose(np.sum(self.pce_polys * coefficients.T, -1))
+            return
+
+        self._set_nodes_weights_evals(combiinstance)
+
+        if restrict_degrees:
+            # Restrict the polynomial degrees if in some dimension not enough points
+            # are available
+            # For degree deg, deg+(deg-1)+1 points should be available
+            num_points = combiinstance.get_num_points_each_dim()
+            polynomial_degrees = [min(polynomial_degrees, num_points[d] // 2) for d in range(self.dim)]
+
+        self._set_pce_polys(polynomial_degrees)
+        self.gPCE = cp.fit_quadrature(self.pce_polys, list(zip(*self.nodes)),
+                                      self.weights, np.asarray(self.f_evals), norms=self.pce_polys_norms)
+
+    def get_gPCE(self):
+        return self.gPCE
+
+    def get_expectation_PCE(self):
+        if self.gPCE is None:
+            assert False, "calculatePCE must be invoked before this method"
+        return cp.E(self.gPCE, self.distributions_joint)
+
+    def get_variance_PCE(self):
+        if self.gPCE is None:
+            assert False, "calculatePCE must be invoked before this method"
+        return cp.Var(self.gPCE, self.distributions_joint)
+
+    def get_expectation_and_variance_PCE(self):
+        return self.get_expectation_PCE(), self.get_variance_PCE()
+
+    def get_Percentile_PCE(self, q: float, sample: int = 10000):
+        if self.gPCE is None:
+            assert False, "calculatePCE must be invoked before this method"
+        return cp.Perc(self.gPCE, q, self.distributions_joint, sample)
+
+    def get_first_order_sobol_indices(self):
+        if self.gPCE is None:
+            assert False, "calculatePCE must be invoked before this method"
+        return cp.Sens_m(self.gPCE, self.distributions_joint)
+
+    def get_total_order_sobol_indices(self):
+        if self.gPCE is None:
+            assert False, "calculatePCE must be invoked before this method"
+        return cp.Sens_t(self.gPCE, self.distributions_joint)
+
+    # Returns a Function which can be passed to performSpatiallyAdaptiv
+    # so that adapting is optimized for the k-th moment
+    def get_moment_Function(self, k: int):
+        if k == 1:
+            return self.f
+        return FunctionPower(self.f, k)
+
+    def set_moment_Function(self, k: int):
+        self.update_function(self.get_moment_Function(k))
+
+    # Optimizes adapting for multiple moments at once
+    def get_moments_Function(self, ks: Sequence[int]):
+        return FunctionConcatenate([self.get_moment_Function(k) for k in ks])
+
+    def set_moments_Function(self, ks: Sequence[int]):
+        self.update_function(self.get_moments_Function(ks))
+
+    def get_expectation_variance_Function(self):
+        return self.get_moments_Function([1, 2])
+
+    def set_expectation_variance_Function(self):
+        self.update_function(self.get_expectation_variance_Function())
+
+    # Returns a Function which can be passed to performSpatiallyAdaptiv
+    # so that adapting is optimized for the PCE
+    def get_PCE_Function(self, polynomial_degrees):
+        self._set_pce_polys(polynomial_degrees)
+        # self.f can change, so putting it to a local variable is important
+        # ~ f = self.f
+        # ~ polys = self.pce_polys
+        # ~ funcs = [(lambda coords: f(coords) * polys[i](coords)) for i in range(len(polys))]
+        # ~ return FunctionCustom(funcs)
+        return FunctionPolysPCE(self.f, self.pce_polys, self.pce_polys_norms)
+        # return FunctionPolysPCE(self.f, self.pce_polys, self.pce_polys_norms, self.polys1D, self.norms1D, self.indices) Markus
+
+    def set_PCE_Function(self, polynomial_degrees):
+        self.update_function(self.get_PCE_Function(polynomial_degrees))
+
+    def get_pdf_Function(self):
+        pdf = self.distributions_joint.pdf
+        return FunctionCustom(lambda coords: float(pdf(coords)))
+
+    def set_pdf_Function(self):
+        self.update_function(self.get_pdf_Function())
+
+    # Returns a Function which applies the PPF functions before evaluating
+    # the problem function; it can be integrated without weighting
+    def get_inverse_transform_Function(self, func=None):
+        return FunctionInverseTransform(func or self.f, self.distributions)
+
+    def set_inverse_transform_Function(self, func=None):
+        self.update_function(self.get_inverse_transform_Function(func or self.f, self.distributions))
+
+# ============================================================================================
+# PCE / PSP Code - Relying on ChaosPy and UQEF...
+# ============================================================================================
+
+
 
 # ============================================================================================
 # SparseSpACE Interpolation...

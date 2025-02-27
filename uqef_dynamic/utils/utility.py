@@ -1606,7 +1606,6 @@ def read_simulation_settings_from_configuration_object(configurationObject: Unio
 # Functions related to parameters, mainly reading parameters from configuration object
 #####################################
 
-
 def get_list_of_uncertain_parameters_from_configuration_dict(configurationObject: Union[dict, pd.DataFrame, str, pathlib.PosixPath, Any], raise_error:Optional[bool]=False, uq_method: str="ensemble") -> List[str]:
     list_of_parameters = get_list_of_parameters_dicts_from_configuration_dict(configurationObject, raise_error=raise_error)
     nodeNames = []

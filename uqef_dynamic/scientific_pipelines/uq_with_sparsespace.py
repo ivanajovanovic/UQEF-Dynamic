@@ -36,6 +36,16 @@ from uqef_dynamic.utils import sparsespace_utils
 from uqef_dynamic.models.time_dependent_baseclass import time_dependent_statistics
 
 local_debugging = False
+mpi = False
+
+if mpi:
+    size = MPI.COMM_WORLD.Get_size()
+    rank = MPI.COMM_WORLD.Get_rank()
+    name = MPI.Get_processor_name()
+    version = MPI.Get_library_version()
+    version2 = MPI.Get_version()
+else:
+    rank = None
 
 def is_master(mpi, rank=None):
     return mpi is False or (mpi is True and rank == 0)
@@ -250,7 +260,7 @@ def main_routine(model, current_output_folder, **kwargs):
     dictionary_with_inf_about_the_run["model"] = uqsim_args_dict["model"] = model
     scratch_dir = cwd
 
-    mpi = kwargs.get("mpi", False)
+    # mpi = kwargs.get("mpi", False)
 
     can_model_evaluate_all_vector_nodes = kwargs.get("can_model_evaluate_all_vector_nodes", False)  # set to True if eval_vectorized is implemented,
     inputModelDir = kwargs.get("inputModelDir", None)
@@ -275,8 +285,9 @@ def main_routine(model, current_output_folder, **kwargs):
     else:
         workingDir = pathlib.Path(outputModelDir / current_output_folder)
 
-    if workingDir is not None and not workingDir.exists():
-        workingDir.mkdir(parents=True, exist_ok=True)
+    if is_master(mpi, rank):
+        if workingDir is not None and not workingDir.exists():
+            workingDir.mkdir(parents=True, exist_ok=True)
     outputResultDir = workingDir
 
     uqsim_args_dict['mpi'] = mpi
@@ -469,7 +480,7 @@ def main_routine(model, current_output_folder, **kwargs):
     # ============================
     # Debugging the model run...
 
-    if local_debugging:
+    if local_debugging and is_master(mpi, rank):
         coordinates = jointDists.sample(size=1, rule='random')
         coordinates = np.array(coordinates)
         results = problem_function.eval(coordinates=coordinates.T)
@@ -516,170 +527,174 @@ def main_routine(model, current_output_folder, **kwargs):
                 'modified_basis', 'boundary', 'norm', 'p_bsplines', 'rebalancing', 'version', 'margin', 'grid_surplusses']}
 
     uqsim_args_dict.update(kwargs_sparsespace_integration_pipeline)
-    combiObject, number_full_model_evaluations, dict_info = sparsespace_utils.sparsespace_integration_pipeline(
-        a=a, b=b, model=problem_function, dim=dim, 
-        directory_for_saving_plots=workingDir,
-        do_plot=True,
-        **kwargs_sparsespace_integration_pipeline
-    )
-    # total_points, total_weights = combiObject.get_points_and_weights()
-    # total_surplusses = combiObject.get_surplusses()
-    print(f"combiObject: {combiObject},\n number_full_model_evaluations: {number_full_model_evaluations},\n dict_info: {dict_info}")
     
-    dictionary_with_inf_about_the_run.update(dict_info)
-    dictionary_with_inf_about_the_run["combiObject"] = combiObject
+    if is_master(mpi, rank):
+        combiObject, number_full_model_evaluations, dict_info = sparsespace_utils.sparsespace_integration_pipeline(
+            a=a, b=b, model=problem_function, dim=dim, 
+            directory_for_saving_plots=workingDir,
+            do_plot=True,
+            **kwargs_sparsespace_integration_pipeline
+        )
+        # total_points, total_weights = combiObject.get_points_and_weights()
+        # total_surplusses = combiObject.get_surplusses()
+        print(f"combiObject: {combiObject},\n number_full_model_evaluations: {number_full_model_evaluations},\n dict_info: {dict_info}")
+        
+        dictionary_with_inf_about_the_run.update(dict_info)
+        dictionary_with_inf_about_the_run["combiObject"] = combiObject
+    # TODO else do some distribution of dictionary_with_inf_about_the_run / combiObject / dict_info
     # ============================
     # If Surrogate is combiinstance compute error model btw original model and surrogate
 
-    reevaluate_surrogate = kwargs.get("reevaluate_surrogate", False)
-    reevaluate_original_model = kwargs.get("reevaluate_original_model", False)
+    if is_master(mpi, rank):
+        reevaluate_surrogate = kwargs.get("reevaluate_surrogate", False)
+        reevaluate_original_model = kwargs.get("reevaluate_original_model", False)
 
-    surrogate_object = combiObject
+        surrogate_object = combiObject
 
-    if reevaluate_surrogate or reevaluate_original_model:
-        # evaluateSurrogateAtStandardDist = sampleFromStandardDist_when_evaluating_surrogate
-        evaluateSurrogateAtStandardDist = False
-        if surrogate_type == "combiinstance":
+        if reevaluate_surrogate or reevaluate_original_model:
+            # evaluateSurrogateAtStandardDist = sampleFromStandardDist_when_evaluating_surrogate
             evaluateSurrogateAtStandardDist = False
-        number_of_samples = kwargs.get('number_of_samples', 1000)
-        sampling_rule = kwargs.get('sampling_rule', "random")
-        # TODO Rename this so it is clear this file is used for reading nodes for re-evaulating the surrogate and original model
-        sample_new_nodes_from_standard_dist = kwargs.get('sample_new_nodes_from_standard_dist', False)
-        # TODO Rename this so it is clear this file is used for reading nodes for re-evaulating the surrogate and original model
-        read_new_nodes_from_file = kwargs.get('read_new_nodes_from_file', False)
-        rounding = kwargs.get('rounding', False)
-        round_dec = kwargs.get('round_dec', 4)
+            if surrogate_type == "combiinstance":
+                evaluateSurrogateAtStandardDist = False
+            number_of_samples = kwargs.get('number_of_samples', 1000)
+            sampling_rule = kwargs.get('sampling_rule', "random")
+            # TODO Rename this so it is clear this file is used for reading nodes for re-evaulating the surrogate and original model
+            sample_new_nodes_from_standard_dist = kwargs.get('sample_new_nodes_from_standard_dist', False)
+            # TODO Rename this so it is clear this file is used for reading nodes for re-evaulating the surrogate and original model
+            read_new_nodes_from_file = kwargs.get('read_new_nodes_from_file', False)
+            rounding = kwargs.get('rounding', False)
+            round_dec = kwargs.get('round_dec', 4)
 
-        set_lower_predictions_to_zero = kwargs.get('set_lower_predictions_to_zero', False)
-        
-        parameters = uqef_dynamic_utils.generate_parameters_for_mc_simulation(
-            jointDists=jointDists, jointStandard=jointStandardDists, numSamples=number_of_samples, rule=sampling_rule,
-            sampleFromStandardDist=sample_new_nodes_from_standard_dist, 
-            read_nodes_from_file=read_new_nodes_from_file, rounding=rounding, round_dec=round_dec,
-        )
-        if evaluateSurrogateAtStandardDist and jointStandardDists is not None:
-            nodes = utility.transformation_of_parameters(
-                parameters, jointDists, jointStandardDists)
-        else:
-            nodes = parameters
-        
-        list_unique_generate_new_samples = range(parameters.shape[1]) # unique index for each sample
-        number_of_samples_generated = parameters.shape[1]
-        print(f"nodes.shape={nodes.shape}")
-        uqsim_args_dict["reevaluate_surrogate"] = reevaluate_surrogate
-        uqsim_args_dict["reevaluate_original_model"] = reevaluate_original_model
-        uqsim_args_dict["number_of_samples_generated"] = number_of_samples_generated
-        uqsim_args_dict["sampling_rule"] = sampling_rule
-        uqsim_args_dict["read_new_nodes_from_file"] = read_new_nodes_from_file
-        dictionary_with_inf_about_the_run["nodes"] = nodes
-        dictionary_with_inf_about_the_run["parameters"] = parameters
+            set_lower_predictions_to_zero = kwargs.get('set_lower_predictions_to_zero', False)
+            
+            parameters = uqef_dynamic_utils.generate_parameters_for_mc_simulation(
+                jointDists=jointDists, jointStandard=jointStandardDists, numSamples=number_of_samples, rule=sampling_rule,
+                sampleFromStandardDist=sample_new_nodes_from_standard_dist, 
+                read_nodes_from_file=read_new_nodes_from_file, rounding=rounding, round_dec=round_dec,
+            )
+            if evaluateSurrogateAtStandardDist and jointStandardDists is not None:
+                nodes = utility.transformation_of_parameters(
+                    parameters, jointDists, jointStandardDists)
+            else:
+                nodes = parameters
+            
+            list_unique_generate_new_samples = range(parameters.shape[1]) # unique index for each sample
+            number_of_samples_generated = parameters.shape[1]
+            print(f"nodes.shape={nodes.shape}")
+            uqsim_args_dict["reevaluate_surrogate"] = reevaluate_surrogate
+            uqsim_args_dict["reevaluate_original_model"] = reevaluate_original_model
+            uqsim_args_dict["number_of_samples_generated"] = number_of_samples_generated
+            uqsim_args_dict["sampling_rule"] = sampling_rule
+            uqsim_args_dict["read_new_nodes_from_file"] = read_new_nodes_from_file
+            dictionary_with_inf_about_the_run["nodes"] = nodes
+            dictionary_with_inf_about_the_run["parameters"] = parameters
 
-    intermediate_surrogate_evaluations = None
-    results_array_intermediate_surrogate_model = None
-    if intermediate_surrogate is not None:
-        # Intermediate surrogate can only be combiinstance
-        start_time_reevaluating_intermediate_surrogate_model = time.time()
-        print(f"Reevaluating the surroget model...")
-        results_array_intermediate_surrogate_model = intermediate_surrogate(parameters.T)
-        # num_cores = multiprocessing.cpu_count()
-        # parameter_chunks = np.array_split(parameters.T, num_cores)
-        # def evaluate_chunk(chunk):
-        #     return np.array([intermediate_surrogate(parameter) for parameter in chunk])
-        # with multiprocessing.Pool(processes=num_cores) as pool:
-        #     results = pool.map(evaluate_chunk, parameter_chunks)
-        # results_array_intermediate_surrogate_model = np.concatenate(results)
-        end_time_reevaluating_intermediate__surrogate_model = time.time()
-        dictionary_with_inf_about_the_run["number_intermediate_surrogate_model_reevaluations"] = len(results_array_intermediate_surrogate_model)
-        dictionary_with_inf_about_the_run["time_parallel_intermediate_surrogate_model_reevaluations"] = end_time_reevaluating_intermediate__surrogate_model - start_time_reevaluating_intermediate_surrogate_model
-        print(f"Time for evaluation (intermediate) surrogate model {len(results_array_intermediate_surrogate_model)} time is {dictionary_with_inf_about_the_run['time_parallel_intermediate_surrogate_model_reevaluations']}")
-        if set_lower_predictions_to_zero:
-            pass
+        intermediate_surrogate_evaluations = None
+        results_array_intermediate_surrogate_model = None
+        if intermediate_surrogate is not None:
+            # Intermediate surrogate can only be combiinstance
+            start_time_reevaluating_intermediate_surrogate_model = time.time()
+            print(f"Reevaluating the surroget model...")
+            results_array_intermediate_surrogate_model = intermediate_surrogate(parameters.T)
+            # num_cores = multiprocessing.cpu_count()
+            # parameter_chunks = np.array_split(parameters.T, num_cores)
+            # def evaluate_chunk(chunk):
+            #     return np.array([intermediate_surrogate(parameter) for parameter in chunk])
+            # with multiprocessing.Pool(processes=num_cores) as pool:
+            #     results = pool.map(evaluate_chunk, parameter_chunks)
+            # results_array_intermediate_surrogate_model = np.concatenate(results)
+            end_time_reevaluating_intermediate__surrogate_model = time.time()
+            dictionary_with_inf_about_the_run["number_intermediate_surrogate_model_reevaluations"] = len(results_array_intermediate_surrogate_model)
+            dictionary_with_inf_about_the_run["time_parallel_intermediate_surrogate_model_reevaluations"] = end_time_reevaluating_intermediate__surrogate_model - start_time_reevaluating_intermediate_surrogate_model
+            print(f"Time for evaluation (intermediate) surrogate model {len(results_array_intermediate_surrogate_model)} time is {dictionary_with_inf_about_the_run['time_parallel_intermediate_surrogate_model_reevaluations']}")
+            if set_lower_predictions_to_zero:
+                pass
 
-    results_array_original_model = None
-    if reevaluate_original_model:
-        start_time_reevaluating_original_model = time.time()
-        print(f"Reevaluating the original model...")
-        ## Var 0
-        # modelObject = create_stat_object.create_model_object(
-        #             configuration_object=configurationObject, uqsim_args_dict=uqsim_args_dict, workingDir=directory_for_saving_plots, model=None, 
-        #             time_column_name=utility.TIME_COLUMN_NAME, index_column_name=utility.INDEX_COLUMN_NAME
-        #         )
-        # modelObject = problem_function
-        # results = modelObject(i_s=range(parameters.T.shape[0]), parameters=parameters.T, raise_exception_on_model_break=False)
-        # df_model_reevaluated, df_index_parameter_reevaluated, _, _, _, _ =  uqef_dynamic_utils.uqef_dynamic_model_run_results_array_to_dataframe(\
-        #     results_array=results, extract_only_qoi_columns=False, qoi_columns=modelObject.list_qoi_column, 
-        #     time_column_name=utility.TIME_COLUMN_NAME, index_column_name=utility.INDEX_COLUMN_NAME)
-        ## Var 1
-        num_cores = multiprocessing.cpu_count()
-        parameter_chunks = np.array_split(parameters.T, num_cores)
-        results_array_original_model = []
-        def process_nodes_concurrently(parameter_chunks):
-            with multiprocessing.Pool(processes=num_cores) as pool:
-                for result in pool.starmap(evaluate_chunk_model, \
-                                        [(problem_function, parameter) for parameter in parameter_chunks]):
-                    yield result
-        for result in process_nodes_concurrently(parameter_chunks):
-            results_array_original_model.append(result)
-        results_array_original_model = np.vstack(np.array(results_array_original_model))
-        ## Var 2
-        # def evaluate_chunk_original_model(chunk):
-        #     return np.array(problem_function(chunk))
-        # with multiprocessing.Pool(processes=num_cores) as pool:
-        #     results = pool.map(evaluate_chunk_original_model, parameter_chunks)
-        # results_array_original_model = np.concatenate(results)
-        ## Var 3
-        # results_array_original_model = problem_function(coordinates=parameters.T)
-        end_time_reevaluating_original_model = time.time()
-        dictionary_with_inf_about_the_run["number_original_model_reevaluations"] = len(results_array_original_model)
-        dictionary_with_inf_about_the_run["time_parallel_original_model_reevaluations"] = end_time_reevaluating_original_model - start_time_reevaluating_original_model
-        print(f"Time for evaluation original model {len(results_array_original_model)} time is {dictionary_with_inf_about_the_run['time_parallel_original_model_reevaluations']}")
-        if set_lower_predictions_to_zero:
-            pass
+        results_array_original_model = None
+        if reevaluate_original_model:
+            start_time_reevaluating_original_model = time.time()
+            print(f"Reevaluating the original model...")
+            ## Var 0
+            # modelObject = create_stat_object.create_model_object(
+            #             configuration_object=configurationObject, uqsim_args_dict=uqsim_args_dict, workingDir=directory_for_saving_plots, model=None, 
+            #             time_column_name=utility.TIME_COLUMN_NAME, index_column_name=utility.INDEX_COLUMN_NAME
+            #         )
+            # modelObject = problem_function
+            # results = modelObject(i_s=range(parameters.T.shape[0]), parameters=parameters.T, raise_exception_on_model_break=False)
+            # df_model_reevaluated, df_index_parameter_reevaluated, _, _, _, _ =  uqef_dynamic_utils.uqef_dynamic_model_run_results_array_to_dataframe(\
+            #     results_array=results, extract_only_qoi_columns=False, qoi_columns=modelObject.list_qoi_column, 
+            #     time_column_name=utility.TIME_COLUMN_NAME, index_column_name=utility.INDEX_COLUMN_NAME)
+            ## Var 1
+            num_cores = multiprocessing.cpu_count()
+            parameter_chunks = np.array_split(parameters.T, num_cores)
+            results_array_original_model = []
+            def process_nodes_concurrently(parameter_chunks):
+                with multiprocessing.Pool(processes=num_cores) as pool:
+                    for result in pool.starmap(evaluate_chunk_model, \
+                                            [(problem_function, parameter) for parameter in parameter_chunks]):
+                        yield result
+            for result in process_nodes_concurrently(parameter_chunks):
+                results_array_original_model.append(result)
+            results_array_original_model = np.vstack(np.array(results_array_original_model))
+            ## Var 2
+            # def evaluate_chunk_original_model(chunk):
+            #     return np.array(problem_function(chunk))
+            # with multiprocessing.Pool(processes=num_cores) as pool:
+            #     results = pool.map(evaluate_chunk_original_model, parameter_chunks)
+            # results_array_original_model = np.concatenate(results)
+            ## Var 3
+            # results_array_original_model = problem_function(coordinates=parameters.T)
+            end_time_reevaluating_original_model = time.time()
+            dictionary_with_inf_about_the_run["number_original_model_reevaluations"] = len(results_array_original_model)
+            dictionary_with_inf_about_the_run["time_parallel_original_model_reevaluations"] = end_time_reevaluating_original_model - start_time_reevaluating_original_model
+            print(f"Time for evaluation original model {len(results_array_original_model)} time is {dictionary_with_inf_about_the_run['time_parallel_original_model_reevaluations']}")
+            if set_lower_predictions_to_zero:
+                pass
 
-    results_array_surrogate_model = None
-    if reevaluate_surrogate:
-        start_time_reevaluating_surrogate_model = time.time()
-        print(f"Reevaluating the surroget model...")
-        num_cores = multiprocessing.cpu_count()
-        parameter_chunks = np.array_split(nodes.T, num_cores)
-        ## Var 1
-        # results_array_surrogate_model = []
-        # def process_nodes_concurrently(parameter_chunks):
-        #     with multiprocessing.Pool(processes=num_cores) as pool:
-        #         for result in pool.starmap(evaluate_chunk_model, \
-        #                                 [(surrogate_object, parameter) for parameter in parameter_chunks]):
-        #             yield result
-        # for result in process_nodes_concurrently(parameter_chunks):
-        #     results_array_surrogate_model.append(result)
-        # results_array_surrogate_model = np.vstack(np.array(results_array_surrogate_model))
-        # with multiprocessing.Pool(processes=num_cores) as pool:
-        #     results = pool.starmap(evaluate_chunk_surrogate, [(surrogate_object, parameter_values) for parameter_values in parameter_chunks])
-        # results_array_surrogate_model = np.concatenate(results)
-        ## Var 2
-        if surrogate_type == "combiinstance":
-            results_array_surrogate_model = surrogate_object(nodes.T)
-        else:
-            results_array_surrogate_model = Nones
-        print(f"DEBUGGING results_array_surrogate_model.shape-{results_array_surrogate_model.shape}")
-        end_time_reevaluating_surrogate_model = time.time()
-        dictionary_with_inf_about_the_run["number_surrogate_model_reevaluations"] = len(results_array_surrogate_model)
-        dictionary_with_inf_about_the_run["time_parallel_surrogate_model_reevaluations"] = end_time_reevaluating_surrogate_model - start_time_reevaluating_surrogate_model
-        print(f"Time for evaluation surrogate model {len(results_array_surrogate_model)} time is {dictionary_with_inf_about_the_run['time_parallel_surrogate_model_reevaluations']}")
-        if set_lower_predictions_to_zero:
-            pass
+        results_array_surrogate_model = None
+        if reevaluate_surrogate:
+            start_time_reevaluating_surrogate_model = time.time()
+            print(f"Reevaluating the surroget model...")
+            num_cores = multiprocessing.cpu_count()
+            parameter_chunks = np.array_split(nodes.T, num_cores)
+            ## Var 1
+            # results_array_surrogate_model = []
+            # def process_nodes_concurrently(parameter_chunks):
+            #     with multiprocessing.Pool(processes=num_cores) as pool:
+            #         for result in pool.starmap(evaluate_chunk_model, \
+            #                                 [(surrogate_object, parameter) for parameter in parameter_chunks]):
+            #             yield result
+            # for result in process_nodes_concurrently(parameter_chunks):
+            #     results_array_surrogate_model.append(result)
+            # results_array_surrogate_model = np.vstack(np.array(results_array_surrogate_model))
+            # with multiprocessing.Pool(processes=num_cores) as pool:
+            #     results = pool.starmap(evaluate_chunk_surrogate, [(surrogate_object, parameter_values) for parameter_values in parameter_chunks])
+            # results_array_surrogate_model = np.concatenate(results)
+            ## Var 2
+            if surrogate_type == "combiinstance":
+                results_array_surrogate_model = surrogate_object(nodes.T)
+            else:
+                results_array_surrogate_model = Nones
+            print(f"DEBUGGING results_array_surrogate_model.shape-{results_array_surrogate_model.shape}")
+            end_time_reevaluating_surrogate_model = time.time()
+            dictionary_with_inf_about_the_run["number_surrogate_model_reevaluations"] = len(results_array_surrogate_model)
+            dictionary_with_inf_about_the_run["time_parallel_surrogate_model_reevaluations"] = end_time_reevaluating_surrogate_model - start_time_reevaluating_surrogate_model
+            print(f"Time for evaluation surrogate model {len(results_array_surrogate_model)} time is {dictionary_with_inf_about_the_run['time_parallel_surrogate_model_reevaluations']}")
+            if set_lower_predictions_to_zero:
+                pass
 
-    compare_surrogate_and_original_model_runs = False
-    if reevaluate_original_model and reevaluate_surrogate and results_array_original_model is not None and results_array_surrogate_model is not None:
-        compare_surrogate_and_original_model_runs = True
+        compare_surrogate_and_original_model_runs = False
+        if reevaluate_original_model and reevaluate_surrogate and results_array_original_model is not None and results_array_surrogate_model is not None:
+            compare_surrogate_and_original_model_runs = True
 
-    if compare_surrogate_and_original_model_runs:
-        # Compute the element-wise error
-        resul_dict = compute_numpy_array_errors(results_array_surrogate_model, results_array_original_model, printing=True)
-        dictionary_with_inf_about_the_run.update(resul_dict)
-        if results_array_intermediate_surrogate_model is not None:
-            resul_dict = compute_numpy_array_errors(results_array_intermediate_surrogate_model, results_array_original_model, printing=True)
-            resul_dict_update = {f"intermediate_{key}": value for key, value in resul_dict.items()}
-            dictionary_with_inf_about_the_run.update(resul_dict_update)
+        if compare_surrogate_and_original_model_runs:
+            # Compute the element-wise error
+            resul_dict = compute_numpy_array_errors(results_array_surrogate_model, results_array_original_model, printing=True)
+            dictionary_with_inf_about_the_run.update(resul_dict)
+            if results_array_intermediate_surrogate_model is not None:
+                resul_dict = compute_numpy_array_errors(results_array_intermediate_surrogate_model, results_array_original_model, printing=True)
+                resul_dict_update = {f"intermediate_{key}": value for key, value in resul_dict.items()}
+                dictionary_with_inf_about_the_run.update(resul_dict_update)
    
     # # ============================
     # # All this to make the second part feasible when model is a time-dependent model
@@ -699,7 +714,7 @@ def main_routine(model, current_output_folder, **kwargs):
     uqsim_args_dict["regression"] = kwargs.get("regression", False)
     uqsim_args_dict["cross_truncation"] = kwargs.get("cross_truncation", 0.7)
     uqsim_args_dict["read_nodes_from_file"] = kwargs.get("read_nodes_from_file", False)
-    uqsim_args_dict["l_sg"] = kwargs.get("l_sg", 5)
+    uqsim_args_dict["l_sg"] = kwargs.get("l_sg", kwargs.get("l", 5))
     parameters_file = kwargs.get("parameters_file", None)
     # path_to_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/sparse_grid_nodes_weights")
     if parameters_file is not None:
@@ -710,7 +725,7 @@ def main_routine(model, current_output_folder, **kwargs):
     uqsim_args_dict["sampleFromStandardDist"] = kwargs.get("sampleFromStandardDist", True)
     uqsim_args_dict["disable_statistics"] = kwargs.get("disable_statistics", False)
     uqsim_args_dict["disable_calc_statistics"] = kwargs.get("disable_calc_statistics", False)
-    uqsim_args_dict["parallel_statistics"] = kwargs.get("parallel_statistics", False)
+    uqsim_args_dict["parallel_statistics"] = mpi #kwargs.get("parallel_statistics", False)
     uqsim_args_dict["instantly_save_results_for_each_time_step"] = kwargs.get("instantly_save_results_for_each_time_step", False)
     uqsim_args_dict["compute_Sobol_m"] = kwargs.get("compute_Sobol_m", True)
     uqsim_args_dict["compute_Sobol_t"] = kwargs.get("compute_Sobol_t", True)
@@ -724,130 +739,133 @@ def main_routine(model, current_output_folder, **kwargs):
     # when configurationObject and simulationNodes are not None - Complex model
     # vs. simple model when configurationObject is None and simulationNodes is None
     
-    if configurationObject is not None:
-        # setup via the uqef
-        simulationNodes = setup_nodes_via_config_file_or_parameters_file(
-            configuration_object=configurationObject, 
-            uq_method=uq_method, read_nodes_from_file=uqsim_args_dict["read_nodes_from_file"], 
-            parameters_file=uqsim_args_dict["parameters_file"],
-            sampleFromStandardDist=uqsim_args_dict["sampleFromStandardDist"],
-            regression=uqsim_args_dict["regression"]
-        )
-        simulationNodes.set_joined_dists()
-        jointDists = simulationNodes.joinedDists
-        jointStandardDists = simulationNodes.joinedStandardDists
-    else:
-        # setup via the chaospy
-        simulationNodes = None
-        dists = []
-        standardDists = []
-        standardDists_min_one_one = []
-        standardDists_zero_one = []
-        # jointDists = None
-        # jointStandardDists = None
-        for single_param_dist_config_dict in distributions_list_of_dicts:
-            cp_dist_signature = inspect.signature(getattr(cp, single_param_dist_config_dict["distribution"]))
-            dist_parameters_values = []
-            for p in cp_dist_signature.parameters:
-                dist_parameters_values.append(single_param_dist_config_dict[p])
-            dists.append(getattr(cp, single_param_dist_config_dict["distribution"])(*dist_parameters_values))
-            standardDists.append(getattr(cp, single_param_dist_config_dict["distribution"])())
-            standardDists_min_one_one.append(getattr(cp, single_param_dist_config_dict["distribution"])(lower=-1, upper=1))
-            standardDists_zero_one.append(getattr(cp, single_param_dist_config_dict["distribution"])(lower=0, upper=1))
-        jointDists = cp.J(*dists)
-        jointStandardDists = cp.J(*standardDists)
-        jointDistsStandardDists_min_one_one = cp.J(*standardDists_min_one_one)
+    if is_master(mpi, rank):
 
-    # Generate Nodes
-    if simulationNodes is not None:
-        if uq_method == "ensemble":
-            nodes = simulationNodes.nodes
-            parameters = simulationNodes.parameters
-        elif uq_method == "mc":
-            nodes, parameters = simulationNodes.generateNodesForMC(
-                numSamples=uqsim_args_dict["mc_numevaluations"], 
-                rule=uqsim_args_dict["sampling_rule"], 
-                read_nodes_from_file=uqsim_args_dict["read_nodes_from_file"], 
-                parameters_file_name=uqsim_args_dict["parameters_file"]
+        if configurationObject is not None:
+            # setup via the uqef
+            simulationNodes = setup_nodes_via_config_file_or_parameters_file(
+                configuration_object=configurationObject, 
+                uq_method=uq_method, read_nodes_from_file=uqsim_args_dict["read_nodes_from_file"], 
+                parameters_file=uqsim_args_dict["parameters_file"],
+                sampleFromStandardDist=uqsim_args_dict["sampleFromStandardDist"],
+                regression=uqsim_args_dict["regression"]
             )
-        elif uq_method == "sc":
-            nodes, weights, parameters = simulationNodes.generateNodesForSC(
-                numCollocationPointsPerDim=uqsim_args_dict["sc_q_order"], 
-                rule=uqsim_args_dict["sc_quadrature_rule"], 
-                sparse=uqsim_args_dict["sc_sparse_quadrature"],
-                read_nodes_from_file=uqsim_args_dict["read_nodes_from_file"], 
-                parameters_file_name=uqsim_args_dict["parameters_file"]
-            )
-        elif uq_method == "saltelli":
-            raise NotImplementedError("Yet not implemented for the Saltelli method")
-    else:
-        if uq_method == "mc":
-            parameters = uqef_dynamic_utils.generate_parameters_for_mc_simulation(
-                jointDists=jointDists, jointStandard=jointStandardDists, numSamples=100, rule="r",
-                sampleFromStandardDist=False, 
-                read_nodes_from_file=False, rounding=False, round_dec=False,
-            )
-        elif uq_method == "sc":
-            raise NotImplementedError("Yet not implemented for the Sparse Grids")
-            # parameters = uqef_dynamic_utils.generate_parameters_for_sc_simulation(
-            #     jointDists=jointDists, jointStandard=jointStandardDists, numSamples=100, rule="r",
-            #     sampleFromStandardDist=False, 
-            #     read_nodes_from_file=False, rounding=False, round_dec=False,
-            # )
-            # nodes = parameters
-        elif uq_method == "saltelli":
-            raise NotImplementedError("Yet not implemented for the Saltelli method")
-        if jointStandardDists is not None and uqsim_args_dict["sampleFromStandardDist"]:
-            nodes = utility.transformation_of_parameters(
-                parameters, jointDists, jointStandardDists)
+            simulationNodes.set_joined_dists()
+            jointDists = simulationNodes.joinedDists
+            jointStandardDists = simulationNodes.joinedStandardDists
         else:
-            nodes = parameters
-    
-    # Simulate
-    start_time_evaluationg_surrogate = time.time()
-    problem_function.uq_method = uq_method
-    ## multiprocessing
-    # list_of_unique_index_runs =range(parameters.T.shape[0])
-    # num_cores = multiprocessing.cpu_count()
-    # parameter_chunks = np.array_split(parameters.T, num_cores)
-    # list_of_unique_index_runs_chunks = np.array_split(list_of_unique_index_runs, num_cores)
-    # list_of_unique_index_runs_chunks = [chunk.tolist() for chunk in list_of_unique_index_runs_chunks]
-    # surrogate_object_chunks = [surrogate_object]*num_cores
-    # results_list = []
-    # def process_nodes_concurrently(parameter_chunks):
-    #     with multiprocessing.Pool(processes=num_cores) as pool:
-    #         for result in pool.starmap(evaluate_chunk_model_run_function, \
-    #             [(problem_function, parameter, i_s, surrogate_object, problem_function.single_qoi) for (parameter, i_s) in zip(parameter_chunks, list_of_unique_index_runs_chunks)]):
-    #             yield result
-    # for result in process_nodes_concurrently(parameter_chunks):
-    #     results_list.append(result)
-    ## version withour parallelization
-    results_list = problem_function.run(
-        i_s=range(parameters.T.shape[0]), 
-        parameters=parameters.T, 
-        raise_exception_on_model_break=True,
-        evaluate_surrogate=True, 
-        surrogate_model=surrogate_object,
-        single_qoi_column_surrogate=problem_function.single_qoi,
-    )
+            # setup via the chaospy
+            simulationNodes = None
+            dists = []
+            standardDists = []
+            standardDists_min_one_one = []
+            standardDists_zero_one = []
+            # jointDists = None
+            # jointStandardDists = None
+            for single_param_dist_config_dict in distributions_list_of_dicts:
+                cp_dist_signature = inspect.signature(getattr(cp, single_param_dist_config_dict["distribution"]))
+                dist_parameters_values = []
+                for p in cp_dist_signature.parameters:
+                    dist_parameters_values.append(single_param_dist_config_dict[p])
+                dists.append(getattr(cp, single_param_dist_config_dict["distribution"])(*dist_parameters_values))
+                standardDists.append(getattr(cp, single_param_dist_config_dict["distribution"])())
+                standardDists_min_one_one.append(getattr(cp, single_param_dist_config_dict["distribution"])(lower=-1, upper=1))
+                standardDists_zero_one.append(getattr(cp, single_param_dist_config_dict["distribution"])(lower=0, upper=1))
+            jointDists = cp.J(*dists)
+            jointStandardDists = cp.J(*standardDists)
+            jointDistsStandardDists_min_one_one = cp.J(*standardDists_min_one_one)
 
-    # print(f"DEBUGGING - results_list evaluating combiinstance surrogate model model={results_list}")
-    end_time_evaluationg_surrogate = time.time()
-    time_evaluationg_intermediate_surrogate  = end_time_evaluationg_surrogate - start_time_evaluationg_surrogate
-    dictionary_with_inf_about_the_run_uqef["time_evaluationg_intermediate_surrogate"] = time_evaluationg_intermediate_surrogate
-    print(f"time_evaluationg_intermediate_surrogate={dictionary_with_inf_about_the_run_uqef['time_evaluationg_intermediate_surrogate']}\n")
+        # Generate Nodes
+        if simulationNodes is not None:
+            if uq_method == "ensemble":
+                nodes = simulationNodes.nodes
+                parameters = simulationNodes.parameters
+            elif uq_method == "mc":
+                nodes, parameters = simulationNodes.generateNodesForMC(
+                    numSamples=uqsim_args_dict["mc_numevaluations"], 
+                    rule=uqsim_args_dict["sampling_rule"], 
+                    read_nodes_from_file=uqsim_args_dict["read_nodes_from_file"], 
+                    parameters_file_name=uqsim_args_dict["parameters_file"]
+                )
+            elif uq_method == "sc":
+                nodes, weights, parameters = simulationNodes.generateNodesForSC(
+                    numCollocationPointsPerDim=uqsim_args_dict["sc_q_order"], 
+                    rule=uqsim_args_dict["sc_quadrature_rule"], 
+                    sparse=uqsim_args_dict["sc_sparse_quadrature"],
+                    read_nodes_from_file=uqsim_args_dict["read_nodes_from_file"], 
+                    parameters_file_name=uqsim_args_dict["parameters_file"]
+                )
+            elif uq_method == "saltelli":
+                raise NotImplementedError("Yet not implemented for the Saltelli method")
+        else:
+            # reading parameters option / SC vs Quadrature / 
+            if uq_method == "mc":
+                parameters = uqef_dynamic_utils.generate_parameters_for_mc_simulation(
+                    jointDists=jointDists, jointStandard=jointStandardDists, numSamples=100, rule="r",
+                    sampleFromStandardDist=False, 
+                    read_nodes_from_file=False, rounding=False, round_dec=False,
+                )
+            elif uq_method == "sc":
+                raise NotImplementedError("Yet not implemented for the Sparse Grids")
+                # parameters = uqef_dynamic_utils.generate_parameters_for_sc_simulation(
+                #     jointDists=jointDists, jointStandard=jointStandardDists, numSamples=100, rule="r",
+                #     sampleFromStandardDist=False, 
+                #     read_nodes_from_file=False, rounding=False, round_dec=False,
+                # )
+                # nodes = parameters
+            elif uq_method == "saltelli":
+                raise NotImplementedError("Yet not implemented for the Saltelli method")
+            if jointStandardDists is not None and uqsim_args_dict["sampleFromStandardDist"]:
+                nodes = utility.transformation_of_parameters(
+                    parameters, jointDists, jointStandardDists)
+            else:
+                nodes = parameters
+        
+        # Simulate
+        start_time_evaluationg_surrogate = time.time()
+        problem_function.uq_method = uq_method
+        ## multiprocessing
+        # list_of_unique_index_runs =range(parameters.T.shape[0])
+        # num_cores = multiprocessing.cpu_count()
+        # parameter_chunks = np.array_split(parameters.T, num_cores)
+        # list_of_unique_index_runs_chunks = np.array_split(list_of_unique_index_runs, num_cores)
+        # list_of_unique_index_runs_chunks = [chunk.tolist() for chunk in list_of_unique_index_runs_chunks]
+        # surrogate_object_chunks = [surrogate_object]*num_cores
+        # results_list = []
+        # def process_nodes_concurrently(parameter_chunks):
+        #     with multiprocessing.Pool(processes=num_cores) as pool:
+        #         for result in pool.starmap(evaluate_chunk_model_run_function, \
+        #             [(problem_function, parameter, i_s, surrogate_object, problem_function.single_qoi) for (parameter, i_s) in zip(parameter_chunks, list_of_unique_index_runs_chunks)]):
+        #             yield result
+        # for result in process_nodes_concurrently(parameter_chunks):
+        #     results_list.append(result)
+        ## version withour parallelization
+        results_list = problem_function.run(
+            i_s=range(parameters.T.shape[0]), 
+            parameters=parameters.T, 
+            raise_exception_on_model_break=True,
+            evaluate_surrogate=True, 
+            surrogate_model=surrogate_object,
+            single_qoi_column_surrogate=problem_function.single_qoi,
+        )
 
-    start_time_evalauting_original_model_uqef = time.time()
-    results_list_original_model = problem_function.run(
-        i_s=range(parameters.T.shape[0]), 
-        parameters=parameters.T, 
-        raise_exception_on_model_break=True,
-    )
-    # print(f"DEBUGGING - results_list_original_model evaluating combiinstance surrogate model model={results_list_original_model}")
-    end_time_evalauting_original_model_uqef = time.time()
-    time_evalauting_original_model_uqef = end_time_evalauting_original_model_uqef - start_time_evalauting_original_model_uqef
-    dictionary_with_inf_about_the_run_uqef["time_evalauting_original_model_uqef"] = time_evalauting_original_model_uqef
-    print(f"time_evalauting_original_model_uqef={dictionary_with_inf_about_the_run_uqef['time_evalauting_original_model_uqef']}\n")
+        # print(f"DEBUGGING - results_list evaluating combiinstance surrogate model model={results_list}")
+        end_time_evaluationg_surrogate = time.time()
+        time_evaluationg_intermediate_surrogate  = end_time_evaluationg_surrogate - start_time_evaluationg_surrogate
+        dictionary_with_inf_about_the_run_uqef["time_evaluationg_intermediate_surrogate"] = time_evaluationg_intermediate_surrogate
+        print(f"time_evaluationg_intermediate_surrogate={dictionary_with_inf_about_the_run_uqef['time_evaluationg_intermediate_surrogate']}\n")
+
+        start_time_evalauting_original_model_uqef = time.time()
+        results_list_original_model = problem_function.run(
+            i_s=range(parameters.T.shape[0]), 
+            parameters=parameters.T, 
+            raise_exception_on_model_break=True,
+        )
+        # print(f"DEBUGGING - results_list_original_model evaluating combiinstance surrogate model model={results_list_original_model}")
+        end_time_evalauting_original_model_uqef = time.time()
+        time_evalauting_original_model_uqef = end_time_evalauting_original_model_uqef - start_time_evalauting_original_model_uqef
+        dictionary_with_inf_about_the_run_uqef["time_evalauting_original_model_uqef"] = time_evalauting_original_model_uqef
+        print(f"time_evalauting_original_model_uqef={dictionary_with_inf_about_the_run_uqef['time_evalauting_original_model_uqef']}\n")
 
     # Statistics
     problem_statistics = None
@@ -866,56 +884,61 @@ def main_routine(model, current_output_folder, **kwargs):
         problem_statistics = None
         # raise ValueError(f"Model {model} is not yet supported for generating statistics object!")
     
-    # TODO Deal wit mpi / parallel statistics setup
-    start_time_computing_statistics = time.time()
-    # uqsim.prepare_statistics()
-    # uqsim.calc_statistics()
-    rawSamples = [single_results_dict for (single_results_dict, _) in results_list]
+    if is_master(mpi, rank):
+        start_time_computing_statistics = time.time()
+        rawSamples = [single_results_dict for (single_results_dict, _) in results_list]
     if problem_statistics is not None:
-        problem_statistics.prepare(rawSamples)
+        if is_master(mpi, rank):
+            problem_statistics.prepare(rawSamples)
         if uq_method == "mc":
-            numEvaluations = nodes.shape[1] # simulationNodes.numSamples
-            problem_statistics.prepareForMcStatistics(
-                simulationNodes, numEvaluations=numEvaluations, 
-                regression=uqsim_args_dict["regression"], 
-                order=uqsim_args_dict["sc_p_order"],
-                poly_normed=uqsim_args_dict["sc_poly_normed"], 
-                poly_rule=uqsim_args_dict["sc_poly_rule"], 
-                cross_truncation=uqsim_args_dict["cross_truncation"])
+            if is_master(mpi, rank):
+                numEvaluations = nodes.shape[1] # simulationNodes.numSamples
+                problem_statistics.prepareForMcStatistics(
+                    simulationNodes, numEvaluations=numEvaluations, 
+                    regression=uqsim_args_dict["regression"], 
+                    order=uqsim_args_dict["sc_p_order"],
+                    poly_normed=uqsim_args_dict["sc_poly_normed"], 
+                    poly_rule=uqsim_args_dict["sc_poly_rule"], 
+                    cross_truncation=uqsim_args_dict["cross_truncation"])
             if uqsim_args_dict["parallel_statistics"] and uqsim_args_dict["mpi"]:
                 problem_statistics.calcStatisticsForMcParallel()
             else:
                 problem_statistics.calcStatisticsForMc()
         elif uq_method == "sc":
-            problem_statistics.prepareForScStatistics(
-                simulationNodes,
-                order=uqsim_args_dict["sc_p_order"],
-                poly_normed=uqsim_args_dict["sc_poly_normed"], 
-                poly_rule=uqsim_args_dict["sc_poly_rule"], 
-                regression=uqsim_args_dict["regression"], 
-                cross_truncation=uqsim_args_dict["cross_truncation"])
+            if is_master(mpi, rank):
+                problem_statistics.prepareForScStatistics(
+                    simulationNodes,
+                    order=uqsim_args_dict["sc_p_order"],
+                    poly_normed=uqsim_args_dict["sc_poly_normed"], 
+                    poly_rule=uqsim_args_dict["sc_poly_rule"], 
+                    regression=uqsim_args_dict["regression"], 
+                    cross_truncation=uqsim_args_dict["cross_truncation"])
             if uqsim_args_dict["parallel_statistics"] and uqsim_args_dict["mpi"]:
                 problem_statistics.calcStatisticsForScParallel()
             else:
                 problem_statistics.calcStatisticsForSc()
         elif uq_method == "saltelli":
-            problem_statistics.prepareForMcSaltelliStatistics(
-                simulationNodes,
-                order=uqsim_args_dict["sc_p_order"],
-                poly_normed=uqsim_args_dict["sc_poly_normed"], 
-                poly_rule=uqsim_args_dict["sc_poly_rule"], 
-                regression=uqsim_args_dict["regression"], 
-                cross_truncation=uqsim_args_dict["cross_truncation"])
+            if is_master(mpi, rank):
+                problem_statistics.prepareForMcSaltelliStatistics(
+                    simulationNodes,
+                    order=uqsim_args_dict["sc_p_order"],
+                    poly_normed=uqsim_args_dict["sc_poly_normed"], 
+                    poly_rule=uqsim_args_dict["sc_poly_rule"], 
+                    regression=uqsim_args_dict["regression"], 
+                    cross_truncation=uqsim_args_dict["cross_truncation"])
             if uqsim_args_dict["parallel_statistics"] and uqsim_args_dict["mpi"]:
                 problem_statistics.calcStatisticsForMcSaltelliParallel()
             else:
                 problem_statistics.calcStatisticsForMcSaltelli()
-        problem_statistics.saveToFile()
-        print(f"DEBUGGING - problem_statistics.result_dict-{problem_statistics.result_dict}")
-    end_time_computing_statistics = time.time()
-    time_computing_statistics = end_time_computing_statistics - start_time_computing_statistics
-    dictionary_with_inf_about_the_run_uqef["time_computing_statistics"] = time_computing_statistics
-    print(f"time_computing_statistics={dictionary_with_inf_about_the_run_uqef['time_computing_statistics']}\n")
+        if is_master(mpi, rank):
+            problem_statistics.saveToFile()
+        # print(f"DEBUGGING - problem_statistics.result_dict-{problem_statistics.result_dict}")
+    
+    if is_master(mpi, rank):
+        end_time_computing_statistics = time.time()
+        time_computing_statistics = end_time_computing_statistics - start_time_computing_statistics
+        dictionary_with_inf_about_the_run_uqef["time_computing_statistics"] = time_computing_statistics
+        print(f"time_computing_statistics={dictionary_with_inf_about_the_run_uqef['time_computing_statistics']}\n")
 
     dictionary_with_inf_about_the_run.update(dictionary_with_inf_about_the_run_uqef)
 
@@ -923,14 +946,15 @@ def main_routine(model, current_output_folder, **kwargs):
     # Some final saving
     # ============================
 
-    if configurationObject is not None:
-        fileName = pathlib.Path(workingDir) / utility.CONFIGURATION_OBJECT_FILE
-        with open(fileName, 'wb') as f:
-            dill.dump(configurationObject, f)
+    if is_master(mpi, rank):
+        if configurationObject is not None:
+            fileName = pathlib.Path(workingDir) / utility.CONFIGURATION_OBJECT_FILE
+            with open(fileName, 'wb') as f:
+                dill.dump(configurationObject, f)
 
-    argsFileName = os.path.abspath(os.path.join(str(workingDir), utility.ARGS_FILE))
-    with open(argsFileName, 'wb') as handle:
-        pickle.dump(uqsim_args_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        argsFileName = os.path.abspath(os.path.join(str(workingDir), utility.ARGS_FILE))
+        with open(argsFileName, 'wb') as handle:
+            pickle.dump(uqsim_args_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     # ============================
     # uqsim = uqef.UQsim()
@@ -1084,7 +1108,8 @@ def run_single_model_setup(single_setup_dict, model, current_output_folder, read
     return dictionary_with_inf_about_the_run
 
 for single_setup_dict in list_of_dict_run_setups:
-    start_time = time.time()
+    if is_master(mpi, rank):
+        start_time = time.time()
 
     temp = single_setup_dict.get("list_of_function_ids", None)
     number_of_functions = 1 if temp is None else len(temp)
@@ -1097,10 +1122,11 @@ for single_setup_dict in list_of_dict_run_setups:
         # max_evaluations=1000, tol=10**-6, modified_basis=False, boundary=True, norm=2, p_bsplines=3, 
         # rebalancing=True, version=6, margin=0.8, grid_surplusses='grid'
     
-    print(f"dictionary_with_inf_about_the_run-{dictionary_with_inf_about_the_run}")
-    end_time = time.time()
-    duration = end_time - start_time
-    print(f"The single setup run took {duration} (for examing in total {number_of_functions} different functions)")
+    if is_master(mpi, rank):
+        print(f"dictionary_with_inf_about_the_run-{dictionary_with_inf_about_the_run}")
+        end_time = time.time()
+        duration = end_time - start_time
+        print(f"The single setup run took {duration} (for examing in total {number_of_functions} different functions)")
 
 # ============================
 # Observations  - max_evaluations is dominant! 
