@@ -420,7 +420,6 @@ def sparsespace_pipeline(a, b, model=None, dim=2,
 grid_type: str='trapezoidal', method: str='standard_combi', operation_str: str='integration',
 directory_for_saving_plots='./', do_plot=True,  **kwargs):
     """
-    Var 2 - Compute gPCE coefficients by integrating the (SG) surrogate
     SG surrogate computed based on SparseSpACE 
     
     :param a: lower bounds of the integration domain
@@ -453,6 +452,8 @@ directory_for_saving_plots='./', do_plot=True,  **kwargs):
         max_evaluations: maximum number of evaluations for spatially adaptive single dimensions algorithm; Default: 100
         tol: tolerance for spatially adaptive single dimensions algorithm; Default: 10**-6
         distributions: Necessary for operation='uq'; distributions for uncertainty quantification; Default: None
+        uq_optimization: 'mean' | 'mean_and_var' | 'pce'; Default: 'mean'
+        sc_p_order | polynomial_degree_max: relevant if building sg surrogate for PCE coefficents; Default: 2
         polynomial_degree_max: maximum polynomial degree for PCE; Default: 2
         writing_results_to_a_file: flag indicating whether to write results to a file or not; Default: True
     
@@ -532,15 +533,28 @@ directory_for_saving_plots='./', do_plot=True,  **kwargs):
     elif operation_str.lower() == 'interpolation':
         operation = Interpolation(f=model, grid=grid, dim=dim, reference_solution=reference_solution)
     elif operation_uq:
-        operation.set_grid(grid)  # TODO do I need this, or I have already done this...!?
+        operation.set_grid(grid)
     else:
         raise Exception(f"{operation_str} is yet not supported!")  
 
-    # TODO Ask extra questions for this; There is no need to do any of this!?
-    # if operation_uq:
-        # operation.set_expectation_variance_Function()  
-        # polynomial_degree_max = kwargs.get('polynomial_degree_max', 2)
-        # operation.set_PCE_Function(polynomial_degree_max)  #this is if you want to optimize for pce coeff. integrals
+    parallelIntegrator = False
+    if parallelIntegrator:
+        # grid.integrator = IntegratorParallelArbitraryGrid(grid)
+        raise Exception(f"parallel Integrator (ie., IntegratorParallelArbitraryGrid) is yet not supported!")
+
+    if operation_uq:
+        uq_optimization = kwargs.get('uq_optimization', 'mean')
+        if uq_optimization == 'mean':
+            print(f"===SparseSpACE INFO - Optimizing for weighted integral====")
+        if uq_optimization == 'mean_and_var':
+            print(f"===SparseSpACE INFO - Optimizing for meana and varaince====")
+            operation.set_expectation_variance_Function()  
+        elif uq_optimization == 'pce':
+            print(f"===SparseSpACE INFO - Optimizing for PCE coefficents====")
+            polynomial_degree_max = kwargs.get('polynomial_degree_max', kwargs('sc_p_order', 2))
+            operation.set_PCE_Function(polynomial_degree_max)  #this is if you want to optimize for pce coeff. integrals
+        else:
+            print(f"===SparseSpACE INFO - Optimizing for weighted integral====")
 
     scheme = None
     refinement = None
@@ -608,6 +622,7 @@ directory_for_saving_plots='./', do_plot=True,  **kwargs):
     # TODO Some of these function should be called before adaptivity
     # Options one can do with uncertainty quantification operation
     # if operation_uq:  
+    ##    here, it is also relevan the value of uq_optimization 'mean' | 'mean_and_var' | 'pce'
     #     (E,), (Var,) = operation.calculate_expectation_and_variance(combiinstance, use_combiinstance_solution=Fals)
     #     (E,), (Var,) = operation.calculate_expectation_and_variance(combiinstance, use_combiinstance_solution=True)
     #     integral = operation.get_result()
@@ -616,6 +631,7 @@ directory_for_saving_plots='./', do_plot=True,  **kwargs):
     #     integral = operation._get_combiintegral(combiinstance, scale_weights=False)
     #     operation.calculate_PCE(
     #         polynomial_degrees, combiinstance, restrict_degrees=False, use_combiinstance_solution=True, scale_weights=False)
+    #     (E,), (Var,) = operation.get_expectation_and_variance_PCE()
     #     operation.f_evals
     #     operation.gPCE / operation.get_gPCE
     #     operation.pce_polys / operation.pce_polys_norms
@@ -693,8 +709,9 @@ directory_for_saving_plots='./', do_plot=True,  **kwargs):
     # TODO Can I save model evaluations somewhere...
     # TODO Can I evaluate the scheme in new points!!!
     # TODO Can I save coefficients, c_l
+    dict_info['combiObject'] = combiObject
 
-    return combiObject, number_full_model_evaluations, dict_info
+    return dict_info
 
 
 # ============================================================================================
@@ -926,9 +943,9 @@ if __name__ == "__main__":
     # model = GenzDiscontinious(border=midpoint,coeffs=coefficients)
     # model = GenzC0(midpoint=midpoint, coeffs=coefficients)
 
-    combiObject, number_full_model_evaluations, dict_info = sparsespace_integration_pipeline(a, b, model=model, dim=dim, 
+    result_dict_sparsespace = sparsespace_integration_pipeline(a, b, model=model, dim=dim, 
     grid_type='trapezoidal', method='standard_combi',
     directory_for_saving_plots='./', do_plot=True)
     # total_points, total_weights = combiObject.get_points_and_weights()
     # total_surplusses = combiObject.get_surplusses()
-    print(f"combiObject: {combiObject}, number_full_model_evaluations: {number_full_model_evaluations}, dict_info: {dict_info}")
+    print(f"result_dict_sparsespace: {result_dict_sparsespace}")

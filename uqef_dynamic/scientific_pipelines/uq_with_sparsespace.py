@@ -35,6 +35,14 @@ from uqef_dynamic.utils import sparsespace_utils
 
 from uqef_dynamic.models.time_dependent_baseclass import time_dependent_statistics
 
+# TODO Add simple pce-part -> produce PCE surrogate
+# TODO Evaluate PCE surrogate (from UQEF-Dynamic, from simple statistics, from combiinstance)
+# TODO HBV Gof inverse logic
+# TODO PCE part from SparseSpace - partially
+# TODO Things will get more complicated when using the combiinstance to produce PCE surrogate!!!
+# TODO Add comparing final E, Var, Sobol indices with analytical values / MC
+# TODO Plotting Issue with SparseSpace
+
 local_debugging = False
 mpi = True
 
@@ -52,14 +60,19 @@ def is_master(mpi, rank=None):
 
 
 def setup_nodes_via_config_file_or_parameters_file(
-    configuration_object, uq_method="sc", read_nodes_from_file=False, parameters_file=None, sampleFromStandardDist=False, regression=False):
+    configuration_object, uq_method="sc", read_nodes_from_file=False, parameters_file=None, 
+    sampleFromStandardDist=False, regression=False):
+    """
+    Setup the nodes for the simulation based on the configuration file or parameters file.
+    This logic is extracted from the UQEF
+    """
     # node names
     node_names = []
     for parameter_config in configuration_object["parameters"]:
         node_names.append(parameter_config["name"])
     simulationNodes = uqef.nodes.Nodes(node_names)
 
-    if read_nodes_from_file and parameters_file:
+    if uq_method == "ensemble" and read_nodes_from_file and parameters_file:
         print(f"Reading nodes values from parameters file {parameters_file}")
         simulationNodes.generateNodesFromListOfValues(
             read_nodes_from_file=read_nodes_from_file,
@@ -119,42 +132,10 @@ def setup_nodes_via_config_file_or_parameters_file(
 
 
 def run_simplified_uqef_dynamic_simulation(
-    problem_function, configurationObject, uqsim_args_dict, distributions_list_of_dicts, 
-    workingDir, model, list_of_surrogate_models=["larsim", "hbvsask", "ishigami", "oscillator",],
+    problem_function, configurationObject, uqsim_args_dict,  
+    workingDir, model, simulationNodes=None,
+    list_of_surrogate_models=["larsim", "hbvsask", "ishigami", "oscillator",],
     surrogate_object=None, **kwargs):
-    uq_method = kwargs.get("uq_method", "mc")
-    uqsim_args_dict["uq_method"] = uq_method
-    uqsim_args_dict["mc_numevaluations"] = kwargs.get("mc_numevaluations", 100)
-    uqsim_args_dict["sampling_rule"] = kwargs.get("sampling_rule", "random")
-    uqsim_args_dict["sc_q_order"] = kwargs.get("sc_q_order", 5)
-    uqsim_args_dict["sc_p_order"] = kwargs.get("sc_p_order", 2)
-    uqsim_args_dict["sc_quadrature_rule"] = kwargs.get("sc_quadrature_rule",  "g")
-    uqsim_args_dict["parameters_setup_file"] = kwargs.get("parameters_setup_file", None)
-    uqsim_args_dict["sc_poly_rule"] = kwargs.get("sc_poly_rule", "three_terms_recurrence")   # "gram_schmidt" | "three_terms_recurrence" | "cholesky"
-    uqsim_args_dict["sc_poly_normed"] = kwargs.get("sc_poly_normed", True)
-    uqsim_args_dict["sc_sparse_quadrature"] = kwargs.get("sc_sparse_quadrature", False)
-    uqsim_args_dict["regression"] = kwargs.get("regression", False)
-    uqsim_args_dict["cross_truncation"] = kwargs.get("cross_truncation", 0.7)
-    uqsim_args_dict["read_nodes_from_file"] = kwargs.get("read_nodes_from_file", False)
-    uqsim_args_dict["l_sg"] = kwargs.get("l_sg", kwargs.get("l", 5))
-    parameters_file = kwargs.get("parameters_file", None)
-    # path_to_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/sparse_grid_nodes_weights")
-    if parameters_file is not None:
-        uqsim_args_dict["parameters_file"] = parameters_file / f"KPU_d{dim}_l{uqsim_args_dict['l_sg']}.asc"
-        parameters_file = uqsim_args_dict["parameters_file"]
-    else:
-        uqsim_args_dict["parameters_file"] = None
-    uqsim_args_dict["sampleFromStandardDist"] = kwargs.get("sampleFromStandardDist", True)
-    uqsim_args_dict["disable_statistics"] = kwargs.get("disable_statistics", False)
-    uqsim_args_dict["disable_calc_statistics"] = kwargs.get("disable_calc_statistics", False)
-    uqsim_args_dict["parallel_statistics"] = mpi #kwargs.get("parallel_statistics", False)
-    uqsim_args_dict["instantly_save_results_for_each_time_step"] = kwargs.get("instantly_save_results_for_each_time_step", False)
-    uqsim_args_dict["compute_Sobol_m"] = kwargs.get("compute_Sobol_m", True)
-    uqsim_args_dict["compute_Sobol_t"] = kwargs.get("compute_Sobol_t", True)
-    uqsim_args_dict["num_cores"] = kwargs.get("num_cores", False)
-    uqsim_args_dict["store_qoi_data_in_stat_dict"] = kwargs.get("store_qoi_data_in_stat_dict", False)
-    uqsim_args_dict["store_gpce_surrogate_in_stat_dict"] = kwargs.get("store_gpce_surrogate_in_stat_dict", False)
-
     dictionary_with_inf_about_the_run_uqef = {}
 
     # From this point on distinguish between the two setup 
@@ -163,88 +144,66 @@ def run_simplified_uqef_dynamic_simulation(
     
     if is_master(mpi, rank):
 
-        if configurationObject is not None:
-            # setup via the uqef
+        uq_method = uqsim_args_dict["uq_method"]
+
+        # ============================
+        # Generate Nodes, Parameters, and Weights
+        # ============================
+        nodes = None
+        parameters = None
+        weights = None
+
+        if simulationNodes is None:
             simulationNodes = setup_nodes_via_config_file_or_parameters_file(
-                configuration_object=configurationObject, 
-                uq_method=uq_method, read_nodes_from_file=uqsim_args_dict["read_nodes_from_file"], 
-                parameters_file=uqsim_args_dict["parameters_file"],
-                sampleFromStandardDist=uqsim_args_dict["sampleFromStandardDist"],
+                configurationObject=configurationObject, 
+                uq_method=uq_method, 
+                read_nodes_from_file=uqsim_args_dict["read_nodes_from_file"], 
+                parameters_file=uqsim_args_dict["parameters_file"], 
+                sampleFromStandardDist=uqsim_args_dict["sampleFromStandardDist"], 
                 regression=uqsim_args_dict["regression"]
             )
-            simulationNodes.set_joined_dists()
-            jointDists = simulationNodes.joinedDists
-            jointStandardDists = simulationNodes.joinedStandardDists
-        else:
-            # setup via the chaospy
-            simulationNodes = None
-            dists = []
-            standardDists = []
-            standardDists_min_one_one = []
-            standardDists_zero_one = []
-            # jointDists = None
-            # jointStandardDists = None
-            for single_param_dist_config_dict in distributions_list_of_dicts:
-                cp_dist_signature = inspect.signature(getattr(cp, single_param_dist_config_dict["distribution"]))
-                dist_parameters_values = []
-                for p in cp_dist_signature.parameters:
-                    dist_parameters_values.append(single_param_dist_config_dict[p])
-                dists.append(getattr(cp, single_param_dist_config_dict["distribution"])(*dist_parameters_values))
-                standardDists.append(getattr(cp, single_param_dist_config_dict["distribution"])())
-                standardDists_min_one_one.append(getattr(cp, single_param_dist_config_dict["distribution"])(lower=-1, upper=1))
-                standardDists_zero_one.append(getattr(cp, single_param_dist_config_dict["distribution"])(lower=0, upper=1))
-            jointDists = cp.J(*dists)
-            jointStandardDists = cp.J(*standardDists)
-            jointDistsStandardDists_min_one_one = cp.J(*standardDists_min_one_one)
 
-        # Generate Nodes
-        if simulationNodes is not None:
-            if uq_method == "ensemble":
-                nodes = simulationNodes.nodes
-                parameters = simulationNodes.parameters
-            elif uq_method == "mc":
-                nodes, parameters = simulationNodes.generateNodesForMC(
-                    numSamples=uqsim_args_dict["mc_numevaluations"], 
-                    rule=uqsim_args_dict["sampling_rule"], 
-                    read_nodes_from_file=uqsim_args_dict["read_nodes_from_file"], 
-                    parameters_file_name=uqsim_args_dict["parameters_file"]
-                )
-            elif uq_method == "sc":
-                nodes, weights, parameters = simulationNodes.generateNodesForSC(
-                    numCollocationPointsPerDim=uqsim_args_dict["sc_q_order"], 
-                    rule=uqsim_args_dict["sc_quadrature_rule"], 
-                    sparse=uqsim_args_dict["sc_sparse_quadrature"],
-                    read_nodes_from_file=uqsim_args_dict["read_nodes_from_file"], 
-                    parameters_file_name=uqsim_args_dict["parameters_file"]
-                )
-            elif uq_method == "saltelli":
-                raise NotImplementedError("Yet not implemented for the Saltelli method")
-        else:
-            # TODO add option to read from a file!
-            # reading parameters option / SC vs Quadrature / 
-            if uq_method == "mc":
-                parameters = uqef_dynamic_utils.generate_parameters_for_mc_simulation(
-                    jointDists=jointDists, jointStandard=jointStandardDists, numSamples=100, rule="r",
-                    sampleFromStandardDist=False, 
-                    read_nodes_from_file=False, rounding=False, round_dec=False,
-                )
-            elif uq_method == "sc":
-                raise NotImplementedError("Yet not implemented for the Sparse Grids")
-                # parameters = uqef_dynamic_utils.generate_parameters_for_sc_simulation(
-                #     jointDists=jointDists, jointStandard=jointStandardDists, numSamples=100, rule="r",
-                #     sampleFromStandardDist=False, 
-                #     read_nodes_from_file=False, rounding=False, round_dec=False,
-                # )
-                # nodes = parameters
-            elif uq_method == "saltelli":
-                raise NotImplementedError("Yet not implemented for the Saltelli method")
-            if jointStandardDists is not None and uqsim_args_dict["sampleFromStandardDist"]:
-                nodes = utility.transformation_of_parameters(
-                    parameters, jointDists, jointStandardDists)
-            else:
-                nodes = parameters
+        if uq_method == "ensemble":
+            nodes = simulationNodes.nodes
+            parameters = simulationNodes.parameters
+        elif uq_method == "mc":
+            nodes, parameters = simulationNodes.generateNodesForMC(
+                numSamples=uqsim_args_dict["mc_numevaluations"], 
+                rule=uqsim_args_dict["sampling_rule"], 
+                read_nodes_from_file=uqsim_args_dict["read_nodes_from_file"], 
+                parameters_file_name=uqsim_args_dict["parameters_file"]
+            )
+        elif uq_method == "sc":
+            nodes, weights, parameters = simulationNodes.generateNodesForSC(
+                numCollocationPointsPerDim=uqsim_args_dict["sc_q_order"], 
+                rule=uqsim_args_dict["sc_quadrature_rule"], 
+                sparse=uqsim_args_dict["sc_sparse_quadrature"],
+                read_nodes_from_file=uqsim_args_dict["read_nodes_from_file"], 
+                parameters_file_name=uqsim_args_dict["parameters_file"]
+            )
+        elif uq_method == "saltelli":
+            raise NotImplementedError("Yet not implemented for the Saltelli method")
+
+        # ============================
+        # Save simulationNodes, nodes, parameters, and weights
+        # ============================
+        simulationNodes.saveToFile(str(workingDir) + "/" + "nodes")
         
+        if parameters is not None:
+            df = pd.DataFrame({'parameters': [row for row in parameters.T]})
+            df.to_pickle(os.path.abspath(os.path.join(str(workingDir), utility.DF_UQSIM_SIMULATION_PARAMETERS_FILE)), compression="gzip")
+
+        if nodes is not None:
+            df = pd.DataFrame({'nodes': [row for row in nodes.T]})
+            df.to_pickle(os.path.abspath(os.path.join(str(workingDir), utility.DF_UQSIM_SIMULATION_NODES_FILE)), compression="gzip")
+
+        if weights is not None:
+            df = pd.DataFrame({'weights': [row for row in weights]})
+            df.to_pickle(os.path.abspath(os.path.join(str(workingDir), utility.DF_UQSIM_SIMULATION_WEIGHTS_FILE)), compression="gzip")
+
+        # ============================
         # Simulate
+        # ============================
         start_time_evaluationg_surrogate = time.time()
         problem_function.uq_method = uq_method
         ## multiprocessing
@@ -263,20 +222,33 @@ def run_simplified_uqef_dynamic_simulation(
         # for result in process_nodes_concurrently(parameter_chunks):
         #     results_list.append(result)
         ## version withour parallelization
-        results_list = problem_function.run(
-            i_s=range(parameters.T.shape[0]), 
-            parameters=parameters.T, 
-            raise_exception_on_model_break=True,
-            evaluate_surrogate=True, 
-            surrogate_model=surrogate_object,
-            single_qoi_column_surrogate=problem_function.single_qoi,
-        )
+        if surrogate_object is None:
+            print(f"====[PCE PART INFO] - building the gPCE of the original model====")
+            results_list = problem_function.run(
+                i_s=range(parameters.T.shape[0]), 
+                parameters=parameters.T, 
+                raise_exception_on_model_break=True,
+                evaluate_surrogate=False,
+                surrogate_model=None,
+                single_qoi_column_surrogate=problem_function.single_qoi,
+            )
+            dictionary_with_inf_about_the_run_uqef["number_full_model_evaluations"] = parameters.T.shape[0]
+        eLse:
+            print(f"====[PCE PART INFO] - building the gPCE without the surrogate model====")
+            results_list = problem_function.run(
+                i_s=range(parameters.T.shape[0]), 
+                parameters=parameters.T, 
+                raise_exception_on_model_break=True,
+                evaluate_surrogate=True, 
+                surrogate_model=surrogate_object,
+                single_qoi_column_surrogate=problem_function.single_qoi,
+            )
+            dictionary_with_inf_about_the_run_uqef["number_surrogate_model_evaluations"] = parameters.T.shape[0]
 
-        # print(f"DEBUGGING - results_list evaluating combiinstance surrogate model model={results_list}")
         end_time_evaluationg_surrogate = time.time()
         time_evaluationg_intermediate_surrogate  = end_time_evaluationg_surrogate - start_time_evaluationg_surrogate
-        dictionary_with_inf_about_the_run_uqef["time_evaluationg_intermediate_surrogate"] = time_evaluationg_intermediate_surrogate
-        print(f"time_evaluationg_intermediate_surrogate={dictionary_with_inf_about_the_run_uqef['time_evaluationg_intermediate_surrogate']}\n")
+        dictionary_with_inf_about_the_run_uqef["time_evaluationg_model_when_building_gpce"] = time_evaluationg_intermediate_surrogate
+        print(f"time_evaluationg_model_when_building_gpce={dictionary_with_inf_about_the_run_uqef['time_evaluationg_model_when_building_gpce']}\n")
 
         if kwargs.get("run_original_model", False):
             start_time_evalauting_original_model_uqef = time.time()
@@ -291,7 +263,9 @@ def run_simplified_uqef_dynamic_simulation(
             dictionary_with_inf_about_the_run_uqef["time_evalauting_original_model_uqef"] = time_evalauting_original_model_uqef
             print(f"time_evalauting_original_model_uqef={dictionary_with_inf_about_the_run_uqef['time_evalauting_original_model_uqef']}\n")
 
+    # ============================
     # Statistics
+    # ============================
     problem_statistics = None
     if model.lower() in list_of_surrogate_models:
         problem_statistics = create_stat_object.create_statistics_object(
@@ -299,15 +273,10 @@ def run_simplified_uqef_dynamic_simulation(
             uqsim_args_dict=uqsim_args_dict, 
             workingDir=workingDir, model=model)
     else:
-        # TODO Finish this for simple functions
-        # problem_statistics = time_dependent_statistics.TimeDependentStatistics(
-        #     configuration_object=configurationObject, 
-        #     uqsim_args_dict=uqsim_args_dict, 
-        #     workingDir=workingDir, model=model,
-        # )
         problem_statistics = None
-        # raise ValueError(f"Model {model} is not yet supported for generating statistics object!")
+        raise ValueError(f"Model {model} is not yet supported for generating statistics object!")
     
+    gPCE_surrogate = None
     if is_master(mpi, rank):
         start_time_computing_statistics = time.time()
         rawSamples = [single_results_dict for (single_results_dict, _) in results_list]
@@ -356,9 +325,8 @@ def run_simplified_uqef_dynamic_simulation(
                 problem_statistics.calcStatisticsForMcSaltelli()
         if is_master(mpi, rank):
             problem_statistics.saveToFile()
-        # print(f"DEBUGGING - problem_statistics.result_dict-{problem_statistics.result_dict}")
 
-    # TODO Extract gPCE surrogate (if available) and use it below for the compariosn with the original model
+    # TODO Extract gPCE surrogate (if available) and use it below for the comparison with the original model
     
     if is_master(mpi, rank):
         end_time_computing_statistics = time.time()
@@ -366,8 +334,58 @@ def run_simplified_uqef_dynamic_simulation(
         dictionary_with_inf_about_the_run_uqef["time_computing_statistics"] = time_computing_statistics
         print(f"time_computing_statistics={dictionary_with_inf_about_the_run_uqef['time_computing_statistics']}\n")
     
+    dictionary_with_inf_about_the_run_uqef['gPCE_surrogate'] = gPCE_surrogate
+
     return dictionary_with_inf_about_the_run_uqef
 
+    # ============================
+    # uqsim = uqef.UQsim()
+    # uqsim.args.model = model # "combiinstance" 
+    # uqsim.args.uncertain = "all"
+    # uqsim.args.chunksize = 1
+    # uqsim.setup_configuration_object()
+    # uqsim.args.workingDir = str(uqsim.args.outputResultDir)
+    # # TODO Register the model (SG Integral) and the statistics
+    # uqsim.models.update({"combiinstance"         : (lambda: CombiinstanceModelUQEF(
+    # combiinstance=combiObject,))})
+    # uqsim.setup()  #here is where model_generator and setup_solver are taking place... not sure if i need this
+    # if uqsim.is_master():
+    #     simulationNodes_save_file = "nodes"
+    #     uqsim.save_simulationNodes(fileName=simulationNodes_save_file)
+    #     number_full_model_evaluations = uqsim.get_simulation_parameters_shape()[0]
+    #     argsFileName = os.path.abspath(os.path.join(uqsim.args.outputResultDir, utility.ARGS_FILE))
+    #     with open(argsFileName, 'wb') as handle:
+    #         pickle.dump(uqsim.args, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    #     fileName = pathlib.Path(uqsim.args.outputResultDir) / utility.CONFIGURATION_OBJECT_FILE
+    #     with open(fileName, 'wb') as f:
+    #         dill.dump(uqsim.configuration_object, f)
+    # # simulate
+    # start_time_model_simulations = time.time()
+    # uqsim.simulate()
+    # end_time_model_simulations = time.time()
+    # time_model_simulations = end_time_model_simulations - start_time_model_simulations
+    # if uqsim.is_master():
+    #     if hasattr(uqsim.simulation, 'parameters') and uqsim.simulation.parameters is not None:
+    #         df = pd.DataFrame({'parameters': [row for row in uqsim.simulation.parameters]})
+    #         df.to_pickle(os.path.abspath(os.path.join(uqsim.args.outputResultDir, utility.DF_UQSIM_SIMULATION_PARAMETERS_FILE)), compression="gzip")
+    #     if hasattr(uqsim.simulation, 'nodes') and uqsim.simulation.nodes is not None:
+    #         df = pd.DataFrame({'nodes': [row for row in uqsim.simulation.nodes]})
+    #         df.to_pickle(os.path.abspath(os.path.join(uqsim.args.outputResultDir, utility.DF_UQSIM_SIMULATION_NODES_FILE)), compression="gzip")
+    #     if hasattr(uqsim.simulation, 'weights') and uqsim.simulation.weights is not None:
+    #         df = pd.DataFrame({'weights': [row for row in uqsim.simulation.weights]})
+    #         df.to_pickle(os.path.abspath(os.path.join(uqsim.args.outputResultDir, utility.DF_UQSIM_SIMULATION_WEIGHTS_FILE)), compression="gzip")
+    #     fileName = pathlib.Path(uqsim.args.outputResultDir) / utility.CONFIGURATION_OBJECT_FILE
+    #     with open(fileName, 'wb') as f:
+    #         dill.dump(uqsim.configuration_object, f)
+    # # statistics
+    # start_time_computing_statistics = time.time()
+    # uqsim.prepare_statistics()
+    # uqsim.calc_statistics()
+    # end_time_computing_statistics = time.time()
+    # time_computing_statistics = end_time_computing_statistics - start_time_computing_statistics
+    # uqsim.save_statistics()
+    # uqsim.tear_down()
+    # # ============================
 # ============================
 
 
@@ -446,72 +464,10 @@ def evaluate_chunk_model_run_function(problem_function, parameter, i_s, surrogat
 # ============================
 
 def main_routine(model, current_output_folder, **kwargs):
-    """
+    # ============================
+    # Initialization
+    # ============================
 
-    :param model:
-    :param current_output_folder:
-
-    Optional parameters propagated through kwargs:
-    :mpi: ;default: False;
-    :can_model_evaluate_all_vector_nodes: ; default: False;
-    :anisotropic: ; default:True
-    :compute_mean: ; default:True
-    :compute_var: ; default:True
-    :compute_Sobol_m: ; default:False
-    :compute_Sobol_t: ; default:False
-    :dict_what_to_compute_stat: ; default:DEFAULT_DICT_STAT_TO_COMPUTE
-    :qoi: ; default:"model_output"
-    :operation: ; default:"UncertaintyQuantification"; other_options:"Interpolation" "both"
-    :use_uqef: ; default:False This is relevant when var=1 is executed
-    :uq_method: ; default:'sc'
-    :writing_results_to_a_file_model: ; default:False
-    :plotting_model: ; default:False
-    :variant: ; default:1
-    :surrogate_model_of_interest: ; default:"gpce"; other_options:"gpce" | "gPCE" | "sg" this is relevant when sg surrogate is indeed computed, i.e., variant == 2 or 3 or 4
-    :writing_results_to_a_file: ; default:True
-    :plotting: ; default:True
-    :quadrature_rule: ; default:'g'; other_options: 'c'
-    :q_order: ; default:9
-    :p_order: ; default:4
-    :poly_rule: ; default:"three_terms_recurrence"; other_options:"gram_schmidt" | "three_terms_recurrence" | "cholesky"
-    :poly_normed: ; default:False
-    :sparse_quadrature: ; default:False
-    :sampling_rule: ; default:"random"; other_options: "random" | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
-    :sampleFromStandardDist: ; default:True
-    :read_nodes_from_file: ; default:False
-    :level_sg: ; default:10
-    :mc_numevaluations: ; default:100
-    :surrogate_type | surrogate_model_of_interest; default: None; other_options:"pce" | "kl+pce" | "sg" | "combiinstance" | "sgi+pce" | "kl+sg" | "kl+combiinstance" | "kl+sgi+pce"
-
-    These are only relevant when uqef simulation is initiated
-    :instantly_save_results_for_each_time_step: ; default:False
-    :disable_statistics: ; default:False
-    :parallel_statistics: ; default:True
-    :num_cores: ; default:1
-
-    The following parameters are relevant when variant == 2 | Var 3 | Var 4 - parameters for SparseSpACE
-    :gridName: ; default:"Trapezoidal"; other_options: "Trapezoidal" | "TrapezoidalWeighted" | "BSpline_p3" | "Leja"
-    :lmin: ; default:1
-    :lmax: ; default:2
-    :max_evals: ; default:10**5
-    :tolerance: ; default:10 ** -5  # or tolerance = 10 ** -20
-    :modified_basis: ; default:False
-    :boundary_points: ; default:True
-    :spatiallyAdaptive: ; default:True
-    :dimensionAdaptive; default:False
-    :rebalancing: ; default:True
-    :version: ; default:6
-    :margin: ; default:0.8
-
-    These configuration parameters make sense when spatiallyAdaptive = True
-    grid_surplusses: ; default:"grid"; other_options:None | "grid", Note: when gridName = "Trapezoidal" grid_surplusses=None is okay...
-    norm_spatiallyAdaptive: ; default:2; other_options:2 | np.inf (I think in sparseSpACE it is np.inf)
-
-    This is only relevant when var==3
-    build_sg_for_e_and_var: ; default:True
-
-    :return:
-    """
     dictionary_with_inf_about_the_run = dict()
     uqsim_args_dict = dict()
     dict_with_time_info = None
@@ -519,6 +475,14 @@ def main_routine(model, current_output_folder, **kwargs):
     scratch_dir = cwd
 
     # mpi = kwargs.get("mpi", False)
+
+    compute_ct_surrogate= kwargs.get("compute_ct_surrogate", True)
+    compute_pce_from_ct_surrogate = kwargs.get("compute_pce_from_ct_surrogate", False)
+    compute_pce_surrogate = kwargs.get("compute_pce_surrogate", True)
+    if not compute_ct_surrogate or not compute_pce_surrogate:
+        raise ValueError("The current implementation requires both ct and pce surrogates to be computed!")
+    uqsim_args_dict["compute_ct_surrogate"] = compute_ct_surrogate
+    uqsim_args_dict["compute_pce_surrogate"] = compute_pce_surrogate
 
     can_model_evaluate_all_vector_nodes = kwargs.get("can_model_evaluate_all_vector_nodes", False)  # set to True if eval_vectorized is implemented,
     inputModelDir = kwargs.get("inputModelDir", None)
@@ -531,7 +495,6 @@ def main_routine(model, current_output_folder, **kwargs):
     parameters_file_name = None
 
     surrogate_type = kwargs.get("surrogate_type", kwargs.get("surrogate_model_of_interest", None))
-
     variant = kwargs.get('variant', 1)
 
     if model.lower() == "ishigami":
@@ -554,16 +517,16 @@ def main_routine(model, current_output_folder, **kwargs):
     uqsim_args_dict["workingDir"] = str(workingDir)
     uqsim_args_dict["inputModelDir"] = str(inputModelDir)
     uqsim_args_dict["single_qoi"] = single_qoi
-    uqsim_args_dict["surrogate_type"] = surrogate_type
+    # uqsim_args_dict["surrogate_type"] = surrogate_type
     uqsim_args_dict['can_model_evaluate_all_vector_nodes'] = can_model_evaluate_all_vector_nodes
-    uqsim_args_dict['variant'] = variant
+    # uqsim_args_dict['variant'] = variant
 
     dictionary_with_inf_about_the_run["config_file"] = str(config_file)
     dictionary_with_inf_about_the_run["workingDir"] = str(workingDir)
     dictionary_with_inf_about_the_run["inputModelDir"] = str(inputModelDir)
     dictionary_with_inf_about_the_run["single_qoi"] = single_qoi
-    dictionary_with_inf_about_the_run["surrogate_type"] = surrogate_type
-    dictionary_with_inf_about_the_run['variant'] = variant
+    # dictionary_with_inf_about_the_run["surrogate_type"] = surrogate_type
+    # dictionary_with_inf_about_the_run['variant'] = variant
 
     # ============================
     # Setting the 'stochastic part'
@@ -657,52 +620,11 @@ def main_routine(model, current_output_folder, **kwargs):
     uqsim_args_dict["anisotropic"] = anisotropic
 
     # ============================
-    # read_nodes_from_file =  kwargs.get("read_nodes_from_file", False)
-    # parameters_file =  kwargs.get("parameters_file", None)
-    # sampleFromStandardDist = kwargs.get("sampleFromStandardDist", True)
-    # uqsim_args_dict["read_nodes_from_file"] = read_nodes_from_file
-    # uqsim_args_dict["parameters_file"] = parameters_file
-    # uqsim_args_dict["sampleFromStandardDist"] = sampleFromStandardDist
-
-    # if configurationObject is not None:
-    #     # setup via the uqef
-    #     simulationNodes = setup_nodes_via_config_file_or_parameters_file(
-    #         configuration_object=configurationObject, 
-    #         uq_method="sc", read_nodes_from_file=read_nodes_from_file, parameters_file=parameters_file,
-    #         sampleFromStandardDist=sampleFromStandardDist
-    #     )
-    #     simulationNodes.set_joined_dists()
-    #     jointDists = simulationNodes.joinedDists
-    #     jointStandardDists = simulationNodes.joinedStandardDists
-    # else:
-
-    # setup via the chaospy
-    simulationNodes = None
-    dists = []
-    standardDists = []
-    standardDists_min_one_one = []
-    standardDists_zero_one = []
-    # jointDists = None
-    # jointStandardDists = None
-    for single_param_dist_config_dict in distributions_list_of_dicts:
-        cp_dist_signature = inspect.signature(getattr(cp, single_param_dist_config_dict["distribution"]))
-        dist_parameters_values = []
-        for p in cp_dist_signature.parameters:
-            dist_parameters_values.append(single_param_dist_config_dict[p])
-        dists.append(getattr(cp, single_param_dist_config_dict["distribution"])(*dist_parameters_values))
-        standardDists.append(getattr(cp, single_param_dist_config_dict["distribution"])())
-        standardDists_min_one_one.append(getattr(cp, single_param_dist_config_dict["distribution"])(lower=-1, upper=1))
-        standardDists_zero_one.append(getattr(cp, single_param_dist_config_dict["distribution"])(lower=0, upper=1))
-    jointDists = cp.J(*dists)
-    jointStandardDists = cp.J(*standardDists)
-    jointDistsStandardDists_min_one_one = cp.J(*standardDists_min_one_one)
-
-    # ============================
     # Creating the model object
     # ============================
 
     problem_function = None
-    intermediate_surrogate = None
+    intermediate_surrogate_object = None
     surrogate_object = None
 
     if model.lower() == "ishigami":
@@ -734,9 +656,156 @@ def main_routine(model, current_output_folder, **kwargs):
         problem_function = sparsespace_functions.GenzDiscontinious(coeffs=coeffs, border=weights)  # TODO ubiquitous
     else:
         raise ValueError(f"Model {model} is not yet supported!")
+   
+    # ============================
+    # I
+    # ============================
+    # TODO add a question to see if combiinstance is used as (intermediate) surrogate model
+    if compute_ct_surrogate:
+        # params for SparseSpACE
+        grid_type = kwargs.get("grid_type", "trapezoidal")  # 'trapezoidal', 'chebyshev', 'leja', 'bspline_p3'; For spetical adaptive single dimensions algorithm: 'globa_trapezoidal', 'trapezoidal' and 'bspline_p3'
+        method = kwargs.get("method", "standard_combi")  # 'standard_combi', 'dim_adaptive_combi', 'dim_wise_spat_adaptive_combi'
+        operation_str = kwargs.get("operation", kwargs.get("operation_str", 'integration'))  # 'uncertaintyquantification', 'interpolation', 'integration'
+        # optional parameters - their default values match ones from sparsespace_utils
+        minimum_level = kwargs.get("minimum_level", kwargs.get("lmin", 1))  # used to be lmin
+        maximum_level = kwargs.get("maximum_level", kwargs.get("lmax", 3))  # used to be lmax
+        max_evaluations = kwargs.get("max_evaluations", kwargs.get("max_evals", 100)) # 0, 22, used to be max_evals
+        tol = kwargs.get("tol", kwargs.get("tolerance", 10**-6))   # 0.3*10**-1, 10**-4  # used to be tolerance
+        modified_basis = kwargs.get("modified_basis", False)
+        boundary = kwargs.get("boundary", kwargs.get("boundary_points", True))  # used to be boundary_points
+        norm = kwargs.get("norm", 2)  #np.inf
+        p_bsplines = kwargs.get("p_bsplines", 3)
+        rebalancing = kwargs.get("rebalancing", True)
+        version = kwargs.get("version", 6)
+        margin = kwargs.get("margin", 0.9)
+        grid_surplusses = kwargs.get("grid_surplusses", 'grid')
+        distributions = distributionsForSparseSpace
+        uq_optimization = kwargs.get("uq_optimization", 'mean')  # 'mean' | 'mean_and_var' | 'pce'; Default: 'mean'
+        sc_p_order  = kwargs.get("sc_p_order", 2)
+        # Collect all the above local variables into kwargs
+        kwargs_sparsespace_pipeline = {
+            key: value for key, value in locals().items() if key in \
+                ['operation_str', 'grid_type', 'method', 'minimum_level', 'maximum_level', 'max_evaluations', 'tol', \
+                    'modified_basis', 'boundary', 'norm', 'p_bsplines', 'rebalancing', 'version', 'margin', 'grid_surplusses', \
+                        'distributions', 'sc_p_order', 'uq_optimization']}
+
+        if operation_str.lower() not in ["uq", 'uncertaintyquantification', 'uncertainty quantification'] or uq_optimization.lower()!='pce':
+            compute_pce_from_ct_surrogate = False
+        uqsim_args_dict["compute_pce_from_ct_surrogate"] = compute_pce_from_ct_surrogate
+
+        uqsim_args_dict.update(kwargs_sparsespace_pipeline)
+        
+        if is_master(mpi, rank):
+            result_dict_sparsespace = sparsespace_utils.sparsespace_pipeline(
+                a=a, b=b, model=problem_function,
+                dim=dim, 
+                directory_for_saving_plots=workingDir,
+                do_plot=True,
+                **kwargs_sparsespace_pipeline
+            )
+            # total_points, total_weights = combiObject.get_points_and_weights()
+            # total_surplusses = combiObject.get_surplusses()
+            combiObject = result_dict_sparsespace.pop('combiObject', None)
+            number_full_model_evaluations = result_dict_sparsespace.get('number_full_model_evaluations', None)
+            print(f"combiObject: {combiObject},\n number_full_model_evaluations: {number_full_model_evaluations},\n result_dict_sparsespace: {result_dict_sparsespace}")
+            
+            # gPCE = result_dict_sparsespace.get("gPCE", None)
+            # approximated_mean = result_dict_sparsespace.get("E", None)
+            # approximated_var = result_dict_sparsespace.get("Var", None)
+            # first_order_sobol_indices = result_dict_sparsespace.get("Sobol_m", None)
+            # total_order_sobol_indices = result_dict_sparsespace.get("Sobol_t", None)
+
+            dictionary_with_inf_about_the_run.update(result_dict_sparsespace)
+
+            # TODO Try to save combiObject in some other way
+            # dictionary_with_inf_about_the_run["combiObject"] = combiObject
+    
+            # TODO Things will get more complicated when using the combiinstance to produce PCE surrogate!!!
+            surrogate_object = combiObject
+            uqsim_args_dict["surrogate_type"] = "combiinstance"
+            dictionary_with_inf_about_the_run["surrogate_type"] = "combiinstance"
+    
+    # ============================
+    # II
+    # ============================
+
+    # ============================
+    # Building the PCE-surrogate model
+    # ============================
+    if compute_pce_surrogate:
+        uq_method = kwargs.get("uq_method", "mc")
+        uqsim_args_dict["uq_method"] = uq_method
+        uqsim_args_dict["mc_numevaluations"] = kwargs.get("mc_numevaluations", 100)
+        uqsim_args_dict["sampling_rule"] = kwargs.get("sampling_rule", "random")
+        uqsim_args_dict["sc_q_order"] = kwargs.get("sc_q_order", 5)
+        uqsim_args_dict["sc_p_order"] = kwargs.get("sc_p_order", 2)
+        uqsim_args_dict["sc_quadrature_rule"] = kwargs.get("sc_quadrature_rule",  "g")
+        uqsim_args_dict["parameters_setup_file"] = kwargs.get("parameters_setup_file", None)
+        uqsim_args_dict["sc_poly_rule"] = kwargs.get("sc_poly_rule", "three_terms_recurrence")   # "gram_schmidt" | "three_terms_recurrence" | "cholesky"
+        uqsim_args_dict["sc_poly_normed"] = kwargs.get("sc_poly_normed", True)
+        uqsim_args_dict["sc_sparse_quadrature"] = kwargs.get("sc_sparse_quadrature", False)
+        uqsim_args_dict["regression"] = kwargs.get("regression", False)
+        uqsim_args_dict["cross_truncation"] = kwargs.get("cross_truncation", 0.7)
+        uqsim_args_dict["read_nodes_from_file"] = kwargs.get("read_nodes_from_file", False)
+        uqsim_args_dict["l_sg"] = kwargs.get("l_sg", kwargs.get("l", 5))
+        parameters_file = kwargs.get("parameters_file", None)
+        # path_to_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/sparse_grid_nodes_weights")
+        if parameters_file is not None:
+            uqsim_args_dict["parameters_file"] = parameters_file / f"KPU_d{dim}_l{uqsim_args_dict['l_sg']}.asc"
+            parameters_file = uqsim_args_dict["parameters_file"]
+        else:
+            uqsim_args_dict["parameters_file"] = None
+        uqsim_args_dict["sampleFromStandardDist"] = kwargs.get("sampleFromStandardDist", True)
+        uqsim_args_dict["disable_statistics"] = kwargs.get("disable_statistics", False)
+        uqsim_args_dict["disable_calc_statistics"] = kwargs.get("disable_calc_statistics", False)
+        uqsim_args_dict["parallel_statistics"] = mpi #kwargs.get("parallel_statistics", False)
+        uqsim_args_dict["instantly_save_results_for_each_time_step"] = kwargs.get("instantly_save_results_for_each_time_step", False)
+        uqsim_args_dict["compute_Sobol_m"] = kwargs.get("compute_Sobol_m", True)
+        uqsim_args_dict["compute_Sobol_t"] = kwargs.get("compute_Sobol_t", True)
+        uqsim_args_dict["num_cores"] = kwargs.get("num_cores", False)
+        uqsim_args_dict["store_qoi_data_in_stat_dict"] = kwargs.get("store_qoi_data_in_stat_dict", False)
+        uqsim_args_dict["store_gpce_surrogate_in_stat_dict"] = kwargs.get("store_gpce_surrogate_in_stat_dict", False)
+
+    # ============================
+    # Setiiing up the nodes / simulationNodes / distributions
+    # ============================
+    if configurationObject is not None:
+        simulationNodes = setup_nodes_via_config_file_or_parameters_file(
+            configuration_object=configurationObject, 
+            uq_method=uqsim_args_dict.get("uq_method", "mc"), 
+            read_nodes_from_file=uqsim_args_dict.get("read_nodes_from_file", False),
+            parameters_file=uuqsim_args_dict.get("parameters_file", None),
+            sampleFromStandardDist=uqsim_args_dict.get("sampleFromStandardDist", True), 
+            regression=uqsim_args_dict.get("regression", False)
+        )
+        simulationNodes.set_joined_dists()
+        jointDists = simulationNodes.joinedDists
+        jointStandardDists = simulationNodes.joinedStandardDists
+    else:
+        # setup via the chaospy
+        simulationNodes = None
+        dists = []
+        standardDists = []
+        standardDists_min_one_one = []
+        standardDists_zero_one = []
+        jointDists = None
+        jointStandardDists = None
+        for single_param_dist_config_dict in distributions_list_of_dicts:
+            cp_dist_signature = inspect.signature(getattr(cp, single_param_dist_config_dict["distribution"]))
+            dist_parameters_values = []
+            for p in cp_dist_signature.parameters:
+                dist_parameters_values.append(single_param_dist_config_dict[p])
+            dists.append(getattr(cp, single_param_dist_config_dict["distribution"])(*dist_parameters_values))
+            standardDists.append(getattr(cp, single_param_dist_config_dict["distribution"])())
+            standardDists_min_one_one.append(getattr(cp, single_param_dist_config_dict["distribution"])(lower=-1, upper=1))
+            standardDists_zero_one.append(getattr(cp, single_param_dist_config_dict["distribution"])(lower=0, upper=1))
+        jointDists = cp.J(*dists)
+        jointStandardDists = cp.J(*standardDists)
+        jointDistsStandardDists_min_one_one = cp.J(*standardDists_min_one_one)
 
     # ============================
     # Debugging the model run...
+    # ============================
 
     if local_debugging and is_master(mpi, rank):
         coordinates = jointDists.sample(size=1, rule='random')
@@ -759,76 +828,41 @@ def main_routine(model, current_output_folder, **kwargs):
         # results_list = problem_function(
         #     i_s=range(coordinates.T.shape[0]), parameters=coordinates.T, raise_exception_on_model_break=True)
         # print(f"run with i_s and parameters results_list={results_list}")
-    # ============================
-    # TODO add a question to see if combiinstance is used as (intermediate) surrogate model
-
-    # params for SparseSpACE
-    grid_type = kwargs.get("grid_type", "trapezoidal")  # 'trapezoidal', 'chebyshev', 'leja', 'bspline_p3'; For spetical adaptive single dimensions algorithm: 'globa_trapezoidal', 'trapezoidal' and 'bspline_p3'
-    method = kwargs.get("method", "standard_combi")  # 'standard_combi', 'dim_adaptive_combi', 'dim_wise_spat_adaptive_combi'
-    operation_str = kwargs.get("operation", kwargs.get("operation_str", 'integration'))  # 'uncertaintyquantification', 'interpolation', 'integration'
-    # optional parameters - their default values match ones from sparsespace_utils
-    minimum_level = kwargs.get("minimum_level", kwargs.get("lmin", 1))  # used to be lmin
-    maximum_level = kwargs.get("maximum_level", kwargs.get("lmax", 3))  # used to be lmax
-    max_evaluations = kwargs.get("max_evaluations", kwargs.get("max_evals", 100)) # 0, 22, used to be max_evals
-    tol = kwargs.get("tol", kwargs.get("tolerance", 10**-6))   # 0.3*10**-1, 10**-4  # used to be tolerance
-    modified_basis = kwargs.get("modified_basis", False)
-    boundary = kwargs.get("boundary", kwargs.get("boundary_points", True))  # used to be boundary_points
-    norm = kwargs.get("norm", 2)  #np.inf
-    p_bsplines = kwargs.get("p_bsplines", 3)
-    rebalancing = kwargs.get("rebalancing", True)
-    version = kwargs.get("version", 6)
-    margin = kwargs.get("margin", 0.9)
-    grid_surplusses = kwargs.get("grid_surplusses", 'grid')
-    distributions = distributionsForSparseSpace
-    # Collect all the above local variables into kwargs
-    kwargs_sparsespace_pipeline = {
-        key: value for key, value in locals().items() if key in \
-            ['operation_str', 'grid_type', 'method', 'minimum_level', 'maximum_level', 'max_evaluations', 'tol', \
-                'modified_basis', 'boundary', 'norm', 'p_bsplines', 'rebalancing', 'version', 'margin', 'grid_surplusses', 'distributions']}
-
-    uqsim_args_dict.update(kwargs_sparsespace_pipeline)
-    
-    if is_master(mpi, rank):
-        combiObject, number_full_model_evaluations, dict_info = sparsespace_utils.sparsespace_pipeline(
-            a=a, b=b, model=problem_function,
-            dim=dim, 
-            directory_for_saving_plots=workingDir,
-            do_plot=True,
-            **kwargs_sparsespace_pipeline
-        )
-        # total_points, total_weights = combiObject.get_points_and_weights()
-        # total_surplusses = combiObject.get_surplusses()
-        print(f"combiObject: {combiObject},\n number_full_model_evaluations: {number_full_model_evaluations},\n dict_info: {dict_info}")
-        
-        # Note: dict_infocontains number_full_model_evaluations
-        dictionary_with_inf_about_the_run.update(dict_info)
-        dictionary_with_inf_about_the_run["combiObject"] = combiObject
-    # TODO else do some distribution of dictionary_with_inf_about_the_run / combiObject / dict_info
-    
-    if is_master(mpi, rank):
-        surrogate_object = combiObject
-    # # ============================
-    # # All this to make the second part feasible when model is a time-dependent model
-    # # instantiate UQsim
-    # TODO Distinguish between these parameters from those above used for the SparseSpACE
-    dictionary_with_inf_about_the_run_uqef = run_simplified_uqef_dynamic_simulation(
-        problem_function, configurationObject, uqsim_args_dict, distributions_list_of_dicts, 
-        workingDir, model, list_of_surrogate_models=["larsim", "hbvsask", "ishigami", "oscillator",],
-        surrogate_object=surrogate_object, **kwargs)
-
-    dictionary_with_inf_about_the_run.update(dictionary_with_inf_about_the_run_uqef)
 
     # ============================
-    # If Surrogate is combiinstance compute error model btw original model and surrogate
+    if compute_pce_surrogate:
+        result_dict_uqef = run_simplified_uqef_dynamic_simulation(
+            problem_function=problem_function, configurationObject=configurationObject, uqsim_args_dict=uqsim_args_dict,
+            workingDir=workingDir, mode=model,
+            simulationNodes=simulationNodes, 
+            list_of_surrogate_models=["larsim", "hbvsask", "ishigami", "oscillator",],
+            surrogate_object=surrogate_object, **kwargs)
+
+        gPCE_surrogate = result_dict_uqef.get("gPCE_surrogate", None)
+        # approximated_mean = result_dict_uqef.get("E", None)
+        # approximated_var = result_dict_uqef.get("Var", None)
+        # first_order_sobol_indices = result_dict_uqef.get("Sobol_m", None)
+        # total_order_sobol_indices = result_dict_uqef.get("Sobol_t", None)
+
+        intermediate_surrogate_object = surrogate_object
+        surrogate_object = gPCE_surrogate #gPCE
+        uqsim_args_dict["surrogate_type"] = dictionary_with_inf_about_the_run["surrogate_type"] = "pce"
+        if intermediate_surrogate_object is not None:
+            uqsim_args_dict["intermediate_surrogate_type"] = "combiinstance"
+            dictionary_with_inf_about_the_run["intermediate_surrogate_type"] = "combiinstance"
+    
+        dictionary_with_inf_about_the_run.update(result_dict_uqef)
+
+    # ============================
+    # III
+    # ============================
+    # TODO Add extraction - PCE, E, Mean, Sobol... simple, complex-vector...
 
     if is_master(mpi, rank):
         reevaluate_surrogate = kwargs.get("reevaluate_surrogate", False)
         reevaluate_original_model = kwargs.get("reevaluate_original_model", False)
 
-        if combiObject is not None:
-            surrogate_object = combiObject
-
-        if surrogate_object is None:
+        if surrogate_object is None and intermediate_surrogate_object is None:
             reevaluate_surrogate = False
 
         if reevaluate_surrogate or reevaluate_original_model:
@@ -836,21 +870,27 @@ def main_routine(model, current_output_folder, **kwargs):
             evaluateSurrogateAtStandardDist = False
             if surrogate_type == "combiinstance":
                 evaluateSurrogateAtStandardDist = False
+            # TODO rename
             number_of_samples = kwargs.get('number_of_samples', 1000)
             sampling_rule = kwargs.get('sampling_rule', "random")
             # TODO Rename this so it is clear this file is used for reading nodes for re-evaulating the surrogate and original model
             sample_new_nodes_from_standard_dist = kwargs.get('sample_new_nodes_from_standard_dist', False)
             # TODO Rename this so it is clear this file is used for reading nodes for re-evaulating the surrogate and original model
             read_new_nodes_from_file = kwargs.get('read_new_nodes_from_file', False)
+            new_parameters_file_name = kwargs.get('new_parameters_file_name', None)
             rounding = kwargs.get('rounding', False)
             round_dec = kwargs.get('round_dec', 4)
 
             set_lower_predictions_to_zero = kwargs.get('set_lower_predictions_to_zero', False)
             
+            # TODO Check this
             parameters = uqef_dynamic_utils.generate_parameters_for_mc_simulation(
-                jointDists=jointDists, jointStandard=jointStandardDists, numSamples=number_of_samples, rule=sampling_rule,
+                jointDists=jointDists, jointStandard=jointStandardDists, 
+                numSamples=number_of_samples, rule=sampling_rule,
                 sampleFromStandardDist=sample_new_nodes_from_standard_dist, 
-                read_nodes_from_file=read_new_nodes_from_file, rounding=rounding, round_dec=round_dec,
+                read_nodes_from_file=read_new_nodes_from_file, 
+                parameters_file_name=new_parameters_file_name,
+                rounding=rounding, round_dec=round_dec,
             )
             if evaluateSurrogateAtStandardDist and jointStandardDists is not None:
                 nodes = utility.transformation_of_parameters(
@@ -866,6 +906,7 @@ def main_routine(model, current_output_folder, **kwargs):
             uqsim_args_dict["number_of_samples_generated"] = number_of_samples_generated
             uqsim_args_dict["sampling_rule"] = sampling_rule
             uqsim_args_dict["read_new_nodes_from_file"] = read_new_nodes_from_file
+             # TODO Rename
             dictionary_with_inf_about_the_run["nodes"] = nodes
             dictionary_with_inf_about_the_run["parameters"] = parameters
 
@@ -875,7 +916,7 @@ def main_routine(model, current_output_folder, **kwargs):
             # Intermediate surrogate can only be combiinstance
             start_time_reevaluating_intermediate_surrogate_model = time.time()
             print(f"Reevaluating the surroget model...")
-            results_array_intermediate_surrogate_model = intermediate_surrogate(parameters.T)
+            results_array_intermediate_surrogate_model = intermediate_surrogate_object(parameters.T)
             # num_cores = multiprocessing.cpu_count()
             # parameter_chunks = np.array_split(parameters.T, num_cores)
             # def evaluate_chunk(chunk):
@@ -981,63 +1022,20 @@ def main_routine(model, current_output_folder, **kwargs):
     # ============================
 
     if is_master(mpi, rank):
+        
         if configurationObject is not None:
             fileName = pathlib.Path(workingDir) / utility.CONFIGURATION_OBJECT_FILE
-            with open(fileName, 'wb') as f:
-                dill.dump(configurationObject, f)
+            with open(fileName, 'wb') as handle:
+                dill.dump(configurationObject, handle)
 
         argsFileName = os.path.abspath(os.path.join(str(workingDir), utility.ARGS_FILE))
         with open(argsFileName, 'wb') as handle:
             pickle.dump(uqsim_args_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-    # ============================
-    # uqsim = uqef.UQsim()
-    # uqsim.args.model = model # "combiinstance" 
-    # uqsim.args.uncertain = "all"
-    # uqsim.args.chunksize = 1
-    # uqsim.setup_configuration_object()
-    # uqsim.args.workingDir = str(uqsim.args.outputResultDir)
-    # # TODO Register the model (SG Integral) and the statistics
-    # uqsim.models.update({"combiinstance"         : (lambda: CombiinstanceModelUQEF(
-    # combiinstance=combiObject,))})
-    # uqsim.setup()  #here is where model_generator and setup_solver are taking place... not sure if i need this
-    # if uqsim.is_master():
-    #     simulationNodes_save_file = "nodes"
-    #     uqsim.save_simulationNodes(fileName=simulationNodes_save_file)
-    #     number_full_model_evaluations = uqsim.get_simulation_parameters_shape()[0]
-    #     argsFileName = os.path.abspath(os.path.join(uqsim.args.outputResultDir, utility.ARGS_FILE))
-    #     with open(argsFileName, 'wb') as handle:
-    #         pickle.dump(uqsim.args, handle, protocol=pickle.HIGHEST_PROTOCOL)
-    #     fileName = pathlib.Path(uqsim.args.outputResultDir) / utility.CONFIGURATION_OBJECT_FILE
-    #     with open(fileName, 'wb') as f:
-    #         dill.dump(uqsim.configuration_object, f)
-    # # simulate
-    # start_time_model_simulations = time.time()
-    # uqsim.simulate()
-    # end_time_model_simulations = time.time()
-    # time_model_simulations = end_time_model_simulations - start_time_model_simulations
-    # if uqsim.is_master():
-    #     if hasattr(uqsim.simulation, 'parameters') and uqsim.simulation.parameters is not None:
-    #         df = pd.DataFrame({'parameters': [row for row in uqsim.simulation.parameters]})
-    #         df.to_pickle(os.path.abspath(os.path.join(uqsim.args.outputResultDir, utility.DF_UQSIM_SIMULATION_PARAMETERS_FILE)), compression="gzip")
-    #     if hasattr(uqsim.simulation, 'nodes') and uqsim.simulation.nodes is not None:
-    #         df = pd.DataFrame({'nodes': [row for row in uqsim.simulation.nodes]})
-    #         df.to_pickle(os.path.abspath(os.path.join(uqsim.args.outputResultDir, utility.DF_UQSIM_SIMULATION_NODES_FILE)), compression="gzip")
-    #     if hasattr(uqsim.simulation, 'weights') and uqsim.simulation.weights is not None:
-    #         df = pd.DataFrame({'weights': [row for row in uqsim.simulation.weights]})
-    #         df.to_pickle(os.path.abspath(os.path.join(uqsim.args.outputResultDir, utility.DF_UQSIM_SIMULATION_WEIGHTS_FILE)), compression="gzip")
-    #     fileName = pathlib.Path(uqsim.args.outputResultDir) / utility.CONFIGURATION_OBJECT_FILE
-    #     with open(fileName, 'wb') as f:
-    #         dill.dump(uqsim.configuration_object, f)
-    # # statistics
-    # start_time_computing_statistics = time.time()
-    # uqsim.prepare_statistics()
-    # uqsim.calc_statistics()
-    # end_time_computing_statistics = time.time()
-    # time_computing_statistics = end_time_computing_statistics - start_time_computing_statistics
-    # uqsim.save_statistics()
-    # uqsim.tear_down()
-    # # ============================
+        fileName = pathlib.Path(workingDir) / utility.DICT_INFO_FILE
+        with open(fileName, 'wb') as handle:
+            pickle.dump(dictionary_with_inf_about_the_run, handle, protocol=pickle.HIGHEST_PROTOCOL)
+            # dill.dump(dictionary_with_inf_about_the_run, handle)
 
     return dictionary_with_inf_about_the_run
 
@@ -1092,6 +1090,7 @@ list_of_dict_run_setups = [
     "grid_type": 'trapezoidal', # try trapezoidal vs gauss_legendre
     "method": 'dim_wise_spat_adaptive_combi',  #  'standard_combi', 'dim_adaptive_combi', 'dim_wise_spat_adaptive_combi'
     "operation_str": "uq", # try out "uq" | 'integration'
+    "uq_optimization": 'mean',  # try 'mean' | 'mean_and_var' | 'pce'; Default: 'mean'
     "grid_surplusses":'grid',  # Try with None
     "minimum_level": 1, "maximum_level": 4, 
     "max_evaluations":1000, "tol":10**-6, "modified_basis":False, "boundary":True, "norm":2, "p_bsplines":3, 
@@ -1181,8 +1180,7 @@ for single_setup_dict in list_of_dict_run_setups:
 # a = np.zeros(2)
 # b = np.ones(2)
 # model = FunctionExpVar()
-# combiObject, number_full_model_evaluations, dict_info = sparsespace_utils.sparsespace_pipeline(
+# result_dict_sparsespace= sparsespace_utils.sparsespace_pipeline(
 #     a, b, model=model, dim=2, 
 #     grid_type='trapezoidal', method='standard_combi',
 #     directory_for_saving_plots='./', do_plot=True)
-# print(f"combiObject: {combiObject}, number_full_model_evaluations: {number_full_model_evaluations}, dict_info: {dict_info}")

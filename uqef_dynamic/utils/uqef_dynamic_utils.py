@@ -2555,6 +2555,10 @@ def redo_all_statistics(
         workingDir, get_measured_data=False, get_unaltered_data=False, station="MARI", uq_method="sc", plotting=False):
     raise NotImplementedError
 
+# ==============================================================================================================
+# Run UQEF-(Dynamic) simulation
+# ==============================================================================================================
+
 ###################################################################################################################
 # Set of different functions for analyzing df_statistics DataFrame
     # produced as part of UQ simulation - these function may go to utility as well?

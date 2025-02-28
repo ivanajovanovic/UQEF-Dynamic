@@ -435,7 +435,7 @@ class TimeDependentStatistics(ABC, Statistics):
         elif 'nodes_file' in self.dict_output_file_paths:
             self.nodes_file = self.dict_output_file_paths['nodes_file']
         else:
-            self.nodes_file  = utility.NODES_FILE
+            self.nodes_file  = utility.NODES_FILE  # todo, think about adding as another option utility.DF_UQSIM_SIMULATION_NODES_FILE
         if not self.nodes_file.is_absolute():
             self.nodes_file = self.workingDir / self.nodes_file
 

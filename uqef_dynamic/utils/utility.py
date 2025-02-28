@@ -56,6 +56,7 @@ GOF = "GOF"
 QOI_COLUMN_NAME_CENTERED = QOI_COLUMN_NAME + "_centered"
 
 ARGS_FILE = 'uqsim_args.pkl'
+DICT_INFO_FILE = 'dict_info.pkl'
 CONFIGURATION_OBJECT_FILE = "configurationObject"
 NODES_FILE = "nodes.simnodes.zip"
 SIMULATION_PARAMETERS_FILE = "simulation_parameters.npy"
