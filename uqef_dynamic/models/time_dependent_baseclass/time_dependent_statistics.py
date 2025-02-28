@@ -490,6 +490,8 @@ class TimeDependentStatistics(ABC, Statistics):
         self.dict_stat_to_compute['Sobol_m'] = self.compute_Sobol_m
         self.dict_stat_to_compute['Sobol_m2'] = self.compute_Sobol_m2
 
+        self.free_result_dict_memory = kwargs.get("free_result_dict_memory", True)
+
         #####################################
         # Parameters related set-up part
         #####################################
@@ -905,6 +907,9 @@ class TimeDependentStatistics(ABC, Statistics):
         self.result_dict = result_dict
         # TODO Should I update self.timesteps self.pdTimesteps self.numTimesteps based on self.result_dict??/
         #self.set_timesteps()
+
+    def get_result_dict(self):
+        return self.result_dict
 
     # def _compute_previous_timestep(self, timestamp):
     #     if self.resolution == "daily":
@@ -1617,7 +1622,8 @@ class TimeDependentStatistics(ABC, Statistics):
 
         # Freeing up the memory
         # del self.result_dict[single_qoi_column]
-        self.result_dict[single_qoi_column].clear()
+        if self.free_result_dict_memory:
+            self.result_dict[single_qoi_column].clear()
 
     def _groupby_df_simulation_results(self, columns_to_group_by: list=[]):
         if not columns_to_group_by:

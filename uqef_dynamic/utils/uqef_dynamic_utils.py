@@ -13,6 +13,7 @@ import dill
 import pickle
 import os
 import numpy as np
+from numpy.polynomial.polynomial import Polynomial
 import math
 import pathlib
 import pandas as pd
@@ -1835,6 +1836,160 @@ statistics_dictionary=None, throw_error=False, **kwargs):
 
     return None
 
+
+def read_surrogate_model_single_working_dir(workingDir, statisticsObject, single_timestamp_single_file,
+surrogate_type, recompute_generalized_sobol_indices, polynomial_expansion=None, polynomial_norms=None):
+    # ========================================================
+    # Read the gPCE / KL surrogate model and its coefficients
+    # ========================================================
+
+    list_qois = statisticsObject.list_qoi_column
+    statistics_pdTimesteps = statisticsObject.pdTimesteps
+
+    gpce_surrogate_dict_over_qois= defaultdict(dict, {single_qoi:{} for single_qoi in list_qois})
+    gpce_coeff_dict_over_qois = defaultdict(dict, {single_qoi:{} for single_qoi in list_qois})
+    # kl_surrogate_dict_over_qois = defaultdict(dict, {single_qoi:{} for single_qoi in list_qois})
+    kl_coeff_dict_over_qois = {single_qoi:None for single_qoi in list_qois}
+    kl_surrogate_df_dict_over_qois = {single_qoi:None for single_qoi in list_qois}
+
+    for single_qoi in list_qois:
+        gpce_surrogate = None
+        gpce_coeffs = None
+
+        if surrogate_type=='pce':
+            gpce_surrogate = fetch_gpce_surrogate_single_qoi(
+                qoi_column_name=single_qoi, workingDir=workingDir,
+                statistics_dictionary=statisticsObject.result_dict, 
+                throw_error=False, single_timestamp_single_file=single_timestamp_single_file)
+
+            if gpce_surrogate is None or recompute_generalized_sobol_indices:
+                gpce_coeffs = fetch_gpce_coeff_single_qoi(
+                    qoi_column_name=single_qoi, workingDir=workingDir,
+                    statistics_dictionary=statisticsObject.result_dict, 
+                    throw_error=False, single_timestamp_single_file=single_timestamp_single_file)
+                
+                if gpce_surrogate is None and gpce_coeffs is None and recompute_generalized_sobol_indices:
+                    raise Exception(f"Error - not possible to recompute generalized_sobol_indices when both \
+                        gpce_surrogate and gpce_coeffs are missing")
+
+                if gpce_surrogate is None and gpce_coeffs is not None:
+                    gpce_surrogate = utility.build_gpce_surrogate_from_coefficients(
+                        gpce_coeffs, polynomial_expansion, polynomial_norms)
+
+                if recompute_generalized_sobol_indices:
+                    if gpce_coeffs is None:
+                        # TODO implement this
+                        # gpce_coeffs = utility.compute_gpce_coefficients(
+                        #     gpce_surrogate, polynomial_expansion, polynomial_norms)
+                        raise NotImplementedError
+                    if isinstance(gpce_coeffs, dict) and single_qoi in gpce_coeffs:
+                        gpce_coeffs = gpce_coeffs[single_qoi]
+                    gpce_coeff_dict_over_qois[single_qoi] = gpce_coeffs
+
+            if isinstance(gpce_surrogate, dict) and single_qoi in gpce_surrogate:
+                gpce_surrogate = gpce_surrogate[single_qoi]
+
+            # Make sure that in the end gpce_surrogate is a dictionary ovet timestamps
+            if isinstance(gpce_surrogate, np.ndarray) or isinstance(gpce_surrogate, Polynomial):
+                gpce_surrogate = {0: gpce_surrogate}  # {statistics_pdTimesteps[0]: gpce_surrogate}
+
+            if gpce_surrogate is None or not isinstance(gpce_surrogate, dict):
+                raise Exception(f"Sorry but there is not gPCE model not saved or not of the required type!")
+
+            if statistics_pdTimesteps!=list(gpce_surrogate.keys()):
+                print("Watch-out - The timestamps of the statistics and the gPCE surrogate do not match!")
+                statistics_pdTimesteps = list(gpce_surrogate.keys())
+
+            # if printing:
+            #     temp = gpce_surrogate[statistics_pdTimesteps[0]]
+            #     print(f"Qoi - {single_qoi}\n gpce_surrogate for a first timestamp - {temp} \n")
+            #     if gpce_coeffs and gpce_coeffs is not None:
+            #         temp = gpce_coeffs[statistics_pdTimesteps[0]]
+            #         print(f"Qoi - {single_qoi}\n gpce_coeffs - {temp} \n")
+
+            gpce_surrogate_dict_over_qois[single_qoi] = gpce_surrogate
+
+        elif surrogate_type=='kl+pce':
+            # read eigenvalues
+            fileName = f"eigenvalues_{single_qoi}.npy"
+            # fullFileName = os.path.abspath(os.path.join(str(workingDir), fileName))
+            fullFileName = workingDir / fileName
+            if fullFileName.is_file():
+                eigenvalues = np.load(fullFileName)
+                eigenvalues_real = np.asarray([element.real for element in eigenvalues], dtype=np.float64)
+                eigenvalues_real_scaled = eigenvalues_real/eigenvalues_real[0]
+            else:
+                eigenvalues = None
+                eigenvalues_real = None
+                eigenvalues_real_scaled = None
+
+            # read eigenvectors
+            fileName = f"eigenvectors_{single_qoi}.npy"
+            # fullFileName = os.path.abspath(os.path.join(str(workingDir), fileName))
+            fullFileName = workingDir / fileName
+            if fullFileName.is_file():
+                eigenvectors = np.load(fullFileName)
+            else:
+                eigenvectors = None
+
+            if eigenvalues is None or eigenvectors is None:
+                raise Exception("Sorry, \
+                    evaluation of the  surrogate (type KL+PCE) can not be performed since eigenvalues or eigenvectors are not saved!")
+
+            # reading the coefficents of PCE approax of the KL 
+            fileName = f"f_kl_surrogate_coefficients_{single_qoi}.npy"
+            # fullFileName = os.path.abspath(os.path.join(str(workingDir), fileName))
+            fullFileName = workingDir / fileName
+            if fullFileName.is_file():
+                gpce_coeffs = np.load(fullFileName, allow_pickle=True)
+            else:
+                gpce_coeffs = None
+
+            if isinstance(gpce_coeffs, dict) and single_qoi in gpce_coeffs:
+                gpce_coeffs = gpce_coeffs[single_qoi]
+            kl_coeff_dict_over_qois[single_qoi] = gpce_coeffs
+
+            # reading f_kl_surrogate_df
+            fileName = f"f_kl_surrogate_df_{single_qoi}.pkl"
+            # fullFileName = os.path.abspath(os.path.join(str(workingDir), fileName))
+            fullFileName = workingDir / fileName
+            if fullFileName.is_file():
+                f_kl_surrogate_df = pd.read_pickle(fullFileName, compression="gzip")
+                # Iterating with iterrows()
+                f_kl_surrogate_df['eigenvectors'] = None  # Initially, set to None or np.nan
+                f_kl_surrogate_df['eigenvectors'] = f_kl_surrogate_df['eigenvectors'].astype(object)  # Explicitly set dtype to object
+                for index, row in f_kl_surrogate_df.iterrows():
+                    f_kl_surrogate_df.at[index, 'eigenvalues'] = eigenvalues[index]
+                    f_kl_surrogate_df.at[index, 'eigenvectors'] = np.array(eigenvectors[:,index]) #eigenvectors[index]
+                    # print(f"Index: {index}, gPCE: {type(row['gPCE'])}, gPCE: {row['gPCE'].shape}; gpce_coeff: {type(row['gpce_coeff'])} gpce_coeff: {row['gpce_coeff'].shape}")
+            else:
+                f_kl_surrogate_df = None
+                if gpce_coeffs is not None:
+                    pass
+                    # gpce_surrogate = utility.build_gpce_surrogate_from_coefficients(
+                    #     gpce_coeffs, polynomial_expansion, polynomial_norms)
+                    # TODO populate f_kl_surrogate_df 
+            kl_surrogate_df_dict_over_qois[single_qoi] = f_kl_surrogate_df
+            
+            if gpce_coeffs is None and f_kl_surrogate_df is None:
+                raise Exception("Sorry, \
+                    evaluation of the  surrogate (type KL+PCE) can not be performed since PCE surrogate of the KL modes and/or the coefficients were not saved!")
+
+            # if printing:
+            #     if gpce_coeffs is not None:
+            #         print(f"kl_coeff_dict_over_qois[{single_qoi}] = {gpce_coeffs}")
+            #         print(f"kl_coeff_dict_over_qois[{single_qoi}].shape = {gpce_coeffs.shape}")
+            #     if f_kl_surrogate_df is not None:
+            #         print(f"kl_surrogate_df_dict_over_qois[{single_qoi}] = {f_kl_surrogate_df}")
+
+            # gpce_surrogate = utility.build_gpce_surrogate_from_coefficients(
+            #             gpce_coeffs, polynomial_expansion, polynomial_norms)
+
+            # kl_surrogate_dict_over_qois[single_qoi] = gpce_surrogate
+        else:
+            raise Exception(f"Sorry, the surrogate type {surrogate_type} is not implemented; it can be either 'pce' or 'kl+pce'!")
+
+    return gpce_surrogate_dict_over_qois, gpce_coeff_dict_over_qois, kl_coeff_dict_over_qois, kl_surrogate_df_dict_over_qois
 
 ###################################################################################################################
 # Running UQEF-Dynamic model

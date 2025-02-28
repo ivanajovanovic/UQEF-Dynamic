@@ -94,7 +94,7 @@ def create_statistics_object(configuration_object, uqsim_args_dict, workingDir, 
                                                                    unordered=False,
                                                                    uq_method=uqsim_args_dict["uq_method"],
                                                                    compute_Sobol_t=uqsim_args_dict["compute_Sobol_t"],
-                                                                   compute_Sobol_m=uqsim_args_dict["compute_Sobol_m"])
+                                                                   compute_Sobol_m=uqsim_args_dict["compute_Sobol_m"], **kwargs)
     elif model == "hbvsask":
         statisticsObject = HBVSASKStatistics.HBVSASKStatistics(
             configurationObject=configuration_object,
@@ -128,6 +128,7 @@ def create_statistics_object(configuration_object, uqsim_args_dict, workingDir, 
             compute_covariance_matrix_in_time = kwargs.get('compute_covariance_matrix_in_time', False),
             dict_stat_to_compute=kwargs.get("dict_stat_to_compute", utility.DEFAULT_DICT_STAT_TO_COMPUTE),
             dict_what_to_plot=kwargs.get("dict_what_to_plot", utility.DEFAULT_DICT_WHAT_TO_PLOT),
+            **kwargs
         )
     # elif model == "battery":
     #     statisticsObject = pybammStatistics.pybammStatistics(
@@ -171,6 +172,7 @@ def create_statistics_object(configuration_object, uqsim_args_dict, workingDir, 
             dict_stat_to_compute=kwargs.get("dict_stat_to_compute", utility.DEFAULT_DICT_STAT_TO_COMPUTE),
             dict_what_to_plot=kwargs.get("dict_what_to_plot", utility.DEFAULT_DICT_WHAT_TO_PLOT),
             index_column_name = kwargs.get('index_column_name', utility.INDEX_COLUMN_NAME),
+            **kwargs
         )
     elif model == "oscillator":
         statisticsObject = LinearDampedOscillatorStatistics.LinearDampedOscillatorStatistics(
@@ -201,6 +203,7 @@ def create_statistics_object(configuration_object, uqsim_args_dict, workingDir, 
             compute_covariance_matrix_in_time = kwargs.get('compute_covariance_matrix_in_time', False),
             dict_stat_to_compute=kwargs.get("dict_stat_to_compute", utility.DEFAULT_DICT_STAT_TO_COMPUTE),
             dict_what_to_plot=kwargs.get("dict_what_to_plot", utility.DEFAULT_DICT_WHAT_TO_PLOT),
+            **kwargs
 )
     else:
         raise ValueError("Model not supported")

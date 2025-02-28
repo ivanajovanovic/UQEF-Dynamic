@@ -2791,6 +2791,8 @@ def build_gpce_surrogate_from_coefficients(gpce_coeffs, polynomial_expansion, po
         Exception: If gpce_coeffs is neither a dictionary nor a numpy array.
 
     """
+    if polynomial_expansion is None:
+        return None
     if isinstance(gpce_coeffs, dict):
         gpce_surrogate = dict()
         for key, single_gpce_coeffs in gpce_coeffs.items():
