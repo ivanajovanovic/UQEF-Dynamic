@@ -26,7 +26,7 @@ from sparseSpACE.RefinementContainer import RefinementContainer
 from sparseSpACE.RefinementObject import RefinementObject
 from sparseSpACE.Utils import *
 
-class UncertaintyQuantificationREfactored(Integration):  #UncertaintyQuantificationREfactored(UncertaintyQuantification)
+class UncertaintyQuantificationRefactored(Integration):  #UncertaintyQuantificationREfactored(UncertaintyQuantification)
     # TODO Ivana - get_result what does it return ?
     # The constructor resembles Integration's constructor;
     # it has an additional parameter:
@@ -178,6 +178,7 @@ class UncertaintyQuantificationREfactored(Integration):  #UncertaintyQuantificat
         if not hasattr(polynomial_degrees, "__iter__"):
             # self.pce_polys, self.pce_polys_norms = cp.orth_ttr(polynomial_degrees, self.distributions_joint,
             #                                                    retall=True)
+            # TODO Ivana add cross_truncation
             self.pce_polys, self.pce_polys_norms = cp.generate_expansion(
                 polynomial_degrees, self.distributions_joint, retall=True)    
             # Markus
@@ -195,6 +196,7 @@ class UncertaintyQuantificationREfactored(Integration):  #UncertaintyQuantificat
         # Chaospy does not support different degrees for each dimension, so
         # the higher degree polynomials are removed afterwards
         # polys, norms = cp.orth_ttr(max(polynomial_degrees), self.distributions_joint, retall=True)
+        # TODO Ivana add cross_truncation
         polys, norms = cp.generate_expansion(max(polynomial_degrees), self.distributions_joint, retall=True)
         # self.pce_polys, self.pce_polys_norms = cp.expansion.stieltjes(polynomial_degrees, self.distributions_joint, retall=True)
         polys_filtered, norms_filtered = [], []
@@ -278,7 +280,7 @@ class UncertaintyQuantificationREfactored(Integration):  #UncertaintyQuantificat
         return self.moments_to_expectation_variance(expectation, expectation_of_squared)
 
     def calculate_PCE(self, polynomial_degrees, combiinstance, restrict_degrees=False, use_combiinstance_solution=True,
-                      scale_weights=False):
+                      scale_weights=False, regression=False):
         if use_combiinstance_solution:
             assert self.pce_polys is not None
             assert not restrict_degrees
@@ -299,9 +301,16 @@ class UncertaintyQuantificationREfactored(Integration):  #UncertaintyQuantificat
             polynomial_degrees = [min(polynomial_degrees, num_points[d] // 2) for d in range(self.dim)]
 
         self._set_pce_polys(polynomial_degrees)
-        self.gPCE = cp.fit_quadrature(self.pce_polys, list(zip(*self.nodes)),
-                                      self.weights, np.asarray(self.f_evals), norms=self.pce_polys_norms)
-
+        # TODO Ivana this should change; maybe using cross-truncation
+        if regression:
+            self.gPCE, self.gPCE_coeff = cp.fit_regression(
+                polynomials=self.pce_polys, abscissas=list(zip(*self.nodes)), evals=np.asarray(self.f_evals), 
+                retall=True, model=None  # classical least-square; one can use as well sklearn.linear_model.LinearRegression(fit_intercept=False)
+            )
+        else:
+            self.gPCE, self.gPCE_coeff = cp.fit_quadrature(self.pce_polys, list(zip(*self.nodes)),
+            self.weights, np.asarray(self.f_evals), norms=self.pce_polys_norms, retall=True,)
+        
     def get_gPCE(self):
         return self.gPCE
 
@@ -476,6 +485,8 @@ directory_for_saving_plots='./', do_plot=True,  **kwargs):
     except NotImplementedError:
         reference_solution = None
 
+    dict_info = {}
+
     operation_uq = False
     if operation_str.lower() == "uq" or operation_str.lower() == "uncertainty quantification" or operation_str.lower() == "uncertaintyquantification" :
         operation_uq = True
@@ -486,7 +497,11 @@ directory_for_saving_plots='./', do_plot=True,  **kwargs):
     # Operation
     operation = None
     if operation_uq:
-        operation = UncertaintyQuantification(f=model, distributions=distributions, a=a, b=b, dim=dim, reference_solution=reference_solution)
+        operation = UncertaintyQuantificationRefactored(
+            f=model, distributions=distributions, a=a, b=b, dim=dim, reference_solution=reference_solution
+        )
+        # operation = UncertaintyQuantification(
+        #     f=model, distributions=distributions, a=a, b=b, dim=dim, reference_solution=reference_solution)
 
     # Grid
     modified_basis = kwargs.get('modified_basis', False)
@@ -542,19 +557,27 @@ directory_for_saving_plots='./', do_plot=True,  **kwargs):
         # grid.integrator = IntegratorParallelArbitraryGrid(grid)
         raise Exception(f"parallel Integrator (ie., IntegratorParallelArbitraryGrid) is yet not supported!")
 
+    dict_info["operation_str"] = operation_str
+    dict_info["operation_uq"] = operation_uq
+
     if operation_uq:
+        polynomial_degree = kwargs.get('polynomial_degree', kwargs.get('sc_p_order', 2))
         uq_optimization = kwargs.get('uq_optimization', 'mean')
+        compute_pce_from_sparsespace = kwargs.get("compute_pce_from_sparsespace", False)
         if uq_optimization == 'mean':
+            # operation.set_moment_Function(k=1)
             print(f"===SparseSpACE INFO - Optimizing for weighted integral====")
-        if uq_optimization == 'mean_and_var':
+        elif uq_optimization == 'mean_and_var':
             print(f"===SparseSpACE INFO - Optimizing for meana and varaince====")
             operation.set_expectation_variance_Function()  
         elif uq_optimization == 'pce':
+            compute_pce_from_sparsespace = True
             print(f"===SparseSpACE INFO - Optimizing for PCE coefficents====")
-            polynomial_degree_max = kwargs.get('polynomial_degree_max', kwargs('sc_p_order', 2))
-            operation.set_PCE_Function(polynomial_degree_max)  #this is if you want to optimize for pce coeff. integrals
+            operation.set_PCE_Function(polynomial_degrees=polynomial_degree)  #this is if you want to optimize for pce coeff. integrals
         else:
             print(f"===SparseSpACE INFO - Optimizing for weighted integral====")
+        dict_info["uq_optimization"] = uq_optimization
+        dict_info["compute_pce_from_sparsespace"] = compute_pce_from_sparsespace
 
     scheme = None
     refinement = None
@@ -598,7 +621,8 @@ directory_for_saving_plots='./', do_plot=True,  **kwargs):
                 rebalancing=rebalancing, margin=margin, grid_surplusses=operation.get_grid())  #or grid_surplusses=grid
         set_up_filenames_for_printing_spatially_adaptive(combiObject, do_plot, directory_for_saving_plots)
         refinement, scheme, lmax, combi_result, number_of_evaluations, error_array, num_point_array, surplus_error_array, interpolation_error_arrayL2, interpolation_error_arrayMax = \
-            combiObject.performSpatiallyAdaptiv(lmin=minimum_level, lmax=maximum_level, errorOperator=errorOperator, tol=tol, max_evaluations=max_evaluations, do_plot=False)
+            combiObject.performSpatiallyAdaptiv(
+                lmin=minimum_level, lmax=maximum_level, errorOperator=errorOperator, tol=tol, max_evaluations=max_evaluations, do_plot=do_plot)
         print(f"SACT - refinement-{refinement};\n scheme-{scheme};\n lmax-{lmax};\n combi_result-{combi_result};\n number_of_evaluations-{number_of_evaluations};\n"
         f"error_array-{error_array};\n num_point_array-{num_point_array};\n surplus_error_array-{surplus_error_array};\n interpolation_error_arrayL2-{interpolation_error_arrayL2};\n interpolation_error_arrayMax-{interpolation_error_arrayMax};\n")
         # combiObject.continue_adaptive_refinement(3 * 10**-1)  # 2 * 10**-1, 1.9 * 10**-1, ...
@@ -619,9 +643,61 @@ directory_for_saving_plots='./', do_plot=True,  **kwargs):
     #     keyLevelvector = component_grid.levelvector
     #     cn[n] = cn[n] + component_grid.coefficient * integralCompGrid
 
-    # TODO Some of these function should be called before adaptivity
     # Options one can do with uncertainty quantification operation
-    # if operation_uq:  
+    # TODO Ask if you want these thing to be computed; 
+    # Experiment with uq_optimization == 'pce'; use_combiinstance_solution in any solution
+    if operation_uq: 
+        # gPCE
+        use_combiinstance_solution = kwargs.get("use_combiinstance_solution", False)
+        regression = kwargs.get("regression", False)
+        restrict_degrees = kwargs.get("restrict_degrees", False)
+        if regression:
+            restrict_degrees = False
+        scale_weights = kwargs.get("scale_weights", False)
+        if uq_optimization == 'pce':
+            if operation.pce_polys is None:
+                operation._set_pce_polys(polynomial_degrees=polynomial_degree)
+            restrict_degrees = False
+            regression = False
+            operation.calculate_PCE(
+                polynomial_degrees=polynomial_degree, 
+                combiinstance=combiObject, restrict_degrees=False, 
+                use_combiinstance_solution=True,
+                scale_weights=scale_weights, regression=False)
+        elif compute_pce_from_sparsespace:        
+            operation.calculate_PCE(
+                polynomial_degrees=polynomial_degree, 
+                combiinstance=combiObject, restrict_degrees=False, 
+                use_combiinstance_solution=False,
+                scale_weights=scale_weights, regression=True)
+        if operation.gPCE is not None:
+            E_gpce, Var_gpce = operation.get_expectation_and_variance_PCE()
+            first_order_sobol_indices = operation.get_first_order_sobol_indices()
+            first_order_sobol_indices = np.squeeze(first_order_sobol_indices)
+            total_order_sobol_indices = operation.get_total_order_sobol_indices()
+            total_order_sobol_indices = np.squeeze(total_order_sobol_indices)
+            dict_info["E_gpce"] = E_gpce
+            dict_info["Var_gpce"] = Var_gpce
+            dict_info["first_order_sobol_indices"] = first_order_sobol_indices
+            dict_info["total_order_sobol_indices"] = total_order_sobol_indices
+
+        pce_polys = operation.pce_polys
+        gPCE = operation.get_gPCE()
+        if operation.pce_polys is not None:
+            dict_info["pce_polys"] = operation.pce_polys
+        if operation.gPCE is not None:
+            dict_info["gPCE"] = operation.get_gPCE()
+
+        # Mean and Variance
+        if uq_optimization == 'mean_and_var':
+            E, Var= operation.calculate_expectation_and_variance(combiinstance=combiObject, use_combiinstance_solution=True)
+            dict_info["E"] = E
+            dict_info["Var"] = Var
+        else:
+            # E = operation.calculate_moment(combiinstance=combiObject, k=1, use_combiinstance_solution=True)
+            E = operation.calculate_expectation(combiinstance=combiObject, use_combiinstance_solution=False)
+            dict_info["E"] = E
+
     ##    here, it is also relevan the value of uq_optimization 'mean' | 'mean_and_var' | 'pce'
     #     (E,), (Var,) = operation.calculate_expectation_and_variance(combiinstance, use_combiinstance_solution=Fals)
     #     (E,), (Var,) = operation.calculate_expectation_and_variance(combiinstance, use_combiinstance_solution=True)
@@ -637,35 +713,49 @@ directory_for_saving_plots='./', do_plot=True,  **kwargs):
     #     operation.pce_polys / operation.pce_polys_norms
     #     operation.get_total_order_sobol_indices() / operation.get_first_order_sobol_indices() / operation.get_Percentile_PCE()
 
-    if do_plot:
+    if do_plot and method.lower() != 'dim_wise_spat_adaptive_combi':
+        # TODO For some reason these plottings below do not work for dim_wise_spat_adaptive_combi
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=UserWarning)
-            if method.lower() == 'standard_combi':
-                filename = os.path.abspath(os.path.join(str(directory_for_saving_plots), "hierarchical_subspaces.pdf"))
-                combiObject.print_subspaces(sparse_grid_spaces=False, ticks=False, fade_full_grid=False, filename=filename)
-                filename = os.path.abspath(os.path.join(str(directory_for_saving_plots), "sparsegrid_subspaces.pdf"))
-                combiObject.print_subspaces(sparse_grid_spaces=False, ticks=False, fade_full_grid=True, filename=filename)
-                filename = os.path.abspath(os.path.join(str(directory_for_saving_plots), "combi.pdf"))
-                combiObject.print_resulting_combi_scheme(ticks=False, filename=filename, show_border=True, fill_boundary_points=True, fontsize=60)
+            # if dim < 3:
             # filename = os.path.abspath(os.path.join(str(directory_for_saving_plots), "sparsegrid.pdf"))
-            # combiObject.print_resulting_sparsegrid(ticks=False, show_border=True, filename=filename)
-            if method.lower() == 'dim_wise_spat_adaptive_combi':
-                filename = os.path.abspath(os.path.join(str(directory_for_saving_plots), "standard_combi.pdf"))
-                combiObject.print_resulting_combi_scheme(filename=filename, show_border=True, markersize=20, ticks=False)
-                # filename = os.path.abspath(os.path.join(str(directory_for_saving_plots), "standard_sparse_grid.pdf"))
-                # combiObject.print_resulting_sparsegrid(filename=filename, show_border=True, markersize=40, ticks=False)
-                filename = os.path.abspath(os.path.join(str(directory_for_saving_plots), "standard_combi.svg"))
-                combiObject.print_resulting_combi_scheme(filename=filename, show_border=True, markersize=20, ticks=False)
-                # filename = os.path.abspath(os.path.join(str(directory_for_saving_plots), "standard_sparse_grid.svg"))
-                # combiObject.print_resulting_sparsegrid(filename=filename, show_border=True, markersize=40, ticks=False)
-                filename = os.path.abspath(os.path.join(str(directory_for_saving_plots), "refinement_tree_start.pdf"))
-                combiObject.draw_refinement_trees(filename=filename, single_dim=0, fontsize=60)
-                filename = os.path.abspath(os.path.join(str(directory_for_saving_plots), "refinement_tree_start.svg"))
-                combiObject.draw_refinement_trees(filename=filename, single_dim=0, fontsize=60)
-                filename = os.path.abspath(os.path.join(str(directory_for_saving_plots), "refinement_start.pdf"))
-                combiObject.draw_refinement(filename=filename, single_dim=0, fontsize=60)
-                filename = os.path.abspath(os.path.join(str(directory_for_saving_plots), "refinement_start.svg"))
-                combiObject.draw_refinement(filename=filename, single_dim=0, fontsize=60)
+            # combiObject.print_resulting_sparsegrid(ticks=False, show_border=True, filename=filename,)
+            filename = os.path.abspath(os.path.join(str(directory_for_saving_plots), "standard_combi.pdf"))
+            combiObject.print_resulting_combi_scheme(show_border=True, fill_boundary_points=True, fontsize=60, ticks=False, filename=filename,)
+            filename = os.path.abspath(os.path.join(str(directory_for_saving_plots), "standard_combi.svg"))
+            combiObject.print_resulting_combi_scheme(show_border=True, fill_boundary_points=True, fontsize=60, ticks=False, filename=filename,)
+            # combiObject.print_subspaces(sparse_grid_spaces=False, ticks=False, fade_full_grid=True)
+            # combiObject.draw_refinement(fontsize=60)
+    
+    # if do_plot:
+    #     with warnings.catch_warnings():
+    #         warnings.filterwarnings("ignore", category=UserWarning)
+    #         if method.lower() == 'standard_combi':
+    #             filename = os.path.abspath(os.path.join(str(directory_for_saving_plots), "hierarchical_subspaces.pdf"))
+    #             combiObject.print_subspaces(sparse_grid_spaces=False, ticks=False, fade_full_grid=False, filename=filename)
+    #             filename = os.path.abspath(os.path.join(str(directory_for_saving_plots), "sparsegrid_subspaces.pdf"))
+    #             combiObject.print_subspaces(sparse_grid_spaces=False, ticks=False, fade_full_grid=True, filename=filename)
+    #             filename = os.path.abspath(os.path.join(str(directory_for_saving_plots), "combi.pdf"))
+    #             combiObject.print_resulting_combi_scheme(ticks=False, filename=filename, show_border=True, fill_boundary_points=True, fontsize=60)
+    #         # filename = os.path.abspath(os.path.join(str(directory_for_saving_plots), "sparsegrid.pdf"))
+    #         # combiObject.print_resulting_sparsegrid(ticks=False, show_border=True, filename=filename)
+    #         if method.lower() == 'dim_wise_spat_adaptive_combi':
+    #             filename = os.path.abspath(os.path.join(str(directory_for_saving_plots), "standard_combi.pdf"))
+    #             combiObject.print_resulting_combi_scheme(filename=filename, show_border=True, markersize=20, ticks=False)
+    #             # filename = os.path.abspath(os.path.join(str(directory_for_saving_plots), "standard_sparse_grid.pdf"))
+    #             # combiObject.print_resulting_sparsegrid(filename=filename, show_border=True, markersize=40, ticks=False)
+    #             filename = os.path.abspath(os.path.join(str(directory_for_saving_plots), "standard_combi.svg"))
+    #             combiObject.print_resulting_combi_scheme(filename=filename, show_border=True, markersize=20, ticks=False)
+    #             # filename = os.path.abspath(os.path.join(str(directory_for_saving_plots), "standard_sparse_grid.svg"))
+    #             # combiObject.print_resulting_sparsegrid(filename=filename, show_border=True, markersize=40, ticks=False)
+    #             filename = os.path.abspath(os.path.join(str(directory_for_saving_plots), "refinement_tree_start.pdf"))
+    #             combiObject.draw_refinement_trees(filename=filename, single_dim=0, fontsize=60)
+    #             filename = os.path.abspath(os.path.join(str(directory_for_saving_plots), "refinement_tree_start.svg"))
+    #             combiObject.draw_refinement_trees(filename=filename, single_dim=0, fontsize=60)
+    #             filename = os.path.abspath(os.path.join(str(directory_for_saving_plots), "refinement_start.pdf"))
+    #             combiObject.draw_refinement(filename=filename, single_dim=0, fontsize=60)
+    #             filename = os.path.abspath(os.path.join(str(directory_for_saving_plots), "refinement_start.svg"))
+    #             combiObject.draw_refinement(filename=filename, single_dim=0, fontsize=60)
     
     writing_results_to_a_file = kwargs.get('writing_results_to_a_file', True)
     if writing_results_to_a_file:
@@ -676,8 +766,6 @@ directory_for_saving_plots='./', do_plot=True,  **kwargs):
         fp.write(f'number_full_model_evaluations: {number_full_model_evaluations}\n')
         fp.close()
 
-    dict_info = {}
-    dict_info["operation_str"] = operation_str
     dict_info["number_full_model_evaluations"] = number_full_model_evaluations
     dict_info["time_building_sg_surrogate"] = time_building_sg_surrogate
     

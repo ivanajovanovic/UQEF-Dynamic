@@ -812,7 +812,7 @@ class HBVSASKModel(object):
             flux_df = flux_df[flux_df.index.isin(simulation_range)]  # Sample only the simulation_range
 
             # Create a final df - state
-            if state_df is not None:
+            if state is not None:
                 last_date = time_series_list[-1]
                 time_series_list_plus_one_day = time_series_list.copy()
                 # time_series_list_plus_one_day.append(pd.to_datetime(last_date) + pd.DateOffset(days=1))
