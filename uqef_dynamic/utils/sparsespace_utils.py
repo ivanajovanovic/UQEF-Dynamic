@@ -678,8 +678,8 @@ directory_for_saving_plots='./', do_plot=True,  **kwargs):
             total_order_sobol_indices = np.squeeze(total_order_sobol_indices)
             dict_info["E_gpce"] = E_gpce
             dict_info["Var_gpce"] = Var_gpce
-            dict_info["first_order_sobol_indices"] = first_order_sobol_indices
-            dict_info["total_order_sobol_indices"] = total_order_sobol_indices
+            dict_info["Sobol_m"] = first_order_sobol_indices
+            dict_info["Sobol_t"] = total_order_sobol_indices
 
         pce_polys = operation.pce_polys
         gPCE = operation.get_gPCE()

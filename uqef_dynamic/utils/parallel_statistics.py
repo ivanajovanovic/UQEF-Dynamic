@@ -138,7 +138,7 @@ def parallel_calc_stats_for_gPCE(
     compute_Sobol_t=False, compute_Sobol_m=False, compute_Sobol_m2=False, \
     store_qoi_data_in_stat_dict=False, store_gpce_surrogate_in_stat_dict=False, \
     save_gpce_surrogate=False, compute_other_stat_besides_pce_surrogate=True, \
-    dict_stat_to_compute=utility.DEFAULT_DICT_STAT_TO_COMPUTE
+    dict_stat_to_compute=utility.DEFAULT_DICT_STAT_TO_COMPUTE, regression_model=None
     ):
     """
     :return: results list, where each of the element is yet another list
@@ -161,7 +161,7 @@ def parallel_calc_stats_for_gPCE(
         if regression:
             qoi_gPCE, goi_coeff = cp.fit_regression(
                 polynomials=polynomial_expansion, abscissas=nodes, evals=qoi_values, retall=True,
-                model=None  # classical least-square; one can use as well sklearn.linear_model.LinearRegression(fit_intercept=False)
+                model=regression_model  # classical least-square; one can use as well sklearn.linear_model.LinearRegression(fit_intercept=False)
             )
         else:
             qoi_gPCE, goi_coeff = cp.fit_quadrature(

@@ -36,14 +36,12 @@ from uqef_dynamic.utils import sparsespace_utils
 
 from uqef_dynamic.models.time_dependent_baseclass import time_dependent_statistics
 
-from uqef_dynamic.scientific_pipelines.list_of_simulation_runs import list_of_simulation_runs_ishigami
+from uqef_dynamic.scientific_pipelines.list_of_simulation_runs_var1_2 import list_of_simulation_runs_ishigami
+# TODO Run thing on LinuxCluster
 # TODO Save reevaluations of all the models as dataframes; maybe for plotting later on...
-# TODO Add simple pce-part -> produce PCE surrogate
-# TODO Evaluate PCE surrogate (from simple statistics, from combiinstance)
+# TODO Add simple pce-part -> produce PCE surrogate; Genz functions!
 # TODO HBV Gof inverse logic
-# TODO PCE part from SparseSpace - almost done
-# TODO Things will get more complicated when using the combiinstance to produce PCE surrogate!!!
-# TODO Add comparing final E, Var, Sobol indices with analytical values / MC
+# TODO If analytical values are missing - compute one from MC...
 
 local_debugging = False
 mpi = True
@@ -56,6 +54,7 @@ if mpi:
     version2 = MPI.Get_version()
 else:
     rank = None
+
 
 def is_master(mpi, rank=None):
     return mpi is False or (mpi is True and rank == 0)
@@ -287,11 +286,16 @@ def run_simplified_uqef_dynamic_simulation(
     # ============================
     # Note: One has to make sure that statistics object get the single qoi information
     problem_statistics = None
+
+    dict_what_to_plot = kwargs.get("dict_what_to_plot", utility.DEFAULT_DICT_WHAT_TO_PLOT)
+    dict_stat_to_compute = kwargs.get("dict_stat_to_compute", utility.DEFAULT_DICT_STAT_TO_COMPUTE)
+
     if model.lower() in list_of_surrogate_models:
         problem_statistics = create_stat_object.create_statistics_object(
             configuration_object=configurationObject, 
             uqsim_args_dict=uqsim_args_dict, 
-            workingDir=workingDir, model=model, free_result_dict_memory=False)
+            workingDir=workingDir, model=model, free_result_dict_memory=False,
+            dict_what_to_plot=dict_what_to_plot, dict_stat_to_compute=dict_stat_to_compute)
         # Note: One has to make sure that statistics object get the single qoi information
         # Or maybe this is not necessary when only doing uqef analysis - since multiple qois are supported!
         print(f"DEBUGGING: problem_statistics.list_qoi_column - {problem_statistics.list_qoi_column}")
@@ -376,15 +380,33 @@ def run_simplified_uqef_dynamic_simulation(
                         if single_qoi in gpce_surrogate_dict_over_qois:
                             gPCE_surrogate = gpce_surrogate_dict_over_qois[single_qoi]
             dictionary_with_inf_about_the_run_uqef["statistics_pdTimesteps"] = problem_statistics.pdTimesteps
+            dictionary_with_inf_about_the_run_uqef['labels'] = problem_statistics.labels
                         
     if is_master(mpi, rank):
         end_time_computing_statistics = time.time()
         time_computing_statistics = end_time_computing_statistics - start_time_computing_statistics
         dictionary_with_inf_about_the_run_uqef["time_computing_statistics"] = time_computing_statistics
         print(f"INFO: time_computing_statistics={dictionary_with_inf_about_the_run_uqef['time_computing_statistics']}\n")
+
+         # TODO Filter df_statistics for single_qoi
+        if df_statistics is not None:
+            df_statistics.sort_values(
+                by=utility.TIME_COLUMN_NAME, ascending=True, inplace=True, kind='quicksort', na_position='last')
+            if 'E' in df_statistics.columns:
+                dictionary_with_inf_about_the_run_uqef["E"] = df_statistics["E"].values
+            if 'Var' in df_statistics.columns:
+                dictionary_with_inf_about_the_run_uqef["Var"] = df_statistics["Var"].values 
+            for i in range(len(problem_statistics.labels)):
+                sobol_m_entry = "Sobol_m_" + problem_statistics.labels[i]
+                sobol_t_entry = "Sobol_t_" + problem_statistics.labels[i]
+                if sobol_m_entry in df_statistics.columns:
+                    dictionary_with_inf_about_the_run_uqef[sobol_m_entry] = df_statistics[sobol_m_entry].values 
+                if sobol_t_entry in df_statistics.columns:
+                    dictionary_with_inf_about_the_run_uqef[sobol_t_entry] = df_statistics[sobol_t_entry].values 
     
     dictionary_with_inf_about_the_run_uqef['gPCE_surrogate'] = gPCE_surrogate
     dictionary_with_inf_about_the_run_uqef['problem_statistics_result_dict'] = problem_statistics_result_dict
+    dictionary_with_inf_about_the_run_uqef['df_statistics'] = df_statistics
     print(f"\n===Done with the UQEF-Dynamic Part===")
 
     return dictionary_with_inf_about_the_run_uqef
@@ -696,8 +718,9 @@ def main_routine(model, current_output_folder, **kwargs):
     # ============================
 
     problem_function = None
-    intermediate_surrogate_object = None
     surrogate_object = None
+    intermediate_surrogate_object = None
+    initial_combi_object = None
 
     if model.lower() == "ishigami":
         # problem_function = sparsespace_functions.IshigamiFunction()
@@ -729,15 +752,14 @@ def main_routine(model, current_output_folder, **kwargs):
     else:
         raise ValueError(f"Model {model} is not yet supported!")
    
-    single_qoi = problem_function.single_qoi
-    if single_qoi is None:
-        single_qoi = problem_function.qoi_column
-    if single_qoi is None:
-        raise ValueError(f"Single qoi is not set for the model {model}!")
+    # single_qoi = problem_function.single_qoi
+    # if single_qoi is None:
+    #     single_qoi = problem_function.qoi_column
+    # if single_qoi is None:
+    #     raise ValueError(f"Single qoi is not set for the model {model}!")
     # ============================
     # I
     # ============================
-    # TODO add a question to see if combiinstance is used as (intermediate) surrogate model
     if compute_sparsespace:
         # params for SparseSpACE
         grid_type = kwargs.get("grid_type", "trapezoidal")  # 'trapezoidal', 'chebyshev', 'leja', 'bspline_p3'; For spetical adaptive single dimensions algorithm: 'globa_trapezoidal', 'trapezoidal' and 'bspline_p3'
@@ -791,20 +813,31 @@ def main_routine(model, current_output_folder, **kwargs):
             print(f"INFO: combiObject: {combiObject},\n number_full_model_evaluations: {number_full_model_evaluations},\n result_dict_sparsespace: {result_dict_sparsespace}")
             
             E_sparsespace = result_dict_sparsespace.get("E", None)
+            result_dict_sparsespace['E_sparsespace'] = result_dict_sparsespace.pop("E", None)
             Var_sparsespace = result_dict_sparsespace.get("Var", None)
+            result_dict_sparsespace['Var_sparsespace'] = result_dict_sparsespace.pop("Var", None)
             gPCE_sparsespace = result_dict_sparsespace.get("gPCE", None)
+            result_dict_sparsespace['gPCE_sparsespace'] = result_dict_sparsespace.pop("gPCE", None)
             poly_expansion_sparsespace = result_dict_sparsespace.get("pce_polys", None)
             E_gpce_sparsespace = result_dict_sparsespace.get("E_gpce", None)
+            result_dict_sparsespace['E_gpce_sparsespace'] = result_dict_sparsespace.pop("E_gpce", None)
             Var_gpce_sparsespace = result_dict_sparsespace.get("Var_gpce", None)
-            first_order_sobol_indices_sparsespace = result_dict_sparsespace.get("first_order_sobol_indices", None)
-            total_order_sobol_indices_sparsespace = result_dict_sparsespace.get("total_order_sobol_indices", None)
+            result_dict_sparsespace['Var_gpce_sparsespace'] = result_dict_sparsespace.pop("Var_gpce", None)
+            first_order_sobol_indices_sparsespace = result_dict_sparsespace.get("Sobol_m", None)
+            result_dict_sparsespace['Sobol_m_sparsespace'] = result_dict_sparsespace.pop("Sobol_m", None)
+            total_order_sobol_indices_sparsespace = result_dict_sparsespace.get("Sobol_t", None)
+            result_dict_sparsespace['Sobol_t_sparsespace'] = result_dict_sparsespace.pop("Sobol_t", None)
+
+            print(f"DEBUGGING - SparseSpace stat:\n"
+                f"E_sparsespace-{E_sparsespace}; Var_sparsespace-{Var_sparsespace};\n"
+                f"E_gpce_sparsespace-{E_gpce_sparsespace}; Var_gpce_sparsespace-{Var_gpce_sparsespace};\n"
+                f"first_order_sobol_indices_sparsespace-{first_order_sobol_indices_sparsespace}; total_order_sobol_indices_sparsespace-{total_order_sobol_indices_sparsespace}")
 
             dictionary_with_inf_about_the_run.update(result_dict_sparsespace)
 
             # TODO Try to save combiObject in some other way
             # dictionary_with_inf_about_the_run["combiObject"] = combiObject
     
-            # TODO Things will get more complicated when using the combiinstance to produce PCE surrogate!!!
             surrogate_object = combiObject
             uqsim_args_dict["surrogate_type"] = dictionary_with_inf_about_the_run["surrogate_type"] = "combiinstance"
 
@@ -814,7 +847,13 @@ def main_routine(model, current_output_folder, **kwargs):
                 surrogate_object = gPCE_sparsespace
                 uqsim_args_dict["surrogate_type"] = dictionary_with_inf_about_the_run["surrogate_type"] = "pce_sparsespace"
                 print(f"DEBUGGING gPCE_sparsespace - {type(gPCE_sparsespace)}")
-
+    else:
+        E_sparsespace = None
+        Var_sparsespace = None
+        E_gpce_sparsespace = None
+        Var_gpce_sparsespace = None
+        first_order_sobol_indices_sparsespace = None
+        total_order_sobol_indices_sparsespace = None
     # ============================
     # II - cut...
     # ============================
@@ -928,6 +967,12 @@ def main_routine(model, current_output_folder, **kwargs):
     if compute_uq or compute_pce_from_uq:
         gPCE_surrogate = None
 
+        single_qoi = problem_function.single_qoi
+        if single_qoi is None:
+            single_qoi = problem_function.qoi_column
+        if single_qoi is None:
+            raise ValueError(f"Single qoi is not set for the model {model}!")
+
         # NOTE: this is needed; so uqef never uses PCE from sparsespace as a surrogate
         if surrogate_object is not None and uqsim_args_dict.get("surrogate_type", None) == "pce_sparsespace":
             # NOTE: this is a combiinstance in this setup
@@ -935,22 +980,63 @@ def main_routine(model, current_output_folder, **kwargs):
         else:
             surrogate_to_build_pce_uqef_on = surrogate_object
 
+        dict_what_to_plot = kwargs.get("dict_what_to_plot", utility.DEFAULT_DICT_WHAT_TO_PLOT)
+        dict_stat_to_compute = kwargs.get("dict_stat_to_compute", utility.DEFAULT_DICT_STAT_TO_COMPUTE)
         result_dict_uqef = run_simplified_uqef_dynamic_simulation(
             problem_function=problem_function, configurationObject=configurationObject, uqsim_args_dict=uqsim_args_dict,
             workingDir=workingDir, model=model,
             simulationNodes=simulationNodes, 
             list_of_surrogate_models=["larsim", "hbvsask", "ishigami", "oscillator",],
-            surrogate_object=surrogate_to_build_pce_uqef_on,)
+            surrogate_object=surrogate_to_build_pce_uqef_on,
+            dict_what_to_plot=dict_what_to_plot,
+            dict_stat_to_compute=dict_stat_to_compute
+            )
 
         gPCE_surrogate = result_dict_uqef.pop("gPCE_surrogate", None)
         problem_statistics_result_dict = result_dict_uqef.pop("problem_statistics_result_dict", None)
+        df_statistics = result_dict_uqef.pop("df_statistics", None)
+
+        print(f"==============")
+        print(f"df_statistics - {df_statistics}")
+        print(f"df_statistics.columns - {df_statistics.columns}")
+        print(f"result_dict_uqef.get('labels') - {result_dict_uqef.get('labels')}")
+        print(f"uqsim_args_dict.get('param_names') - {uqsim_args_dict.get('param_names')}")
+        print(f"==============")
+
         # approximated_mean = result_dict_uqef.get("E", None)
         # approximated_var = result_dict_uqef.get("Var", None)
         # first_order_sobol_indices = result_dict_uqef.get("Sobol_m", None)
         # total_order_sobol_indices = result_dict_uqef.get("Sobol_t", None)
-        # print(f"DEBUGGING - problem_statistics_result_dict-{problem_statistics_result_dict}")
-        
+        E_uqef = result_dict_uqef.get("E", None)
+        result_dict_uqef['E_uqef'] = result_dict_uqef.pop("E", None)
+        Var_uqef = result_dict_uqef.get("Var", None)
+        result_dict_uqef['Var_uqef'] = result_dict_uqef.pop("Var", None)
+        labels = result_dict_uqef.get('labels')
+        first_order_sobol_indices_uqef = []
+        total_order_sobol_indices_uqef = []
+        for i in range(len(labels)):
+            sobol_m_entry = "Sobol_m_" + labels[i]
+            sobol_t_entry = "Sobol_t_" + labels[i]
+            first_order_sobol_indices_uqef.append(result_dict_uqef.get(sobol_m_entry, None))
+            result_dict_uqef[f'{sobol_m_entry}_uqef'] = result_dict_uqef.pop(sobol_m_entry, None)
+            total_order_sobol_indices_uqef.append(result_dict_uqef.get(sobol_t_entry, None))
+            result_dict_uqef[f'{sobol_t_entry}_uqef'] = result_dict_uqef.pop(sobol_t_entry, None)
+        if first_order_sobol_indices_uqef is None or (isinstance(first_order_sobol_indices_uqef, list) and all(item is None for item in first_order_sobol_indices_uqef)):
+            first_order_sobol_indices_uqef = None
+        else:
+            first_order_sobol_indices_uqef = np.array(first_order_sobol_indices_uqef)
+            first_order_sobol_indices_uqef = np.squeeze(first_order_sobol_indices_uqef)
+        if total_order_sobol_indices_uqef is None or (isinstance(total_order_sobol_indices_uqef, list) and all(item is None for item in total_order_sobol_indices_uqef)):
+            total_order_sobol_indices_uqef = None
+        else:
+            total_order_sobol_indices_uqef = np.array(total_order_sobol_indices_uqef)
+            total_order_sobol_indices_uqef = np.squeeze(total_order_sobol_indices_uqef)
+        print(f"DEBUGGING - Stat from UQEF:\n E_uqef-{E_uqef}; Var_uqef-{Var_uqef};\n first_order_sobol_indices_uqef-{first_order_sobol_indices_uqef}; total_order_sobol_indices_uqef-{total_order_sobol_indices_uqef}")
+
         if gPCE_surrogate is not None and compute_pce_from_uq:
+            if intermediate_surrogate_object is not None:  #NOTE: this can only be combiinstance
+                initial_combi_object = intermediate_surrogate_object
+                uqsim_args_dict["initial_combi_object_type"] = dictionary_with_inf_about_the_run["initial_combi_object_type"] = uqsim_args_dict.get("intermediate_surrogate_type", "combiinstance")
             intermediate_surrogate_object = surrogate_object
             if intermediate_surrogate_object is not None:
                 uqsim_args_dict["intermediate_surrogate_type"] = dictionary_with_inf_about_the_run["intermediate_surrogate_type"] = uqsim_args_dict.get("surrogate_type", "combiinstance")  # 
@@ -963,13 +1049,62 @@ def main_routine(model, current_output_folder, **kwargs):
             uqsim_args_dict["compute_pce_from_uq"] = compute_pce_from_uq = False
 
         dictionary_with_inf_about_the_run.update(result_dict_uqef)
-
+    else:
+        labels = None
+        E_uqef = None
+        Var_uqef = None
+        first_order_sobol_indices_uqef = None
+        total_order_sobol_indices_uqef = None
     # ============================
     # III
     # # ============================
     # # TODO Add extraction - PCE, E, Mean, Sobol... simple, complex-vector...
 
     if is_master(mpi, rank):
+        # TODO Compare  E_sparsespace, Var_sparsespace, E_gpce_sparsespace, Var_gpce_sparsespace, first_order_sobol_indices_sparsespace, first_order_sobol_indices_sparsespace
+        # with E_uqef, Var_uqef, first_order_sobol_indices_uqef, total_order_sobol_indices_uqef
+        # with some analytical_mean / analytical_var
+        # E_gpce_sparsespace, Var_gpce_sparsespace, first_order_sobol_indices_sparsespace, total_order_sobol_indices_sparsespace
+        # E_uqef, Var_uqef, first_order_sobol_indices_uqef, total_order_sobol_indices_uqef
+        # analytical_E, analytical_Var, analytical_Sobol_t, analytical_Sobol_m
+        analytical_E = None
+        analytical_Var = None
+        analytical_Sobol_t = None
+        analytical_Sobol_m = None
+        if model.lower() == "ishigami":
+            # compare uqef stat and analytical
+            timestamp = 0.0
+            analytical_E=3.48227783540168
+            analytical_Var=13.887058470972093
+            analytical_Sobol_t=np.array([0.5574, 0.4424, 0.2436], dtype=np.float64)
+            analytical_Sobol_m=np.array([0.3138, 0.4424, 0.0], dtype=np.float64)
+            print(f"DEBUGGING - Analytical stat:\n"
+                f"analytical_E-{analytical_E}; analytical_Var-{analytical_Var};\n"
+                f"analytical_Sobol_m-{analytical_Sobol_m}; analytical_Sobol_t-{analytical_Sobol_t}")
+        else:
+            print(f"Sorry, the comparison of analytical and computed stat still not supported for model {model}") 
+        
+        if analytical_E is not None:
+            if E_gpce_sparsespace is not None:
+                dictionary_with_inf_about_the_run['E_error_sparsespace'] = abs(E_gpce_sparsespace - analytical_E)
+            if E_uqef is not None:
+                dictionary_with_inf_about_the_run['E_error_uqef'] = abs(E_uqef - analytical_E)
+        if analytical_Var is not None:
+            if Var_gpce_sparsespace is not None:
+                dictionary_with_inf_about_the_run['Var_error_sparsespace'] = abs(Var_gpce_sparsespace - analytical_Var)
+            if Var_uqef is not None:
+                dictionary_with_inf_about_the_run['Var_error_uqef'] = abs(Var_uqef - analytical_Var)
+        if analytical_Sobol_m is not None:
+            if first_order_sobol_indices_sparsespace is not None:
+                dictionary_with_inf_about_the_run['Sobol_m_error_sparsespace'] = np.abs(first_order_sobol_indices_sparsespace - analytical_Sobol_m)
+            if first_order_sobol_indices_uqef is not None:
+                dictionary_with_inf_about_the_run['Sobol_m_error_uqef'] = np.abs(first_order_sobol_indices_uqef - analytical_Sobol_m)
+        if analytical_Sobol_t is not None:
+            if total_order_sobol_indices_sparsespace is not None:
+                dictionary_with_inf_about_the_run['Sobol_t_error_sparsespace'] = np.abs(total_order_sobol_indices_sparsespace - analytical_Sobol_t)
+            if total_order_sobol_indices_uqef is not None:
+                dictionary_with_inf_about_the_run['Sobol_t_error_uqef'] = np.abs(total_order_sobol_indices_uqef - analytical_Sobol_t)
+                
         reevaluate_surrogate = kwargs.get("reevaluate_surrogate", False)
         reevaluate_original_model = kwargs.get("reevaluate_original_model", False)
         reevaluate_intermediate_surrogate = kwargs.get("reevaluate_intermediate_surrogate", False)
@@ -1071,7 +1206,9 @@ def main_routine(model, current_output_folder, **kwargs):
             ## Var 3
             # results_array_original_model = problem_function(coordinates=parameters_model_comparison.T)
             if results_array_original_model is not None:
-                print(f"DEBUGGING results_array_original_model.shape-{results_array_original_model.shape}")
+                results_array_original_model_FileName = os.path.abspath(os.path.join(str(workingDir), 'original_model_reevaluations.pkl'))
+                with open(results_array_original_model_FileName, 'wb') as handle:
+                    pickle.dump(results_array_original_model, handle)
                 end_time_reevaluating_original_model = time.time()
                 dictionary_with_inf_about_the_run["number_original_model_reevaluations"] = len(results_array_original_model)
                 dictionary_with_inf_about_the_run["time_parallel_original_model_reevaluations"] = end_time_reevaluating_original_model - start_time_reevaluating_original_model
@@ -1081,7 +1218,6 @@ def main_routine(model, current_output_folder, **kwargs):
 
         # ============================
 
-        # TODO make sure this works when gPCE is a surrogate model
         results_array_surrogate_model = None
         if surrogate_object is not None and reevaluate_surrogate:
             start_time_reevaluating_surrogate_model = time.time()
@@ -1157,7 +1293,9 @@ def main_routine(model, current_output_folder, **kwargs):
             
             if results_array_surrogate_model is not None:
                 results_array_surrogate_model = results_array_surrogate_model.reshape(number_of_samples_model_comparison, problem_function.output_length())
-                print(f"DEBUGGING results_array_surrogate_model.shape-{results_array_surrogate_model.shape}")
+                results_array_surrogate_model_FileName = os.path.abspath(os.path.join(str(workingDir), 'surrogate_model_reevaluations.pkl'))
+                with open(results_array_surrogate_model_FileName, 'wb') as handle:
+                    pickle.dump(results_array_surrogate_model, handle)
                 end_time_reevaluating_surrogate_model = time.time()
                 dictionary_with_inf_about_the_run["number_surrogate_model_reevaluations"] = len(results_array_surrogate_model)
                 dictionary_with_inf_about_the_run["time_parallel_surrogate_model_reevaluations"] = end_time_reevaluating_surrogate_model - start_time_reevaluating_surrogate_model
@@ -1167,7 +1305,6 @@ def main_routine(model, current_output_folder, **kwargs):
 
         # ============================
 
-        # TODO: See what to do when ther is both combiinstance and pce_sparsespace as intermediate surrogates...
         results_array_intermediate_surrogate_model = None
         if intermediate_surrogate_object is not None and reevaluate_intermediate_surrogate:
             start_time_reevaluating_intermediate_surrogate_model = time.time()
@@ -1192,6 +1329,9 @@ def main_routine(model, current_output_folder, **kwargs):
             # results_array_intermediate_surrogate_model = np.concatenate(results)
             if results_array_intermediate_surrogate_model is not None:
                 results_array_intermediate_surrogate_model = results_array_intermediate_surrogate_model.reshape(number_of_samples_model_comparison, problem_function.output_length())
+                results_array_intermediate_surrogate_model_FileName = os.path.abspath(os.path.join(str(workingDir), 'intermediate_surrogate_model_reevaluations.pkl'))
+                with open(results_array_intermediate_surrogate_model_FileName, 'wb') as handle:
+                    pickle.dump(results_array_intermediate_surrogate_model, handle)
                 end_time_reevaluating_intermediate__surrogate_model = time.time()
                 dictionary_with_inf_about_the_run["number_intermediate_surrogate_model_reevaluations"] = len(results_array_intermediate_surrogate_model)
                 dictionary_with_inf_about_the_run["time_parallel_intermediate_surrogate_model_reevaluations"] = end_time_reevaluating_intermediate__surrogate_model - start_time_reevaluating_intermediate_surrogate_model
@@ -1199,6 +1339,22 @@ def main_routine(model, current_output_folder, **kwargs):
                 if set_lower_predictions_to_zero:
                     pass
 
+        results_array_initial_combi_model = None
+        if initial_combi_object is not None and (id(initial_combi_object)!=id(intermediate_surrogate_object)) and (id(initial_combi_object)!=id(surrogate_object)):
+            start_time_reevaluating_initial_combi_model = time.time()
+            print(f"\n===Reevaluating the initila combi model of type {uqsim_args_dict.get('initial_combi_object_type', None)}...===")
+            results_array_initial_combi_model = initial_combi_object(parameters_model_comparison.T)
+            if results_array_initial_combi_model is not None:
+                results_array_initial_combi_model = results_array_initial_combi_model.reshape(number_of_samples_model_comparison, problem_function.output_length())
+                results_array_initial_combi_model_FileName = os.path.abspath(os.path.join(str(workingDir), 'initila_combi_model_reevaluations.pkl'))
+                with open(results_array_initial_combi_model_FileName, 'wb') as handle:
+                    pickle.dump(results_array_initial_combi_model, handle)
+                end_time_reevaluating_initial_combi_model = time.time()
+                dictionary_with_inf_about_the_run["number_initial_combi_model_reevaluations"] = len(results_array_initial_combi_model)
+                dictionary_with_inf_about_the_run["time_initial_combi_reevaluations"] = end_time_reevaluating_initial_combi_model - start_time_reevaluating_initial_combi_model
+                print(f"INFO: Time for evaluation (inital) combi model {len(results_array_initial_combi_model)} time is {dictionary_with_inf_about_the_run['time_initial_combi_reevaluations']}")
+                if set_lower_predictions_to_zero:
+                    pass
         # ============================
 
         compare_surrogate_and_original_model_runs = False
@@ -1218,6 +1374,12 @@ def main_routine(model, current_output_folder, **kwargs):
             print(f"\n===Comparing Original and Intermediate({uqsim_args_dict.get('intermediate_surrogate_type', None)}) Surrogate===")
             resul_dict_comparing_mode_and_intermediate_surrogate = compute_numpy_array_errors(results_array_intermediate_surrogate_model, results_array_original_model, printing=True)
             resul_dict_comparing_mode_and_intermediate_surrogate_update = {f"intermediate_{key}": value for key, value in resul_dict_comparing_mode_and_intermediate_surrogate.items()}
+            dictionary_with_inf_about_the_run.update(resul_dict_comparing_mode_and_intermediate_surrogate_update)
+    
+        if results_array_initial_combi_model is not None and results_array_original_model is not None:
+            print(f"\n===Comparing Original and Initial combiinstance({uqsim_args_dict.get('initial_combi_object_type', None)}) Surrogate===")
+            resul_dict_comparing_mode_and_intermediate_surrogate = compute_numpy_array_errors(results_array_initial_combi_model, results_array_original_model, printing=True)
+            resul_dict_comparing_mode_and_intermediate_surrogate_update = {f"initial_combi_{key}": value for key, value in resul_dict_comparing_mode_and_intermediate_surrogate.items()}
             dictionary_with_inf_about_the_run.update(resul_dict_comparing_mode_and_intermediate_surrogate_update)
     
     # ============================
@@ -1249,32 +1411,23 @@ def main_routine(model, current_output_folder, **kwargs):
 # Simulation setup
 # ============================
 
-list_of_dict_run_setups = [
-    {"model": "corner_peak", "list_of_function_ids": [1, ], 
-    "current_output_folder": "ct_trapez_lmax2_tol_10-6_maxeval1000_bound_nomodify_norm2",
-    "grid_type": 'trapezoidal', "method": 'standard_combi', "minimum_level": 1, "maximum_level": 2, 
-    "max_evaluations":100, "tol":10**-6, "modified_basis":False, "boundary":True, "norm":2, "p_bsplines":3, 
-    "rebalancing":True, "version":6, "margin":0.8, "grid_surplusses":'grid'},
-]
-
-
 can_model_evaluate_all_vector_nodes = True
 config_file = pathlib.Path('/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic/data/configurations/configuration_ishigami.json')
 outputModelDir = pathlib.Path('/work/ga45met/uqef_dynamic_runs/ishigami_runs/sg_anaysis_feb_25')
 list_of_dict_run_setups = [
     {"model":'ishigami',
-    "current_output_folder":'sact_trapez_uq_mean_lmax4_maxeval1000_bound_nomodify_norm2_157mc_random_p5_regression_ct10', 
+    "current_output_folder":'ct_trapezoidal_integration_mean_lmax4_maxeval1000_bound_nomodify_norm2_157mc_random_p5_regression_ct10', 
     "config_file": config_file,
     "outputModelDir": outputModelDir,
     "can_model_evaluate_all_vector_nodes": can_model_evaluate_all_vector_nodes,
     "single_qoi":None,
     "compute_sparsespace": True, 
-    "compute_pce_from_sparsespace": False,
+    "compute_pce_from_sparsespace": True,
     "compute_uq": True, 
     "compute_pce_from_uq": True,
     "grid_type": 'trapezoidal', # try trapezoidal vs gauss_legendre
-    "method": 'dim_wise_spat_adaptive_combi',  #  'standard_combi', 'dim_adaptive_combi', 'dim_wise_spat_adaptive_combi'
-    "operation_str": "uq", # try out "uq" | 'integration'
+    "method": 'standard_combi',  #  'standard_combi', 'dim_adaptive_combi', 'dim_wise_spat_adaptive_combi'
+    "operation_str": "integration", # try out "uq" | 'integration'
     "uq_optimization": 'mean',  # try 'mean' | 'mean_and_var' | 'pce'; Default: 'mean'
     "grid_surplusses":'grid',  # Try with None
     "minimum_level": 1, "maximum_level": 4, 
@@ -1292,6 +1445,66 @@ list_of_dict_run_setups = [
     "sample_nodes_from_standard_dist_model_comparison": True, 
     },
 ]
+
+# outputModelDir = pathlib.Path('/work/ga45met/uqef_dynamic_runs/genz_functions')
+# list_of_dict_run_setups = [
+#     {"model": "corner_peak", "list_of_function_ids": [1, ], 
+#     "current_output_folder": "sact_trapez_uq_mean_lmax4_maxeval1000_bound_nomodify_norm2",
+#     "outputModelDir": pathlib.Path(f"{outputModelDir}/corner_peak"),
+#     "can_model_evaluate_all_vector_nodes": can_model_evaluate_all_vector_nodes,
+#     "compute_sparsespace": True, 
+#     "compute_pce_from_sparsespace": True,
+#     "compute_uq": False, 
+#     "compute_pce_from_uq": False,
+#     "grid_type": 'trapezoidal', # try trapezoidal vs gauss_legendre
+#     "method": 'dim_wise_spat_adaptive_combi',  #  'standard_combi', 'dim_adaptive_combi', 'dim_wise_spat_adaptive_combi'
+#     "operation_str": "uq", # try out "uq" | 'integration'
+#     "uq_optimization": 'mean',  # try 'mean' | 'mean_and_var' | 'pce'; Default: 'mean'
+#     "grid_surplusses":'grid',  # Try with None
+#     "minimum_level": 1, "maximum_level": 4, 
+#     "max_evaluations":1000, "tol":10**-6, "modified_basis":False, "boundary":True, "norm":2, "p_bsplines":3, 
+#     "rebalancing":True, "version":6, "margin":0.8,
+#     "scale_weights": False,
+#     # "grid_type": 'trapezoidal', "method": 'standard_combi', "minimum_level": 1, "maximum_level": 2, 
+#     # "max_evaluations":100, "tol":10**-6, "modified_basis":False, "boundary":True, "norm":2, "p_bsplines":3, 
+#     # "rebalancing":True, "version":6, "margin":0.8, "grid_surplusses":'grid'
+#     "reevaluate_surrogate":True, 
+#     "reevaluate_original_model":True,
+#     "reevaluate_intermediate_surrogate": True, 
+#     "number_of_samples_model_comparison": 1000, "sampling_rule_model_comparison": "random",
+#     "sample_nodes_from_standard_dist_model_comparison": True, 
+#     },
+# ]
+
+# outputModelDir = pathlib.Path('/work/ga45met/uqef_dynamic_runs/genz_functions')
+# list_of_dict_run_setups = [
+#     {"model": "discontinuous", "list_of_function_ids": [1, ], 
+#     "current_output_folder": "ct_trapez_uq_mean_lmax2_maxeval500_bound_nomodify_norm2",
+#     "outputModelDir": pathlib.Path(f"{outputModelDir}/discontinuous"),
+#     "can_model_evaluate_all_vector_nodes": can_model_evaluate_all_vector_nodes,
+#     "compute_sparsespace": True, 
+#     "compute_pce_from_sparsespace": True,
+#     "compute_uq": False, 
+#     "compute_pce_from_uq": False,
+#     "grid_type": 'trapezoidal', # try trapezoidal vs gauss_legendre
+#     "method": 'standard_combi',  #  'standard_combi', 'dim_adaptive_combi', 'dim_wise_spat_adaptive_combi'
+#     "operation_str": "uq", # try out "uq" | 'integration'
+#     "uq_optimization": 'mean',  # try 'mean' | 'mean_and_var' | 'pce'; Default: 'mean'
+#     "grid_surplusses":'grid',  # Try with None
+#     "minimum_level": 1, "maximum_level": 2, 
+#     "max_evaluations":500, "tol":10**-6, "modified_basis":False, "boundary":True, "norm":2, "p_bsplines":3, 
+#     "rebalancing":True, "version":6, "margin":0.8,
+#     "scale_weights": False,
+#     # "grid_type": 'trapezoidal', "method": 'standard_combi', "minimum_level": 1, "maximum_level": 2, 
+#     # "max_evaluations":100, "tol":10**-6, "modified_basis":False, "boundary":True, "norm":2, "p_bsplines":3, 
+#     # "rebalancing":True, "version":6, "margin":0.8, "grid_surplusses":'grid'
+#     "reevaluate_surrogate":True, 
+#     "reevaluate_original_model":True,
+#     "reevaluate_intermediate_surrogate": True, 
+#     "number_of_samples_model_comparison": 1000, "sampling_rule_model_comparison": "random",
+#     "sample_nodes_from_standard_dist_model_comparison": True, 
+#     },
+# ]
 
 # list_of_dict_run_setups = [
 #     {"model":'ishigami',
@@ -1318,46 +1531,46 @@ list_of_dict_run_setups = [
 
 
 # #sact_trapez_lmax2_tol_10_6_maxeval1000_nobound_nomodify_norm2
-# can_model_evaluate_all_vector_nodes = True
-# inputModelDir = pathlib.Path("/work/ga45met/Hydro_Models/HBV-SASK-data")
-# outputModelDir = pathlib.Path('/work/ga45met/uqef_dynamic_runs/hbv_sask_runs/Oldman_Basin')
-# config_file = pathlib.Path('/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic/data/configurations/configuration_hbv_10D_single_qoi.json')
-# single_qoi={'qoi':'Q_cms', 'gof':'RMSE'}  # 'Q_cms', 'RMSE' | None
-# surrogate_type='combiinstance' # 'pce' | 'kl+pce' | 'sg' | 'combiinstance' | 'sgi+pce' | 'kl+sg' | 'kl+combiinstance' | 'kl+sgi+pce'
-# list_of_dict_run_setups = [
-#     {"model": "hbvsask", 
-#     "current_output_folder": "ct_trapez_lmax2_tol_10_6_maxeval100_bound_nomodify_norm2_1000mc_random",
-#     "inputModelDir":inputModelDir,
-#     "outputModelDir": outputModelDir,
-#     "config_file": config_file,
-#     "can_model_evaluate_all_vector_nodes": can_model_evaluate_all_vector_nodes,
-#     "single_qoi":None,  #single_qoi
-#     "compute_sparsespace": True, 
-#     "compute_pce_from_sparsespace": False,
-#     "compute_uq": True, 
-#     "compute_pce_from_uq": True,
-#     "grid_type": 'trapezoidal', # try trapezoidal vs gauss_legendre
-#     "method": 'standard_combi',  #  'standard_combi', 'dim_adaptive_combi', 'dim_wise_spat_adaptive_combi'
-#     "operation_str": "uq", # try out "uq" | 'integration'
-#     "uq_optimization": 'mean',  # try 'mean' | 'mean_and_var' | 'pce'; Default: 'mean'
-#     "grid_surplusses":'grid', 
-#     "method": 'standard_combi', 
-#     "minimum_level": 1, "maximum_level": 2, 
-#     "max_evaluations":100, "tol":10**-6, "modified_basis":False, "boundary":True, "norm":2, "p_bsplines":3, 
-#     "rebalancing":True, "version":6, "margin":0.8,
-#     "uq_method": "mc", "regression": False,
-#     "read_nodes_from_file": False, "parameters_file": "/work/ga45met/sparseSpACE/sparse_grid_nodes_weights", "l_sg":4,
-#     "sampleFromStandardDist": True,
-#     "mc_numevaluations": 1000, "sampling_rule":"random",
-#     "sc_p_order": 3,  "sc_q_order": 6, "cross_truncation": 0.7,
-#     "reevaluate_surrogate":True, 
-#     "reevaluate_original_model":True,
-#     "reevaluate_intermediate_surrogate": True, 
-#     "number_of_samples_model_comparison": 1000, "sampling_rule_model_comparison": "random",
-#     "sample_nodes_from_standard_dist_model_comparison": True, 
-#     "set_lower_predictions_to_zero" : True,
-#     },
-# ]
+can_model_evaluate_all_vector_nodes = True
+inputModelDir = pathlib.Path("/work/ga45met/Hydro_Models/HBV-SASK-data")
+outputModelDir = pathlib.Path('/work/ga45met/uqef_dynamic_runs/hbv_sask_runs/Oldman_Basin')
+config_file = pathlib.Path('/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic/data/configurations/configuration_hbv_10D_single_qoi.json')
+single_qoi=None #{'qoi':'Q_cms', 'gof':'RMSE'}  # 'Q_cms', 'RMSE' | None
+surrogate_type='combiinstance' # 'pce' | 'kl+pce' | 'sg' | 'combiinstance' | 'sgi+pce' | 'kl+sg' | 'kl+combiinstance' | 'kl+sgi+pce'
+list_of_dict_run_setups = [
+    {"model": "hbvsask", 
+    "current_output_folder": "sact_trapez_lmax3_tol_10_6_maxeval1000_bound_nomodify_norm2_1000mc_random",
+    "inputModelDir":inputModelDir,
+    "outputModelDir": outputModelDir,
+    "config_file": config_file,
+    "can_model_evaluate_all_vector_nodes": can_model_evaluate_all_vector_nodes,
+    "single_qoi":None,  #single_qoi
+    "compute_sparsespace": True, 
+    "compute_pce_from_sparsespace": False, #yet not tailord to work with 
+    "compute_uq": True, 
+    "compute_pce_from_uq": False,
+    "grid_type": 'trapezoidal', # try trapezoidal vs gauss_legendre
+    "method": 'dim_wise_spat_adaptive_combi',  #  'standard_combi', 'dim_adaptive_combi', 'dim_wise_spat_adaptive_combi'
+    "operation_str": "uq", # try out "uq" | 'integration'
+    "uq_optimization": 'mean',  # try 'mean' | 'mean_and_var' | 'pce'; Default: 'mean'
+    "grid_surplusses":'grid', 
+    "method": 'standard_combi', 
+    "minimum_level": 1, "maximum_level": 3, 
+    "max_evaluations":1000, "tol":10**-6, "modified_basis":False, "boundary":True, "norm":2, "p_bsplines":3, 
+    "rebalancing":True, "version":6, "margin":0.8,
+    "uq_method": "mc", "regression": False,
+    "read_nodes_from_file": False, "parameters_file": "/work/ga45met/sparseSpACE/sparse_grid_nodes_weights", "l_sg":4,
+    "sampleFromStandardDist": True,
+    "mc_numevaluations": 1000, "sampling_rule":"random",
+    "sc_p_order": 3,  "sc_q_order": 6, "cross_truncation": 0.7,
+    "reevaluate_surrogate":True, 
+    "reevaluate_original_model":True,
+    "reevaluate_intermediate_surrogate": True, 
+    "number_of_samples_model_comparison": 1000, "sampling_rule_model_comparison": "random",
+    "sample_nodes_from_standard_dist_model_comparison": True, 
+    "set_lower_predictions_to_zero" : True,
+    },
+]
 
 # ============================
 # Initial Model Setup
@@ -1367,7 +1580,10 @@ list_of_models = ["hbvsask", "larsim", "ishigami", "gfunction", "zabarras2d", "z
 
 # Hard-coded for Genz functions
 # Additional Genz Options: GenzOszillatory, GenzDiscontinious2, GenzC0, GenzGaussian
-path_to_saved_all_genz_functions = pathlib.Path("/work/ga45met/sg_anaysis/genz_functions")
+if linux_cluster_run:
+    path_to_saved_all_genz_functions = pathlib.Path("/work/ga45met/sg_anaysis/genz_functions")
+else:
+    path_to_saved_all_genz_functions = pathlib.Path("/work/ga45met/sg_anaysis/genz_functions")
 read_saved_genz_functions = True
 anisotropic = True
 
@@ -1403,7 +1619,7 @@ def run_single_model_setup(single_setup_dict, model, current_output_folder, read
         dictionary_with_inf_about_the_run = main_routine(**single_setup_dict)
     return dictionary_with_inf_about_the_run
 
-# for single_setup_dict in list_of_simulation_runs_ishigami:
+#for single_setup_dict in list_of_simulation_runs_ishigami:
 for single_setup_dict in list_of_dict_run_setups:
     if is_master(mpi, rank):
         start_time = time.time()

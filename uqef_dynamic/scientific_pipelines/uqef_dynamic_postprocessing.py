@@ -56,6 +56,23 @@ from uqef_dynamic.utils import colors
 # size = comm.Get_size()
 # # Get the number of threads
 # # num_threads = threading.active_count()
+mpi = True
+
+if mpi:
+    comm = MPI.COMM_WORLD
+    size = comm.Get_size()
+    rank = comm.Get_rank()
+    # name = MPI.Get_processor_name()
+    # version = MPI.Get_library_version()
+    # version2 = MPI.Get_version()
+else:
+    size = 1
+    rank = None
+    comm = None
+
+def is_master(mpi, rank=None):
+    return mpi is False or (mpi is True and rank == 0)
+
 
 def read_surrogate_model_single_working_dir(workingDir, statisticsObject, single_timestamp_single_file,
 surrogate_type, recompute_generalized_sobol_indices, polynomial_expansion=None, polynomial_norms=None):
@@ -82,12 +99,22 @@ surrogate_type, recompute_generalized_sobol_indices, polynomial_expansion=None, 
                 statistics_dictionary=statisticsObject.result_dict, 
                 throw_error=False, single_timestamp_single_file=single_timestamp_single_file)
 
+            # gpce_surrogate = uqef_dynamic_utils.fetch_gpce_surrogate_single_qoi(
+            #     qoi_column_name=single_qoi, workingDir=workingDir,
+            #     statistics_dictionary=None, 
+            #     throw_error=False, single_timestamp_single_file=single_timestamp_single_file)
+
             if gpce_surrogate is None or recompute_generalized_sobol_indices:
                 gpce_coeffs = uqef_dynamic_utils.fetch_gpce_coeff_single_qoi(
                     qoi_column_name=single_qoi, workingDir=workingDir,
                     statistics_dictionary=statisticsObject.result_dict, 
                     throw_error=False, single_timestamp_single_file=single_timestamp_single_file)
                 
+                # gpce_coeffs = uqef_dynamic_utils.fetch_gpce_coeff_single_qoi(
+                #     qoi_column_name=single_qoi, workingDir=workingDir,
+                #     statistics_dictionary=None, 
+                #     throw_error=False, single_timestamp_single_file=single_timestamp_single_file)
+
                 if gpce_surrogate is None and gpce_coeffs is None and recompute_generalized_sobol_indices:
                     raise Exception(f"Error - not possible to recompute generalized_sobol_indices when both \
                         gpce_surrogate and gpce_coeffs are missing")
@@ -199,8 +226,8 @@ surrogate_type, recompute_generalized_sobol_indices, polynomial_expansion=None, 
             #     if gpce_coeffs is not None:
             #         print(f"kl_coeff_dict_over_qois[{single_qoi}] = {gpce_coeffs}")
             #         print(f"kl_coeff_dict_over_qois[{single_qoi}].shape = {gpce_coeffs.shape}")
-            #     if f_kl_surrogate_df is not None:
-            #         print(f"kl_surrogate_df_dict_over_qois[{single_qoi}] = {f_kl_surrogate_df}")
+            if f_kl_surrogate_df is not None:
+                print(f"kl_surrogate_df_dict_over_qois[{single_qoi}] = {f_kl_surrogate_df}")
 
             # gpce_surrogate = utility.build_gpce_surrogate_from_coefficients(
             #             gpce_coeffs, polynomial_expansion, polynomial_norms)
@@ -226,12 +253,19 @@ def _postprocess_kl_expansion_or_generalized_sobol_indices_computation_from_resu
         dicti over timestamps/or maybe containing info only for the last time stamp with the computed statistics 
         (f"generalized_sobol_total_index_{param_name}")
     """
-    result_dict = {}
+    # result_dict = {}
 
     dict_with_gpce_coeff_and_generalized_indices = {}
     for single_time_stamp in gpce_coeff_dict.keys():
         dict_with_gpce_coeff_and_generalized_indices[single_time_stamp] = {}
+        # TODO Remove this
+        # TODO Check if this is the problem 
+        if single_time_stamp == pd.Timestamp('2007-10-01 00:00:00'):
+            print(f"DEBUGGING {single_qoi_column}-{single_time_stamp} gpce_coeff_dict[single_time_stamp]-{gpce_coeff_dict[single_time_stamp]}")
         dict_with_gpce_coeff_and_generalized_indices[single_time_stamp][utility.PCE_COEFF_ENTRY] = gpce_coeff_dict[single_time_stamp]
+        # if single_qoi_column == "Q_cms":
+        #     print(f"DEBUGGING {single_time_stamp}; {type(single_time_stamp)}")
+        #     print(f"Coeff: {gpce_coeff_dict[single_time_stamp]}")
         # if gpce_surrogate_dict is not None and single_time_stamp in gpce_surrogate_dict:
         #     dict_with_gpce_coeff_and_generalized_indices[single_time_stamp][utility.PCE_ENTRY] = gpce_surrogate_dict[single_time_stamp]
 
@@ -240,8 +274,9 @@ def _postprocess_kl_expansion_or_generalized_sobol_indices_computation_from_resu
     timesteps_min = min(gpce_coeff_dict.keys())
     N_quad = len(list(gpce_coeff_dict.keys()))
     if N_quad > 1:
-        # TODO Think about 1 in num?
-        h = (timesteps_max - timesteps_min)/(N_quad-1) #1/(N_quad-1)
+        difference_between_two_time_stamps = utility.compute_difference_between_two_time_stamps(
+            end_timestamp=timesteps_max, start_timestamp=timesteps_min, resolution=resolution)
+        h = (difference_between_two_time_stamps)/(N_quad-1) #1/(self.N_quad-1) #
         weights_time = [h for i in range(N_quad)]
         if len(weights_time) >= 3:
             weights_time[0] /= 2
@@ -262,15 +297,33 @@ def _postprocess_kl_expansion_or_generalized_sobol_indices_computation_from_resu
         #     dict_with_gpce_coeff_and_generalized_indices[last_time_step][f"generalized_sobol_total_index_{param_name}"] = \
         #         param_name_generalized_sobol_total_indices[param_name]
     else: 
-        fileName = workingDir / f"recomputed_generalized_sobol_indices_{single_qoi_column}.pkl"
         if compute_generalized_sobol_indices_over_time:
+            # NOTE param_names / polynomial_expansion alphas / coefficients  result_dict_statistics[time_stamp][PCE_COEFF_ENTRY] have to match!
+
+            fileName = workingDir / f"recomputed_generalized_sobol_indices_{single_qoi_column}_whole.pkl"
             utility.computing_generalized_sobol_total_indices_from_poly_expan_over_time(
                 result_dict_statistics=dict_with_gpce_coeff_and_generalized_indices, 
-                polynomial_expansion=polynomial_expansion, weights=weights_time, param_names=labels,
-                fileName=fileName, look_back_window_size=look_back_window_size, resolution=resolution)
+                polynomial_expansion=polynomial_expansion, 
+                weights=weights_time, 
+                param_names=labels,
+                fileName=fileName, 
+                look_back_window_size='whole', 
+                resolution=resolution
+                )
+            if look_back_window_size!='whole': 
+                fileName = workingDir / f"recomputed_generalized_sobol_indices_{single_qoi_column}_{look_back_window_size}.pkl"
+                utility.computing_generalized_sobol_total_indices_from_poly_expan_over_time(
+                    result_dict_statistics=dict_with_gpce_coeff_and_generalized_indices, 
+                    polynomial_expansion=polynomial_expansion, 
+                    weights=weights_time, 
+                    param_names=labels,
+                    fileName=fileName, 
+                    look_back_window_size=look_back_window_size, 
+                    resolution=resolution)
             print(f"INFO: computation of (over time) generalized S.S.I based on PCE finished...")
         else:
             # the computation of the generalized Sobol indices is done only for the last time step
+            fileName = workingDir / f"recomputed_generalized_sobol_indices_{single_qoi_column}.pkl"
             utility.computing_generalized_sobol_total_indices_from_poly_expan(
                 result_dict_statistics=dict_with_gpce_coeff_and_generalized_indices, 
                 polynomial_expansion=polynomial_expansion, 
@@ -281,6 +334,7 @@ def _postprocess_kl_expansion_or_generalized_sobol_indices_computation_from_resu
     for single_time_stamp in dict_with_gpce_coeff_and_generalized_indices.keys():
         del dict_with_gpce_coeff_and_generalized_indices[single_time_stamp][utility.PCE_COEFF_ENTRY]
     return dict_with_gpce_coeff_and_generalized_indices
+
 
 # TODO Change so there are alternative how to extract mean (i.e, beside via df_statistics_and_measured)
 def evaluate_kl_and_pce_surrogate_model(kl_surrogate_df_dict_over_qois, list_qois, nodes, statistics_pdTimesteps, df_statistics_and_measured):
@@ -300,6 +354,7 @@ def evaluate_kl_and_pce_surrogate_model(kl_surrogate_df_dict_over_qois, list_qoi
     surrogate_evaluated_dict_over_qois = {single_qoi:{} for single_qoi in list_qois}
     for single_qoi in list_qois:
         f_kl_surrogate_df = kl_surrogate_df_dict_over_qois[single_qoi]
+        print(f"DEBUGGING f_kl_surrogate_df.columns-{f_kl_surrogate_df.columns}")
         if f_kl_surrogate_df is None:
             raise Exception(f"Error - kl_surrogate_df_dict_over_qois[{single_qoi}] is None")
         surrogate_evaluated_dict_over_qois[single_qoi] = {}
@@ -316,13 +371,69 @@ def evaluate_kl_and_pce_surrogate_model(kl_surrogate_df_dict_over_qois, list_qoi
                 for index, row in f_kl_surrogate_df.iterrows():
                     temp_value += evaluation_of_kl_coefficients[index, node_idx] * row['eigenvectors'][date_index]
                     #temp_value += evaluation_of_kl_coefficients[index, node_idx] * row['eigenvectors'][date_index]*np.sqrt(row['eigenvalues'])
-                # TODO Do I want to compare temp_value with original model run?
                 list_of_values_over_nodes.append(temp_value)
             surrogate_evaluated_dict_over_qois[single_qoi][date] = np.array(list_of_values_over_nodes)
     return surrogate_evaluated_dict_over_qois
 
+
 def evaluate_gPCE_model_single_qoi_single_date(gPCE_model, nodes):
     return np.array(gPCE_model(*nodes))
+
+
+def _process_single_pce_surrogate(gPCE_model, dist):
+    # moments = dist.mom(gPCE_model.exponents.T)
+    # mean_1 = np.zeros(gPCE_model.shape)
+    # for idx, key in enumerate(gPCE_model.keys):
+    #     mean_1 += gPCE_model.values[key] * moments[idx]
+    # mean_2 = float(cp.E(gPCE_model, dist))
+    # print(f"DEBUGGING - mean_1-{mean_1}; mean_2-{mean_2}")
+    gPCE_model_df = pd.DataFrame(
+        gPCE_model.todict().items(), columns=['poly_index', 'coeff'])
+    gPCE_model_df = gPCE_model_df.astype({'poly_index': "category"}, copy=True)
+    gPCE_model_df['poly_index'] = gPCE_model_df['poly_index'].apply(lambda x: str(x))
+    return gPCE_model_df
+
+
+def compute_errors(df, single_qoi=None, \
+    qoi_column_left=None, qoi_column_right=None, dict_with_errors_over_qois={}, directory_for_saving_plots="./"):
+    """
+    This function computes different metrcis between qoi_column_left and qoi_column_right columns from df DataFrame
+    The computed metrices are added to the dict_with_errors_over_qois dictionary (side effect)
+    """
+    if single_qoi is None:
+        single_qoi = utility.QOI_COLUMN_NAME
+    if qoi_column_left is None:
+        qoi_column_left = single_qoi
+    if qoi_column_right is None:
+        qoi_column_right = single_qoi
+    df['error'] = df[qoi_column_left] - df[qoi_column_right]
+    df['abs_error'] = np.abs(df['error'])
+    df['squared_error'] = (df[qoi_column_left] - df[qoi_column_right])**2
+
+    # Compute RMSE for each time step by grouping on 'time_column'
+    rmse_over_time = df.groupby(utility.TIME_COLUMN_NAME)['squared_error'] \
+                                .mean() \
+                                .apply(np.sqrt) \
+                                .reset_index(name='RMSE')
+    rmse_over_time.to_pickle(
+        os.path.abspath(os.path.join(str(directory_for_saving_plots), f"rmse_over_time_{single_qoi}.pkl")), compression="gzip")
+    
+    # Compute overall RMSE across all time steps
+    overall_rmse = np.sqrt(df['squared_error'].mean())
+    overall_linf = df['abs_error'].max()
+    overall_l2_scaled = np.sqrt(np.sum(df['squared_error'])) / math.sqrt(len(df))
+    l2_error = np.linalg.norm(df['abs_error'])
+    # l1_error = np.sum(df['abs_error'])
+    print(f"Overall errors for {single_qoi}: "
+            f" RMSE={overall_rmse}; inf-norm={overall_linf}; overall_l2_scaled-norm={overall_l2_scaled}"
+            f" l2_error={l2_error};")
+    dict_with_errors_over_qois[single_qoi] = {}
+    dict_with_errors_over_qois[single_qoi]['overall_rmse'] = overall_rmse
+    dict_with_errors_over_qois[single_qoi]['overall_linf'] = overall_linf
+    dict_with_errors_over_qois[single_qoi]['overall_l2_scaled'] = overall_l2_scaled
+    dict_with_errors_over_qois[single_qoi]['l2_error'] = l2_error
+    # dict_with_errors_over_qois[single_qoi]['l1_error'] = l1_error
+
 
 # TODO add measured data to surrogate reevaluations
 # TODO run model in parallel for new nodes; observe times
@@ -332,7 +443,7 @@ def evaluate_gPCE_model_single_qoi_single_date(gPCE_model, nodes):
 # TODO when workingDir is a list - make one 'big' Statistics Object and then (re)compute / (re)plot statistics
 # TODO recomputation of the generalized sobol indices based on pce surrogate...
 
-def main(workingDir=None, inputModelDir=None, directory_for_saving_plots=None, 
+def main(mpi, rank, workingDir=None, inputModelDir=None, directory_for_saving_plots=None, 
     surrogate_type="pce", single_timestamp_single_file=False, printing=False, plotting=True, model=None, **kwargs):
     """
     Main function for computing the statistics for gPCE surrogate model
@@ -341,12 +452,36 @@ def main(workingDir=None, inputModelDir=None, directory_for_saving_plots=None,
     """
     # TODO Parallelization does not seem to work properly - it is not faster than the serial version
     # Initialize MPI communicator
-    comm = MPI.COMM_WORLD
-    rank = comm.Get_rank()
-    size = comm.Get_size()
+    # comm = MPI.COMM_WORLD
+    # rank = comm.Get_rank()
+    # size = comm.Get_size()
 
-    if rank == 0:
+    if is_master(mpi, rank):
         start = time.time()
+
+        # To make sure that all the values which will eventually be broadcasted have some initial value
+        list_qois = None
+        gpce_surrogate_dict_over_qois= None
+        gpce_coeff_dict_over_qois = None
+        nodes = None
+        parameters = None
+        list_unique_generate_new_samples = None
+        number_of_samples = None
+        statistics_pdTimesteps = None
+        reevaluate_surrogate = False
+        reevaluate_original_model = None
+        recompute_statistics = False
+        analyse_pce_surrogate = False
+        jointDists = None
+        jointStandard = None
+        evaluateSurrogateAtStandardDist = None
+        compute_other_stat_besides_pce_surrogate = None
+        compute_Sobol_t = None
+        compute_Sobol_m = None
+        compute_Sobol_m2 = None
+        dict_stat_to_compute = None
+        configurationObject = None
+        uqsim_args_dict = None
 
         dict_with_time_info = {}
 
@@ -365,6 +500,7 @@ def main(workingDir=None, inputModelDir=None, directory_for_saving_plots=None,
         reevaluate_original_model = kwargs.get('reevaluate_original_model', False)
         recompute_sobol_indices = kwargs.get('recompute_sobol_indices', False)
         recompute_generalized_sobol_indices = kwargs.get('recompute_generalized_sobol_indices', False)
+        analyse_pce_surrogate = kwargs.get('analyse_pce_surrogate', False)
 
         replot_statistics_from_statistics_object = kwargs.get('replot_statistics_from_statistics_object', False)
         dict_what_to_plot = kwargs.get('dict_what_to_plot', utility.DEFAULT_DICT_WHAT_TO_PLOT)
@@ -538,6 +674,7 @@ def main(workingDir=None, inputModelDir=None, directory_for_saving_plots=None,
             # TODO add option to specify config_file/configurationObject and args_file/uqsim_args_dict
             # set df_simulation_result=None; create also simulationNodes
             # and to procedee with a new simulation, i.e, not to read from the saved one...
+            # this is in partially done in uqef with sparsespace
             # ============================================================
             # Get all files /data/ dataframe / paths saved by UQEF-Dynamic        
             results_dict = uqef_dynamic_utils.read_output_files_uqef_dynamic(
@@ -669,8 +806,22 @@ def main(workingDir=None, inputModelDir=None, directory_for_saving_plots=None,
                 regression=uqsim_args_dict['regression'], 
                 cross_truncation=uqsim_args_dict['cross_truncation']
             )
+            # print(f"DEBUGGING statisticsObject.dist - {statisticsObject.dist}")
             polynomial_expansion = statisticsObject.polynomial_expansion
             polynomial_norms = statisticsObject.polynomial_norms
+            # print(f"DEBUGGING polynomial_expansion - {polynomial_expansion}")
+            # print(f"DEBUGGING polynomial_expansion - {type(polynomial_expansion)}")
+            # print(f"DEBUGGING polynomial_norms - {polynomial_norms}")
+            jointStandard = simulationNodes.joinedStandardDists
+            polynomial_expansion_test, polynomial_norms_test = cp.generate_expansion(
+                order=uqsim_args_dict['sc_p_order'], dist=statisticsObject.dist, 
+                rule=uqsim_args_dict['sc_poly_rule'], normed=uqsim_args_dict['sc_poly_normed'],
+                graded=True, reverse=True, cross_truncation=uqsim_args_dict['cross_truncation'], retall=True
+                )
+            # polynomial_expansion_test, polynomial_norms_test = cp.generate_expansion(
+            #     order=5, dist=statisticsObject.dist, rule="three_terms_recurrence", normed=True,
+            #     graded=True, reverse=True, cross_truncation=0.7, retall=True)
+            # print(f"DEBUGGING polynomial_expansion_test - {polynomial_expansion_test}")
 
             # ========================================================
             # Read the gPCE / KL surrogate model and its coefficients
@@ -748,6 +899,8 @@ def main(workingDir=None, inputModelDir=None, directory_for_saving_plots=None,
         end_time_reading_all_saved_data = time.time()
         dict_with_time_info["time_reading_all_saved_data"] = end_time_reading_all_saved_data - start
 
+        directory_for_saving_plots.mkdir(parents=True, exist_ok=True)
+
         start_time_parallel_computing = time.time()
 
     else:
@@ -773,19 +926,35 @@ def main(workingDir=None, inputModelDir=None, directory_for_saving_plots=None,
         dict_stat_to_compute = None
         configurationObject = None
         uqsim_args_dict = None
+        printing = False
+        plotting = False
+        analyse_pce_surrogate = False
 
     list_qois = comm.bcast(list_qois, root=0)
     gpce_surrogate_dict_over_qois = comm.bcast(gpce_surrogate_dict_over_qois, root=0)
     
     statistics_pdTimesteps = comm.bcast(statistics_pdTimesteps, root=0)
-    dates_to_process = statistics_pdTimesteps
-    workingDir = comm.bcast(workingDir, root=0)
+    workingDir = comm.bcast(workingDir, root=0)   # TODO not sure this is needed
 
     # TODO This is probably unnecessary to broadcast...
     reevaluate_surrogate = comm.bcast(reevaluate_surrogate, root=0)
     recompute_statistics = comm.bcast(recompute_statistics, root=0)
     reevaluate_original_model = comm.bcast(reevaluate_original_model, root=0)
+    analyse_pce_surrogate = comm.bcast(analyse_pce_surrogate, root=0)
 
+    printing = comm.bcast(printing, root=0)
+    plotting = comm.bcast(plotting, root=0)
+
+    # Split the nodes/parametres among processes & Distribute the nodes/parametres to processes
+    # if reevaluate_original_model:
+    nodes = comm.bcast(nodes, root=0)
+    parameters = comm.bcast(parameters, root=0)
+    
+    # We need this to recreate model object
+    configurationObject = comm.bcast(configurationObject, root=0)  #TODO Problem when workingDir is a list
+    uqsim_args_dict = comm.bcast(uqsim_args_dict, root=0)
+
+    dates_to_process = statistics_pdTimesteps
     # Split the dates among processes
     chunk_size = len(dates_to_process) // size
     remainder = len(dates_to_process) % size
@@ -796,25 +965,18 @@ def main(workingDir=None, inputModelDir=None, directory_for_saving_plots=None,
     # Distribute dates to processes
     my_dates = dates_to_process[start_index:end_index]
 
-    # Split the nodes/parametres among processes & Distribute the nodes/parametres to processes
-    # if reevaluate_original_model:
-    nodes = comm.bcast(nodes, root=0)
-    parameters = comm.bcast(parameters, root=0)
+    if parameters is not None:
+        list_unique_generate_new_samples = range(parameters.shape[1]) # unique index for each sample
+        number_of_samples = parameters.shape[1]
     
-    # We need this to recreate model object
-    configurationObject = comm.bcast(configurationObject, root=0)  #TODO Problem when workingDir is a list
-    uqsim_args_dict = comm.bcast(uqsim_args_dict, root=0)
-    list_unique_generate_new_samples = range(parameters.shape[1]) # unique index for each sample
-    number_of_samples = parameters.shape[1]
-    
-    # Split the parameters among processes
-    chunk_size = len(list_unique_generate_new_samples) // size
-    remainder = len(list_unique_generate_new_samples) % size
-    start_index = rank * chunk_size
-    end_index = start_index + chunk_size if rank < size - 1 else len(list_unique_generate_new_samples)
-    my_parametres = parameters[:, start_index:end_index]
-    my_nodes = nodes[:, start_index:end_index]
-    my_indices = list(range(start_index, end_index))
+        # Split the parameters among processes
+        chunk_size = len(list_unique_generate_new_samples) // size
+        remainder = len(list_unique_generate_new_samples) % size
+        start_index = rank * chunk_size
+        end_index = start_index + chunk_size if rank < size - 1 else len(list_unique_generate_new_samples)
+        my_parametres = parameters[:, start_index:end_index]
+        my_nodes = nodes[:, start_index:end_index]
+        my_indices = list(range(start_index, end_index))
     # maybe I need also access to workingDir, args_files, uqsim_args_dict, model, inputModelDir, configurationObject \
     # and simulation_settings_dict to be able to create my own model object...
 
@@ -825,7 +987,7 @@ def main(workingDir=None, inputModelDir=None, directory_for_saving_plots=None,
     # ============================
 
     if recompute_statistics:
-        if rank == 0:
+        if is_master(mpi, rank):
             start_time_recompute_statistics = time.time()
             print(f"Recomputing the statistics...")
         jointDists = comm.bcast(jointDists, root=0)
@@ -856,7 +1018,7 @@ def main(workingDir=None, inputModelDir=None, directory_for_saving_plots=None,
                 gpce_statistics_dict_over_qois[single_qoi][date] = local_result_dict
 
         all_results_gpce_statistics_recomputed = comm.gather(gpce_statistics_dict_over_qois, root=0)
-        if rank == 0:
+        if is_master(mpi, rank):
             end_time_recompute_statistics = time.time()
             print(f"Done with recomputing the statistics...")
             dict_with_time_info["time_paralle_statistics_recomputation"] = end_time_recompute_statistics - start_time_recompute_statistics
@@ -865,33 +1027,37 @@ def main(workingDir=None, inputModelDir=None, directory_for_saving_plots=None,
 
     # TODO This will change in case workingDir is a list
     if reevaluate_original_model:
-        if rank == 0:
+        if is_master(mpi, rank):
             start_time_reevaluating_original_model = time.time()
             print(f"Reevaluating the original model...")
         # create model; TODO think about new workingDir/directory_for_saving_plots
         modelObject = create_stat_object.create_model_object(
-                configuration_object=configurationObject, uqsim_args_dict=uqsim_args_dict, workingDir=directory_for_saving_plots, model=None, 
-                time_column_name=utility.TIME_COLUMN_NAME, index_column_name=utility.INDEX_COLUMN_NAME
+                configuration_object=configurationObject, uqsim_args_dict=uqsim_args_dict, 
+                workingDir=directory_for_saving_plots, model=None, 
+                time_column_name=utility.TIME_COLUMN_NAME, index_column_name=utility.INDEX_COLUMN_NAME,
+                printing=printing
             )
         results = modelObject(i_s=my_indices, parameters=my_parametres.T, raise_exception_on_model_break=False)
         # print(f"Results - {results}")
         # # processing the collected result
+        # TODO One can fatch list_index_run_with_None and Update nodes based on df_index_parameter_local
         df_simulation_result_local, df_index_parameter_local, _, _, _, _ =  uqef_dynamic_utils.uqef_dynamic_model_run_results_array_to_dataframe(\
             results_array=results, extract_only_qoi_columns=False, qoi_columns=modelObject.list_qoi_column, 
             time_column_name=utility.TIME_COLUMN_NAME, index_column_name=utility.INDEX_COLUMN_NAME)  #time_column_name=modelObject.time_column_name, index_column_name= modelObject.index_column_name
         # print(f"Rank {rank} - Final df_index_parameter_local - {df_index_parameter_local}")
         # print(f"Rank {rank} - Final DF - {df_simulation_result_local}")
+        
         # Gather results from all processes
         all_df_index_parameter_model_evaluated = comm.gather(df_index_parameter_local, root=0)
         all_results_model_evaluated = comm.gather(df_simulation_result_local, root=0)
         
-        if rank == 0:
+        if is_master(mpi, rank):
             end_time_reevaluating_original_model = time.time()
             dict_with_time_info["time_parallel_original_model_reevaluations"] = end_time_reevaluating_original_model - start_time_reevaluating_original_model
         
         # if reevaluate_surrogate:
         #     nodes = comm.bcast(nodes, root=0)
-        #     if rank == 0:
+        #     if is_master(mpi, rank):
         #         start_time_reevaluating_reevaluate_surrogate = time.time()
         #         # combin all_df_index_parameter_values_model_evaluated into one
         #         df_index_parameter_reevaluated = pd.concat(all_df_index_parameter_model_evaluated, ignore_index=True, sort=False, axis=0)
@@ -906,12 +1072,12 @@ def main(workingDir=None, inputModelDir=None, directory_for_saving_plots=None,
     # ============================
 
     if reevaluate_surrogate:  #and not reevaluate_original_model
-        if rank == 0:
-            start_time_reevaluating_reevaluate_surrogate = time.time()
-            print(f"Reevaluating the surrogate model...")
         if surrogate_type=='pce':
-            gpce_surrogate_evaluated_dict_over_qois = {single_qoi:{} for single_qoi in list_qois} #defaultdict(dict, {single_qoi:{} for single_qoi in list_qois})
+            if is_master(mpi, rank):
+                start_time_reevaluating_reevaluate_surrogate = time.time()
+                print(f"Reevaluating the surrogate model...")
 
+            gpce_surrogate_evaluated_dict_over_qois = {single_qoi:{} for single_qoi in list_qois} #defaultdict(dict, {single_qoi:{} for single_qoi in list_qois})
             # Monitor memory usage at regular intervals
             # Process dates
             for single_qoi in list_qois:
@@ -922,8 +1088,41 @@ def main(workingDir=None, inputModelDir=None, directory_for_saving_plots=None,
                             gPCE_model=gpce_surrogate_dict_over_qois[single_qoi][date], nodes=nodes)
 
             # Gather results from all processes
-            all_results_surrogate_evaluated = comm.gather(gpce_surrogate_evaluated_dict_over_qois, root=0)          
-    
+            all_results_surrogate_evaluated = comm.gather(gpce_surrogate_evaluated_dict_over_qois, root=0)   
+
+            if is_master(mpi, rank):
+                end_time_parallel_computing = time.time()
+                dict_with_time_info["time_parallel_pce_surrogate_reevaluations"] = end_time_parallel_computing - start_time_reevaluating_reevaluate_surrogate #start_time_parallel_computing
+
+    if analyse_pce_surrogate:        
+        all_results_surrogate_info = None
+        if surrogate_type=='pce':
+            if is_master(mpi, rank):
+                start_time_analysing_pce_surrogate = time.time()
+                print(f"Analyzing the PCE-surrogate model...")
+
+            jointDists = comm.bcast(jointDists, root=0)
+            jointStandard = comm.bcast(jointStandard, root=0)
+            evaluateSurrogateAtStandardDist = comm.bcast(evaluateSurrogateAtStandardDist, root=0)
+            if evaluateSurrogateAtStandardDist:
+                distStandard = jointStandard
+            else:
+                distStandard = jointDists
+            list_of_single_gPCE_model_df = []
+            for single_qoi in list_qois:
+                for date in my_dates:
+                    single_gPCE_model_df = _process_single_pce_surrogate(
+                        gPCE_model=gpce_surrogate_dict_over_qois[single_qoi][date], dist=distStandard)
+                    single_gPCE_model_df[utility.TIME_COLUMN_NAME] = date
+                    single_gPCE_model_df[utility.QOI_ENTRY] = single_qoi
+                    list_of_single_gPCE_model_df.append(single_gPCE_model_df)
+            
+            all_results_surrogate_info = comm.gather(list_of_single_gPCE_model_df, root=0)
+
+            if is_master(mpi, rank):
+                end_time_analysing_pce_surrogate = time.time()
+                dict_with_time_info["time_paralle_analysing_pce_surrogate"] = end_time_analysing_pce_surrogate - start_time_analysing_pce_surrogate #start_time_parallel_computing
+
     # Query memory usage and record it
     memory_usage = psutil.virtual_memory().used / (1024 * 1024)  # Memory usage in MB
     memory_usage_history.append(memory_usage)
@@ -932,10 +1131,76 @@ def main(workingDir=None, inputModelDir=None, directory_for_saving_plots=None,
     # Combine results on rank 0; or do some computation on rank 0
     # ============================
 
-    if rank == 0:
+    if is_master(mpi, rank):
         # TODO Do modification to the mean and surrogate model evaluations
         #  if the autoregressive mode is activated
-        
+
+        # ========================================================
+        # Finalize analysis of the PCE surrogate
+        # ========================================================
+        # TODO Move this to a separate function!
+        # TODO Add option to analyse KL+PCE surrogate...
+        if analyse_pce_surrogate:
+            if surrogate_type!='pce':
+                print(f"Sorry analyse_pce_surrogate when surrogate_type is {surrogate_type} is still not supported!")
+            else:
+                number_pce_surrogates = len(statistics_pdTimesteps)
+                df_pce_surrogates_info = None
+                if all_results_surrogate_info is not None:
+                    single_list_gPCE_model_info_df = [item for sublist in all_results_surrogate_info for item in sublist]
+                    # for idx, result in enumerate(all_results_surrogate_info):
+                    #     if isinstance(result, list):
+                    #         single_list_gPCE_model_info_df.append(*result)
+                    #     else:
+                    #         single_list_gPCE_model_info_df.append(result)
+                    df_pce_surrogates_info = pd.concat(single_list_gPCE_model_info_df, axis=0)
+
+                # NOTE: computing average of the pce coeff, and perentage of coeff greater than, e.g., 0.5
+                list_of_mean_coeficient_of_polynomials_sorted_df_over_qois = []
+                for single_qoi in list_qois:
+                    percantege_greater_than_dict = dict()
+                    mean_coeficient_of_polynomials = defaultdict(float, {k:0. for k in gpce_surrogate_dict_over_qois[single_qoi][statistics_pdTimesteps[0]].todict().keys()})
+                    for date in statistics_pdTimesteps:
+                    #     current_gPCE_surrogate_sorted = dict(sorted(gpce_surrogate_dict_over_qois[single_qoi][date].todict().items(), key=lambda item: item[1]))
+                        percantege_greater_than = 0
+                        counter = 0
+                        for key, value in gpce_surrogate_dict_over_qois[single_qoi][date].todict().items():
+                            counter += 1
+                            mean_coeficient_of_polynomials[key] = mean_coeficient_of_polynomials[key] + value
+                            if abs(value) > 0.5:  # TODO one can modify this value
+                                percantege_greater_than +=1
+                        percantege_greater_than = percantege_greater_than/counter
+                        percantege_greater_than = percantege_greater_than*100
+                        percantege_greater_than_dict[date] = percantege_greater_than
+                        print(f"{single_qoi}: for date - {date} perc. of values grater than 0.5 is {percantege_greater_than} %")
+                        
+                    for key in mean_coeficient_of_polynomials.keys():
+                        mean_coeficient_of_polynomials[key] = mean_coeficient_of_polynomials[key]/number_pce_surrogates
+                    
+                    # mean_coeficient_of_polynomials_sorted = dict(sorted(mean_coeficient_of_polynomials.items(), key=lambda item: item[1]))
+                    mean_coeficient_of_polynomials_sorted = mean_coeficient_of_polynomials
+                    mean_coeficient_of_polynomials_sorted_df = pd.DataFrame(
+                        mean_coeficient_of_polynomials_sorted.items(), columns=['poly_index', 'coeff'])
+                    mean_coeficient_of_polynomials_sorted_df = mean_coeficient_of_polynomials_sorted_df.astype({'poly_index': "category"})
+                    mean_coeficient_of_polynomials_sorted_df['poly_index'] = mean_coeficient_of_polynomials_sorted_df['poly_index'].apply(lambda x: str(x))
+                    mean_coeficient_of_polynomials_sorted_df['avrg_coeff_over_pce_models'] = True
+                    mean_coeficient_of_polynomials_sorted_df[utility.QOI_ENTRY] = single_qoi
+                    list_of_mean_coeficient_of_polynomials_sorted_df_over_qois.append(mean_coeficient_of_polynomials_sorted_df)
+                
+                mean_coeficient_of_polynomials_sorted_df_over_qois = None
+                df_pce_info = None
+                if list_of_mean_coeficient_of_polynomials_sorted_df_over_qois:
+                    mean_coeficient_of_polynomials_sorted_df_over_qois = pd.concat(list_of_mean_coeficient_of_polynomials_sorted_df_over_qois, axis=0)
+                    df_pce_info = mean_coeficient_of_polynomials_sorted_df_over_qois
+                if df_pce_surrogates_info is not None and mean_coeficient_of_polynomials_sorted_df_over_qois is not None:
+                    df_pce_info = pd.concat([df_pce_surrogates_info, mean_coeficient_of_polynomials_sorted_df_over_qois], axis=0, ignore_index=True)
+                if printing:
+                    print(f"df_pce_info - {df_pce_info}")
+
+                if df_pce_info is not None:
+                    df_pce_info.to_pickle(
+                        os.path.abspath(os.path.join(str(directory_for_saving_plots), "df_pce_info.pkl")), compression="gzip")
+
         # ========================================================
         # Finalize recomputation of the original model
         # ========================================================
@@ -953,6 +1218,10 @@ def main(workingDir=None, inputModelDir=None, directory_for_saving_plots=None,
                     if single_qoi in df_model_reevaluated:
                         df_model_reevaluated[single_qoi] = df_model_reevaluated[single_qoi].apply(lambda x: max(0, x)) 
 
+            # TODO One can fatch list_index_run_with_None and Update nodes based on df_index_parameter_reevaluated
+            list_of_model_index_runs_with_none_return = df_index_parameter_reevaluated[df_index_parameter_reevaluated[utility.SUCCESSFUL_RUN]==False][utility.INDEX_COLUMN_NAME].values()
+            print(f"DEBUGGING list_of_model_index_runs_with_none_return-{list_of_model_index_runs_with_none_return}")
+
             # Save newly created DataFrame with the (re)evaluated original model
             if df_model_reevaluated is not None:
                 df_model_reevaluated.to_pickle(
@@ -960,6 +1229,7 @@ def main(workingDir=None, inputModelDir=None, directory_for_saving_plots=None,
             if df_index_parameter_reevaluated is not None:
                 df_index_parameter_reevaluated.to_pickle(
                     os.path.abspath(os.path.join(str(directory_for_saving_plots), "df_index_parameter_reevaluated.pkl")), compression="gzip")
+        
         # ========================================================
         # Finalize recomputation of the surrogate model
         # ========================================================
@@ -980,9 +1250,6 @@ def main(workingDir=None, inputModelDir=None, directory_for_saving_plots=None,
                 # surrogate_evaluated_dict_over_qois now contains the combined results for all dates processed in parallel on rank 0
                 surrogate_evaluated_dict_over_qois = combined_results
 
-                # TODO Add to model runs = Compare to model runs
-
-
                 # if printing:
                 #     for single_qoi in list_qois:
                 #         print(f"type(surrogate_evaluated_dict_over_qois[{single_qoi}]) = {type(surrogate_evaluated_dict_over_qois[single_qoi])}")
@@ -990,10 +1257,9 @@ def main(workingDir=None, inputModelDir=None, directory_for_saving_plots=None,
                 #         print(f"{list(surrogate_evaluated_dict_over_qois[single_qoi].keys())}")
                 #         # print(f"surrogate_evaluated_dict_over_qois[{single_qoi}][{my_dates[0]}] = {surrogate_evaluated_dict_over_qois[single_qoi][my_dates[0]]}")
                 #         #Timestamp('2007-08-14 00:00:00')
-                end_time_parallel_computing = time.time()
-                dict_with_time_info["time_parallel_pce_surrogate_reevaluations"] = end_time_parallel_computing - start_time_reevaluating_reevaluate_surrogate #start_time_parallel_computing
 
             elif surrogate_type=='kl+pce':
+                start_time_reevaluating_reevaluate_surrogate = time.time()
                 surrogate_evaluated_dict_over_qois = evaluate_kl_and_pce_surrogate_model(
                     kl_surrogate_df_dict_over_qois, list_qois, nodes, statistics_pdTimesteps, df_statistics_and_measured)
 
@@ -1005,6 +1271,7 @@ def main(workingDir=None, inputModelDir=None, directory_for_saving_plots=None,
                 #         print(f"surrogate_evaluated_dict_over_qois[{single_qoi}][keys[0]] = {surrogate_evaluated_dict_over_qois[single_qoi][keys_list[0]]}")
                 end_time_parallel_computing = time.time()
                 dict_with_time_info["time_kl_surrogate_reevaluations"] = end_time_parallel_computing - start_time_reevaluating_reevaluate_surrogate #start_time_parallel_computing
+            
             else:
                 raise Exception(f"Sorry, the surrogate type {surrogate_type} is not implemented; it can be either 'pce' or 'kl+pce'!")
                 
@@ -1023,7 +1290,7 @@ def main(workingDir=None, inputModelDir=None, directory_for_saving_plots=None,
                     # Add qoi column if it does not exist
                     if utility.QOI_ENTRY not in df_surrogate_reevaluated_single_qoi.columns:
                         df_surrogate_reevaluated_single_qoi[utility.QOI_ENTRY] = single_qoi
-                    # TODO add option to propagate dictionary storing boolean value for each single qoi
+                    # TODO add option to propagate dictionary storing boolean value (similar to set_lower_predictions_to_zero) for each single qoi
                     if set_lower_predictions_to_zero:
                         df_surrogate_reevaluated_single_qoi[utility.QOI_COLUMN_NAME] = df_surrogate_reevaluated_single_qoi[utility.QOI_COLUMN_NAME].apply(lambda x: max(0, x)) 
                     list_of_single_qoi_dfs.append(df_surrogate_reevaluated_single_qoi)
@@ -1031,27 +1298,10 @@ def main(workingDir=None, inputModelDir=None, directory_for_saving_plots=None,
                     if compare_surrogate_and_original_model_runs:
                         df_model_reevaluated_subset = df_model_reevaluated[[single_qoi, utility.TIME_COLUMN_NAME, utility.INDEX_COLUMN_NAME]]
                         merged_df = pd.merge(df_surrogate_reevaluated_single_qoi, df_model_reevaluated_subset, on=[utility.TIME_COLUMN_NAME, utility.INDEX_COLUMN_NAME])
-                        # Calculate the squared error for each row
-                        merged_df['squared_error'] = (merged_df[single_qoi] - merged_df[utility.QOI_COLUMN_NAME])**2
-
-                        # Compute RMSE for each time step by grouping on 'time_column'
-                        rmse_over_time = merged_df.groupby(utility.TIME_COLUMN_NAME)['squared_error'] \
-                                                    .mean() \
-                                                    .apply(np.sqrt) \
-                                                    .reset_index(name='RMSE')
-                        rmse_over_time.to_pickle(
-                            os.path.abspath(os.path.join(str(directory_for_saving_plots), f"rmse_over_time_{single_qoi}.pkl")), compression="gzip")
                         
-                        # Compute overall RMSE across all time steps
-                        overall_linf = merged_df['squared_error'].max()
-                        print(f"DEBUGGING - len(merged_df)-{len(merged_df)}")
-                        overall_l2_scaled = np.sqrt(np.sum(merged_df['squared_error'])) / math.sqrt(len(merged_df))
-                        overall_rmse = np.sqrt(merged_df['squared_error'].mean())
-                        print(f"Overall errors for {single_qoi}: RMSE={overall_rmse}; 1-norm={overall_linf}; 2-norm={overall_l2_scaled}")
-                        dict_with_errors_over_qois[single_qoi] = {}
-                        dict_with_errors_over_qois[single_qoi]['overall_rmse'] = overall_rmse
-                        dict_with_errors_over_qois[single_qoi]['overall_linf'] = overall_linf
-                        dict_with_errors_over_qois[single_qoi]['overall_l2_scaled'] = overall_l2_scaled
+                        compute_errors(df=merged_df, single_qoi=single_qoi, 
+                        qoi_column_left=single_qoi, qoi_column_right=utility.QOI_COLUMN_NAME,
+                        dict_with_errors_over_qois=dict_with_errors_over_qois, directory_for_saving_plots=directory_for_saving_plots)
 
             if list_of_single_qoi_dfs:
                 df_surrogate_reevaluated= pd.concat(list_of_single_qoi_dfs, axis=0)
@@ -1132,7 +1382,7 @@ def main(workingDir=None, inputModelDir=None, directory_for_saving_plots=None,
             compute_generalized_sobol_indices_over_time = kwargs.get('compute_generalized_sobol_indices_over_time', False)
             look_back_window_size = kwargs.get('look_back_window_size', 'whole')
             resolution = statisticsObject.resolution  #kwargs.get('resolution', 'integer')
-            generalized_total_sobol_indices_dict_over_qois = {single_qoi:{} for single_qoi in list_qois}
+            generalized_sobol_indices_dict_over_qois = {single_qoi:{} for single_qoi in list_qois}
             
             if printing:
                 print(f"statisticsObject.weights_time-{statisticsObject.weights_time}")
@@ -1149,43 +1399,52 @@ def main(workingDir=None, inputModelDir=None, directory_for_saving_plots=None,
                     gpce_coeff_dict=gpce_coeff_dict_over_qois[single_qoi], 
                     gpce_surrogate_dict=gpce_surrogate_dict_over_qois[single_qoi], 
                     polynomial_expansion=polynomial_expansion,
-                    weights_time=statisticsObject.weights_time, labels=statisticsObject.labels, 
-                    look_back_window_size=look_back_window_size, resolution=resolution
+                    weights_time=statisticsObject.weights_time, 
+                    labels=statisticsObject.labels, 
+                    look_back_window_size=look_back_window_size, 
+                    resolution=resolution
                 )
-                generalized_total_sobol_indices_dict_over_qois[single_qoi] = dict_with_generalized_indices
+                # print(f"DEBUGGING {single_qoi} dict_with_generalized_indices.keys()- {dict_with_generalized_indices.keys()}")
+                generalized_sobol_indices_dict_over_qois[single_qoi] = dict_with_generalized_indices
                 
-                df_with_generalized_indices_single_qoi = uqef_dynamic_utils.create_df_from_generalized_total_sobol_indices_single_qoi(
+                df_with_generalized_indices_single_qoi = uqef_dynamic_utils.create_df_from_generalized_sobol_indices_single_qoi(
                     stat_dict=dict_with_generalized_indices, 
                     qoi_column=single_qoi, 
                     list_of_uncertain_variables=statisticsObject.labels, 
                     measured_qoi_column=statisticsObject.dict_qoi_column_and_measured_info[single_qoi][1],
                     set_lower_predictions_to_zero=set_lower_predictions_to_zero, 
-                    measured_fetched=statisticsObject.dict_qoi_column_and_measured_info[single_qoi][0], 
-                    df_measured=df_statistics_and_measured, #statisticsObject.df_measured,
+                    measured_fetched=False, #statisticsObject.dict_qoi_column_and_measured_info[single_qoi][0], 
+                    df_measured=None, #df_statistics_and_measured, #statisticsObject.df_measured,
                     time_column_name=utility.TIME_COLUMN_NAME)
-                
+
+                # print(f"DEBUGGING {single_qoi} df_with_generalized_indices_single_qoi- {df_with_generalized_indices_single_qoi}")
+
+                # if resolution!='integer' and resolution in ["daily", "hourly", "minute"]:
+                #     df_with_generalized_indices_single_qoi[utility.TIME_COLUMN_NAME] = pd.to_datetime(df_with_generalized_indices_single_qoi[utility.TIME_COLUMN_NAME])
+
                 if df_with_generalized_indices_single_qoi is not None:
                     if "qoi" not in df_with_generalized_indices_single_qoi.columns:
                         df_with_generalized_indices_single_qoi["qoi"] = single_qoi
                     list_of_single_qoi_dfs.append(df_with_generalized_indices_single_qoi)
                 
-                if printing:
-                    print(f"generalized_total_sobol_indices_dict_over_qois for single qoi={single_qoi}- {dict_with_generalized_indices}")
+                # if printing:
+                #     print(f"generalized_sobol_indices_dict_over_qois for single qoi={single_qoi}- {generalized_sobol_indices_dict_over_qois}")
 
             if list_of_single_qoi_dfs:
-                df_generalized_total_sobol_indices_dict_and_measured = pd.concat(list_of_single_qoi_dfs, axis=0)
-                df_generalized_total_sobol_indices_dict_and_measured.sort_values(by=utility.TIME_COLUMN_NAME, ascending=True, inplace=True)
+                df_generalized_sobol_indices_dict_and_measured = pd.concat(list_of_single_qoi_dfs, axis=0)
+                df_generalized_sobol_indices_dict_and_measured.sort_values(by=utility.TIME_COLUMN_NAME, ascending=True, inplace=True)
             else:
-                df_generalized_total_sobol_indices_dict_and_measured = None
+                df_generalized_sobol_indices_dict_and_measured = None
 
-            if printing:
-                print(f"df_generalized_total_sobol_indices_dict_and_measured={df_generalized_total_sobol_indices_dict_and_measured}")
+            # if printing:
+            print(f"DEBUGGING df_generalized_sobol_indices_dict_and_measured={df_generalized_sobol_indices_dict_and_measured}")
 
-            if df_generalized_total_sobol_indices_dict_and_measured is not None:
-                fileName = f"df_recomputed_generalized_total_sobol_indices_dict_and_measured.pkl"
+            if df_generalized_sobol_indices_dict_and_measured is not None:
+                fileName = f"df_recomputed_generalized_sobol_indices_dict_and_measured.pkl"
                 # if look_back_window_size != 'whole':
-                fileName = f"df_recomputed_generalized_total_sobol_indices_dict_{look_back_window_size}_and_measured.pkl"
-                df_generalized_total_sobol_indices_dict_and_measured.to_pickle(
+                # fileName = f"df_recomputed_generalized_sobol_indices_dict_{look_back_window_size}_and_measured.pkl"
+                fileName = f"df_recomputed_generalized_sobol_indices_dict_and_measured.pkl"
+                df_generalized_sobol_indices_dict_and_measured.to_pickle(
                     os.path.abspath(os.path.join(str(directory_for_saving_plots), fileName)), compression="gzip")
 
             end_time_generalized_si_recomputation = time.time()
@@ -1215,7 +1474,7 @@ def main(workingDir=None, inputModelDir=None, directory_for_saving_plots=None,
     # Plotting and final post-processing in the main process
     # ============================
     # TODO Change when workingDir is a list - statisticsObject.df_measured; Things depend again on statisticsObject
-    if rank == 0:
+    if is_master(mpi, rank):
         end = time.time()
         runtime = end - start
         
@@ -1417,7 +1676,7 @@ def main(workingDir=None, inputModelDir=None, directory_for_saving_plots=None,
             # # relevant here  - 
             # # df_statistics_and_measured; statisticsObject.df_statistics/statisticsObject.result_dict
             # # gpce_statistics_dict_over_qois/df_recomputed_statistics_and_measured;
-            # # generalized_total_sobol_indices_dict_over_qois/df_generalized_total_sobol_indices_dict_and_measured
+            # # generalized_total_sobol_indices_dict_over_qois/df_generalized_sobol_indices_dict_and_measured
             # # si_t_df, si_t_df
             # qoi_idx = 0
             # for single_qoi in statisticsObject.list_qoi_column:
@@ -1429,9 +1688,9 @@ def main(workingDir=None, inputModelDir=None, directory_for_saving_plots=None,
             #     # df = df_statistics_and_measured.loc[
             #     #     df_statistics_and_measured['qoi'] == single_qoi] 
             #     # print(f"dict_qoi_column_and_measured_info - {single_qoi} - {statisticsObject.dict_qoi_column_and_measured_info[single_qoi]}")
-            #     if plotting_generalized_indices and df_generalized_total_sobol_indices_dict_and_measured is not None:
-            #         df = df_generalized_total_sobol_indices_dict_and_measured.loc[
-            #             df_generalized_total_sobol_indices_dict_and_measured['qoi'] == single_qoi] 
+            #     if plotting_generalized_indices and df_generalized_sobol_indices_dict_and_measured is not None:
+            #         df = df_generalized_sobol_indices_dict_and_measured.loc[
+            #             df_generalized_sobol_indices_dict_and_measured['qoi'] == single_qoi] 
             #         df_generalized = df[[col for col in df.columns if col.startswith("generalized_sobol_total_index_")]]
             #         substring = "generalized_sobol_total_index_"
             #         for inx, single_column in enumerate(df_generalized.columns):
@@ -1448,8 +1707,8 @@ def main(workingDir=None, inputModelDir=None, directory_for_saving_plots=None,
             #         qoi_idx +=1
             #     # TODO Plot - mean; mean+-std; measured; up to 100 realizations of the surrogate; 
             #     # TODO Plot standard Sobol indices; if saved or re-computed (heatmaps)
-            #     # TODO Plot generazlied time-wise Sobol indices - generalized_total_sobol_indices_dict_over_qois[single_qoi] (heatmaps?)
-            #     # TODO Plot re-computed generazlied time-wise Sobol indices with some other time window generalized_total_sobol_indices_dict_over_qois (heatmaps?)
+            #     # TODO Plot generazlied time-wise Sobol indices - generalized_sobol_indices_dict_over_qois[single_qoi] (heatmaps?)
+            #     # TODO Plot re-computed generazlied time-wise Sobol indices with some other time window generalized_sobol_indices_dict_over_qois (heatmaps?)
             # plot_filename = directory_for_saving_plots / f"SA_and_measured_data_total_generalized_60_days_look_back_window_size.pdf"
             # fig.update_layout(title=None)
             # fig.update_layout(
@@ -1708,126 +1967,170 @@ def main(workingDir=None, inputModelDir=None, directory_for_saving_plots=None,
         # # TODO Rely on statisticsObject plotting and re-computing stat dataframe subroutines
 
 
-if __name__ == '__main__':
+# if __name__ == '__main__':
 
-    # HBV-SASK model
-    # 7D Sparse-gPCE l=7, p=2 2007 deltaQ_cms - 203
-    workingDir = pathlib.Path('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/paper_hydro_uq_sim/hbv_uq_cm2.0220')
-    # 3D Sparse-gPCE l=7, p=3 2005-2007 deltaQ_cms
-    workingDir = pathlib.Path('/gpfs/scratch/pr63so/ga45met2/hbvsask_runs/pce_deltq_3d_short_oldman')
-    workingDir = pathlib.Path('/gpfs/scratch/pr63so/ga45met2/hbvsask_runs/pce_deltq_3d_longer_oldman')
-    basis_workingDir = pathlib.Path('/work/ga45met/paper_uqef_dynamic_sim/hbvsask_runs_lxc_autumn_24')
-    workingDir = basis_workingDir / 'hbv_uq_cm4.0069'
-    workingDir = [
-        basis_workingDir / 'hbv_uq_cm4.0067',
-        basis_workingDir / 'hbv_uq_cm4.0068',
-        basis_workingDir / 'hbv_uq_cm4.0069',
-    ]
+# HBV-SASK model
+# 7D Sparse-gPCE l=7, p=2 2007 deltaQ_cms - 203
+workingDir = pathlib.Path('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/paper_hydro_uq_sim/hbv_uq_cm2.0220')
+# 3D Sparse-gPCE l=7, p=3 2005-2007 deltaQ_cms
+workingDir = pathlib.Path('/gpfs/scratch/pr63so/ga45met2/hbvsask_runs/pce_deltq_3d_short_oldman')
+workingDir = pathlib.Path('/gpfs/scratch/pr63so/ga45met2/hbvsask_runs/pce_deltq_3d_longer_oldman')
+basis_workingDir = pathlib.Path('/work/ga45met/paper_uqef_dynamic_sim/hbvsask_runs_lxc_autumn_24')
+workingDir = basis_workingDir / 'hbv_uq_cm4.0069'
+workingDir = [
+    basis_workingDir / 'hbv_uq_cm4.0067',
+    basis_workingDir / 'hbv_uq_cm4.0068',
+    basis_workingDir / 'hbv_uq_cm4.0069',
+]
 
-    workingDir = [
-        basis_workingDir / 'hbv_uq_cm4.0080',
-        basis_workingDir / 'hbv_uq_cm4.0079',
-        basis_workingDir / 'hbv_uq_cm4.0078',
-    ]
-    inputModelDir = pathlib.Path("/work/ga45met/Hydro_Models/HBV-SASK-data")
-    directory_for_saving_plots = pathlib.Path('/work/ga45met/paper_uqef_dynamic_sim/hbv_sask/mc_gpce_p4_ct07_100000_lhc_nse02_2004_2007_oldman')
-    directory_for_saving_plots = pathlib.Path('/work/ga45met/paper_uqef_dynamic_sim/hbv_sask/mc_gpce_p5_ct07_30000_lhc_2004_2007_oldman')
-    
-    # Linux Cluster
-    basis_workingDir = pathlib.Path('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/hbvsask_runs/kl_analysis')
-    workingDir = basis_workingDir / 'mc_kl40_gpce_10d_p3_ct10_10000lhc_oldman_2007'
-    inputModelDir = pathlib.Path("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/HBV-SASK-data")
-    directory_for_saving_plots = workingDir
-    
-    set_lower_predictions_to_zero = True
-    dict_set_lower_predictions_to_zero = True
-    add_measured_data=True
-    add_forcing_data=True
-    single_timestamp_single_file = False
+workingDir = [
+    basis_workingDir / 'hbv_uq_cm4.0080',
+    basis_workingDir / 'hbv_uq_cm4.0079',
+    basis_workingDir / 'hbv_uq_cm4.0078',
+]
 
-    # battery model
-    # config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/uqef_dynamic/models/pybamm/configuration_battery_24_shot_names.json'
-    # workingDir = pathlib.Path('/work/ga45met/uqef_dynamic_runs/battery_results/cm4_runs/mc_kl10_p4_ct07_24d_10000_random')
-    # workingDir = pathlib.Path('/work/ga45met/uqef_dynamic_runs/battery_results/cm4_runs/mc_kl10_p4_ct07_24d_100000_random')
-    # # workingDir = pathlib.Path('/work/ga45met/uqef_dynamic_runs/battery_results/cm4_runs/mc_kl10_p5_ct07_24d_10000_random')
-    # workingDir = pathlib.Path('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/battery_runs/mc_kl10_p3_ct07_24d_10000_random')
-    # workingDir = pathlib.Path('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/battery_runs/mc_kl10_p4_ct07_24d_100000_random')
-    # workingDir = pathlib.Path('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/battery_runs/mc_kl10_p2_ct07_24d_10000_random')
-    # inputModelDir = pathlib.Path('/dss/dsshome1/lxc0C/ga45met2/.conda/envs/my_uq_env/lib/python3.11/site-packages/pybamm/input/drive_cycles')
-    # directory_for_saving_plots = workingDir
-    # set_lower_predictions_to_zero = False
-    # dict_set_lower_predictions_to_zero = False
-    # add_measured_data=False
-    # add_forcing_data=False
-    # single_timestamp_single_file = False
+# MC 150 000 Random gpce p=5 ct=0.7 2004--2007
+workingDir = [
+    basis_workingDir / 'hbv_uq_cm4.0092',
+    basis_workingDir / 'hbv_uq_cm4.0093',
+    basis_workingDir / 'hbv_uq_cm4.0094',
+]
 
-    set_up_statistics_from_scratch = False
+inputModelDir = pathlib.Path("/work/ga45met/Hydro_Models/HBV-SASK-data")
+directory_for_saving_plots = pathlib.Path('/work/ga45met/paper_uqef_dynamic_sim/hbv_sask/mc_gpce_p4_ct07_100000_lhc_nse02_2004_2007_oldman')
+directory_for_saving_plots = pathlib.Path('/work/ga45met/paper_uqef_dynamic_sim/hbv_sask/mc_gpce_p5_ct07_30000_lhc_2004_2007_oldman')
 
-    recompute_gpce = False
-    recompute_statistics = False
-    reevaluate_original_model = True 
-    reevaluate_surrogate = False
-    recompute_sobol_indices = False
-    recompute_generalized_sobol_indices = False
+# Linux Cluster
+basis_workingDir = pathlib.Path('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/hbvsask_runs/kl_analysis')
+workingDir = basis_workingDir / 'mc_kl40_gpce_10d_p3_ct10_10000lhc_oldman_2007'
+inputModelDir = pathlib.Path("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/HBV-SASK-data")
+directory_for_saving_plots = workingDir
+basis_workingDir = pathlib.Path('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/hbvsask_runs')
+# MC 150 000 Random gpce p=5 ct=0.7 2004--2007 NSE>0.2
+workingDir = [
+    basis_workingDir / 'hbv_uq_cm4.0087',
+    basis_workingDir / 'hbv_uq_cm4.0085',
+    basis_workingDir / 'hbv_uq_cm4.0088',
+]    
+# PSP KPU(l=7) p=5 ct=0.7 2004--2007
+workingDir = [
+    basis_workingDir / 'hbv_uq_cm4.0089',
+    basis_workingDir / 'hbv_uq_cm4.0090',
+    basis_workingDir / 'hbv_uq_cm4.0091',
+]  
+directory_for_saving_plots = basis_workingDir / 'psp_p5_ct07_kpu7_2004_2007_oldman'
+workingDir = [
+    basis_workingDir / 'hbv_uq_cm4.0092',
+    basis_workingDir / 'hbv_uq_cm4.0093',
+    basis_workingDir / 'hbv_uq_cm4.0094',
+]   
+directory_for_saving_plots = basis_workingDir / 'mc_gpce_p5_ct07_150000_random_2004_2007_oldman'
+workingDir = [
+    basis_workingDir / 'hbv_uq_cm4.0095',
+    basis_workingDir / 'hbv_uq_cm4.0096',
+    basis_workingDir / 'hbv_uq_cm4.0097',
+]   
+directory_for_saving_plots = basis_workingDir / 'psp_p4_sgl6_ct07_2004_2007_oldman'
 
-    read_saved_simulations = True
+# 10 MC gPCE p=5 CT0.7 150 000 Random 2006-07 Q_cms; AET
+workingDir = basis_workingDir / "hbv_uq_cm4.0105"  #"hbv_uq_cm4.0094"
+directory_for_saving_plots = workingDir  #basis_workingDir / "mc_gpce_p5_150000_ct07_2006_07_oldman"
 
-    surrogate_type='kl+pce' # 'pce' | 'kl+pce'
+set_lower_predictions_to_zero = True
+dict_set_lower_predictions_to_zero = True
+add_measured_data=True
+add_forcing_data=True
+single_timestamp_single_file = False
 
-    compute_other_stat_besides_pce_surrogate = True
-    compute_Sobol_t = True
-    compute_Sobol_m = True
-    compute_Sobol_m2 = False
-    dict_stat_to_compute = {
-         "Var": True, "StdDev": True, "P10": True, "P90": True,
-         "E_minus_std": False, "E_plus_std": False,
-         "Skew": False, "Kurt": False, "Sobol_m": compute_Sobol_m, "Sobol_m2": compute_Sobol_m2, "Sobol_t": compute_Sobol_t
-         }
+# battery model
+# config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/uqef_dynamic/models/pybamm/configuration_battery_24_shot_names.json'
+# workingDir = pathlib.Path('/work/ga45met/uqef_dynamic_runs/battery_results/cm4_runs/mc_kl10_p4_ct07_24d_10000_random')
+# workingDir = pathlib.Path('/work/ga45met/uqef_dynamic_runs/battery_results/cm4_runs/mc_kl10_p4_ct07_24d_100000_random')
+# # workingDir = pathlib.Path('/work/ga45met/uqef_dynamic_runs/battery_results/cm4_runs/mc_kl10_p5_ct07_24d_10000_random')
+# workingDir = pathlib.Path('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/battery_runs/mc_kl10_p3_ct07_24d_10000_random')
+# workingDir = pathlib.Path('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/battery_runs/mc_kl10_p4_ct07_24d_100000_random')
+workingDir = pathlib.Path('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/battery_runs/mc_kl10_p2_ct07_24d_10000_random')
+workingDir = pathlib.Path('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/battery_runs/battery_uq_cm4.0101')
+inputModelDir = pathlib.Path('/dss/dsshome1/lxc0C/ga45met2/.conda/envs/my_uq_env/lib/python3.11/site-packages/pybamm/input/drive_cycles')
+directory_for_saving_plots = workingDir
+set_lower_predictions_to_zero = False
+dict_set_lower_predictions_to_zero = False
+add_measured_data=False
+add_forcing_data=False
+single_timestamp_single_file = False
 
-    compute_generalized_sobol_indices_from_kl_expansion = False
-    compute_generalized_sobol_indices_over_time = True
-    look_back_window_size = 365 #'whole'
+set_up_statistics_from_scratch = False
 
-    printing = True
-    plotting = True
-    replot_statistics_from_statistics_object = True
-    dict_what_to_plot = {
-            "E_minus_2std": False, "E_plus_2std": False,
-            "E_minus_std": False, "E_plus_std": False, 
-            "P10": True, "P90": True,
-            "StdDev": True, "Skew": False, "Kurt": False, "Sobol_m": compute_Sobol_m, "Sobol_m2": compute_Sobol_m2, "Sobol_t": compute_Sobol_t
-    }
-    plotting_generalized_indices = True
+recompute_statistics = False
+reevaluate_original_model = True 
+reevaluate_surrogate = True
+recompute_generalized_sobol_indices = False
+analyse_pce_surrogate = False
 
-    main(
-        workingDir=workingDir,
-        inputModelDir=inputModelDir,
-        directory_for_saving_plots=directory_for_saving_plots,
-        surrogate_type=surrogate_type,
-        single_timestamp_single_file=single_timestamp_single_file,
-        add_measured_data=add_measured_data,
-        add_forcing_data=add_forcing_data,
-        read_saved_simulations=read_saved_simulations,
-        set_up_statistics_from_scratch=set_up_statistics_from_scratch,
-        printing=printing, 
-        plotting=plotting,
-        replot_statistics_from_statistics_object=replot_statistics_from_statistics_object,
-        plotting_generalized_indices=plotting_generalized_indices,
-        dict_what_to_plot=dict_what_to_plot,
-        recompute_gpce = recompute_gpce,
-        recompute_statistics = recompute_statistics,
-        compute_other_stat_besides_pce_surrogate = compute_other_stat_besides_pce_surrogate,
-        reevaluate_surrogate = reevaluate_surrogate,
-        reevaluate_original_model=reevaluate_original_model,
-        recompute_sobol_indices = recompute_sobol_indices,
-        recompute_generalized_sobol_indices = recompute_generalized_sobol_indices,
-        compute_generalized_sobol_indices_from_kl_expansion = compute_generalized_sobol_indices_from_kl_expansion,
-        compute_generalized_sobol_indices_over_time = compute_generalized_sobol_indices_over_time,
-        look_back_window_size=look_back_window_size,
-        compute_Sobol_t = compute_Sobol_t,
-        compute_Sobol_m = compute_Sobol_m,
-        compute_Sobol_m2 = compute_Sobol_m2,
-        dict_stat_to_compute = dict_stat_to_compute,
-        dict_set_lower_predictions_to_zero=dict_set_lower_predictions_to_zero,
-        set_lower_predictions_to_zero=set_lower_predictions_to_zero,
-    )
+# TODO These variables do not seem to be relevant at the moment...
+recompute_gpce = False
+recompute_sobol_indices = False
+
+read_saved_simulations = True
+
+surrogate_type='kl+pce' # 'pce' | 'pce'
+
+compute_other_stat_besides_pce_surrogate = True
+compute_Sobol_t = True
+compute_Sobol_m = True
+compute_Sobol_m2 = False
+dict_stat_to_compute = {
+        "Var": True, "StdDev": True, "P10": True, "P90": True,
+        "E_minus_std": False, "E_plus_std": False,
+        "Skew": False, "Kurt": False, "Sobol_m": compute_Sobol_m, "Sobol_m2": compute_Sobol_m2, "Sobol_t": compute_Sobol_t
+        }
+
+compute_generalized_sobol_indices_from_kl_expansion = False
+compute_generalized_sobol_indices_over_time = False
+look_back_window_size = 'whole'  #365 
+
+printing = True #True
+plotting = True #True
+replot_statistics_from_statistics_object = False
+dict_what_to_plot = {
+        "E_minus_2std": False, "E_plus_2std": False,
+        "E_minus_std": False, "E_plus_std": False, 
+        "P10": True, "P90": True,
+        "StdDev": True, "Skew": False, "Kurt": False, "Sobol_m": compute_Sobol_m, "Sobol_m2": compute_Sobol_m2, "Sobol_t": compute_Sobol_t
+}
+plotting_generalized_indices = True
+
+main(
+    mpi, rank, 
+    workingDir=workingDir,
+    inputModelDir=inputModelDir,
+    directory_for_saving_plots=directory_for_saving_plots,
+    surrogate_type=surrogate_type,
+    single_timestamp_single_file=single_timestamp_single_file,
+    add_measured_data=add_measured_data,
+    add_forcing_data=add_forcing_data,
+    read_saved_simulations=read_saved_simulations,
+    set_up_statistics_from_scratch=set_up_statistics_from_scratch,
+    printing=printing, 
+    plotting=plotting,
+    replot_statistics_from_statistics_object=replot_statistics_from_statistics_object,
+    plotting_generalized_indices=plotting_generalized_indices,
+    dict_what_to_plot=dict_what_to_plot,
+    recompute_gpce = recompute_gpce,
+    recompute_statistics = recompute_statistics,
+    compute_other_stat_besides_pce_surrogate = compute_other_stat_besides_pce_surrogate,
+    reevaluate_surrogate = reevaluate_surrogate,
+    reevaluate_original_model=reevaluate_original_model,
+    recompute_sobol_indices = recompute_sobol_indices,
+    recompute_generalized_sobol_indices = recompute_generalized_sobol_indices,
+    analyse_pce_surrogate = analyse_pce_surrogate,
+    compute_generalized_sobol_indices_from_kl_expansion = compute_generalized_sobol_indices_from_kl_expansion,
+    compute_generalized_sobol_indices_over_time = compute_generalized_sobol_indices_over_time,
+    look_back_window_size=look_back_window_size,
+    compute_Sobol_t = compute_Sobol_t,
+    compute_Sobol_m = compute_Sobol_m,
+    compute_Sobol_m2 = compute_Sobol_m2,
+    dict_stat_to_compute = dict_stat_to_compute,
+    dict_set_lower_predictions_to_zero=dict_set_lower_predictions_to_zero,
+    set_lower_predictions_to_zero=set_lower_predictions_to_zero,
+)

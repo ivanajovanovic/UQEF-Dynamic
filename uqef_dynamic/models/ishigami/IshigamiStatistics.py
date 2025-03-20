@@ -169,6 +169,8 @@ class IshigamiStatistics(TimeDependentStatistics):
                     # print(f"Sobol Total Analytical = {Sobol_t_analytical[i]:.4f} \n")
                     Sobol_t_error[i] = local_result_dict["Sobol_t"][i] - Sobol_t_analytical[i]
             Sobol_t_error = abs(Sobol_t_error)
+            local_result_dict['Sobol_t_analytical'] = Sobol_t_analytical
+            local_result_dict['Sobol_t_error'] = Sobol_t_error
         if self._is_Sobol_m_computed and Sobol_m_analytical is not None:
             for i in range(len(self.labels)):
                 if local_result_dict["Sobol_m"].shape[0] == len(self.timesteps):
@@ -182,6 +184,8 @@ class IshigamiStatistics(TimeDependentStatistics):
                     # print(f"Sobol Main Analytical = {Sobol_m_analytical[i]:.4f} \n")
                     Sobol_m_error[i] = local_result_dict["Sobol_m"][i] - Sobol_m_analytical[i]
             Sobol_m_error = abs(Sobol_m_error)
+            local_result_dict['Sobol_m_analytical'] = Sobol_m_analytical
+            local_result_dict['Sobol_m_error'] = Sobol_m_error
 
         print("STATISTICS INFO: Sobol' Indices (Error)")
         if self._is_Sobol_t_computed:

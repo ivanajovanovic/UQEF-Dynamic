@@ -39,6 +39,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import plotly.offline as pyo
 import seaborn as sns
+from sklearn import linear_model
 import scipy
 from tabulate import tabulate
 import time
@@ -52,6 +53,7 @@ from uqef_dynamic.utils import sens_indices_sampling_based_utils
 TIME_COLUMN_NAME="TimeStamp"
 INDEX_COLUMN_NAME = "Index_run"
 QOI_COLUMN_NAME = "Value"  # "model"
+SUCCESSFUL_RUN = "successful_run"
 GOF = "GOF"
 QOI_COLUMN_NAME_CENTERED = QOI_COLUMN_NAME + "_centered"
 
@@ -86,6 +88,8 @@ DF_UQSIM_SIMULATION_NODES_FILE = "df_uqsim_simulation_nodes.pkl"
 DF_UQSIM_SIMULATION_WEIGHTS_FILE = "df_uqsim_simulation_weights.pkl"
 
 QOI_ENTRY = 'qoi'
+MEASURED_ENTRY = 'measured'
+MEASURED_NORM_ENTRY = 'measured_norm'
 PCE_ENTRY = 'gPCE'
 PCE_COEFF_ENTRY = 'gpce_coeff'
 QOI_DIST_ENTR = 'qoi_dist'
@@ -1820,7 +1824,7 @@ def _handle_parameters(parameters, configurationObject, default_par_info_dict, t
     the conrete value from parameters (dictionary or list).
 
     Args:
-        parameters (dict, or list): A list of parameters.
+        parameters (dict, or list): A list of parameter(s value).
         configurationObject (dict): The configuration object containing information about the parameters.
         default_par_info_dict (dict): A dictionary containing default parameter information.
         take_direct_value (bool): A boolean value indicating whether to take the direct value.
@@ -2704,13 +2708,29 @@ def generate_polynomial_expansion(joint_dist, order: int, rule: str = 'three_ter
         order, joint_dist, rule=rule, normed=poly_normed, retall=True)
     return polynomial_expansion, norms
 
+
+def generate_regression_model(regression_model_type=None, polynomial_expansion=None):
+    if regression_model_type == "OLS":
+        regression_model = linear_model.LinearRegression(fit_intercept=False)
+    elif regression_model_type == "LARS":
+        if polynomial_expansion is None:
+            regression_model = None
+        else:
+            regression_model = linear_model.Lars(
+                fit_intercept=False, n_nonzero_coefs=len(polynomial_expansion)
+                )
+    else:
+        regression_model = None
+    return regression_model
 # =================================================================================================
 # Functions for computing PCE over time
 # =================================================================================================
 
 
 def compute_gPCE_over_time(model, t: Union[np.array, np.ndarray, List[Union[int, float]]], expansion_order: int, joint_dist, 
-                            parameters: np.ndarray, nodes: np.ndarray, regression: bool = False, weights_quad: np.ndarray = None, poly_rule: str = 'three_terms_recurrence', poly_normed: bool = True):
+                            parameters: np.ndarray, nodes: np.ndarray, regression: bool = False, 
+                            weights_quad: np.ndarray = None, poly_rule: str = 'three_terms_recurrence', 
+                            poly_normed: bool = True, regression_model_type: str = None):
     """
     This function computes the generalized Polynomial Chaos Expansion (gPCE) over time
     model: function
@@ -2730,6 +2750,7 @@ def compute_gPCE_over_time(model, t: Union[np.array, np.ndarray, List[Union[int,
         Quadrature weights dimension (dim, number_of_nodes)
     poly_rule: str, optional
     poly_normed: bool, optional
+    regression_model_type: str, optional; "OLS" for linear_model.LinearRegression or "LARS" for linear_model.Lars default is None
     return: np.ndarray
         gPCE over time dimension (len(t), )
     """
@@ -2746,8 +2767,9 @@ def compute_gPCE_over_time(model, t: Union[np.array, np.ndarray, List[Union[int,
     coeff = np.empty((len(t),), dtype=object)
     for idx, _ in enumerate(model_runs):  # for element in t:
         if regression:
+            regression_model = generate_regression_model(regression_model_type=regression_model_type, polynomial_expansion=polynomial_expansion)
             gPCE_over_time[idx] = cp.fit_regression(
-                polynomials=polynomial_expansion, abscissas=nodes, evals=model_runs[idx], model=None)
+                polynomials=polynomial_expansion, abscissas=nodes, evals=model_runs[idx], model=regression_model)
         else:
             gPCE_over_time[idx], coeff[idx] = cp.fit_quadrature(
                 orth=polynomial_expansion, nodes=nodes, weights=weights_quad, 
@@ -3230,6 +3252,7 @@ def computing_gpce_statistics_simple(
     compute_Sobol_t:bool=True, compute_Sobol_m:bool=False, compute_Sobol_m2:bool=False,
     dict_stat_to_compute:dict=DEFAULT_DICT_STAT_TO_COMPUTE,
     polynomial_norms=None,
+    regression_model_type:str=None,
     ):
     """
     Parameters:
@@ -3254,6 +3277,7 @@ def computing_gpce_statistics_simple(
     - compute_Sobol_m2 (bool, optional): Whether to compute Sobol' indices (total-order main effects). Defaults to False.
     - dict_stat_to_compute(dict, optional): dictionary of entrie what statistics to be computedl can be combined with above variables...
     - polynomial_norms(numpy.ndarray, optional): The norms of the polynomial expansion. Defaults to None.
+    - regression_model_type: str, optional; "OLS" for linear_model.LinearRegression or "LARS" for linear_model.Lars default is None
 
     Returns:
     - result_dict: Dict[Any, Any]
@@ -3274,7 +3298,9 @@ def computing_gpce_statistics_simple(
 
     coeff = None
     if regression:
-        qoi_gPCE, coeff = cp.fit_regression(polynomial_expansion, nodes, qoi_values)
+        regression_model = generate_regression_model(regression_model_type=regression_model_type, polynomial_expansion=polynomial_expansion)
+        qoi_gPCE, coeff = cp.fit_regression(
+            polynomials=polynomial_expansion, abscissas=nodes, evals=qoi_values, model=regression_model)
     else:
         qoi_gPCE, coeff = cp.fit_quadrature(
             orth=polynomial_expansion, nodes=nodes, weights=weights, 
@@ -3533,8 +3559,11 @@ def plot_covariance_matrix(covariance_matrix, directory_for_saving_plots, filnam
     plt.savefig(fileName)
 
 
-def save_covariance_matrix(covariance_matrix, directory_for_saving, qoi):
-    fileName = f"covariance_matrix_{qoi}.npy"
+def save_covariance_matrix(covariance_matrix, directory_for_saving, qoi=None):
+    if qoi is None:
+        fileName = f"covariance_matrix.npy"
+    else:
+        fileName = f"covariance_matrix_{qoi}.npy"
     fullFileName = os.path.abspath(os.path.join(str(directory_for_saving), fileName))
     np.save(fullFileName, covariance_matrix)
 
@@ -3574,7 +3603,13 @@ def solve_eigenvalue_problem(covariance_matrix, weights):
     # return eigenvalues, eigenvectors
 
 
-def plot_eigenvalues(eigenvalues, directory_for_saving_plots):
+def plot_eigenvalues(eigenvalues, directory_for_saving_plots, qoi=None):
+    if qoi is None:
+        fileName = f"eigenvalues_covariance_operator.png"
+        fileName_scaled = f"scaled_eigenvalues_covariance_operator.png"
+    else:
+        fileName = f"eigenvalues_covariance_operator_{qoi}.png"
+        fileName_scaled = f"scaled_eigenvalues_covariance_operator_{qoi}.png"
     # Plotting the eigenvalues
     eigenvalues_real = np.asarray([element.real for element in eigenvalues], dtype=np.float64)
     eigenvalues_real_scaled = eigenvalues_real/eigenvalues_real[0]
@@ -3582,13 +3617,13 @@ def plot_eigenvalues(eigenvalues, directory_for_saving_plots):
     plt.yscale("log")
     plt.plot(eigenvalues, 'x')
     plt.title('Eigenvalues of the Covariance Operator')
-    fileName = os.path.abspath(os.path.join(str(directory_for_saving_plots), "eigenvalues_covariance_operator.png"))
+    fileName = os.path.abspath(os.path.join(str(directory_for_saving_plots), fileName))
     plt.savefig(fileName)
     plt.figure()
     plt.yscale("log")
     plt.plot(eigenvalues_real_scaled, 'x')
     plt.title('Scaled Eigenvalues of the Covariance Operator')
-    fileName = os.path.abspath(os.path.join(str(directory_for_saving_plots), "scaled_eigenvalues_covariance_operator.png"))
+    fileName = os.path.abspath(os.path.join(str(directory_for_saving_plots), fileName_scaled))
     plt.savefig(fileName)
 
 
@@ -3610,7 +3645,7 @@ def setup_kl_expansion_matrix(eigenvalues, N_kl, N, N_quad, weights, centered_ou
 
 
 def pce_of_kl_expansion(
-    N_kl, polynomial_expansion, nodes, weights, f_kl_eval_at_params, regression=False, polynomial_norms=None):
+    N_kl, polynomial_expansion, nodes, weights, f_kl_eval_at_params, regression=False, polynomial_norms=None, regression_model=None):
     # PCE of the KL Expansion
     f_kl_surrogate_dict = {}
     # f_kl_surrogate_coefficients = np.empty(N_kl, c_number)
@@ -3623,15 +3658,15 @@ def pce_of_kl_expansion(
             f_kl_gPCE, f_kl_coeff = cp.fit_regression(
                 polynomials=polynomial_expansion, abscissas=nodes, 
                 evals=f_kl_eval_at_params[i,:], retall=True, 
-                model=None,
+                model=regression_model,
                 )
         else:
             f_kl_gPCE, f_kl_coeff = cp.fit_quadrature(
                 orth=polynomial_expansion, nodes=nodes, weights=weights, solves=f_kl_eval_at_params[i,:], retall=True,
                 norms=polynomial_norms
                 )        
-        f_kl_surrogate_dict[i]["gPCE"] = f_kl_gPCE
-        f_kl_surrogate_dict[i]["gpce_coeff"] = f_kl_coeff
+        f_kl_surrogate_dict[i][PCE_ENTRY] = f_kl_gPCE
+        f_kl_surrogate_dict[i][PCE_COEFF_ENTRY] = f_kl_coeff
         # f_kl_surrogate_coefficients[i] = np.asfarray(f_kl_coeff).T
         f_kl_surrogate_coefficients.append(np.asarray(f_kl_coeff, dtype=np.float64)) 
     f_kl_surrogate_coefficients = np.asarray(f_kl_surrogate_coefficients, dtype=np.float64)
@@ -3640,9 +3675,7 @@ def pce_of_kl_expansion(
 # =================================================================================================
 # Generlaized Sobol Indices
 # =================================================================================================
-
-
-def computing_generalized_sobol_total_indices_from_kl_expan(
+def computing_generalized_sobol_indices_from_kl_expan_elia(
     f_kl_surrogate_coefficients: np.ndarray,
     polynomial_expansion: cp.polynomial,
     weights: np.ndarray,
@@ -3658,7 +3691,7 @@ def computing_generalized_sobol_total_indices_from_kl_expan(
     One would have to do scaling with norms of the polynomials if they are not normalized.
 
     Args:
-        f_kl_surrogate_coefficients (np.ndarray): 
+        f_kl_surrogate_coefficients (np.ndarray) of shape N_kl x terms in poly expan: 
         polynomial_expansion (cp.polynomial): The polynomial expansion.
         weights (np.ndarray): An array of weights for time quadratures.
         param_names (List[str]): A list of parameter names.
@@ -3666,6 +3699,111 @@ def computing_generalized_sobol_total_indices_from_kl_expan(
 
     Returns:
         Dict[str, np.ndarray]: A dictionary containing the computed generalized Sobol total indices, 
+        with parameter names as the keys.
+        Dict[str, np.ndarray]: A dictionary containing the computed generalized Sobol main/first indices, 
+        with parameter names as the keys.
+        total_variance
+        total_variance_based_on_pce_coefficients whic is None if compute_total_variance_based_on_pce_coefficients is False and total_variance is not None
+    Raises:
+        None
+    """
+    dic = polynomial_expansion.todict()
+    N_kl = f_kl_surrogate_coefficients.shape[0]
+    num_params = len(param_names)
+
+    # Computing Denum...
+    total_variance_based_on_pce_coefficients = None
+
+    denum = total_variance
+    if compute_total_variance_based_on_pce_coefficients or total_variance is None:
+        total_variance_based_on_pce_coefficients = np.sum(
+                [np.sum(f_kl_surrogate_coefficients[j][1:] ** 2) for j in range(N_kl)]
+            )
+        if total_variance is None:
+            denum = total_variance_based_on_pce_coefficients
+        else:
+            rel_error_variance = (
+                np.abs(total_variance - total_variance_based_on_pce_coefficients) / total_variance
+                )
+            if rel_error_variance > 0.1:
+                print(f"WARNING: The relative error between the sum of eigenvalues and the sum of squared PC coefficients is larger than 10%: {rel_error_variance:.2f}. The sum of squared PC coefficients will be used as total variance to compute the Sobol' indices. \n")
+                denum = total_variance_based_on_pce_coefficients
+
+    if denum is None:
+        raise ValueError("Total variance must be provided")
+
+    # Computing Num...
+    masks_total = []
+    masks_first = []
+    for i in range(len(param_names)):
+        mask_total = [
+            1 if key[i] != 0 else 0 for key in dic.keys()
+        ]
+        masks_total.append(mask_total)
+        mask_first = [
+            1 if key[i] != 0 and key.count(0) == (len(key) - 1) else 0
+            for key in dic.keys()
+        ]
+        masks_first.append(mask_first)
+    masks_total = np.array(masks_total)
+    masks_first = np.array(masks_first)
+    
+    sum_coeff_per_param_total = np.zeros((N_kl, num_params))
+    sum_coeff_per_param_first = np.zeros((N_kl, num_params))
+    for i in range(f_kl_surrogate_coefficients.shape[0]):
+        for j in range(len(param_names)):
+            sum_coeff_per_param_total[i, j] = np.sum(
+                f_kl_surrogate_coefficients[i] ** 2 * masks_total[j]
+                )
+            sum_coeff_per_param_first[i, j] = np.sum(
+                f_kl_surrogate_coefficients[i] ** 2 * masks_first[j]
+                )
+
+    sobol_indices_total = np.zeros(num_params)
+    sobol_indices_first = np.zeros(num_params)
+    param_name_generalized_sobol_total_indices = {}
+    param_name_generalized_sobol_main_indices = {}
+    for j in range(len(param_names)): 
+        sobol_indices_total[j] = np.sum(sum_coeff_per_param_total[:, j]) / denum
+        sobol_indices_first[j] = np.sum(sum_coeff_per_param_first[:, j]) / denum
+        param_name = param_names[j] 
+        param_name_generalized_sobol_total_indices[param_name] = sobol_indices_total[j]
+        param_name_generalized_sobol_main_indices[param_name] = sobol_indices_first[j]
+        print(f"Generalized First Sobol Index computed based on the PCE of KL expansion for {param_name} is {sobol_indices_first[j]}")
+        print(f"Generalized Total Sobol Index computed based on the PCE of KL expansion for {param_name} is {sobol_indices_total[j]}")
+        with open(fileName, 'a') as file:
+            file.write(f'First {param_name}: {sobol_indices_first[j]}\n')
+            file.write(f'Total {param_name}: {sobol_indices_total[j]}\n')
+
+    return param_name_generalized_sobol_total_indices, param_name_generalized_sobol_main_indices, total_variance, total_variance_based_on_pce_coefficients
+
+
+def computing_generalized_sobol_indices_from_kl_expan(
+    f_kl_surrogate_coefficients: np.ndarray,
+    polynomial_expansion: cp.polynomial,
+    weights: np.ndarray,
+    param_names: List[str],
+    fileName: Union[str, pathlib.PosixPath],
+    total_variance=None,
+    compute_total_variance_based_on_pce_coefficients=False
+):
+    """
+    Computes the generalized Sobol total indices from a polynomial expansion of the KL expansion coefficints.
+    This function computes for the last timestep in result_dict_statistics!
+    The current implamantion of the function assumes that the polynomial expansion is normalized.
+    One would have to do scaling with norms of the polynomials if they are not normalized.
+
+    Args:
+        f_kl_surrogate_coefficients (np.ndarray) of shape N_kl x terms in poly expan: 
+        polynomial_expansion (cp.polynomial): The polynomial expansion.
+        weights (np.ndarray): An array of weights for time quadratures.
+        param_names (List[str]): A list of parameter names.
+        fileName (str): The name of the file to write the results to.
+
+    Returns:
+        Dict[str, np.ndarray]: A dictionary containing the computed generalized Sobol total indices, 
+        with parameter names as the keys.
+        Dict[str, np.ndarray]: A dictionary containing the computed generalized Sobol main/first indices, 
         with parameter names as the keys.
         total_variance
         total_variance_based_on_pce_coefficients whic is None if compute_total_variance_based_on_pce_coefficients is False and total_variance is not None
@@ -3681,53 +3819,77 @@ def computing_generalized_sobol_total_indices_from_kl_expan(
 
     index = np.array([any(alpha) for alpha in alphas])  # list of non-constant terms from poly expans
 
-    dict_of_num = defaultdict(list)
+    dict_of_num_total = defaultdict(list)
     for idx in range(len(alphas[0])):
-        dict_of_num[idx] = []
+        dict_of_num_total[idx] = []
+    dict_of_num_main = defaultdict(list)
+    for idx in range(len(alphas[0])):
+        dict_of_num_main[idx] = []
 
+    N_kl = f_kl_surrogate_coefficients.shape[0]
     total_variance_based_on_pce_coefficients = None
-
+    denum = total_variance
     if compute_total_variance_based_on_pce_coefficients or total_variance is None:
-        variance_over_kl_terms = []
+        # variance_over_kl_terms = np.asarray(variance_over_kl_terms, dtype=np.float64)
+        # total_variance_based_on_pce_coefficients = np.sum(variance_over_kl_terms)
+        total_variance_based_on_pce_coefficients = np.sum(
+                [np.sum(f_kl_surrogate_coefficients[j][1:] ** 2) for j in range(N_kl)]
+            )
+        if total_variance is None:
+            denum = total_variance_based_on_pce_coefficients
+        else:
+            rel_error_variance = (
+                np.abs(total_variance - total_variance_based_on_pce_coefficients) / total_variance
+                )
+            if rel_error_variance > 0.1:
+                print(f"WARNING: The relative error between the sum of eigenvalues and the sum of squared PC coefficients is larger than 10%: {rel_error_variance:.2f}. The sum of squared PC coefficients will be used as total variance to compute the Sobol' indices. \n")
+                denum = total_variance_based_on_pce_coefficients
 
     for i in range(f_kl_surrogate_coefficients.shape[0]):
         coefficients = np.asarray(f_kl_surrogate_coefficients[i,:], dtype=np.float64)
-        if compute_total_variance_based_on_pce_coefficients or total_variance is None:
-            variance = np.sum(coefficients[index] ** 2, axis=0) 
-            variance_over_kl_terms.append(variance)
-        for idx in range(len(alphas[0])):
-            index_local = np.array([alpha[idx] > 0 for alpha in alphas])  # Compute the total Sobol indices
-            # TODO add for the first order
-            # index_local = np.array(
-            #     [
-            #         bool(alpha[idx] and not any(alpha[:idx] + alpha[idx + 1 :]))
-            #         for alpha in alphas
-            #     ]
-            # )
-            dict_of_num[idx].append(np.sum(coefficients[index_local] ** 2, axis=0))
-
-    if compute_total_variance_based_on_pce_coefficients or total_variance is None:
-        variance_over_kl_terms = np.asarray(variance_over_kl_terms, dtype=np.float64)
-        total_variance_based_on_pce_coefficients = np.sum(variance_over_kl_terms)
-        if total_variance is None:
-            denum = total_variance_based_on_pce_coefficients
-            raise ValueError("Total variance must be provided")
-    
-    if total_variance is not None:
-        denum = total_variance
         
+        # if compute_total_variance_based_on_pce_coefficients or total_variance is None:
+        #     # variance = np.sum(coefficients[1:] ** 2, axis=0) 
+        #     variance = np.sum(coefficients[index] ** 2) #, axis=0) 
+        #     variance_over_kl_terms.append(variance)
+        
+        for idx in range(len(alphas[0])):  # iterate through all the parameters
+            index_local = np.array([alpha[idx] > 0 for alpha in alphas])  # Compute the total Sobol indices
+            dict_of_num_total[idx].append(np.sum(coefficients[index_local] ** 2, axis=0))
+            index_local = np.array(
+                [
+                    bool(alpha[idx] and not any(alpha[:idx] + alpha[idx + 1 :]))
+                    for alpha in alphas
+                ]
+            )
+            dict_of_num_main[idx].append(np.sum(coefficients[index_local] ** 2, axis=0))
+
+    # if total_variance is not None:
+    #     denum = total_variance
+    # else:
+    #     raise ValueError("Total variance must be provided")
+    if denum is None:
+        raise ValueError("Total variance must be provided")
+
     param_name_generalized_sobol_total_indices = {}
-    for idx in range(len(alphas[0])):
+    param_name_generalized_sobol_main_indices = {}
+    for idx in range(len(alphas[0])):  # iterate through all the parameters
         param_name = param_names[idx]
-        # num = np.dot(np.asarray(dict_of_num[idx], dtype=np.float64), weights)
-        num = np.sum(np.asarray(dict_of_num[idx], dtype=np.float64), axis=0)
-        s_tot_generalized = num/denum
+        # num = np.dot(np.asarray(dict_of_num_total[idx], dtype=np.float64), weights)
+        num_tot = np.sum(np.asarray(dict_of_num_total[idx], dtype=np.float64)) #, axis=0)
+        s_tot_generalized = num_tot/denum
+        num_main = np.sum(np.asarray(dict_of_num_main[idx], dtype=np.float64)) #, axis=0)
+        s_main_generalized = num_main/denum
         param_name_generalized_sobol_total_indices[param_name] = s_tot_generalized
+        param_name_generalized_sobol_main_indices[param_name] = s_main_generalized
+        print(f"Generalized First Sobol Index computed based on the PCE of KL expansion for {param_name} is {s_main_generalized}")
         print(f"Generalized Total Sobol Index computed based on the PCE of KL expansion for {param_name} is {s_tot_generalized}")
         with open(fileName, 'a') as file:
             # Write each variable to the file followed by a newline character
-            file.write(f'{param_name}: {s_tot_generalized}\n')
-    return param_name_generalized_sobol_total_indices, total_variance, total_variance_based_on_pce_coefficients
+            file.write(f'First {param_name}: {s_main_generalized}\n')
+            file.write(f'Total {param_name}: {s_tot_generalized}\n')
+
+    return param_name_generalized_sobol_total_indices, param_name_generalized_sobol_main_indices, total_variance, total_variance_based_on_pce_coefficients
 
 
 def computing_generalized_sobol_total_indices_from_poly_expan(
@@ -3818,18 +3980,22 @@ def computing_generalized_sobol_total_indices_from_poly_expan_over_time(
     total_variance=None,
     look_back_window_size: Union[str, int]='whole',
     resolution: str = "integer",
+    type_of_sobol_index: str="total",
 ):
+    """
+    Take a look at the documantation of computing_generalized_sobol_indices_from_poly_expan_single_timesample
+    """
     for time_stamp in result_dict_statistics.keys():
         qoi_time_stamp = time_stamp
-        fileName_new = extend_filename_with_timestamp(fileName, qoi_time_stamp)
-        print(f"DEBUGGING INFO : {qoi_time_stamp} {fileName_new}")
-        computing_generalized_sobol_total_indices_from_poly_expan_single_timesample(
-            qoi_time_stamp, result_dict_statistics, polynomial_expansion, weights, param_names, fileName_new, total_variance=None,
-            look_back_window_size=look_back_window_size, resolution=resolution,
+        # fileName_new = extend_filename_with_timestamp(fileName, qoi_time_stamp)
+        # print(f"DEBUGGING INFO : {qoi_time_stamp} {fileName_new}")
+        computing_generalized_sobol_indices_from_poly_expan_single_timesample(
+            qoi_time_stamp, result_dict_statistics, polynomial_expansion, weights, param_names, fileName, total_variance=None,
+            look_back_window_size=look_back_window_size, resolution=resolution, type_of_sobol_index="total"
         )
     
     
-def computing_generalized_sobol_total_indices_from_poly_expan_single_timesample(
+def computing_generalized_sobol_indices_from_poly_expan_single_timesample(
     qoi_time_stamp: Any,
     result_dict_statistics: Dict[Any, Dict[str, Any]],
     polynomial_expansion: cp.polynomial,
@@ -3838,7 +4004,8 @@ def computing_generalized_sobol_total_indices_from_poly_expan_single_timesample(
     fileName: Union[str, pathlib.PosixPath],
     total_variance=None,
     look_back_window_size: Union[str, int] = 'whole',
-    resolution: str = "integer"
+    resolution: str = "integer",
+    type_of_sobol_index: str="total",
 ):
     """
     Computes the generalized Sobol total indices from a polynomial expansion.
@@ -3856,6 +4023,7 @@ def computing_generalized_sobol_total_indices_from_poly_expan_single_timesample(
         fileName (str): The name of the file to write the results to.
         look_back_window_size (Union[str, int], optional): The look back window size. Defaults to 'whole'.
         resolution (str, optional): The resolution of the time stamps. Defaults to "integer".
+        type_of_sobol_index(str, optional): 'total' or 'main'
 
     Returns:
         None
@@ -3886,27 +4054,35 @@ def computing_generalized_sobol_total_indices_from_poly_expan_single_timesample(
     if qoi_time_stamp not in result_dict_statistics.keys():
         raise ValueError(f"The time stamp {qoi_time_stamp} is not in the dictionary of statistics!")
 
+    # NOTE param_names / polynomial_expansion / alphas / coefficients / result_dict_statistics[time_stamp][PCE_COEFF_ENTRY] have to match!
+
+    # TODO Be careful when time_stamp and qoi_time_stamp are of type str
+    list_of_used_time_stamps = []
     for time_stamp in result_dict_statistics.keys():
         if time_stamp > qoi_time_stamp:
             continue
+        take_current_time_stamp_into_account = True
         if look_back_window_size!='whole':
-            take_current_time_stamp_into_account = True
             take_current_time_stamp_into_account = is_time_stamp_in_look_back_window(time_stamp, qoi_time_stamp, look_back_window_size, resolution)
-            if not take_current_time_stamp_into_account:
-                continue
+        if not take_current_time_stamp_into_account:
+            continue
+        list_of_used_time_stamps.append(time_stamp)
         number_of_timestamps += 1
         coefficients = np.asarray(result_dict_statistics[time_stamp][PCE_COEFF_ENTRY], dtype=np.float64)
         variance = np.sum(coefficients[index] ** 2, axis=0)
         variance_over_time_array.append(variance)
         for idx in range(len(alphas[0])):
-            index_local = np.array([alpha[idx] > 0 for alpha in alphas])      # Compute the total Sobol indices
-            # TODO add for the first order
-            # index_local = np.array(
-            #     [
-            #         bool(alpha[idx] and not any(alpha[:idx] + alpha[idx + 1 :]))
-            #         for alpha in alphas
-            #     ]
-            # )
+            if type_of_sobol_index.lower()=='total':
+                index_local = np.array([alpha[idx] > 0 for alpha in alphas])      # Compute the total Sobol indices
+            elif type_of_sobol_index.lower()=='main':
+                index_local = np.array(
+                    [
+                        bool(alpha[idx] and not any(alpha[:idx] + alpha[idx + 1 :]))
+                        for alpha in alphas
+                    ]
+                )
+            else:
+                raise Exception(f"Error in computing_generalized_sobol_total_indices_from_poly_expan_single_timesample- {type_of_sobol_index} is not supported; it should be 'main' or 'total' ")
             dict_of_num[idx].append(np.sum(coefficients[index_local] ** 2, axis=0))  # scaling with norm of the polynomial corresponding to the index_local
     
     if number_of_timestamps==0:
@@ -3915,19 +4091,36 @@ def computing_generalized_sobol_total_indices_from_poly_expan_single_timesample(
     # update the weights over time
     # TODO - change this eventually
     total_variance = None
-    # if total_number_of_weights!=number_of_timestamps:
-    if number_of_timestamps==1:
-        h = 1
-        weights = [1,]
-    else:
-        # TODO Think about 1 in num?
-        h = 1/(number_of_timestamps-1)
+    timesteps_max = max(list_of_used_time_stamps)
+    timesteps_min = min(list_of_used_time_stamps)
+    
+    # # if total_number_of_weights!=number_of_timestamps:
+    # if number_of_timestamps==1:
+    #     h = 1
+    #     weights = [1,]
+    # else:
+    #     # TODO Think about 1 in num?
+    #     h = 1/(number_of_timestamps-1)
+    #     weights = [h for i in range(number_of_timestamps)]
+    #     assert number_of_timestamps==len(weights)
+    # if len(weights) >= 3:
+    #     weights[0] /= 2
+    #     weights[-1] /= 2
+    # weights = np.asarray(weights, dtype=np.float64)
+
+    if number_of_timestamps > 1:
+        # h = (timesteps_max - timesteps_min)/(number_of_timestamps-1)
+        difference_between_two_time_stamps = compute_difference_between_two_time_stamps(
+            end_timestamp=timesteps_max, start_timestamp=timesteps_min, resolution=resolution)
+        h = (difference_between_two_time_stamps)/(number_of_timestamps-1)  # 1/(number_of_timestamps-1)
         weights = [h for i in range(number_of_timestamps)]
+        if len(weights) >= 3:
+            weights[0] /= 2
+            weights[-1] /= 2
+        weights = np.asarray(weights, dtype=np.float32)
         assert number_of_timestamps==len(weights)
-    if len(weights) >= 3:
-        weights[0] /= 2
-        weights[-1] /= 2
-    weights = np.asarray(weights, dtype=np.float64)
+    else:
+        weights = np.asarray([1.0], dtype=np.float32)
 
     variance_over_time_array = np.asarray(variance_over_time_array, dtype=np.float64)
 
@@ -3938,13 +4131,25 @@ def computing_generalized_sobol_total_indices_from_poly_expan_single_timesample(
 
     for idx in range(len(alphas[0])):
         param_name = param_names[idx]
+        # print(f"DEBUGGING idx-{idx}; param_name-{param_name}")
+        # print(f"DEBUGGING denum-{denum};")
         num = np.dot(np.asarray(dict_of_num[idx], dtype=np.float64), weights)
-        s_tot_generalized = num/denum
-        result_dict_statistics[qoi_time_stamp][f"generalized_sobol_total_index_{param_name}"] = s_tot_generalized
-        print(f"Generalized Total Sobol Index for {param_name} for {qoi_time_stamp} is {s_tot_generalized}")
-        # with open(fileName, 'a') as file:
-        #     # Write each variable to the file followed by a newline character
-        #     file.write(f'{param_name}: {s_tot_generalized}\n')
+        s_generalized = num/denum
+        if type_of_sobol_index.lower()=='total':
+            key_name = f"generalized_sobol_total_index_{param_name}"
+            if look_back_window_size!='whole':
+                key_name = f"generalized_sobol_total_index_{param_name}_{look_back_window_size}"
+            result_dict_statistics[qoi_time_stamp][key_name] = s_generalized
+            # print(f"Generalized Total Sobol Index for {param_name} for {qoi_time_stamp} is {s_generalized}")
+        elif type_of_sobol_index.lower()=='main':
+            key_name = f"generalized_sobol_main_index_{param_name}"
+            if look_back_window_size!='whole':
+                key_name = f"generalized_sobol_main_index_{param_name}_{look_back_window_size}"
+            result_dict_statistics[qoi_time_stamp][key_name] = s_generalized
+            print(f"Generalized Main Sobol Index for {param_name} for {qoi_time_stamp} is {s_generalized}")
+        with open(fileName, 'a') as file:
+            # Write each variable to the file followed by a newline character
+            file.write(f'{param_name}-{qoi_time_stamp}: {s_generalized}\n')
 
 
 def compute_difference_between_two_time_stamps(end_timestamp, start_timestamp, resolution):
@@ -3977,16 +4182,22 @@ def is_time_stamp_in_look_back_window(time_stamp, qoi_time_stamp, look_back_wind
         time_stamp_pdTimestamp = pd.Timestamp(time_stamp)
         difference = qoi_time_stamp_pdTimestamp - time_stamp_pdTimestamp
         if resolution == "daily":
+            if difference.days < 0:
+                return False
             if difference.days > look_back_window_size:
                 return False
         elif resolution == "hourly":
             total_seconds = difference.total_seconds()
             total_hours = total_seconds // 3600  # Total hours
+            if total_hours < 0:
+                return False
             if total_hours > look_back_window_size:
                 return False
         elif resolution == "minute":
             total_seconds = difference.total_seconds()
             total_minutes = total_seconds // 60  # Total minutes
+            if total_minutes < 0:
+                return False
             if total_minutes > look_back_window_size:
                 return False
     else:
@@ -4137,7 +4348,7 @@ def extend_filename_with_timestamp(file_path, time_stamp):
     # Extract the file extension
     file_suffix = file_path.suffix
     # Construct the new file name
-    new_file_path = directory_structure / f"{file_stem}_{time_stamp}{file_suffix}"
+    new_file_path = directory_structure / f"{file_stem}_{str(time_stamp)}.{file_suffix}"
     return new_file_path
 
 

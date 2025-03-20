@@ -500,11 +500,11 @@ class TimeDependentModel(ABC, Model):
                     model_output = self._model_run(parameters_dict=parameters_dict)
             except:
                 result_df = None
-                index_run_and_parameters_dict = {**id_dict, **parameters_dict, "successful_run": False}
+                index_run_and_parameters_dict = {**id_dict, **parameters_dict, utility.SUCCESSFUL_RUN: False}
                 if raise_exception_on_model_break:
                     raise Exception(f"[ERROR] Model broke for run {unique_run_index}")
             else:
-                index_run_and_parameters_dict = {**id_dict, **parameters_dict, "successful_run": True}
+                index_run_and_parameters_dict = {**id_dict, **parameters_dict, utility.SUCCESSFUL_RUN: True}
                 result_df = self._process_model_output(model_output, unique_run_index)
                 self._transform_model_output(result_df)
 

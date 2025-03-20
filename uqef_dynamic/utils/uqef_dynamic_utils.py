@@ -17,6 +17,7 @@ from numpy.polynomial.polynomial import Polynomial
 import math
 import pathlib
 import pandas as pd
+from pandas.api.types import is_datetime64_any_dtype
 import scipy
 import seaborn as sns
 import time
@@ -779,6 +780,7 @@ def update_dict_with_results_of_interest_based_on_uqsim_args_dict(dict_with_resu
         dict_with_results_of_interest["sc_quadrature_rule"] = uqsim_args_dict["sc_quadrature_rule"]
         dict_with_results_of_interest["mc_numevaluations"] = uqsim_args_dict["mc_numevaluations"]
         dict_with_results_of_interest["sampling_rule"] = uqsim_args_dict["sampling_rule"]
+        dict_with_results_of_interest["cross_truncation"] = uqsim_args_dict["cross_truncation"]
         if uqsim_args_dict["uq_method"]== "mc" or uqsim_args_dict["uq_method"]== "saltelli":
             variant = "m3-mc"
         else:
@@ -802,6 +804,7 @@ def update_dict_with_results_of_interest_based_on_uqsim_args_dict(dict_with_resu
         dict_with_results_of_interest["p_order"] = uqsim_args_dict["sc_p_order"]
         dict_with_results_of_interest["read_nodes_from_file"] = uqsim_args_dict["read_nodes_from_file"]
         dict_with_results_of_interest["sc_quadrature_rule"] = uqsim_args_dict["sc_quadrature_rule"]
+        dict_with_results_of_interest["cross_truncation"] = uqsim_args_dict["cross_truncation"]
 
         if (not uqsim_args_dict["sc_sparse_quadrature"] and not uqsim_args_dict["read_nodes_from_file"]) and uqsim_args_dict["cross_truncation"]==1.0:
             variant = "m4"
@@ -814,12 +817,12 @@ def update_dict_with_results_of_interest_based_on_uqsim_args_dict(dict_with_resu
             else:
                 variant = "m5"
         elif (not uqsim_args_dict["sc_sparse_quadrature"] and not uqsim_args_dict["read_nodes_from_file"]) and uqsim_args_dict["cross_truncation"]<1.0:
-            dict_with_results_of_interest["cross_truncation"] = uqsim_args_dict["cross_truncation"]
+            # dict_with_results_of_interest["cross_truncation"] = uqsim_args_dict["cross_truncation"]
             # ct = uqsim_args_dict["cross_truncation"]
             # variant = f"m6-{ct}"
             variant = f"m6"
         elif (uqsim_args_dict["sc_sparse_quadrature"] or uqsim_args_dict["read_nodes_from_file"]) and uqsim_args_dict["cross_truncation"]<1.0:
-            dict_with_results_of_interest["cross_truncation"] = uqsim_args_dict["cross_truncation"]
+            # dict_with_results_of_interest["cross_truncation"] = uqsim_args_dict["cross_truncation"]
             parameters_file = pathlib.Path(uqsim_args_dict["parameters_file"]).name
             if uqsim_args_dict["sc_quadrature_rule"] == "KPU" or parameters_file.startswith('KPU'):
                 variant = "m7-kpu"
@@ -1237,10 +1240,31 @@ def create_df_from_statistics_data_single_qoi(
     return df_statistics_single_qoi
 
 
+def check_it_time_column_of_same_time_in_two_dataframes_and_unify(df1, df2, time_column_name=utility.TIME_COLUMN_NAME):
+    df1_is_datetime = is_datetime64_any_dtype(df1[time_column_name])
+    df2_is_datetime = is_datetime64_any_dtype(df2[time_column_name])
+    # If one is datetime and the other is not, convert the non-datetime column to datetime
+    if df1_is_datetime != df2_is_datetime:
+        if not df1_is_datetime:
+            df1[time_column_name] = pd.to_datetime(df1[time_column_name])
+        if not df2_is_datetime:
+            df2[time_column_name] = pd.to_datetime(df2[time_column_name])
+
+
 def add_measured_data_to_dataframe(
     df, qoi_column, measured_qoi_column=None, measured_fetched=False, df_measured=None,
     time_column_name=utility.TIME_COLUMN_NAME):
     if measured_fetched and df_measured is not None:
+        # Check if the TimeStamp columns are of datetime type
+        df_is_datetime = is_datetime64_any_dtype(df[time_column_name])
+        df_measured_is_datetime = is_datetime64_any_dtype(df_measured[time_column_name])
+        # If one is datetime and the other is not, convert the non-datetime column to datetime
+        if df_is_datetime != df_measured_is_datetime:
+            if not df_is_datetime:
+                df[time_column_name] = pd.to_datetime(df[time_column_name])
+            if not df_measured_is_datetime:
+                df_measured[time_column_name] = pd.to_datetime(df_measured[time_column_name])
+
         if qoi_column in list(df_measured[utility.QOI_ENTRY].unique()):
             # print(f"{qoi_column}")
             df_measured_subset = df_measured.loc[df_measured[utility.QOI_ENTRY] == qoi_column][[
@@ -1261,7 +1285,7 @@ def add_measured_data_to_dataframe(
     # return df
 
 
-def create_df_from_generalized_total_sobol_indices_single_qoi(
+def create_df_from_generalized_sobol_indices_single_qoi(
     stat_dict, qoi_column, list_of_uncertain_variables, measured_qoi_column=None, 
     set_lower_predictions_to_zero=False, measured_fetched=False, df_measured=None,
     time_column_name=utility.TIME_COLUMN_NAME):
@@ -1274,29 +1298,35 @@ def create_df_from_generalized_total_sobol_indices_single_qoi(
 
     keyIter = list(stat_dict.keys())  # timesteps (?)
     list_of_columns = [keyIter, ]  # self.timesteps (?)
-    list_of_columns_names = [utility.TIME_COLUMN_NAME, ]
+    # list_of_columns_names = [utility.TIME_COLUMN_NAME, ]
 
-    if f'generalized_sobol_total_index_{list_of_uncertain_variables[0]}' in stat_dict[keyIter[-1]]:
-        for i in range(len(list_of_uncertain_variables)):
-            name = f"generalized_sobol_total_index_{list_of_uncertain_variables[i]}"
-            generalized_sobol_total_index_values_temp = []
-            at_least_one_entry_found = False
-            for key in keyIter:
-                if name in stat_dict[key]:
-                    at_least_one_entry_found = True
-                    temp = stat_dict[key][name]
-                    generalized_sobol_total_index_values_temp.append(temp)
-            if at_least_one_entry_found:
-                list_of_columns_names.append(name)
-                if len(generalized_sobol_total_index_values_temp)==1:
-                    generalized_sobol_total_index_values_temp = generalized_sobol_total_index_values_temp[0]*len(keyIter)
-                list_of_columns.append(generalized_sobol_total_index_values_temp)
+    list_of_prefixes = ['generalized_sobol_total_index', 'generalized_sobol_main_index']
 
+    list_of_columns_names_generalized_sobol_indices = []
+    for sinlge_prefix in list_of_prefixes:
+        for i, param_name in enumerate(list_of_uncertain_variables):
+            for column_name, value in stat_dict[keyIter[-1]].items():
+                if column_name.startswith(f'{sinlge_prefix}_{param_name}'):
+                    list_of_columns_names_generalized_sobol_indices.append(column_name)
+    list_of_columns_names = [utility.TIME_COLUMN_NAME, *list_of_columns_names_generalized_sobol_indices]
+
+    # list_of_columns_generalized_sobol_indices = []
+    for column_name in list_of_columns_names_generalized_sobol_indices:
+        generalized_sobol_total_index_values_temp = []
+        for key in keyIter:
+            if column_name in stat_dict[key]:
+                temp = stat_dict[key][column_name]
+                generalized_sobol_total_index_values_temp.append(temp)
+        list_of_columns.append(generalized_sobol_total_index_values_temp)
+    
     if not list_of_columns:
         return None
 
     df_single_qoi = pd.DataFrame(list(zip(*list_of_columns)), columns=list_of_columns_names)
     df_single_qoi[utility.QOI_ENTRY] = qoi_column
+    
+    # TODO - maybe this is not always required, e.g., battery!
+    # df_single_qoi[utility.TIME_COLUMN_NAME] = pd.to_datetime(df_single_qoi[utility.TIME_COLUMN_NAME])
 
     add_measured_data_to_dataframe(
         df_single_qoi, qoi_column, 
@@ -2058,6 +2088,9 @@ def uqef_dynamic_model_run_results_array_to_dataframe(results_array,
     list_of_single_index_parameter_gof_df = []
     list_of_gradient_matrix_dict = []
     list_of_single_state_df = []
+
+    list_index_run_with_None = []
+
     for index_run, single_result_tuple in enumerate(results_array, ):        
         result_dict = single_result_tuple[0]
         runtime = single_result_tuple[1]
@@ -2067,6 +2100,13 @@ def uqef_dynamic_model_run_results_array_to_dataframe(results_array,
             if df_result is not None:
                 df_result = process_df_simulation_result(df_result, extract_only_qoi_columns, qoi_columns, time_column_name)
                 list_of_single_df.append(df_result)
+            else:
+                parameters_dict = result_dict.get("parameters_dict", None)
+                if parameters_dict is not None and utility.SUCCESSFUL_RUN in parameters_dict:
+                    if not parameters_dict[utility.SUCCESSFUL_RUN]:
+                        index_run_temp = parameters_dict.get(utility.INDEX_COLUMN_NAME, index_run)
+                        list_index_run_with_None.append(index_run_temp)
+                        print(f"Warning - The model did not run successfully for index_run: {index_run}/{index_run_temp}")
         if "parameters_dict" in result_dict:
             parameters_dict = result_dict["parameters_dict"]
             if parameters_dict is not None:
@@ -2111,6 +2151,8 @@ def uqef_dynamic_model_run_results_array_to_dataframe(results_array,
         df_state_results = pd.concat(list_of_single_state_df, ignore_index=True, sort=False, axis=0)
     else:
         df_state_results = None
+
+    # TODO Think maybe to return list_index_run_with_None
     return df_simulation_result, df_index_parameter_values, df_index_parameter_gof_values, \
     dict_of_approx_matrix_c, dict_of_matrix_c_eigen_decomposition, df_state_results
 
@@ -3689,8 +3731,9 @@ def plotting_function_single_qoi_hbv(
 
     if not str(directory).endswith("/"):
         directory = str(directory) + "/"
-    plot_filename = pathlib.Path(directory)  / f"{fileName}.pdf"
+    fileName_without_ext = pathlib.Path(fileName).stem
+    plot_filename = pathlib.Path(directory)  / f"{fileName_without_ext}.pdf"
     fig.write_image(str(plot_filename), format="pdf", width=1100,)
-    fileName = str(directory) + f"{fileName}.html"
-    pyo.plot(fig, filename=fileName, auto_open=False)
+    plot_filename = str(directory) + f"{fileName_without_ext}.html"
+    pyo.plot(fig, filename=plot_filename, auto_open=False)
     return fig

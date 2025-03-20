@@ -155,7 +155,7 @@ if local_debugging:
 # TODO Eventually add these configurations to uqef.args
 utility.DEFAULT_DICT_WHAT_TO_PLOT = {
     "E_minus_std": False, "E_plus_std": False, "E_minus_2std": True, "E_plus_2std":True, 
-    "P10": False, "P90": False,
+    "P10": True, "P90": True,
     "StdDev": True, "Skew": False, "Kurt": False, "Sobol_m": True, "Sobol_m2": False, "Sobol_t": True
 }
 utility.DEFAULT_DICT_STAT_TO_COMPUTE = {

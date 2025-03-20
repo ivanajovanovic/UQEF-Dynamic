@@ -9,7 +9,7 @@ from uqef_dynamic.models.linearDampedOscillator import LinearDampedOscillatorMod
 from uqef_dynamic.models.ishigami import IshigamiModel
 from uqef_dynamic.models.productFunction import ProductFunctionModel
 from uqef_dynamic.models.hbv_sask import HBVSASKModelUQ
-# from uqef_dynamic.models.pybamm import pybammModelUQ as pybammmodel
+from uqef_dynamic.models.pybamm import pybammModelUQ as pybammmodel
 from uqef_dynamic.models.simpleOscilator.simple_oscillator_model import simpleOscillatorUQ
 
 from uqef_dynamic.models.larsim import LarsimStatistics
@@ -17,7 +17,7 @@ from uqef_dynamic.models.linearDampedOscillator import LinearDampedOscillatorSta
 from uqef_dynamic.models.ishigami import IshigamiStatistics
 from uqef_dynamic.models.productFunction import ProductFunctionStatistics
 from uqef_dynamic.models.hbv_sask import HBVSASKStatistics
-# from uqef_dynamic.models.pybamm import pybammStatistics
+from uqef_dynamic.models.pybamm import pybammStatistics
 from uqef_dynamic.models.simpleOscilator.simple_oscillator_statistics import simpleOscillatorStatistics
 
 from uqef_dynamic.utils import utility
@@ -58,11 +58,11 @@ def create_model_object(configuration_object, uqsim_args_dict, workingDir, model
             workingDir=workingDir,
             disable_statistics=uqsim_args_dict["disable_statistics"],
             uq_method=uqsim_args_dict["uq_method"],**kwargs)
-    # elif model.lower() == "battery":
-    #     modelObject = pybammmodel.pybammModelUQ(
-    #         configurationObject=configuration_object,
-    #         inputModelDir=uqsim_args_dict["inputModelDir"],
-    #         workingDir=workingDir,**kwargs)
+    elif model.lower() == "battery":
+        modelObject = pybammmodel.pybammModelUQ(
+            configurationObject=configuration_object,
+            inputModelDir=uqsim_args_dict["inputModelDir"],
+            workingDir=workingDir,**kwargs)
     elif model.lower() == "simple_oscillator":
         modelObject = simpleOscillatorUQ(
             configurationObject=configuration_object,
@@ -112,43 +112,44 @@ def create_statistics_object(configuration_object, uqsim_args_dict, workingDir, 
             store_qoi_data_in_stat_dict=uqsim_args_dict.get("store_qoi_data_in_stat_dict", False),
             store_gpce_surrogate_in_stat_dict=uqsim_args_dict.get("store_gpce_surrogate_in_stat_dict", True),
             instantly_save_results_for_each_time_step=uqsim_args_dict.get("instantly_save_results_for_each_time_step", False),
-            compute_sobol_indices_with_samples=kwargs.get('compute_sobol_indices_with_samples', False),
-            save_gpce_surrogate=kwargs.get('save_gpce_surrogate', False),
-            compute_other_stat_besides_pce_surrogate=kwargs.get('compute_other_stat_besides_pce_surrogate', True),
-            compute_kl_expansion_of_qoi = kwargs.get('compute_kl_expansion_of_qoi', False),
-            index_column_name = kwargs.get('index_column_name', utility.INDEX_COLUMN_NAME),
-            allow_conditioning_results_based_on_metric=kwargs.get('allow_conditioning_results_based_on_metric', False),
-            condition_results_based_on_metric = kwargs.get('condition_results_based_on_metric', 'NSE'),
-            condition_results_based_on_metric_value = kwargs.get('condition_results_based_on_metric_value', 0.2),
-            condition_results_based_on_metric_sign = kwargs.get('condition_results_based_on_metric_sign', "greater_or_equal"),
-            compute_timewise_gpce_next_to_kl_expansion=kwargs.get('compute_timewise_gpce_next_to_kl_expansion', False),
-            kl_expansion_order = kwargs.get("kl_expansion_order", 2),
-            compute_generalized_sobol_indices = kwargs.get('compute_generalized_sobol_indices', False),
-            compute_generalized_sobol_indices_over_time = kwargs.get('compute_generalized_sobol_indices_over_time', False),
-            compute_covariance_matrix_in_time = kwargs.get('compute_covariance_matrix_in_time', False),
-            dict_stat_to_compute=kwargs.get("dict_stat_to_compute", utility.DEFAULT_DICT_STAT_TO_COMPUTE),
-            dict_what_to_plot=kwargs.get("dict_what_to_plot", utility.DEFAULT_DICT_WHAT_TO_PLOT),
+            compute_sobol_indices_with_samples=kwargs.pop('compute_sobol_indices_with_samples', False),
+            save_gpce_surrogate=kwargs.pop('save_gpce_surrogate', False),
+            compute_other_stat_besides_pce_surrogate=kwargs.pop('compute_other_stat_besides_pce_surrogate', True),
+            compute_kl_expansion_of_qoi = kwargs.pop('compute_kl_expansion_of_qoi', False),
+            index_column_name = kwargs.pop('index_column_name', utility.INDEX_COLUMN_NAME),
+            allow_conditioning_results_based_on_metric=kwargs.pop('allow_conditioning_results_based_on_metric', False),
+            condition_results_based_on_metric = kwargs.pop('condition_results_based_on_metric', 'NSE'),
+            condition_results_based_on_metric_value = kwargs.pop('condition_results_based_on_metric_value', 0.2),
+            condition_results_based_on_metric_sign = kwargs.pop('condition_results_based_on_metric_sign', "greater_or_equal"),
+            compute_timewise_gpce_next_to_kl_expansion=kwargs.pop('compute_timewise_gpce_next_to_kl_expansion', False),
+            kl_expansion_order = kwargs.pop("kl_expansion_order", 2),
+            compute_generalized_sobol_indices = kwargs.pop('compute_generalized_sobol_indices', False),
+            compute_generalized_sobol_indices_over_time = kwargs.pop('compute_generalized_sobol_indices_over_time', False),
+            compute_covariance_matrix_in_time = kwargs.pop('compute_covariance_matrix_in_time', False),
+            dict_stat_to_compute=kwargs.pop("dict_stat_to_compute", utility.DEFAULT_DICT_STAT_TO_COMPUTE),
+            dict_what_to_plot=kwargs.pop("dict_what_to_plot", utility.DEFAULT_DICT_WHAT_TO_PLOT),
             **kwargs
         )
-    # elif model == "battery":
-    #     statisticsObject = pybammStatistics.pybammStatistics(
-    #         configurationObject=configuration_object,
-    #         workingDir=workingDir,
-    #         inputModelDir=uqsim_args_dict["inputModelDir"],
-    #         sampleFromStandardDist=uqsim_args_dict["sampleFromStandardDist"],
-    #         parallel_statistics=uqsim_args_dict["parallel_statistics"],
-    #         mpi_chunksize=uqsim_args_dict.get("mpi_chunksize", 1),
-    #         unordered=False,
-    #         uq_method=uqsim_args_dict["uq_method"],
-            # compute_Sobol_t=uqsim_args_dict.get("compute_Sobol_t", False),
-            # compute_Sobol_m=uqsim_args_dict.get("compute_Sobol_m", False),
-            # compute_Sobol_m2=uqsim_args_dict.get("compute_Sobol_m2", False),
-            # save_all_simulations=uqsim_args_dict.get("save_all_simulations", True),
-            # collect_and_save_state_data=uqsim_args_dict.get("collect_and_save_state_data", False),
-            # store_qoi_data_in_stat_dict=uqsim_args_dict.get("store_qoi_data_in_stat_dict", False),
-            # store_gpce_surrogate_in_stat_dict=uqsim_args_dict.get("store_gpce_surrogate_in_stat_dict", True),
-            # instantly_save_results_for_each_time_step=uqsim_args_dict.get("instantly_save_results_for_each_time_step", False),
-    #     )
+    # NOTE: For now one has to comment out bettery model when running SparseSpACE simulations...
+    elif model == "battery":
+        statisticsObject = pybammStatistics.pybammStatistics(
+            configurationObject=configuration_object,
+            workingDir=workingDir,
+            inputModelDir=uqsim_args_dict["inputModelDir"],
+            sampleFromStandardDist=uqsim_args_dict["sampleFromStandardDist"],
+            parallel_statistics=uqsim_args_dict["parallel_statistics"],
+            mpi_chunksize=uqsim_args_dict.get("mpi_chunksize", 1),
+            unordered=False,
+            uq_method=uqsim_args_dict["uq_method"],
+            compute_Sobol_t=uqsim_args_dict.get("compute_Sobol_t", False),
+            compute_Sobol_m=uqsim_args_dict.get("compute_Sobol_m", False),
+            compute_Sobol_m2=uqsim_args_dict.get("compute_Sobol_m2", False),
+            save_all_simulations=uqsim_args_dict.get("save_all_simulations", True),
+            collect_and_save_state_data=uqsim_args_dict.get("collect_and_save_state_data", False),
+            store_qoi_data_in_stat_dict=uqsim_args_dict.get("store_qoi_data_in_stat_dict", False),
+            store_gpce_surrogate_in_stat_dict=uqsim_args_dict.get("store_gpce_surrogate_in_stat_dict", True),
+            instantly_save_results_for_each_time_step=uqsim_args_dict.get("instantly_save_results_for_each_time_step", False),
+        )
     elif model == "ishigami":
         statisticsObject = IshigamiStatistics.IshigamiStatistics(
             configurationObject=configuration_object,
@@ -166,12 +167,12 @@ def create_statistics_object(configuration_object, uqsim_args_dict, workingDir, 
             store_qoi_data_in_stat_dict=uqsim_args_dict.get("store_qoi_data_in_stat_dict", False),
             store_gpce_surrogate_in_stat_dict=uqsim_args_dict.get("store_gpce_surrogate_in_stat_dict", True),
             instantly_save_results_for_each_time_step=uqsim_args_dict.get("instantly_save_results_for_each_time_step", False),
-            compute_sobol_indices_with_samples=kwargs.get('compute_sobol_indices_with_samples', False),
-            save_gpce_surrogate=kwargs.get('save_gpce_surrogate', False),
-            compute_other_stat_besides_pce_surrogate=kwargs.get('compute_other_stat_besides_pce_surrogate', True),
-            dict_stat_to_compute=kwargs.get("dict_stat_to_compute", utility.DEFAULT_DICT_STAT_TO_COMPUTE),
-            dict_what_to_plot=kwargs.get("dict_what_to_plot", utility.DEFAULT_DICT_WHAT_TO_PLOT),
-            index_column_name = kwargs.get('index_column_name', utility.INDEX_COLUMN_NAME),
+            compute_sobol_indices_with_samples=kwargs.pop('compute_sobol_indices_with_samples', False),
+            save_gpce_surrogate=kwargs.pop('save_gpce_surrogate', False),
+            compute_other_stat_besides_pce_surrogate=kwargs.pop('compute_other_stat_besides_pce_surrogate', True),
+            dict_stat_to_compute=kwargs.pop("dict_stat_to_compute", utility.DEFAULT_DICT_STAT_TO_COMPUTE),
+            dict_what_to_plot=kwargs.pop("dict_what_to_plot", utility.DEFAULT_DICT_WHAT_TO_PLOT),
+            index_column_name = kwargs.pop('index_column_name', utility.INDEX_COLUMN_NAME),
             **kwargs
         )
     elif model == "oscillator":
@@ -181,28 +182,28 @@ def create_statistics_object(configuration_object, uqsim_args_dict, workingDir, 
             inputModelDir=uqsim_args_dict["inputModelDir"],
             sampleFromStandardDist=uqsim_args_dict["sampleFromStandardDist"],
             parallel_statistics=uqsim_args_dict["parallel_statistics"],
-            mpi_chunksize=uqsim_args_dict.get("mpi_chunksize", 1),
+            mpi_chunksize=uqsim_args_dict.pop("mpi_chunksize", 1),
             unordered=False,
             uq_method=uqsim_args_dict["uq_method"],
-            compute_Sobol_t=uqsim_args_dict.get("compute_Sobol_t", False),
-            compute_Sobol_m=uqsim_args_dict.get("compute_Sobol_m", False),
-            compute_Sobol_m2=uqsim_args_dict.get("compute_Sobol_m2", False),
-            save_all_simulations=uqsim_args_dict.get("save_all_simulations", True),
-            collect_and_save_state_data=uqsim_args_dict.get("collect_and_save_state_data", False),
-            store_qoi_data_in_stat_dict=uqsim_args_dict.get("store_qoi_data_in_stat_dict", False),
-            store_gpce_surrogate_in_stat_dict=uqsim_args_dict.get("store_gpce_surrogate_in_stat_dict", True),
-            instantly_save_results_for_each_time_step=uqsim_args_dict.get("instantly_save_results_for_each_time_step", False),
-            compute_sobol_indices_with_samples=kwargs.get('compute_sobol_indices_with_samples', False),
-            save_gpce_surrogate=kwargs.get('save_gpce_surrogate', False),
-            compute_other_stat_besides_pce_surrogate=kwargs.get('compute_other_stat_besides_pce_surrogate', True),
-            compute_kl_expansion_of_qoi = kwargs.get('compute_kl_expansion_of_qoi', False),
-            compute_timewise_gpce_next_to_kl_expansion=kwargs.get('compute_timewise_gpce_next_to_kl_expansion', False),
-            kl_expansion_order = kwargs.get("kl_expansion_order", 2),
-            compute_generalized_sobol_indices = kwargs.get('compute_generalized_sobol_indices', False),
-            compute_generalized_sobol_indices_over_time = kwargs.get('compute_generalized_sobol_indices_over_time', False),
-            compute_covariance_matrix_in_time = kwargs.get('compute_covariance_matrix_in_time', False),
-            dict_stat_to_compute=kwargs.get("dict_stat_to_compute", utility.DEFAULT_DICT_STAT_TO_COMPUTE),
-            dict_what_to_plot=kwargs.get("dict_what_to_plot", utility.DEFAULT_DICT_WHAT_TO_PLOT),
+            compute_Sobol_t=uqsim_args_dict.pop("compute_Sobol_t", False),
+            compute_Sobol_m=uqsim_args_dict.pop("compute_Sobol_m", False),
+            compute_Sobol_m2=uqsim_args_dict.pop("compute_Sobol_m2", False),
+            save_all_simulations=uqsim_args_dict.pop("save_all_simulations", True),
+            collect_and_save_state_data=uqsim_args_dict.pop("collect_and_save_state_data", False),
+            store_qoi_data_in_stat_dict=uqsim_args_dict.pop("store_qoi_data_in_stat_dict", False),
+            store_gpce_surrogate_in_stat_dict=uqsim_args_dict.pop("store_gpce_surrogate_in_stat_dict", True),
+            instantly_save_results_for_each_time_step=uqsim_args_dict.pop("instantly_save_results_for_each_time_step", False),
+            compute_sobol_indices_with_samples=kwargs.pop('compute_sobol_indices_with_samples', False),
+            save_gpce_surrogate=kwargs.pop('save_gpce_surrogate', False),
+            compute_other_stat_besides_pce_surrogate=kwargs.pop('compute_other_stat_besides_pce_surrogate', True),
+            compute_kl_expansion_of_qoi = kwargs.pop('compute_kl_expansion_of_qoi', False),
+            compute_timewise_gpce_next_to_kl_expansion=kwargs.pop('compute_timewise_gpce_next_to_kl_expansion', False),
+            kl_expansion_order = kwargs.pop("kl_expansion_order", 2),
+            compute_generalized_sobol_indices = kwargs.pop('compute_generalized_sobol_indices', False),
+            compute_generalized_sobol_indices_over_time = kwargs.pop('compute_generalized_sobol_indices_over_time', False),
+            compute_covariance_matrix_in_time = kwargs.pop('compute_covariance_matrix_in_time', False),
+            dict_stat_to_compute=kwargs.pop("dict_stat_to_compute", utility.DEFAULT_DICT_STAT_TO_COMPUTE),
+            dict_what_to_plot=kwargs.pop("dict_what_to_plot", utility.DEFAULT_DICT_WHAT_TO_PLOT),
             **kwargs
 )
     else:
