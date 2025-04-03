@@ -37,15 +37,15 @@ start_uq_sim(){
     echo "$counter:cm4: $@"
     echo "$counter:cm4: $@" >> started_jobs.txt
 
+   conda_env=my_uq_env
+
     # define paths
     basePath=$HOME/Repositories #'pwd'
     baseSourcePath=$basePath/UQEF-Dynamic
     baseExecutionPath=$basePath/UQEF-Dynamic
     baseResultsPath=$WORK/battery_runs #$SCRATCH/battery_runs
-    modelMasterPath=/dss/dsshome1/lxc0C/ga45met2/.conda/envs/my_uq_env/lib/python3.11/site-packages/pybamm/input/drive_cycles
+    modelMasterPath=/dss/dsshome1/lxc0C/ga45met2/.conda/envs/$conda_env/lib/python3.11/site-packages/pybamm/input/drive_cycles
     resultsPath=$baseResultsPath/battery_uq_cm4.$counter
-
-    conda_env=my_uq_env
 
     if [ "$sched_strut" = "SWPT" -o "$sched_strut" = "SWPT_OPT" ] ; then
         cpus=112
@@ -88,11 +88,15 @@ echo "#!/bin/bash
 
 # load modules and activate the conda env
 module load slurm_setup
+module load spack/23.1.0  # added 10.03.25
 source /etc/profile.d/modules.sh
 # module load anaconda3/2022.10
-module load mpi.intel/2019
-source /dss/dsshome1/lxc0C/ga45met2/.conda/envs/$conda_env/bin/activate $conda_env
-# conda activate $conda_env
+# module load mpi.intel/2019  # commented on 10.03.25
+module load intel/2023.1.0  # added 10.03.25
+module load intel-mpi/2021.11  # added 10.03.25
+module load mpi.intel/2018  # added 10.03.25
+# source /dss/dsshome1/lxc0C/ga45met2/.conda/envs/$conda_env/bin/activate $conda_env
+conda activate $conda_env
 
 # export num threads for OMP
 export OMP_NUM_THREADS=$threads
@@ -104,7 +108,7 @@ echo "---- start Battery sim: \`date\`"
                             --outputResultDir $resultsPath \
                             --inputModelDir "$modelMasterPath" \
                             --sourceDir $baseSourcePath \
-                            --config_file $baseSourcePath/uqef_dynamic/models/pybamm/configuration_battery.json \
+                            --config_file $baseSourcePath/uqef_dynamic/models/pybamm/configuration_battery_24_shot_names.json \
                             --model "$model" \
                             --uncertain "$uncertain" \
                             --opt_strategy "$strategy" --opt_algorithm "$algorithm" \
@@ -120,34 +124,34 @@ echo "---- start Battery sim: \`date\`"
                             --sc_poly_rule "$sc_poly_rule" \
                             --sc_quadrature_rule "$sc_quadrature_rule" \
                             --parameters_file "$parameters_file" \
-                            --cross_truncation 0.7 \
+                            --cross_truncation 1.0 \
                             $opt
 
 echo "---- end Battery sim: \`date\`"
 
-" > $baseSourcePath/batter_uq_mc_6d_10000_lhs.cmd
+" > $baseSourcePath/batter_uq_mc_24d_10000_random_pce2_ct10.cmd
 
     #execute batch file
-    sbatch $baseSourcePath/batter_uq_mc_6d_10000_lhs.cmd
+    sbatch $baseSourcePath/batter_uq_mc_24d_10000_random_pce2_ct10.cmd
 
 }
 
 model="battery"
-opt_add="--parallel_statistics --save_all_simulations --sampleFromStandardDist --compute_Sobol_m --compute_Sobol_t --sc_poly_normed --store_gpce_surrogate_in_stat_dict --save_all_simulations" #--regression  --read_nodes_from_file --instantly_save_results_for_each_time_step
+opt_add="--regression --parallel_statistics --save_all_simulations --sampleFromStandardDist --compute_Sobol_m --compute_Sobol_t --sc_poly_normed --store_gpce_surrogate_in_stat_dict" #  --read_nodes_from_file --instantly_save_results_for_each_time_step
 nodes=4
-tasks_per_node=112  #22
+tasks_per_node=112  #22  112 
 low_time="2:30:00"
-mid_time="3:00:00"
-max_time="72:00:00"
+mid_time="24:00:00"
+max_time="24:00:00"
 uq_method="mc"
 q_order=6
-p_order=4
+p_order=2
 mc_numevaluations=10000
 uc="all"
-sampling_rule="latin_hypercube"
+sampling_rule="random"  #"latin_hypercube"
 sc_poly_rule="three_terms_recurrence"
 sc_quadrature_rule="p" # "clenshaw_curtis" "genz_keister_24" "p"
 mpi_method="MpiPoolSolver"
-parameters_file="/dss/dsshome1/lxc0C/ga45met2/Repositories/sparse_grid_nodes_weights/KPU_d6_l6.asc"
+parameters_file="/dss/dsshome1/lxc0C/ga45met2/Repositories/sparse_grid_nodes_weights/KPU_d24_l4.asc"
 
-start_uq_sim "DWP" "DYNAMIC" "FCFS" "$uq_method" $q_order $p_order $mc_numevaluations "$model" "$opt_add" "$mpi_method" "$nodes" "$tasks_per_node" "$mid_time" "$uc" "$sampling_rule" "$sc_poly_rule" "$sc_quadrature_rule" "$parameters_file"
+start_uq_sim "DWP" "DYNAMIC" "FCFS" "$uq_method" $q_order $p_order $mc_numevaluations "$model" "$opt_add" "$mpi_method" "$nodes" "$tasks_per_node" "$max_time" "$uc" "$sampling_rule" "$sc_poly_rule" "$sc_quadrature_rule" "$parameters_file"

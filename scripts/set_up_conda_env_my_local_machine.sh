@@ -30,6 +30,8 @@ conda create -n my_uq_env python=3.11
 conda activate my_uq_env
 conda install -p /dss/dsshome1/lxc0C/ga45met2/.conda/envs/my_uq_env --file requirements_no_version.txt --update-deps
 conda install -p /dss/dsshome1/lxc0C/ga45met2/.conda/envs/my_uq_env -c conda-forge pybamm --no-update-deps
+# When you want to uninstall previous installation of some package (if any)
+# $(which pip) uninstall -y your_package_name
 # pybamm 24.11.2
 $(which pip) install chaospy
 # after installing chaospy I have Successfully installed chaospy-4.3.17 numpoly-1.3.6 numpy-2.0.2 scipy-1.13.1
