@@ -875,10 +875,8 @@ class TimeDependentStatistics(ABC, Statistics):
                 if len(self.weights_time) >= 3:
                     self.weights_time[0] /= 2
                     self.weights_time[-1] /= 2
-                # self.weights_time = np.asfarray(self.weights_time)
                 self.weights_time = np.asarray(self.weights_time, dtype=np.float32)
             else:
-                # self.weights_time = np.asfarray([1.0])
                 self.weights_time = np.asarray([1.0], dtype=np.float32)
             assert len(self.timesteps)==len(self.weights_time)
         else:
@@ -1003,7 +1001,6 @@ class TimeDependentStatistics(ABC, Statistics):
     def set_weights_time(self, weights_time=None):
         if weights_time is not None:
             self.weights_time = weights_time
-            #self.weights_time = np.asfarray(self.weights_time)
             self.weights_time = np.asarray(self.weights_time, dtype=np.float32)
             self.N_quad = len(self.weights_time)
         elif self.timesteps is not None:
@@ -1022,10 +1019,8 @@ class TimeDependentStatistics(ABC, Statistics):
                 if len(self.weights_time) >= 3:
                     self.weights_time[0] /= 2
                     self.weights_time[-1] /= 2
-                #self.weights_time = np.asfarray(self.weights_time)
                 self.weights_time = np.asarray(self.weights_time, dtype=np.float32)
             else:
-                #self.weights_time = np.asfarray([1.0])
                 self.weights_time = np.asarray([1.0], dtype=np.float32)
             assert len(self.timesteps)==len(self.weights_time)
         else:
@@ -1111,15 +1106,16 @@ class TimeDependentStatistics(ABC, Statistics):
             graded=True, reverse=True, cross_truncation=self.cross_truncation, retall=True)
     
     def handle_regression_model_generation(self):
-        if self.regression and self.regression_model_type == "OLS":
-            self.regression_model = linear_model.LinearRegression(fit_intercept=False)
-        elif self.regression and self.regression_model_type == "LARS":
-            if self.polynomial_expansion is None:
-                self.regression_model = None
-                return
-            self.regression_model = linear_model.Lars(
-                fit_intercept=False, n_nonzero_coefs=len(self.polynomial_expansion)
-            )
+        if self.regression and self.regression_model_type is not None:
+            if self.regression_model_type.lower() == "ols":
+                self.regression_model = linear_model.LinearRegression(fit_intercept=False)
+            elif self.regression_model_type.lower() == "lars":
+                if self.polynomial_expansion is None:
+                    self.regression_model = None
+                    return
+                self.regression_model = linear_model.Lars(
+                    fit_intercept=False, n_nonzero_coefs=len(self.polynomial_expansion)
+                )
         else:
             self.regression_model = None
 
@@ -1679,6 +1675,23 @@ class TimeDependentStatistics(ABC, Statistics):
             Var_kl_approx_trunc = np.sum(eigenvalues[:self.kl_expansion_order])
             # f_kl_surrogate_coefficients = f_kl_surrogate_dict[utility.PCE_COEFF_ENTRY].values
             if self.compute_generalized_sobol_indices:
+                # TODO This is temporarly here, remove eventaully...
+                fileName = self.workingDir / f"elia_generalized_sobol_indices_{single_qoi_column}.pkl"
+                param_name_generalized_sobol_total_indices, param_name_generalized_sobol_main_indices, \
+                    total_variance, total_variance_based_on_pce_coefficients = utility.computing_generalized_sobol_indices_from_kl_expan_elia(
+                    f_kl_surrogate_coefficients=f_kl_surrogate_coefficients, 
+                    polynomial_expansion=self.polynomial_expansion, 
+                    weights=self.weights_time, 
+                    param_names=self.labels, 
+                    fileName=fileName, 
+                    total_variance=None, #Var_kl_approx,  # TODO Try with None here, then total_variance_based_on_pce_coefficients will be used
+                    compute_total_variance_based_on_pce_coefficients=True,
+                    )
+                print(f"INFO: Total Variance computed via eigenvalues: {Var_kl_approx} \
+                    Computed via truncating {self.kl_expansion_order} eigenvalues: {Var_kl_approx_trunc} \
+                        Total Variance computed via PCE coefficients: {total_variance_based_on_pce_coefficients}; \
+                            Total Variance used in the computing_generalized_sobol_indices_from_kl_expan: {total_variance}")
+                print(f"INFO: computation of (Elia) generalized S.S.I based on KL+gPCE(MC) finished...")
                 fileName = self.workingDir / f"generalized_sobol_indices_{single_qoi_column}.pkl"
                 param_name_generalized_sobol_total_indices, param_name_generalized_sobol_main_indices, \
                     total_variance, total_variance_based_on_pce_coefficients = utility.computing_generalized_sobol_indices_from_kl_expan(
@@ -1687,14 +1700,14 @@ class TimeDependentStatistics(ABC, Statistics):
                     weights=self.weights_time, 
                     param_names=self.labels, 
                     fileName=fileName, 
-                    total_variance=None #Var_kl_approx,  # TODO Try with None here, then total_variance_based_on_pce_coefficients will be used
+                    total_variance=None, #Var_kl_approx,  # TODO Try with None here, then total_variance_based_on_pce_coefficients will be used
                     compute_total_variance_based_on_pce_coefficients=True,
                     )
                 print(f"INFO: computation of generalized S.S.I based on KL+gPCE(MC) finished...")
                 for param_name in self.labels:
                     self.result_dict[single_qoi_column][last_time_step][f"generalized_sobol_total_index_{param_name}"] = \
                         param_name_generalized_sobol_total_indices[param_name]
-                    self.result_dict[single_qoi_column][last_time_step][f"generalized_sobol_first_index_{param_name}"] = \
+                    self.result_dict[single_qoi_column][last_time_step][f"generalized_sobol_main_index_{param_name}"] = \
                         param_name_generalized_sobol_main_indices[param_name]
 
             # Comparing different Variances
@@ -1708,7 +1721,7 @@ class TimeDependentStatistics(ABC, Statistics):
                 Computed via truncating {self.kl_expansion_order} eigenvalues: {Var_kl_approx_trunc} \
                 Total Variance integral over time: {variance_integral}; \
                     Total Variance computed via PCE coefficients: {total_variance_based_on_pce_coefficients};\
-                         Total Variance returned by the computing_generalized_sobol_indices_from_kl_expan: {total_variance}")
+                         Total Variance used in the computing_generalized_sobol_indices_from_kl_expan: {total_variance}")
             fileName = self.workingDir / f"total_variance_{single_qoi_column}.txt"
             with open(fileName, 'w') as fp:
                 fp.write(f'Total Variance computed via eigenvalues: {Var_kl_approx}\n')
@@ -1907,7 +1920,9 @@ class TimeDependentStatistics(ABC, Statistics):
         self.chunk_results = list(chunk_results_it)
 
     def _postprocess_mc_chunk_results_single_qoi_after_parallel_in_time_analysis(self, single_qoi_column):
+        # print(f"DEBUGGIN {self.rank} - self.chunk_results-{self.chunk_results}")
         for chunk_result in self.chunk_results:
+            # print(f"DEBUGGIN {self.rank} - chunk_result-{chunk_result}")
             for result in chunk_result:
                 self._process_chunk_result_single_qoi_single_time_step(
                     single_qoi_column, timestamp=result[0], result_dict=result[1])
@@ -1915,6 +1930,8 @@ class TimeDependentStatistics(ABC, Statistics):
                     del result[1]
                 else:
                     self.result_dict[single_qoi_column][result[0]] = result[1]
+            # temp_gpce_coeff = result[1][utility.PCE_COEFF_ENTRY]
+            # print(f"DEBUGGIN {single_qoi_column}-{result[0]}: {type(temp_gpce_coeff)}\n{temp_gpce_coeff}")
         self._postprocess_mc_results_single_qoi(single_qoi_column)
         self.save_print_plot_and_clear_result_dict_single_qoi(single_qoi_column)
         del self.chunk_results
@@ -2200,9 +2217,9 @@ class TimeDependentStatistics(ABC, Statistics):
                 else:
                     qoi_gPCE, qoi_coeff = cp.fit_regression(
                         polynomials=self.polynomial_expansion, abscissas=self.nodes, evals=qoi_values, retall=True, 
-                        model=self.regression_model  # classical least-square; one can use as well sklearn.linear_model.LinearRegression(fit_intercept=False)
+                        model=self.regression_model  # if self.regression_model is None then classical least-square; one can use as well sklearn.linear_model.LinearRegression(fit_intercept=False)
                     )
-                    self.result_dict[single_qoi_column][key][utility.PCE_COEFF_ENTRY] = qoi_coeff
+                    self.result_dict[single_qoi_column][key][utility.PCE_COEFF_ENTRY] = np.asarray(qoi_coeff, dtype=np.float64)
                     self._calc_stats_for_gPCE_single_qoi(
                         single_qoi_column, key, self.dist, qoi_gPCE, compute_other_stat_besides_pce_surrogate)
                 
@@ -2375,7 +2392,7 @@ class TimeDependentStatistics(ABC, Statistics):
                         #qoi_gPCE, qoi_coeff = cp.fit_quadrature(self.polynomial_expansion, self.nodes, self.weights, qoi_values, retall=True)
                         qoi_gPCE, qoi_coeff = cp.fit_quadrature(
                             orth=self.polynomial_expansion, nodes=self.nodes, weights=self.weights, solves=qoi_values, retall=True, norms=self.polynomial_norms)
-                    self.result_dict[single_qoi_column][key][utility.PCE_COEFF_ENTRY] = qoi_coeff
+                    self.result_dict[single_qoi_column][key][utility.PCE_COEFF_ENTRY] = np.asarray(qoi_coeff, dtype=np.float64)
                     
                     self._calc_stats_for_gPCE_single_qoi(
                         single_qoi_column, key, self.dist, qoi_gPCE, compute_other_stat_besides_pce_surrogate)
@@ -3148,6 +3165,24 @@ class TimeDependentStatistics(ABC, Statistics):
                         generalized_sobol_total_index_values_temp = [generalized_sobol_total_index_values_temp[0],]*len(keyIter)
                         # print(f"[DEBUGGING] {type(generalized_sobol_total_index_values_temp)}; {len(generalized_sobol_total_index_values_temp)}")
                     list_of_columns.append(generalized_sobol_total_index_values_temp)
+        if f'generalized_sobol_main_index_{self.labels[0]}' in self.result_dict[qoi_column][keyIter[-1]]:
+            for i in range(len(self.labels)):
+                name = f"generalized_sobol_main_index_{self.labels[i]}"
+                generalized_sobol_main_index_values_temp = []
+                at_least_one_entry_found = False
+                for key in keyIter:
+                    if name in self.result_dict[qoi_column][key]:
+                        at_least_one_entry_found = True
+                        temp = self.result_dict[qoi_column][key][name]
+                        generalized_sobol_main_index_values_temp.append(temp)
+                if at_least_one_entry_found:
+                    list_of_columns_names.append(name)
+                    if len(generalized_sobol_main_index_values_temp)==1:
+                        # print(f"[DEBUGGING] {type(generalized_sobol_main_index_values_temp)}; {len(generalized_sobol_main_index_values_temp)}")
+                        generalized_sobol_main_index_values_temp = [generalized_sobol_main_index_values_temp[0],]*len(keyIter)
+                        # print(f"[DEBUGGING] {type(generalized_sobol_main_index_values_temp)}; {len(generalized_sobol_main_index_values_temp)}")
+                    list_of_columns.append(generalized_sobol_main_index_values_temp)
+        
 
         if not list_of_columns:
             return None
@@ -3378,7 +3413,8 @@ class TimeDependentStatistics(ABC, Statistics):
             else:
                 dict_what_to_plot = {
                     "E_minus_std": False, "E_plus_std": False, "P10": False, "P90": False,
-                    "StdDev": False, "Skew": False, "Kurt": False, "Sobol_m": False, "Sobol_m2": False, "Sobol_t": False
+                    "StdDev": False, "Skew": False, "Kurt": False, "Sobol_m": False, "Sobol_m2": False, "Sobol_t": False,
+                    "generalized_sobol_total_index": False, "generalized_sobol_main_index": False,
                 }
                 self.dict_what_to_plot = dict_what_to_plot
 
@@ -3417,13 +3453,22 @@ class TimeDependentStatistics(ABC, Statistics):
                     n_rows += 1
                     # dict_qoi_vs_plot_rows[single_qoi_column]["Sobol_t"] = current_row
                     # current_row += 1
-                plot_generalized_sobol_indices = False
-                for key in result_dict[keyIter[-1]].keys():
-                    if key.startswith("generalized_sobol_total_index_"):
-                        plot_generalized_sobol_indices = True
-                        break
-                if plot_generalized_sobol_indices:   
-                    n_rows += 1
+                plot_generalized_sobol_total_indices = False
+                if dict_what_to_plot.get("generalized_sobol_total_index", False):
+                    for key in result_dict[keyIter[-1]].keys():
+                        if key.startswith("generalized_sobol_total_index_"):
+                            plot_generalized_sobol_total_indices = True
+                            break
+                    if plot_generalized_sobol_total_indices:   
+                        n_rows += 1
+                plot_generalized_sobol_main_indices = False
+                if dict_what_to_plot.get("generalized_sobol_main_index", False):
+                    for key in result_dict[keyIter[-1]].keys():
+                        if key.startswith("generalized_sobol_main_index_"):
+                            plot_generalized_sobol_main_indices = True
+                            break
+                    if plot_generalized_sobol_main_indices:   
+                        n_rows += 1
             else:
                 continue
 
@@ -3789,7 +3834,8 @@ class TimeDependentStatistics(ABC, Statistics):
         si_columns_to_plot = [x for x in si_df.columns.tolist() if x != 'measured' \
                               and x != 'measured_norm' and x != 'qoi']
         
-        si_columns_to_label = [single_column.split("_", 2)[2] for single_column in si_columns_to_plot]
+        # si_columns_to_label = [single_column.split("_", 2)[2] for single_column in si_columns_to_plot]
+        si_columns_to_label = [single_column.split('_')[-1] for single_column in si_columns_to_plot]
 
         if 'qoi' in si_df.columns.tolist():
             fig = px.imshow(si_df.loc[si_df['qoi'] == qoi_column][si_columns_to_plot].T,
@@ -3934,7 +3980,8 @@ class TimeDependentStatistics(ABC, Statistics):
         si_columns_to_plot = [x for x in si_df.columns.tolist() if x != 'measured' \
                               and x != 'measured_norm' and x != 'qoi']
 
-        si_columns_to_label = [single_column.split("_", 2)[2] for single_column in si_columns_to_plot]
+        # si_columns_to_label = [single_column.split("_", 2)[2] for single_column in si_columns_to_plot]
+        si_columns_to_label = [single_column.split('_')[-1] for single_column in si_columns_to_plot]
         # fig = px.line(
         #     si_df, x=si_df.index, y=si_columns_to_plot) #mode='lines+markers' markers=True
         fig = go.Figure()

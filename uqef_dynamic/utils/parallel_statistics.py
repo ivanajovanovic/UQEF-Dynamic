@@ -159,23 +159,23 @@ def parallel_calc_stats_for_gPCE(
         if store_qoi_data_in_stat_dict:
             local_result_dict["qoi_values"] = qoi_values
         if regression:
-            qoi_gPCE, goi_coeff = cp.fit_regression(
+            qoi_gPCE, qoi_coeff = cp.fit_regression(
                 polynomials=polynomial_expansion, abscissas=nodes, evals=qoi_values, retall=True,
                 model=regression_model  # classical least-square; one can use as well sklearn.linear_model.LinearRegression(fit_intercept=False)
             )
         else:
-            qoi_gPCE, goi_coeff = cp.fit_quadrature(
+            qoi_gPCE, qoi_coeff = cp.fit_quadrature(
                 orth=polynomial_expansion, nodes=nodes, weights=weights, solves=qoi_values, retall=True, norms=polynomial_norms
                 )
 
         if store_gpce_surrogate_in_stat_dict:
-            local_result_dict["gPCE"] = qoi_gPCE
-        local_result_dict['gpce_coeff'] = goi_coeff
+            local_result_dict[utility.PCE_ENTRY] = qoi_gPCE
+        local_result_dict[utility.PCE_COEFF_ENTRY] = np.asarray(qoi_coeff, dtype=np.float64)
 
         if save_gpce_surrogate: # and "gPCE" in local_result_dict:
             # # TODO - propagate workingDir and single_qoi_column
             # utility.save_gpce_surrogate_model(workingDir=workingDir, gpce=qoi_gPCE, qoi=single_qoi_column, timestamp=timestamp)
-            # utility.save_gpce_coeffs(workingDir=workingDir, coeff=goi_coeff, qoi=single_qoi_column, timestamp=timestamp)
+            # utility.save_gpce_coeffs(workingDir=workingDir, coeff=qoi_coeff, qoi=single_qoi_column, timestamp=timestamp)
             pass
 
         calculate_stats_gpce(

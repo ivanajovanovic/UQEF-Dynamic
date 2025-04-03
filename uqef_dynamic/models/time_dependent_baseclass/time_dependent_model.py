@@ -118,7 +118,7 @@ class TimeDependentModelConfig(object):
         else:
             if "model_settings" in self.configurationObject:
                 self.plotting = strtobool(self.configurationObject["model_settings"].get(
-                    "plotting", "True"))
+                    "plotting", "False"))
             else:
                 self.plotting = False 
 
@@ -127,7 +127,7 @@ class TimeDependentModelConfig(object):
         else:
             if "model_settings" in self.configurationObject:
                 self.printing = strtobool(self.configurationObject["model_settings"].get(
-                    "printing", "True"))
+                    "printing", "False"))
             else:
                 self.printing = False 
 
