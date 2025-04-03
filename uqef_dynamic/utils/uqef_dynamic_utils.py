@@ -1188,6 +1188,23 @@ def create_df_from_statistics_data_single_qoi(
                     # generalized_sobol_total_index_values_temp = generalized_sobol_total_index_values_temp[0]*len(keyIter)
                 list_of_columns.append(generalized_sobol_total_index_values_temp)
 
+    if f'generalized_sobol_main_index_{list_of_uncertain_variables[0]}' in stat_dict[keyIter[-1]]:
+        for i in range(len(list_of_uncertain_variables)):
+            name = f"generalized_sobol_main_index_{list_of_uncertain_variables[i]}"
+            generalized_sobol_main_index_values_temp = []
+            at_least_one_entry_found = False
+            for key in keyIter:
+                if name in stat_dict[key]:
+                    at_least_one_entry_found = True
+                    temp = stat_dict[key][name]
+                    generalized_sobol_main_index_values_temp.append(temp)
+            if at_least_one_entry_found:
+                list_of_columns_names.append(name)
+                if len(generalized_sobol_main_index_values_temp)==1:
+                    generalized_sobol_main_index_values_temp = [generalized_sobol_main_index_values_temp[0],]*len(keyIter)
+                    # generalized_sobol_main_index_values_temp = generalized_sobol_main_index_values_temp[0]*len(keyIter)
+                list_of_columns.append(generalized_sobol_main_index_values_temp)
+
     if not list_of_columns:
         return None
 
@@ -1312,12 +1329,12 @@ def create_df_from_generalized_sobol_indices_single_qoi(
 
     # list_of_columns_generalized_sobol_indices = []
     for column_name in list_of_columns_names_generalized_sobol_indices:
-        generalized_sobol_total_index_values_temp = []
+        generalized_sobol_index_values_temp = []
         for key in keyIter:
             if column_name in stat_dict[key]:
                 temp = stat_dict[key][column_name]
-                generalized_sobol_total_index_values_temp.append(temp)
-        list_of_columns.append(generalized_sobol_total_index_values_temp)
+                generalized_sobol_index_values_temp.append(temp)
+        list_of_columns.append(generalized_sobol_index_values_temp)
     
     if not list_of_columns:
         return None
@@ -2896,7 +2913,7 @@ def describe_sensitivity_indices_single_qoi_under_some_condition(
 
 def compute_df_statistics_columns_correlation(
         df_statistics, single_qoi, param_names,
-        only_sensitivity_indices_columns=True, si_type="Sobol_t", plot=True, list_of_columns_to_keep=[]):
+        only_sensitivity_indices_columns=True, si_type="Sobol_t", plot=True, list_of_columns_to_keep=[], plot_filename="heatmap.pdf"):
     """
     Computes the correlation matrix between columns of a DataFrame containing statistical data.
     If plot plots the correlation matrix
@@ -2917,20 +2934,22 @@ def compute_df_statistics_columns_correlation(
             df_statistics, single_qoi, param_names, si_type, list_of_columns_to_keep)
     else:
         # df_statistics_and_measured_single_qoi = df_statistics.loc[df_statistics['qoi'] == single_qoi]
-        df_statistics_and_measured_single_qoi_subset = df_statistics_and_measured_single_qoi
+        # df_statistics_and_measured_single_qoi_subset = df_statistics_and_measured_single_qoi
         df_statistics_and_measured_single_qoi_subset = df_statistics.loc[df_statistics['qoi'] == single_qoi]
 
     corr_df_statistics_and_measured_single_qoi_subset = df_statistics_and_measured_single_qoi_subset.corr()
     print(f"Correlation matrix: {corr_df_statistics_and_measured_single_qoi_subset} \n")
-    fig = None
     if plot:
         sns.set(style="darkgrid")
         mask = np.triu(np.ones_like(corr_df_statistics_and_measured_single_qoi_subset, dtype=bool))
-        fig, axs = plt.subplots(figsize=(11, 9))
+        # fig, axs = plt.subplots(figsize=(11, 9))
+        plt.figure(figsize=(11, 9))
         sns.heatmap(corr_df_statistics_and_measured_single_qoi_subset, mask=mask, square=True, annot=True,
-                    linewidths=.5)
+                    linewidths=.5, cmap="viridis")
+        plt.savefig(plot_filename, format="pdf", bbox_inches='tight', dpi=300)
         plt.show()
-    return corr_df_statistics_and_measured_single_qoi_subset, fig
+        plt.close()
+    return corr_df_statistics_and_measured_single_qoi_subset
 
 
 def validate_condition(df, condition_results_based_on_metric, condition_results_based_on_metric_value):
@@ -3381,7 +3400,7 @@ def plot_parameters_sensitivity_indices_vs_temp_prec_measured(df_statistics, sin
 
 
 def plot_parameters_sensitivity_indices_vs_temp_prec_measured_plotly(
-    df, single_qoi, param_names, forcing_measured_columns, si_type="Sobol_t"):
+    df, single_qoi, param_names, forcing_measured_columns, si_type="Sobol_t", color_dict=None):
     df =_get_sensitivity_indices_subset_of_big_df_statistics(
         df_statistics=df, 
         single_qoi=single_qoi, 
@@ -3403,10 +3422,24 @@ def plot_parameters_sensitivity_indices_vs_temp_prec_measured_plotly(
     # Populate the subplot grid with scatter plots
     for i, x_col in enumerate(forcing_measured_columns):
         for j, y_col in enumerate(param_names):
-            fig.add_trace(
-                go.Scatter(x=df[f"{si_type}_{y_col}"], y=df[x_col], mode='markers', marker=dict(size=5)),
-                row=i+1, col=j+1
-            )
+            if color_dict is not None:
+                fig.add_trace(
+                    go.Scatter(
+                        x=df[f"{si_type}_{y_col}"], y=df[x_col], 
+                        mode='markers', 
+                        marker=dict(size=5, color=color_dict[y_col]),
+                        ),
+                    row=i+1, col=j+1
+                )
+            else:
+                fig.add_trace(
+                    go.Scatter(
+                        x=df[f"{si_type}_{y_col}"], y=df[x_col], 
+                        mode='markers', 
+                        marker=dict(size=5)
+                        ),
+                    row=i+1, col=j+1
+                )
             # Update axes titles
             if j == 0:
                 fig.update_yaxes(title_text=x_col, row=i+1, col=j+1)
