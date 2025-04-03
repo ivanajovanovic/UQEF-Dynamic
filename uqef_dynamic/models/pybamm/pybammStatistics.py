@@ -33,7 +33,9 @@ class pybammStatistics(time_dependent_statistics.TimeDependentStatistics):
             else:
                 dict_what_to_plot = {
                     "E_minus_std": False, "E_plus_std": False, "P10": False, "P90": False,
-                    "StdDev": False, "Skew": False, "Kurt": False, "Sobol_m": False, "Sobol_m2": False, "Sobol_t": False
+                    "StdDev": False, "Skew": False, "Kurt": False, "Sobol_m": False, "Sobol_m2": False, "Sobol_t": False,
+                    "generalized_sobol_total_index": False, "generalized_sobol_main_index": False,
+
                 }
                 self.dict_what_to_plot = dict_what_to_plot
                 
@@ -158,12 +160,12 @@ class pybammStatistics(time_dependent_statistics.TimeDependentStatistics):
             dict_plot_rows["Sobol_t"] = starting_row
             starting_row += 1
 
-        plot_generalized_sobol_indices = False
+        plot_generalized_sobol_total_indices = False
         for key in dict_time_vs_qoi_stat[keyIter[-1]].keys():
-            if key.startswith("generalized_sobol_total_index_"):
-                plot_generalized_sobol_indices = True
+            if key.startswith("generalized_sobol_total_index"):
+                plot_generalized_sobol_total_indices = True
                 break
-        if plot_generalized_sobol_indices:  
+        if plot_generalized_sobol_total_indices and dict_what_to_plot.get("generalized_sobol_total_index", False):  
             for i in range(len(self.labels)):
                 name = f"generalized_sobol_total_index_{self.labels[i]}"
                 y = []
@@ -185,6 +187,35 @@ class pybammStatistics(time_dependent_statistics.TimeDependentStatistics):
             if showlegend_other_sobol_indices:
                 showlegend_other_sobol_indices = False
             dict_plot_rows["generalized_sobol_total_index"] = starting_row
+            starting_row += 1
+
+        plot_generalized_sobol_main_indices = False
+        for key in dict_time_vs_qoi_stat[keyIter[-1]].keys():
+            if key.startswith("generalized_sobol_main_index"):
+                plot_generalized_sobol_main_indices = True
+                break
+        if plot_generalized_sobol_main_indices and dict_what_to_plot.get("generalized_sobol_main_index", False):  
+            for i in range(len(self.labels)):
+                name = f"generalized_sobol_main_index_{self.labels[i]}"
+                y = []
+                for key in keyIter:
+                    if name in dict_time_vs_qoi_stat[key]:
+                        y.append(dict_time_vs_qoi_stat[key][name])
+                if len(y)==1: 
+                    y = [y[0],]*len(keyIter)  #[y[0],]*len(pdTimesteps)
+                # if self.compute_generalized_sobol_indices_over_time:
+                #     y = [dict_time_vs_qoi_stat[key][name] for key in keyIter]
+                # else:
+                #     y = [dict_time_vs_qoi_stat[keyIter[-1]][name]]*len(keyIter)
+                name = self.labels[i] + "_" + single_qoi_column + "_Sobol" #+ "generalized_S_t"
+                fig.add_trace(go.Scatter(
+                    x=pdTimesteps,
+                    y=y,
+                    name=name, legendgroup=self.labels[i], mode='lines', line_color=colors.COLORS[i], showlegend=showlegend_other_sobol_indices),
+                    row=starting_row, col=1)
+            if showlegend_other_sobol_indices:
+                showlegend_other_sobol_indices = False
+            dict_plot_rows["generalized_sobol_main_index"] = starting_row
             starting_row += 1
 
         fig.update_yaxes(title_text=single_qoi_column, showgrid=True, side='left',
@@ -209,10 +240,12 @@ class pybammStatistics(time_dependent_statistics.TimeDependentStatistics):
         if "Sobol_t" in dict_time_vs_qoi_stat[keyIter[0]] and dict_what_to_plot.get("Sobol_t", False):
             fig.update_yaxes(title_text=f"T. SI", showgrid=True, range=[0, 1],
                              row=dict_plot_rows["Sobol_t"], col=1)
-        if plot_generalized_sobol_indices and dict_plot_rows.get("generalized_sobol_total_index", False):
+        if plot_generalized_sobol_total_indices and dict_what_to_plot.get("generalized_sobol_total_index", False):
             fig.update_yaxes(title_text=f"Gener. T. SI", showgrid=True, range=[0, 1],
                              row=dict_plot_rows["generalized_sobol_total_index"], col=1)
-
+        if plot_generalized_sobol_main_indices and dict_what_to_plot.get("generalized_sobol_main_index", False):
+            fig.update_yaxes(title_text=f"Gener. F. SI", showgrid=True, range=[0, 1],
+                             row=dict_plot_rows["generalized_sobol_main_index"], col=1)
         fig.update_layout(width=1000)
         # fig.update_layout(
         #     # legend=dict(yanchor="bottom", y=0.01, xanchor="right", x=0.99),
