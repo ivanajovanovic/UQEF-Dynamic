@@ -156,7 +156,8 @@ if local_debugging:
 utility.DEFAULT_DICT_WHAT_TO_PLOT = {
     "E_minus_std": False, "E_plus_std": False, "E_minus_2std": True, "E_plus_2std":True, 
     "P10": True, "P90": True,
-    "StdDev": True, "Skew": False, "Kurt": False, "Sobol_m": True, "Sobol_m2": False, "Sobol_t": True
+    "StdDev": True, "Skew": False, "Kurt": False, "Sobol_m": True, "Sobol_m2": False, "Sobol_t": True,
+    "generalized_sobol_total_index": True, "generalized_sobol_main_index": True,
 }
 utility.DEFAULT_DICT_STAT_TO_COMPUTE = {
     "Var": True, "StdDev": True, "P10": True, "P90": True,
@@ -164,7 +165,7 @@ utility.DEFAULT_DICT_STAT_TO_COMPUTE = {
     "Skew": False, "Kurt": False, "Sobol_m": True, "Sobol_m2": False, "Sobol_t": True
 }
 dict_stat_to_compute = utility.DEFAULT_DICT_STAT_TO_COMPUTE
-compute_sobol_indices_with_samples = False  # This is only relevant in the mc-saltelli's approach
+compute_sobol_indices_with_samples = True  # This is only relevant in the mc-saltelli's approach
 # TODO Think about when regression is True, what do you prefer gPCE-based indices or MC?
 if uqsim.args.uq_method == "mc" and uqsim.args.compute_Sobol_m:
     compute_sobol_indices_with_samples = True
@@ -176,8 +177,8 @@ compute_kl_expansion_of_qoi = False
 kl_expansion_order = 10
 compute_timewise_gpce_next_to_kl_expansion = False
 
-compute_generalized_sobol_indices = True
-compute_generalized_sobol_indices_over_time = True
+compute_generalized_sobol_indices = False
+compute_generalized_sobol_indices_over_time = False
 
 compute_covariance_matrix_in_time = False
 
