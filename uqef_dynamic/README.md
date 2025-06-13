@@ -16,10 +16,6 @@ uqef_dynamic/
 └── utils/
 ```
 
-<!-- ### Core Files
-
-- **__init__.py**: Package initialization file
-- **paths.py**: Handles path configurations for different environments (cluster nodes, local machines) -->
 
 ### Models
 

@@ -1,3 +1,6 @@
+"""
+Note: This file is outdate and it still might be used only with the LARSIM pipeline
+"""
 import inspect
 import os
 import os.path as osp
