@@ -9,7 +9,7 @@ from uqef_dynamic.models.linearDampedOscillator import LinearDampedOscillatorMod
 from uqef_dynamic.models.ishigami import IshigamiModel
 from uqef_dynamic.models.productFunction import ProductFunctionModel
 from uqef_dynamic.models.hbv_sask import HBVSASKModelUQ
-from uqef_dynamic.models.pybamm import pybammModelUQ as pybammmodel
+# from uqef_dynamic.models.pybamm import pybammModelUQ as pybammmodel
 from uqef_dynamic.models.simpleOscilator.simple_oscillator_model import simpleOscillatorUQ
 
 from uqef_dynamic.models.larsim import LarsimStatistics
@@ -17,7 +17,7 @@ from uqef_dynamic.models.linearDampedOscillator import LinearDampedOscillatorSta
 from uqef_dynamic.models.ishigami import IshigamiStatistics
 from uqef_dynamic.models.productFunction import ProductFunctionStatistics
 from uqef_dynamic.models.hbv_sask import HBVSASKStatistics
-from uqef_dynamic.models.pybamm import pybammStatistics
+# from uqef_dynamic.models.pybamm import pybammStatistics
 from uqef_dynamic.models.simpleOscilator.simple_oscillator_statistics import simpleOscillatorStatistics
 
 from uqef_dynamic.utils import utility
@@ -58,11 +58,11 @@ def create_model_object(configuration_object, uqsim_args_dict, workingDir, model
             workingDir=workingDir,
             disable_statistics=uqsim_args_dict["disable_statistics"],
             uq_method=uqsim_args_dict["uq_method"],**kwargs)
-    elif model.lower() == "battery":
-        modelObject = pybammmodel.pybammModelUQ(
-            configurationObject=configuration_object,
-            inputModelDir=uqsim_args_dict["inputModelDir"],
-            workingDir=workingDir,**kwargs)
+    # elif model.lower() == "battery":
+    #     modelObject = pybammmodel.pybammModelUQ(
+    #         configurationObject=configuration_object,
+    #         inputModelDir=uqsim_args_dict["inputModelDir"],
+    #         workingDir=workingDir,**kwargs)
     elif model.lower() == "simple_oscillator":
         modelObject = simpleOscillatorUQ(
             configurationObject=configuration_object,
@@ -131,25 +131,25 @@ def create_statistics_object(configuration_object, uqsim_args_dict, workingDir, 
             **kwargs
         )
     # NOTE: For now one has to comment out bettery model when running SparseSpACE simulations...
-    elif model == "battery":
-        statisticsObject = pybammStatistics.pybammStatistics(
-            configurationObject=configuration_object,
-            workingDir=workingDir,
-            inputModelDir=uqsim_args_dict["inputModelDir"],
-            sampleFromStandardDist=uqsim_args_dict["sampleFromStandardDist"],
-            parallel_statistics=uqsim_args_dict["parallel_statistics"],
-            mpi_chunksize=uqsim_args_dict.get("mpi_chunksize", 1),
-            unordered=False,
-            uq_method=uqsim_args_dict["uq_method"],
-            compute_Sobol_t=uqsim_args_dict.get("compute_Sobol_t", False),
-            compute_Sobol_m=uqsim_args_dict.get("compute_Sobol_m", False),
-            compute_Sobol_m2=uqsim_args_dict.get("compute_Sobol_m2", False),
-            save_all_simulations=uqsim_args_dict.get("save_all_simulations", True),
-            collect_and_save_state_data=uqsim_args_dict.get("collect_and_save_state_data", False),
-            store_qoi_data_in_stat_dict=uqsim_args_dict.get("store_qoi_data_in_stat_dict", False),
-            store_gpce_surrogate_in_stat_dict=uqsim_args_dict.get("store_gpce_surrogate_in_stat_dict", True),
-            instantly_save_results_for_each_time_step=uqsim_args_dict.get("instantly_save_results_for_each_time_step", False),
-        )
+    # elif model == "battery":
+    #     statisticsObject = pybammStatistics.pybammStatistics(
+    #         configurationObject=configuration_object,
+    #         workingDir=workingDir,
+    #         inputModelDir=uqsim_args_dict["inputModelDir"],
+    #         sampleFromStandardDist=uqsim_args_dict["sampleFromStandardDist"],
+    #         parallel_statistics=uqsim_args_dict["parallel_statistics"],
+    #         mpi_chunksize=uqsim_args_dict.get("mpi_chunksize", 1),
+    #         unordered=False,
+    #         uq_method=uqsim_args_dict["uq_method"],
+    #         compute_Sobol_t=uqsim_args_dict.get("compute_Sobol_t", False),
+    #         compute_Sobol_m=uqsim_args_dict.get("compute_Sobol_m", False),
+    #         compute_Sobol_m2=uqsim_args_dict.get("compute_Sobol_m2", False),
+    #         save_all_simulations=uqsim_args_dict.get("save_all_simulations", True),
+    #         collect_and_save_state_data=uqsim_args_dict.get("collect_and_save_state_data", False),
+    #         store_qoi_data_in_stat_dict=uqsim_args_dict.get("store_qoi_data_in_stat_dict", False),
+    #         store_gpce_surrogate_in_stat_dict=uqsim_args_dict.get("store_gpce_surrogate_in_stat_dict", True),
+    #         instantly_save_results_for_each_time_step=uqsim_args_dict.get("instantly_save_results_for_each_time_step", False),
+    #     )
     elif model == "ishigami":
         statisticsObject = IshigamiStatistics.IshigamiStatistics(
             configurationObject=configuration_object,

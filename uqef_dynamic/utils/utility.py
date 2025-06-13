@@ -4442,6 +4442,22 @@ def generate_table_over_rules_orders_for_single_dim(rules, dist, dim, q_orders, 
 # =================================================================================================
 # MISC - Different set of utility functions
 # =================================================================================================
+
+def get_matrix_for_saltelli_computation(matrix_A, matrix_B, indices):
+    """Retrieve Saltelli matrix.
+    Input matrices should be of dimension dim x number_of_samples
+    len(indices) should be equal to the dim
+
+    Return: A_B matrix from Saltelli's 2010 paper
+    """
+    new = np.empty(matrix_A.shape)
+    for idx in range(len(indices)):
+        if indices[idx]:
+            new[idx] = matrix_B[idx]
+        else:
+            new[idx] = matrix_A[idx]
+    return new
+
 def process_dict_set_predictions_to_zero(dict_set_predictions_to_zero, list_qois):
     if not isinstance(dict_set_predictions_to_zero, dict) or not dict_set_predictions_to_zero:
         if isinstance(dict_set_predictions_to_zero, bool):
