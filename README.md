@@ -361,7 +361,7 @@ For a complete list of arguments and their explanations, refer to the `docs` sub
 
 ```bash
 python uqef_dynamic/scientific_pipelines/uq_simulation_uqsim.py --help
-
+```
 
 ## Authors
 
