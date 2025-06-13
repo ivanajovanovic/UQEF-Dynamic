@@ -4,17 +4,53 @@ Software tool for Efficient Forward Uncertainty Quantification of Dynamical Mode
 
 ## Overview
 
-UQEF-Dynamic is a comprehensive framework for Uncertainty Quantification (UQ) and Global Sensitivity Analysis (SA) for dynamic models, with a particular focus on hydrological models and other time-dependent systems. The framework extends the capabilities of the UQEF (Uncertainty Quantification and Ensemble Framework) to handle time-dependent processes.
+UQEF-Dynamic is a comprehensive framework for Uncertainty Quantification (UQ) and Global Sensitivity Analysis (SA) for dynamic models, with a particular focus on hydrological models and other time-dependent systems. The framework extends the capabilities of the UQEF (Uncertainty Quantification Execution Framework) to handle time-dependent processes.
 
 <!-- This code is licensed under the GNU Lesser General Public License version 3 or
 later, see `COPYING` and `COPYING.LESSER`. -->
+
+## Framework Capabilities
+
+The UQEF-Dynamic framework provides the following key capabilities:
+
+1. **Model Integration**: Support for various models including hydrological models (HBV, LARSIM), test functions (Ishigami), and physical models (oscillators, batteries)
+
+2. **Uncertainty Quantification Methods**:
+   - Ensamble Analysis
+   - Monte Carlo (MC) sampling
+   - Stochastic Collocation (SC)
+   - Polynomial Chaos Expansion (PCE)
+   - Karhunen-Loève (KL) expansion for time-dependent processes
+
+3. **Sensitivity Analysis**:
+   - Sobol indices (main, total, and second-order)
+   - Generalized Sobol indices for time-dependent processes
+   - Active subspaces
+   - Gradient analysis
+
+4. **Statistical Analysis**:
+   - Computation of statistical moments (mean, variance, skewness, kurtosis)
+   - Percentile calculations
+   - Time-dependent statistics
+   - Goodness-of-fit metrics
+
+5. **Visualization and Post-processing**:
+   - Time series visualization
+   - Sensitivity indices visualization
+   - Statistical moments visualization
+   - Surrogate model validation
+
+6. **Parallel Computing**:
+   - MPI-based parallelization
+   - Thread-based parallelization
+   - Hybrid parallelization strategies
 
 ## Requirements/Dependencies
 
 ### Core Dependencies
 
 - **Python**: Compatible with Python 3.11 (recommended)
-- **UQEF**: Uncertainty Quantification and Ensemble Framework (core library)
+- **UQEF**: Uncertainty Quantification Execution Framework (core library)
 - **Chaospy**: Python toolbox for performing uncertainty quantification
 - **NumPy/SciPy/Pandas**: For numerical computations and data handling
 - **MPI Libraries**: For parallel computing (mpi4py)
@@ -26,12 +62,8 @@ The project includes several requirements files:
 
 - `requirements.txt`: Basic dependencies list
 - `requirements/requirements_py311.txt`: Dependencies with fixed versions for Python 3.11
-- `requirements/requirements_py311-not-fixed.txt`: Same dependencies without fixed versions
-- `requirements/requirements_mpi_cluster_py311.txt`: Dependencies for MPI on clusters
-- `requirements/requirements_no_mpi_py311.txt`: Dependencies without MPI support
-- `requirements/requirements_openmpi_py311.txt`: Dependencies for OpenMPI
 
-### Model-Specific Dependencies
+### Other Dependencies
 
 - **LARSIM Model**: Require Larsim_Utility_Set library
 - **Battery Models**: Require PyBaMM (Python Battery Mathematical Modelling)
@@ -45,8 +77,6 @@ The recommended way to set up the environment is using conda:
 # Create a new conda environment with Python 3.11
 conda create -n uqef_env python=3.11
 conda install -n uqef_env --file requirements/requirements_py311.txt
-# conda install -n uqef_env -c conda-forge nb_conda_kernels
-# conda install -n uqef_env -c conda-forge pyproj
 conda activate uqef_env
 
 # Install Chaospy
@@ -55,7 +85,6 @@ $(which pip) install chaospy
 # Install UQEF (assuming the repository is cloned)
 cd UQEF/
 git checkout parallel_statistics
-# python setup_new.py install
 $(which pip) install -e .
 cd ../
 
@@ -63,13 +92,11 @@ cd ../
 cd Larsim_Utility_Set/
 git checkout master
 git pull
-# python setup.py install
 $(which pip) install -e .
 cd ../
 
 # For sparseSpACE toolbox (if needed)
 cd sparseSpACE/
-# python setup.py install
 $(which pip) install -e .
 cd ../
 ```
@@ -80,9 +107,19 @@ For convenience, you can use the provided setup script:
 bash set_up_conda_env.sh
 ```
 
+## Usage
+
+The framework is typically used through the scientific pipelines, with the main entry point being `uq_simulation_uqsim.py`. The workflow generally involves:
+
+1. Defining a configuration file
+2. Selecting a model and UQ method
+3. Running the simulation
+4. Post-processing and analyzing the results
+
+
 ## How to Run the Code/Simulation
 
-The UQEF-Dynamic framework is primarily used through the scientific pipelines, with the main entry point being `uqef_dynamic/scientific_pipelines/uq_simulation_uqsim.py`.
+The UQEF-Dynamic framework is primarily used through the scientific pipelines, with the main entry point being `uqef_dynamic/scientific_pipelines/uq_simulation_uqsim.py`. The `uqef_dynamic/scientific_pipelines/` subdirectory contains workflows for other different types of scientific simulations.
 
 ### Basic Usage
 
@@ -122,7 +159,7 @@ The framework supports several UQ methods:
    --uq_method mc --mc_numevaluations 10000 --sampling_rule latin_hypercube
    ```
 
-2. **Stochastic Collocation (SC)** - Polynomial chaos expansion:
+2. **Pseudo-spectral Projection (PSP) and Stochastic Collocation (SC)** - Polynomial chaos expansion:
    ```bash
    --uq_method sc --sc_q_order 7 --sc_p_order 3 --sc_quadrature_rule G
    ```
@@ -160,6 +197,9 @@ The framework includes several models:
    ```bash
    --model ishigami --config_file data/configurations/configuration_ishigami.json
    ```
+
+The `models/` directory contains implementations of various models that can be used with the framework. The `time_dependent_baseclass/` provides a common interface for all time-dependent models, ensuring consistent handling of time series data.
+
 
 ### Parallel Computing
 
@@ -321,3 +361,9 @@ For a complete list of arguments and their explanations, refer to the `docs` sub
 
 ```bash
 python uqef_dynamic/scientific_pipelines/uq_simulation_uqsim.py --help
+
+
+## Authors
+
+- Ivana Jovanovic Buha
+- Florian Kuenzner

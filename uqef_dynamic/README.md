@@ -11,8 +11,6 @@ The `uqef_dynamic` directory is organized into the following main components:
 
 ```
 uqef_dynamic/
-├── __init__.py
-├── paths.py
 ├── models/
 ├── scientific_pipelines/
 └── utils/
@@ -29,7 +27,6 @@ The `models/` directory contains implementations of various models that can be u
 
 ```
 models/
-├── __init__.py
 ├── hbv/                  # HBV hydrological model
 ├── hbv_sask/             # Saskatchewan implementation of HBV model
 ├── ishigami/             # Ishigami test function model
@@ -56,7 +53,6 @@ The `scientific_pipelines/` directory contains workflows for different types of 
 
 ```
 scientific_pipelines/
-├── __init__.py
 ├── compare_surrogate_model_pipeline.py
 ├── comparing_model_and_surrogate_mpi_threading.py
 ├── comparing_model_and_surrogate_mpi.py
@@ -88,7 +84,6 @@ The `utils/` directory contains utility functions and tools that support the fra
 
 ```
 utils/
-├── __init__.py
 ├── colors.py
 ├── create_stat_object.py
 ├── morris_sensitivity_analysis.py
@@ -116,6 +111,7 @@ The UQEF-Dynamic framework provides the following key capabilities:
 1. **Model Integration**: Support for various models including hydrological models (HBV, LARSIM), test functions (Ishigami), and physical models (oscillators, batteries)
 
 2. **Uncertainty Quantification Methods**:
+   - Ensamble Analysis
    - Monte Carlo (MC) sampling
    - Stochastic Collocation (SC)
    - Polynomial Chaos Expansion (PCE)
@@ -124,8 +120,8 @@ The UQEF-Dynamic framework provides the following key capabilities:
 3. **Sensitivity Analysis**:
    - Sobol indices (main, total, and second-order)
    - Generalized Sobol indices for time-dependent processes
-   - Morris method
    - Active subspaces
+   - Gradient analysis
 
 4. **Statistical Analysis**:
    - Computation of statistical moments (mean, variance, skewness, kurtosis)
@@ -166,9 +162,9 @@ The framework is typically used through the scientific pipelines, with the main 
 ## Dependencies
 
 The framework depends on several libraries:
-- NumPy, SciPy, Pandas for numerical computations and data handling
 - Chaospy for uncertainty quantification
 - UQEF library
+- NumPy, SciPy, Pandas for numerical computations and data handling
 - Plotly and Matplotlib for visualization
 - MPI libraries for parallel computing
 
