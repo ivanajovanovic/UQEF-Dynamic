@@ -184,7 +184,29 @@ def run_simplified_uqef_dynamic_simulation(
                 parameters_file_name=uqsim_args_dict["parameters_file"]
             )
         elif uq_method == "saltelli":
-            raise NotImplementedError("Yet not implemented for the Saltelli method")
+            nodes, parameters = simulationNodes.generateNodesForMC(
+                numSamples=uqsim_args_dict["mc_numevaluations"]*2, 
+                rule=uqsim_args_dict["sampling_rule"], 
+                read_nodes_from_file=uqsim_args_dict["read_nodes_from_file"], 
+                parameters_file_name=uqsim_args_dict["parameters_file"]
+            )
+            dim = nodes.shape[0]
+            N = uqsim_args_dict["mc_numevaluations"]
+            total_number_model_evaluations = N * (dim + 2)
+            if parameters is not None:
+                original_set_of_parameters = parameters
+            else:
+                original_set_of_parameters = nodes
+            m1 = original_set_of_parameters.T[:N].T  # m1.shape = (dim,N)
+            m2 = original_set_of_parameters.T[N:].T  # m2.shape = (dim,N)
+            zeros = [0] * dim
+            ones = [1] * dim
+            matrix_A = utility.get_matrix_for_saltelli_computation(matrix_A=m1, matrix_B=m2, indices=zeros)
+            matrix_B = utility.get_matrix_for_saltelli_computation(matrix_A=m1, matrix_B=m2, indices=ones)
+            matrix_A_B = np.concatenate([utility.get_matrix_for_saltelli_computation(matrix_A=m1, matrix_B=m2, indices=index) for index in np.eye(dim, dtype=bool)], axis=1)
+            parameters = np.concatenate([matrix_A, matrix_B, matrix_A_B], axis=1)
+            # parameters = parameters.T  # should be in Saltelli's case N*(dim+2) x dim
+            # raise NotImplementedError("Yet not implemented for the Saltelli method")
 
         # ============================
         # Save simulationNodes, nodes, parameters, and weights
@@ -206,7 +228,7 @@ def run_simplified_uqef_dynamic_simulation(
         # ============================
         # Simulate
         # ============================
-        start_time_evaluationg_surrogate = time.time()
+        start_time_evaluating_surrogate = time.time()
         problem_function.uq_method = uq_method
 
         single_qoi = None
@@ -263,10 +285,10 @@ def run_simplified_uqef_dynamic_simulation(
             )
             dictionary_with_inf_about_the_run_uqef["number_surrogate_model_evaluations"] = parameters.T.shape[0]
 
-        end_time_evaluationg_surrogate = time.time()
-        time_evaluationg_intermediate_surrogate  = end_time_evaluationg_surrogate - start_time_evaluationg_surrogate
-        dictionary_with_inf_about_the_run_uqef["time_evaluationg_model_when_building_gpce"] = time_evaluationg_intermediate_surrogate
-        print(f"INFO: time_evaluationg_model_when_building_gpce={dictionary_with_inf_about_the_run_uqef['time_evaluationg_model_when_building_gpce']}\n")
+        end_time_evaluating_surrogate = time.time()
+        time_evaluating_intermediate_surrogate  = end_time_evaluating_surrogate - start_time_evaluating_surrogate
+        dictionary_with_inf_about_the_run_uqef["time_evaluating_model_when_building_gpce"] = time_evaluating_intermediate_surrogate
+        print(f"INFO: time_evaluating_model_when_building_gpce={dictionary_with_inf_about_the_run_uqef['time_evaluating_model_when_building_gpce']}\n")
 
         if kwargs.get("run_original_model", False):
             start_time_evalauting_original_model_uqef = time.time()
@@ -347,13 +369,11 @@ def run_simplified_uqef_dynamic_simulation(
                 problem_statistics.calcStatisticsForSc()
         elif uq_method == "saltelli":
             if is_master(mpi, rank):
+                numEvaluations = uqsim_args_dict["mc_numevaluations"]
                 problem_statistics.prepareForMcSaltelliStatistics(
-                    simulationNodes,
-                    order=uqsim_args_dict["sc_p_order"],
-                    poly_normed=uqsim_args_dict["sc_poly_normed"], 
-                    poly_rule=uqsim_args_dict["sc_poly_rule"], 
+                    simulationNodes, numEvaluations=numEvaluations, 
                     regression=uqsim_args_dict["regression"], 
-                    cross_truncation=uqsim_args_dict["cross_truncation"])
+                )
             if uqsim_args_dict["parallel_statistics"] and uqsim_args_dict["mpi"]:
                 problem_statistics.calcStatisticsForMcSaltelliParallel()
             else:
@@ -983,7 +1003,9 @@ def main_routine(model, current_output_folder, **kwargs):
         dict_what_to_plot = kwargs.get("dict_what_to_plot", utility.DEFAULT_DICT_WHAT_TO_PLOT)
         dict_stat_to_compute = kwargs.get("dict_stat_to_compute", utility.DEFAULT_DICT_STAT_TO_COMPUTE)
         result_dict_uqef = run_simplified_uqef_dynamic_simulation(
-            problem_function=problem_function, configurationObject=configurationObject, uqsim_args_dict=uqsim_args_dict,
+            problem_function=problem_function, 
+            configurationObject=configurationObject, 
+            uqsim_args_dict=uqsim_args_dict,
             workingDir=workingDir, model=model,
             simulationNodes=simulationNodes, 
             list_of_surrogate_models=["larsim", "hbvsask", "ishigami", "oscillator",],
@@ -1082,7 +1104,7 @@ def main_routine(model, current_output_folder, **kwargs):
                 f"analytical_E-{analytical_E}; analytical_Var-{analytical_Var};\n"
                 f"analytical_Sobol_m-{analytical_Sobol_m}; analytical_Sobol_t-{analytical_Sobol_t}")
         else:
-            print(f"Sorry, the comparison of analytical and computed stat still not supported for model {model}") 
+            print(f"Sorry, the comparison of analytical and computed stat still not supported for model- {model}") 
         
         if analytical_E is not None:
             if E_gpce_sparsespace is not None:
@@ -1619,8 +1641,8 @@ def run_single_model_setup(single_setup_dict, model, current_output_folder, read
         dictionary_with_inf_about_the_run = main_routine(**single_setup_dict)
     return dictionary_with_inf_about_the_run
 
-#for single_setup_dict in list_of_simulation_runs_ishigami:
-for single_setup_dict in list_of_dict_run_setups:
+for single_setup_dict in list_of_simulation_runs_ishigami:
+# for single_setup_dict in list_of_dict_run_setups:
     if is_master(mpi, rank):
         start_time = time.time()
 

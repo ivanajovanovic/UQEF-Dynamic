@@ -564,6 +564,7 @@ class TimeDependentStatistics(ABC, Statistics):
 
         self.polynomial_expansion = None
         self.polynomial_norms = None
+        self.regression_model = None
 
         self.dict_processed_simulation_settings_from_config_file = None
         self.set_attributes_based_on_dict_processed_simulation_settings_from_config_file(**kwargs)
@@ -1484,8 +1485,8 @@ class TimeDependentStatistics(ABC, Statistics):
         #     if self.allow_conditioning_results_based_on_metric:
         #         self.handle_conditioning_model_runs(kwargs)
         # else:
-        self.handle_unsuccessful_runs()  # TODO - let's try this...
-        # self.handle_unsuccessful_runs_psp_saltelli()
+        #self.handle_unsuccessful_runs()  # TODO - let's try this...
+        self.handle_unsuccessful_runs_psp_saltelli()
             
     # =================================================================================================
 
@@ -1568,7 +1569,6 @@ class TimeDependentStatistics(ABC, Statistics):
         fullFileName = os.path.abspath(os.path.join(str(self.workingDir), fileName))
         with open(fullFileName, 'wb') as handle:
             pickle.dump(result_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
 
     # TODO Remove this function
     # def _process_result_single_qoi_single_time_step(self, single_qoi_column, timestamp):

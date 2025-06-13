@@ -33,7 +33,7 @@
   "simulation_settings": {
     "qoi":"Q_cms",
     "qoi_column":"Q_cms",
-    "autoregressive_model_first_order":"True",
+    "autoregressive_model_first_order":"False",
     "scale_factor_autoregressive_model_first_order":0.8,
     "transform_model_output":"None",
     "read_measured_data": "True",

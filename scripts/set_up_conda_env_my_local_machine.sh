@@ -12,7 +12,7 @@ $(which pip) install chaospy
 # after installing chaospy I have Successfully installed chaospy-4.3.17 numpoly-1.3.6 numpy-2.2.2 scipy-1.15.1
 cd UQEF/
 git checkout parallel_statistics
-$(which pip) install -e . #$(which python) setup_new.py install
+$(which pip) install -e . #in past it used to be $(which python) setup_new.py install
 cd ../
 cd Larsim_Utility_Set/
 git checkout master

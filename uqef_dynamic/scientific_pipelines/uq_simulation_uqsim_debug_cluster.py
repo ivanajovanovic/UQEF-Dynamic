@@ -60,18 +60,18 @@ if local_debugging:
     uqsim.args.uncertain = "all"
     uqsim.args.chunksize = 1
 
-    uqsim.args.uq_method = "mc"  # "sc" | "saltelli" | "mc" | "ensemble"
+    uqsim.args.uq_method = "sc"  # "sc" | "saltelli" | "mc" | "ensemble"
     
     uqsim.args.mc_numevaluations = 20000 # #10000
     uqsim.args.sampling_rule = "random"  # "random" | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
     
     uqsim.args.sc_q_order = 5  # 7 8 8 #10 3
-    uqsim.args.sc_p_order = 4  # 3, 3, 4 5, 6, 8
+    uqsim.args.sc_p_order = 2  # 3, 3, 4 5, 6, 8
     uqsim.args.sc_quadrature_rule = "g"  # "p" "genz_keister_24" "leja" "clenshaw_curtis"
 
-    uqsim.args.read_nodes_from_file = False
+    uqsim.args.read_nodes_from_file = True
     l = 5  # 10
-    dim = 24
+    dim = 10
     path_to_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/sparse_grid_nodes_weights")
     uqsim.args.parameters_file = path_to_file / f"KPU_d{dim}_l{l}.asc" # f"KPU_d7_l{l}.asc"
     uqsim.args.parameters_setup_file = None
@@ -79,7 +79,7 @@ if local_debugging:
     uqsim.args.sc_poly_rule = "three_terms_recurrence"  # "gram_schmidt" | "three_terms_recurrence" | "cholesky"
     uqsim.args.sc_poly_normed = True  # True
     uqsim.args.sc_sparse_quadrature = False  # False
-    uqsim.args.regression = True
+    uqsim.args.regression = False
     uqsim.args.regression_model_type = "OLS"  # None | "OLS" | "LARS"
     uqsim.args.cross_truncation = 0.7
 
@@ -103,7 +103,7 @@ if local_debugging:
     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs", 'beta_2007_sc_sliding_window_rmse')) #sliding_window or continuous
     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs", 'ensemble_q6_p3_6d_2006_banff')) #sliding_window or continuous
     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs", 'mc_10d_short_banff'))
-    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/hbvsask_runs", 'mc_20000_10d_p4_ols_ct07_oldman2004_2005'))
+    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/hbvsask_runs", 'gpce_10d_p2_l5_ct07_oldman_23days_2005_2006'))
     # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/configurations/configuration_hbv_10D_MC.json'
     # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/configurations/configuration_hbv_10D_MC_banff.json'
     # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/configurations/configuration_hbv_12D_MC.json'
@@ -111,7 +111,7 @@ if local_debugging:
     # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/configuration_hbv_7D.json'
     uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/configuration_hbv_10D.json'
     uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/configuration_hbv_10D_single_qoi.json'
-    uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/configuration_hbv_10D_2004_2005.json'
+    uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/configuration_hbv_10D_short.json'
 
     # Simple Oscillator
     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "simple_oscillator_model", 'sc_kl10_l7_p3_generalized'))  # mc_10000 mc_10000_terminal_voltage
@@ -140,7 +140,7 @@ if local_debugging:
     uqsim.args.disable_calc_statistics = False
     uqsim.args.parallel_statistics = True
 
-    uqsim.args.instantly_save_results_for_each_time_step = True
+    uqsim.args.instantly_save_results_for_each_time_step = False
     uqsim.args.uqsim_store_to_file = False
 
     uqsim.args.compute_Sobol_m = True
@@ -148,12 +148,14 @@ if local_debugging:
 
     uqsim.args.num_cores = 1
 
-    uqsim.args.save_all_simulations = True  # True for sc
+    uqsim.args.save_all_simulations = False  # True for sc
     uqsim.args.store_qoi_data_in_stat_dict = False  # if set to True, the qoi_values entry is stored in the stat_dict 
     uqsim.args.store_gpce_surrogate_in_stat_dict = False
     uqsim.args.collect_and_save_state_data = False # False 
 
     uqsim.setup_configuration_object()
+
+start_time = time.time()
 
 # TODO Eventually add these configurations to uqef.args
 utility.DEFAULT_DICT_WHAT_TO_PLOT = {
@@ -180,8 +182,8 @@ compute_kl_expansion_of_qoi = False
 kl_expansion_order = 10
 compute_timewise_gpce_next_to_kl_expansion = False
 
-compute_generalized_sobol_indices = False
-compute_generalized_sobol_indices_over_time = False
+compute_generalized_sobol_indices = True
+compute_generalized_sobol_indices_over_time = True
 
 compute_covariance_matrix_in_time = False
 
@@ -317,7 +319,7 @@ uqsim.statistics.update({"hbvsask"         : (lambda: HBVSASKStatistics.HBVSASKS
     save_gpce_surrogate=save_gpce_surrogate,
     compute_other_stat_besides_pce_surrogate=compute_other_stat_besides_pce_surrogate,
     compute_kl_expansion_of_qoi = compute_kl_expansion_of_qoi,
-    index_column_name = "Index_run",
+    index_column_name = utility.INDEX_COLUMN_NAME,
     allow_conditioning_results_based_on_metric=allow_conditioning_results_based_on_metric,
     condition_results_based_on_metric = condition_results_based_on_metric,
     condition_results_based_on_metric_value = condition_results_based_on_metric_value,
@@ -485,6 +487,8 @@ time_computing_statistics = end_time_computing_statistics - start_time_computing
 
 uqsim.save_statistics()
 
+end_time = time.time()
+total_time = end_time - start_time
 # save the dictionary with the arguments once again
 if uqsim.is_master():
     time_infoFileName = os.path.abspath(os.path.join(uqsim.args.outputResultDir, utility.TIME_INFO_FILE))
@@ -492,7 +496,8 @@ if uqsim.is_master():
         fp.write(f'number_full_model_runs: {number_full_model_evaluations}\n')
         fp.write(f'time_model_simulations: {time_model_simulations}\n')
         # fp.write(f'time_producing_gpce: {time_producing_gpce}\n')
-        fp.write(f'time_computing_statistics: {time_computing_statistics}')
+        fp.write(f'time_computing_statistics: {time_computing_statistics}\n')
+        fp.write(f'total_time: {total_time}')
 
 #####################################
 # tear down

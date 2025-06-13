@@ -82,6 +82,7 @@ if local_debugging:
     uqsim.args.sc_poly_normed = True  # True
     uqsim.args.sc_sparse_quadrature = False  # False
     uqsim.args.regression = False
+    uqsim.args.regression_model_type = "OLS"  # None | "OLS" | "LARS"
     uqsim.args.cross_truncation = 0.7
 
     # uqsim.args.sourceDir = os.path.abspath(os.path.join('/dss/dsshome1/lxc0C/ga45met2', 'Repositories', 'UQEF-Dynamic'))
@@ -152,6 +153,8 @@ if local_debugging:
 
     uqsim.setup_configuration_object()
 
+start_time = time.time()
+
 # TODO Eventually add these configurations to uqef.args
 utility.DEFAULT_DICT_WHAT_TO_PLOT = {
     "E_minus_std": False, "E_plus_std": False, "E_minus_2std": True, "E_plus_2std":True, 
@@ -177,8 +180,8 @@ compute_kl_expansion_of_qoi = False
 kl_expansion_order = 10
 compute_timewise_gpce_next_to_kl_expansion = False
 
-compute_generalized_sobol_indices = False
-compute_generalized_sobol_indices_over_time = False
+compute_generalized_sobol_indices = True #True
+compute_generalized_sobol_indices_over_time = True #True
 
 compute_covariance_matrix_in_time = False
 
@@ -482,6 +485,8 @@ time_computing_statistics = end_time_computing_statistics - start_time_computing
 
 uqsim.save_statistics()
 
+end_time = time.time()
+total_time = end_time - start_time
 # save the dictionary with the arguments once again
 if uqsim.is_master():
     time_infoFileName = os.path.abspath(os.path.join(uqsim.args.outputResultDir, utility.TIME_INFO_FILE))
@@ -489,7 +494,8 @@ if uqsim.is_master():
         fp.write(f'number_full_model_runs: {number_full_model_evaluations}\n')
         fp.write(f'time_model_simulations: {time_model_simulations}\n')
         # fp.write(f'time_producing_gpce: {time_producing_gpce}\n')
-        fp.write(f'time_computing_statistics: {time_computing_statistics}')
+        fp.write(f'time_computing_statistics: {time_computing_statistics}\n')
+        fp.write(f'total_time: {total_time}')
 
 #####################################
 # tear down
