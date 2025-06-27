@@ -23,7 +23,7 @@
     },
   "model_settings": {
     "model_name": "HBV",
-    "basis": "Oldman_Basin",
+    "basin": "Oldman_Basin",
     "plotting": "False",
     "writing_results_to_a_file": "False",
     "corrupt_forcing_data": "False"

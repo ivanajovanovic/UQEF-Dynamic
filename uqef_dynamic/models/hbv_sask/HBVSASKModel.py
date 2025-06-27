@@ -60,7 +60,7 @@ class HBVSASKModelConfigurations:
         # if not self.disable_statistics:
         #     self.writing_results_to_a_file = False
         #####################################
-        # self.initial_condition_file = self.inputModelDir_basis / "initial_condition.inp"
+        # self.initial_condition_file = self.inputModelDir_basin / "initial_condition.inp"
         initial_condition_file = kwargs.get("initial_condition_file", "state_df.pkl")
         # initial_condition_file = kwargs.get("initial_condition_file", "state_const_df.pkl")
         # if self.run_full_timespan:
@@ -126,11 +126,11 @@ class HBVSASKModel(object):
 
         self.inputModelDir = Path(inputModelDir)
 
-        if "basis" in kwargs:
-            self.basis = kwargs['basis']
+        if "basin" in kwargs:
+            self.basin = kwargs['basin']
         else:
-            self.basis = self.configurationObject["model_settings"].get("basis", 'Oldman_Basin')
-        self.inputModelDir_basis = self.inputModelDir / self.basis
+            self.basin = self.configurationObject["model_settings"].get("basin", 'Oldman_Basin')
+        self.inputModelDir_basin = self.inputModelDir / self.basin
 
         if workingDir is None:
             workingDir = self.inputModelDir
@@ -204,7 +204,7 @@ class HBVSASKModel(object):
         #     self.writing_results_to_a_file = False
         
         #####################################
-        # self.initial_condition_file = self.inputModelDir_basis / "initial_condition.inp"
+        # self.initial_condition_file = self.inputModelDir_basin / "initial_condition.inp"
         initial_condition_file = kwargs.get("initial_condition_file", "state_df.pkl")
         # initial_condition_file = kwargs.get("initial_condition_file", "state_const_df.pkl")
         # if self.run_full_timespan:
@@ -214,10 +214,10 @@ class HBVSASKModel(object):
         streamflow_inp = kwargs.get("streamflow_inp", "streamflow.inp")
         factorSpace_txt = kwargs.get("factorSpace_txt", "factorSpace.txt")
 
-        self.initial_condition_file = self.inputModelDir_basis / initial_condition_file
-        self.monthly_data_inp = self.inputModelDir_basis / monthly_data_inp
-        self.precipitation_temperature_inp = self.inputModelDir_basis / precipitation_temperature_inp
-        self.streamflow_inp = self.inputModelDir_basis / streamflow_inp
+        self.initial_condition_file = self.inputModelDir_basin / initial_condition_file
+        self.monthly_data_inp = self.inputModelDir_basin / monthly_data_inp
+        self.precipitation_temperature_inp = self.inputModelDir_basin / precipitation_temperature_inp
+        self.streamflow_inp = self.inputModelDir_basin / streamflow_inp
         self.factorSpace_txt = self.inputModelDir / factorSpace_txt
 
         self.time_column_name = kwargs.get('time_column_name', utility.TIME_COLUMN_NAME)
@@ -256,18 +256,31 @@ class HBVSASKModel(object):
         # Parameters related set-up part
         #####################################
         # TODO Move this to HBVSASKModelConfigurations eventually
-        self.nodeNames = [] # list of uncertain parameter names
-        try:
-            list_of_parameters = self.configurationObject["parameters"]
-        except KeyError as e:
-            print(f"Statistics: parameters key does "
-                  f"not exists in the configurationObject{e}")
-            raise
-        for i in list_of_parameters:
-            if self.uq_method == "ensemble" or i["distribution"] != "None":
-                self.nodeNames.append(i["name"])
-        self.dim = len(self.nodeNames)  # this should be equal to number of uncertain parameters and dim = simulationNodes.distNodes.shape[0]
-        self.labels = [nodeName.strip() for nodeName in self.nodeNames]
+        self.nodeNames = []  # list of uncertain parameter names
+        self.labels = []     # list of labels
+        self.dim = 0         # dimension of uncertain parameters
+
+        list_of_parameters = self.configurationObject.get("parameters", [])
+        if list_of_parameters:
+            for i in list_of_parameters:
+                if self.uq_method == "ensemble" or i.get("distribution") != "None":
+                    self.nodeNames.append(i.get("name", "").strip())
+            self.dim = len(self.nodeNames)
+            if self.nodeNames:
+                self.labels = [nodeName.strip() for nodeName in self.nodeNames]
+
+        # self.nodeNames = [] # list of uncertain parameter names
+        # try:
+        #     list_of_parameters = self.configurationObject["parameters"]
+        # except KeyError as e:
+        #     print(f"Careful! Parameters key does "
+        #           f"not exists in the configurationObject{e}")
+        #     # raise
+        # for i in list_of_parameters:
+        #     if self.uq_method == "ensemble" or i["distribution"] != "None":
+        #         self.nodeNames.append(i["name"])
+        # self.dim = len(self.nodeNames)  # this should be equal to number of uncertain parameters and dim = simulationNodes.distNodes.shape[0]
+        # self.labels = [nodeName.strip() for nodeName in self.nodeNames]
 
         #####################################
 
@@ -301,13 +314,13 @@ class HBVSASKModel(object):
         # TODO think about refactoring this, to get start_date and end_date as input arguments as well
         # note: run_full_timespan has a power over start and end dates
         if self.run_full_timespan:
-            self.start_date, self.end_date = hbv._get_full_time_span(self.basis)
+            self.start_date, self.end_date = hbv._get_full_time_span(self.basin)
         else:
             try:
                 self.start_date = self.get_timestamp_from_configuration_dict("start")
                 self.end_date = self.get_timestamp_from_configuration_dict("end")
             except KeyError:
-                self.start_date, self.end_date = hbv._get_full_time_span(self.basis)
+                self.start_date, self.end_date = hbv._get_full_time_span(self.basin)
 
     def get_timestamp_from_configuration_dict(self, time_type):
         return pd.Timestamp(
@@ -1049,7 +1062,7 @@ class HBVSASKModel(object):
                                                                       additional_columns=None,
                                                                       plot_measured_data=self.list_read_measured_data[idx])
                         # fig.add_trace(go.Scatter(x=flux_df.index, y=flux_df["Q_cms"], name="Q_cms"))
-                        plot_filename = curr_working_dir / f"hbv_sask_{self.basis}_{unique_run_index}_{single_qoi_column}.html"
+                        plot_filename = curr_working_dir / f"hbv_sask_{self.basin}_{unique_run_index}_{single_qoi_column}.html"
                         plot(fig, filename=str(plot_filename), auto_open=False)
                 else:
                     fig = hbv._plot_output_data_and_precipitation(input_data_df=self.time_series_measured_data_df,
@@ -1062,7 +1075,7 @@ class HBVSASKModel(object):
                                                                   additional_columns=None,
                                                                   plot_measured_data=self.read_measured_data)
                     # fig.add_trace(go.Scatter(x=flux_df.index, y=flux_df["Q_cms"], name="Q_cms"))
-                    plot_filename = curr_working_dir / f"hbv_sask_{self.basis}_{unique_run_index}.html"
+                    plot_filename = curr_working_dir / f"hbv_sask_{self.basin}_{unique_run_index}.html"
                     plot(fig, filename=str(plot_filename), auto_open=False)
                 # fig.show()
 

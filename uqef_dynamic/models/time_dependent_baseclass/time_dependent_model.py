@@ -311,7 +311,7 @@ class TimeDependentModel(ABC, Model):
         """
         # self.timesteps = None
         if self.run_full_timespan:
-            self.start_date, self.end_date = self._get_full_time_span(self.basis)
+            self.start_date, self.end_date = self._get_full_time_span(self.basin)
         else:
             try:
                 self.start_date = pd.Timestamp(
@@ -327,7 +327,7 @@ class TimeDependentModel(ABC, Model):
                     hour=self.configurationObject["time_settings"].get("end_hour", 0)
                 )
             except KeyError:
-                self.start_date, self.end_date = self._get_full_time_span(self.basis)
+                self.start_date, self.end_date = self._get_full_time_span(self.basin)
 
         if "spin_up_length" in kwargs:
             self.spin_up_length = kwargs["spin_up_length"]

@@ -20,7 +20,7 @@ from uqef_dynamic.utils import create_stat_object
 # TODO - change these paths accordingly
 hbv_model_data_path = pathlib.Path("/work/ga45met/Hydro_Models/HBV-SASK-data")
 inputModelDir = hbv_model_data_path
-basis = "Oldman_Basin"  # 'Banff_Basin'
+basin = "Oldman_Basin"  # 'Banff_Basin'
 # TODO - change these paths accordingly
 # 8D Saltelli 10 000 Q_cms, AET - 141
 workingDir = pathlib.Path('/work/ga45met/mnt/linux_cluster_scratch_hbv_2/hbv_uq_cm2.0141/')
@@ -66,7 +66,7 @@ simulation_settings_dict = utility.read_simulation_settings_from_configuration_o
 
 if model == "hbvsask":
     inputModelDir = uqsim_args_dict["inputModelDir"]
-    basis = configurationObject['model_settings']['basis']
+    basin = configurationObject['model_settings']['basin']
 
 # Reading Nodes and Parameters
 with open(nodes_file, 'rb') as f:
@@ -135,7 +135,7 @@ uqef_dynamic_utils.extend_statistics_object(
 )
 
 # Add measured Data - This is hardcoded for HBV
-statisticsObject.inputModelDir_basis = hbv_model_data_path / basis
+statisticsObject.inputModelDir_basin = hbv_model_data_path / basin
 statisticsObject.get_measured_data(
     timestepRange=(statisticsObject.timesteps_min, statisticsObject.timesteps_max),
     transforme_mesured_data_as_original_model="False")

@@ -17,14 +17,14 @@ class HBVSASKStatistics(time_dependent_statistics.TimeDependentStatistics):
         super(HBVSASKStatistics, self).__init__(configurationObject, workingDir, *args, **kwargs)
         # Statistics.__init__(self)
 
-        if "basis" in kwargs:
-            self.basis = kwargs['basis']
+        if "basin" in kwargs:
+            self.basin = kwargs['basin']
         else:
-            self.basis = self.configurationObject["model_settings"].get("basis", 'Oldman_Basin')
+            self.basin = self.configurationObject["model_settings"].get("basin", 'Oldman_Basin')
 
         inputModelDir = kwargs.get('inputModelDir', self.workingDir)
         self.inputModelDir = pathlib.Path(inputModelDir)
-        self.inputModelDir_basis = self.inputModelDir / self.basis
+        self.inputModelDir_basin = self.inputModelDir / self.basin
 
         #####################################
         # Set of configuration variables propagated via **kwargs or read from configurationObject
@@ -93,7 +93,7 @@ class HBVSASKStatistics(time_dependent_statistics.TimeDependentStatistics):
     def _get_measured_streamflow(self, timestepRange=None, time_column_name="TimeStamp",
                                  streamflow_column_name="streamflow", **kwargs):
         streamflow_inp = kwargs.get("streamflow_inp", "streamflow.inp")
-        streamflow_inp = self.inputModelDir_basis / streamflow_inp
+        streamflow_inp = self.inputModelDir_basin / streamflow_inp
 
         if streamflow_column_name is None:
             streamflow_column_name = self.streamflow_column_name
@@ -116,7 +116,7 @@ class HBVSASKStatistics(time_dependent_statistics.TimeDependentStatistics):
         precipitation_temperature_inp = kwargs.get("precipitation_temperature_inp", "Precipitation_Temperature.inp")
         precipitation_column_name = kwargs.get("precipitation_column_name", "precipitation")
         temperature_column_name = kwargs.get("temperature_column_name", "temperature")
-        precipitation_temperature_inp = self.inputModelDir_basis / precipitation_temperature_inp
+        precipitation_temperature_inp = self.inputModelDir_basin / precipitation_temperature_inp
 
         precipitation_temperature_df = hbv.read_precipitation_temperature(
             precipitation_temperature_inp, time_column_name=time_column_name,

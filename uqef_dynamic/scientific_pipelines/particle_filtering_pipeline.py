@@ -327,8 +327,8 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
     hbv_model_data_path = pathlib.Path("/work/ga45met/Hydro_Models/HBV-SASK-data")
     configuration_file = pathlib.Path('/work/ga45met/Hydro_Models/HBV-SASK-py-tool/configurations/configuration_hbv_6D.json')
     inputModelDir = hbv_model_data_path
-    basis = "Oldman_Basin"  # 'Banff_Basin'
-    workingDir = hbv_model_data_path / basis / "model_runs" / working_dir_name
+    basin = "Oldman_Basin"  # 'Banff_Basin'
+    workingDir = hbv_model_data_path / basin / "model_runs" / working_dir_name
     directory_for_saving_plots = workingDir
     if not str(directory_for_saving_plots).endswith("/"):
         directory_for_saving_plots = str(directory_for_saving_plots) + "/"
@@ -343,7 +343,7 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
         configurationObject=configuration_file,
         inputModelDir=inputModelDir,
         workingDir=workingDir,
-        basis=basis,
+        basin=basin,
         writing_results_to_a_file=writing_results_to_a_file,
         plotting=plotting
     )
@@ -610,7 +610,7 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
     print(f"FINISH")
         
     # =========================================================
-    # Creating Data Structures whihc will be used for further analysis (saving it) and plotting
+    # Creating Data Structures which will be used for further analysis (saving it) and plotting
     # =========================================================
 
     # Create one big DataFrame storing all the simulation over time and over different particles

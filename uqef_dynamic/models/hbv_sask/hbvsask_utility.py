@@ -1187,11 +1187,11 @@ def HBV_SASK(forcing, long_term, par_values_dict, initial_condition_df, printing
 #####################################
 
 
-def _get_full_time_span(basis):
-    if basis == 'Banff_Basin':
+def _get_full_time_span(basin):
+    if basin == 'Banff_Basin':
         start_date = pd.Timestamp('1950-01-01 00:00:00')
         end_date = pd.Timestamp('2011-12-31 00:00:00')
-    elif basis == 'Oldman_Basin':
+    elif basin == 'Oldman_Basin':
         start_date = pd.Timestamp('1979-01-01 00:00:00')
         end_date = pd.Timestamp('2008-12-31 00:00:00')
     else:
@@ -1201,10 +1201,10 @@ def _get_full_time_span(basis):
 
 
 # TODO Change the function such that less is pre-assumed about the structure of different dfs
-def run_the_model(hbv_model_path, config_file, par_values_dict, run_full_timespan=False, basis='Oldman_Basin',
+def run_the_model(hbv_model_path, config_file, par_values_dict, run_full_timespan=False, basin='Oldman_Basin',
                   plotting=False, writing_results_to_a_file=False, output_path=None, **kwargs):
     # Preparing paths
-    path_to_input = hbv_model_path / basis
+    path_to_input = hbv_model_path / basin
     # initial_condition_file = path_to_input / "initial_condition.inp"
     initial_condition_file = path_to_input / "state_df.pkl"
     # initial_condition_file = path_to_input / "state_const_df.pkl"
@@ -1217,7 +1217,7 @@ def run_the_model(hbv_model_path, config_file, par_values_dict, run_full_timespa
         configuration_object = json.load(f)
 
     if run_full_timespan:
-        start_date, end_date = _get_full_time_span(basis)
+        start_date, end_date = _get_full_time_span(basin)
     else:
         try:
             start_date = pd.Timestamp(
@@ -1233,7 +1233,7 @@ def run_the_model(hbv_model_path, config_file, par_values_dict, run_full_timespa
                 hour=configuration_object["time_settings"]["end_hour"]
             )
         except KeyError:
-            start_date, end_date = _get_full_time_span(basis)
+            start_date, end_date = _get_full_time_span(basin)
 
     if "spin_up_length" in kwargs:
         spin_up_length = kwargs["spin_up_length"]
@@ -1376,7 +1376,7 @@ def run_the_model(hbv_model_path, config_file, par_values_dict, run_full_timespa
                                                  precipitation_columns=precipitation_column_name,
                                                  additional_columns=None)
         # fig.add_trace(go.Scatter(x=flux_df.index, y=flux_df["Q_cms"], name="Q_cms"))
-        plot_filename = output_path / f"hbv_sask_{basis}.html"
+        plot_filename = output_path / f"hbv_sask_{basin}.html"
         plot(fig, filename=str(plot_filename), auto_open=False)
         # fig.show()
 
@@ -1386,10 +1386,10 @@ def run_the_model(hbv_model_path, config_file, par_values_dict, run_full_timespa
 if __name__ == "__main__":
     # Path definitions - change them accordingly
     hbv_model_path = pathlib.Path("/work/ga45met/Hydro_Models/HBV-SASK-data")
-    # basis = 'Oldman_Basin'  # to read in data for the Oldman Basin
-    basis = 'Banff_Basin'  # to read in data for the Banff Basin
+    # basin = 'Oldman_Basin'  # to read in data for the Oldman Basin
+    basin = 'Banff_Basin'  # to read in data for the Banff Basin
     config_file = pathlib.Path("/work/ga45met/mnt/linux_cluster_2/UQEFPP/configurations/configuration_hbv.json")
-    output_path = hbv_model_path / basis / "model_runs" / "temp_7_constant_ic"
+    output_path = hbv_model_path / basin / "model_runs" / "temp_7_constant_ic"
     output_path.mkdir(parents=True, exist_ok=True)
 
     # this will overwrite configurations from the json file
@@ -1419,7 +1419,7 @@ if __name__ == "__main__":
     print(f"simulation_time_start-{simulation_time_start}")
 
     flux, state = run_the_model(
-        hbv_model_path, config_file, par_values_dict_mean, run_full_timespan=run_full_timespan, basis=basis,
+        hbv_model_path, config_file, par_values_dict_mean, run_full_timespan=run_full_timespan, basin=basin,
         plotting=plotting, writing_results_to_a_file=writing_results_to_a_file, output_path=output_path)  # spin_up_length=0
 
     simulation_time_end = time.time()

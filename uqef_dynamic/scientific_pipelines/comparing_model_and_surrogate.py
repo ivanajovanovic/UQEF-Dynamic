@@ -120,7 +120,7 @@ if __name__ == '__main__':
         configurationObject = dill.load(f)
     simulation_settings_dict = utility.read_simulation_settings_from_configuration_object(configurationObject)
     if model == "hbvsask":
-        basis = configurationObject['model_settings']['basis']
+        basin = configurationObject['model_settings']['basin']
 
     # Reading Nodes and Parameters
     with open(nodes_file, 'rb') as f:
@@ -208,7 +208,7 @@ if __name__ == '__main__':
         raise NotImplementedError
     elif model == "hbvsask":
         # This is hard-coded for HBV
-        statisticsObject.inputModelDir_basis = inputModelDir / basis
+        statisticsObject.inputModelDir_basin = inputModelDir / basin
         statisticsObject.get_measured_data(
             timestepRange=(statisticsObject.timesteps_min, statisticsObject.timesteps_max),
             transforme_mesured_data_as_original_model="False")

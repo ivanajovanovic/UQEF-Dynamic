@@ -128,7 +128,7 @@ if __name__ == '__main__':
                 inputModelDir = pathlib.Path("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/HBV-SASK-data")
             else:
                 pass
-            basis = "Oldman_Basin"  # 'Banff_Basin'
+            basin = "Oldman_Basin"  # 'Banff_Basin'
         else:
             raise NotImplementedError
 
@@ -229,7 +229,7 @@ if __name__ == '__main__':
             raise NotImplementedError
         elif model == "hbvsask":
             # This is hard-coded for HBV
-            statisticsObject.inputModelDir_basis = inputModelDir / basis
+            statisticsObject.inputModelDir_basin = inputModelDir / basin
             statisticsObject.get_measured_data(
                 timestepRange=(statisticsObject.timesteps_min, statisticsObject.timesteps_max),
                 transforme_mesured_data_as_original_model="False")

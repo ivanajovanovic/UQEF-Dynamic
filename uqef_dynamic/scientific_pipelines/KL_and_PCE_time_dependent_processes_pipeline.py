@@ -542,9 +542,9 @@ def main_routine():
         configurationObject = pathlib.Path('/work/ga45met/Hydro_Models/HBV-SASK-py-tool/configurations/configuration_hbv_6D.json')
         # configurationObject = pathlib.Path('/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic/configurations/configuration_hbv_10D.json')
         inputModelDir = hbv_model_data_path
-        basis = "Oldman_Basin"  # 'Banff_Basin'
-        workingDir = hbv_model_data_path / basis / "model_runs" / "kl_and_pce_time_dependent_processes_pipeline_7d_pce_p3_sgql7_checking_pce_speed" #7d_kl40_p3_sgql7"  _mc_10d_10000
-        # workingDir = hbv_model_data_path / basis / "model_runs" / "kl_and_pce_time_dependent_processes_pipeline_4d_kl_tt_beta_etf_fc" 
+        basin = "Oldman_Basin"  # 'Banff_Basin'
+        workingDir = hbv_model_data_path / basin / "model_runs" / "kl_and_pce_time_dependent_processes_pipeline_7d_pce_p3_sgql7_checking_pce_speed" #7d_kl40_p3_sgql7"  _mc_10d_10000
+        # workingDir = hbv_model_data_path / basin / "model_runs" / "kl_and_pce_time_dependent_processes_pipeline_4d_kl_tt_beta_etf_fc" 
 
         # creating HBVSASK model object
         writing_results_to_a_file = False
@@ -554,7 +554,7 @@ def main_routine():
             configurationObject=configurationObject,
             inputModelDir=inputModelDir,
             workingDir=workingDir,
-            basis=basis,
+            basin=basin,
             writing_results_to_a_file=writing_results_to_a_file,
             plotting=plotting
         )
