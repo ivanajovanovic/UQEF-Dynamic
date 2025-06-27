@@ -1,6 +1,6 @@
 # UQEF-Dynamic Framework
 
-Software tool for Efficient Forward Uncertainty Quantification of Dynamical Models 
+Software tool for efficient forward uncertainty quantification and global sensitivity analysis of different models that produce time-varying output-of-interest (e.g., environmental models, dynamical models) 
 
 ## Overview
 

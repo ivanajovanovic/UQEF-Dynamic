@@ -5,13 +5,13 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "uqef_dynamic"
 version = "0.1"
-description = "Framework for Efficient Uncertainty Quantification and Sensitivity Analysis of Time-dependent Model Outputs"
+description = "Framework for Efficient Uncertainty Quantification and Sensitivity Analysis of Time-varying Model Outputs"
 readme = "README.rst"
 license = {text = "GNU GPL-3.0"}
 authors = [
     {name = "Ivana Jovanovic Buha", email = "ivana.jovanovic@tum.de"}
 ]
-keywords = ["uncertainty quantification", "sensitivity analysis", "time-dependent model outputs"]
+keywords = ["uncertainty quantification", "sensitivity analysis", "time-varying model outputs"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Science/Research",
