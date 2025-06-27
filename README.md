@@ -73,8 +73,7 @@ The UQEF-Dynamic framework provides the following key capabilities:
 2. **Uncertainty Quantification Methods**:
    - Ensamble Analysis
    - Monte Carlo (MC) sampling
-   - Stochastic Collocation (SC)
-   - Polynomial Chaos Expansion (PCE)
+   - Polynomial Chaos Expansion (PCE) with Stochastic Collocation (SC) or Pseudo-Spectral Projection (PSP)
    - Karhunen-Loève (KL) expansion for time-dependent processes
 
 3. **Sensitivity Analysis**:
@@ -97,8 +96,7 @@ The UQEF-Dynamic framework provides the following key capabilities:
 
 6. **Parallel Computing**:
    - MPI-based parallelization
-   - Thread-based parallelization
-   - Hybrid parallelization strategies
+   - Thread-based parallelization or hybrid parallelization of some pipeline
 
 ## Requirements/Dependencies
 

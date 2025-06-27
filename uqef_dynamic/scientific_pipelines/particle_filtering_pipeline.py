@@ -16,16 +16,11 @@ import multiprocessing
 
 import chaospy as cp
 
-# TODO - change these paths accordingly
-# sys.path.insert(1, '/work/ga45met/Hydro_Models/HBV-SASK-py-tool')
-# sys.path.insert(1, '/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic')
 from uqef_dynamic.utils import utility
 from uqef_dynamic.utils import transport_map
 from uqef_dynamic.models.hbv_sask import hbvsask_utility as hbv
 from uqef_dynamic.models.hbv_sask import HBVSASKModel as hbvmodel
 
-TIME_COLUMN_NAME = 'TimeStamp'
-INDEX_COLUMN_NAME = "Index_run"
 PLOT_FORCING_DATA = True
 
 def run_model_single_time_stamp_single_particle(hbvsaskModelObject, date_of_interest,
@@ -532,9 +527,9 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
         y_t_model_per_date_dict[date_of_interest] = y_t_models_for_date
         updated_weights = np.asfarray(updated_weights)
 
-        row[TIME_COLUMN_NAME] = date_of_interest  # date_of_interest_over_rows
+        row[utility.TIME_COLUMN_NAME] = date_of_interest  # date_of_interest_over_rows
         row['y_t_model'] = y_t_models_for_date  # y_t_model_over_rows
-        row[INDEX_COLUMN_NAME] = new_list_unique_index_model_run_list  # index_run_over_rows
+        row[utility.INDEX_COLUMN_NAME] = new_list_unique_index_model_run_list  # index_run_over_rows
         row['likelihood'] = likelihood_over_rows
 
         average_predicted_streamflow = np.mean(y_t_models_for_date)  # this can as well be computed from row['y_t_model']
@@ -616,7 +611,7 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
     # Create one big DataFrame storing all the simulation over time and over different particles
     unfolded_data_structure_over_dates = []
     for item in data_structure_over_dates:
-        for i in range(len(item[INDEX_COLUMN_NAME])):
+        for i in range(len(item[utility.INDEX_COLUMN_NAME])):
             single_row_dict = {key: value[i] if isinstance(value, list) else value for key, value in item.items()}
             unfolded_data_structure_over_dates.append(single_row_dict)
     df = pd.DataFrame(unfolded_data_structure_over_dates)
@@ -696,12 +691,12 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
     #     )
 
     # Add all the model simulation over different particles
-    # grouped = df.groupby([INDEX_COLUMN_NAME,])
+    # grouped = df.groupby([utility.INDEX_COLUMN_NAME,])
     # groups = grouped.groups
     # print(f"DEBUGGING groups - {groups}")
     # lines = [
     #     go.Scatter(
-    #         x=list(df.loc[val_indices, TIME_COLUMN_NAME].values),
+    #         x=list(df.loc[val_indices, utility.TIME_COLUMN_NAME].values),
     #         y=list(df.loc[val_indices, 'y_t_model'].values),
     #         showlegend=False,
     #         # legendgroup=colours[i],
@@ -731,8 +726,8 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
     # Add forcing data streamflow
     if PLOT_FORCING_DATA:
         reset_index_at_the_end = False
-        if hbvsaskModelObject.time_series_measured_data_df.index.name != TIME_COLUMN_NAME:
-            hbvsaskModelObject.time_series_measured_data_df.set_index(TIME_COLUMN_NAME, inplace=True)
+        if hbvsaskModelObject.time_series_measured_data_df.index.name != utility.TIME_COLUMN_NAME:
+            hbvsaskModelObject.time_series_measured_data_df.set_index(utility.TIME_COLUMN_NAME, inplace=True)
             reset_index_at_the_end = True
         
         temp = hbvsaskModelObject.time_series_measured_data_df[hbvsaskModelObject.time_series_measured_data_df.index.isin(list_of_dates_of_interest)]  # Sample forcing data for plotting only the list_of_dates_of_interest
@@ -745,7 +740,7 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
         )
         if reset_index_at_the_end:
             hbvsaskModelObject.time_series_measured_data_df.reset_index(inplace=True)
-            hbvsaskModelObject.time_series_measured_data_df.rename(columns={hbvsaskModelObject.time_series_measured_data_df.index.name: TIME_COLUMN_NAME}, inplace=True)
+            hbvsaskModelObject.time_series_measured_data_df.rename(columns={hbvsaskModelObject.time_series_measured_data_df.index.name: utility.TIME_COLUMN_NAME}, inplace=True)
 
     # Add observed streamflow
     fig.add_trace(
