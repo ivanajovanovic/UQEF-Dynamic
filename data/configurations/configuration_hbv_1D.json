@@ -1,21 +1,21 @@
 {
     "time_settings":
     {
-      "start_day": 30,
-      "start_month": 4,
-      "start_year": 2004,
+      "start_day": 1,
+      "start_month": 9,
+      "start_year": 2003,
       "start_hour": 0,
       "start_minute": 0,
 
-      "end_day": 30,
-      "end_month": 6,
+      "end_day": 10,
+      "end_month": 11,
       "end_year": 2007,
       "end_hour": 0,
       "end_minute": 0,
 
       "run_full_timespan":"False",
-      "spin_up_length":1095,
-      "simulation_length": 61,
+      "spin_up_length":1125,
+      "simulation_length": 395,
       "resolution": "daily",
 
       "cut_runs": "False",
@@ -31,17 +31,17 @@
     "hbv_model_path": "Hydro_Models/HBV-SASK-data"
   },
   "simulation_settings": {
-    "qoi":"Q_cms",
+    "qoi":"GoF",
     "qoi_column":"Q_cms",
     "autoregressive_model_first_order":"False",
     "transform_model_output":"None",
     "read_measured_data": "True",
     "qoi_column_measured":"streamflow",
-    "objective_function_qoi":["RMSE", "LogNSE","KGE"],
-    "calculate_GoF":"False",
-    "objective_function":["MAE", "MSE", "RMSE", "NRMSE", "NSE", "KGE"],
-    "mode":"continuous",
-    "interval": 10,
+    "objective_function_qoi":"RMSE",
+    "calculate_GoF":"True",
+    "objective_function":["MAE", "MSE", "RMSE", "NRMSE", "NSE", "LogNSE", "KGE"],
+    "mode":"sliding_window",
+    "interval": 5,
     "min_periods": 5,
     "method": "avrg",
     "center": "center",
@@ -54,85 +54,62 @@
   },
   "parameters": [
     {
+      "name": "beta",
+      "distribution": "Uniform",
+      "lower": 1.0,
+      "upper": 4.0,
+      "default": 2.0,
+      "values_list":[0.1, 0.5, 1.0, 2.0, 3.0, 4.0]
+    }
+  ],
+  "unused_parameters": [
+    {
       "name": "TT",
       "distribution": "Uniform",
       "lower": -4.0,
       "upper": 4.0,
-      "default": 0.0
+      "default": 0.0,
+      "values_list":[0.0,  1.0]
     },
     {
       "name": "C0",
       "distribution": "Uniform",
       "lower": 0.0,
-      "upper": 10.0,
-      "default": 2.0
+      "upper": 5.0,
+      "default": 0.5,
+      "values_list":[0.5, 5.0]
     },
     {
       "name": "ETF",
       "distribution": "Uniform",
       "lower": 0.0,
       "upper": 1.0,
-      "default": 0.2
+      "default": 0.2,
+      "values_list":[0.2, 0.5]
     },
     {
       "name": "FC",
       "distribution": "Uniform",
       "lower": 50.0,
       "upper": 500.0,
-      "default": 250
+      "default": 250,
+      "values_list":[100.0, 250.0]
     },
     {
       "name": "FRAC",
       "distribution": "Uniform",
       "lower": 0.01,
       "upper": 0.9,
-      "default": 0.3
+      "default": 0.1,
+      "values_list":[0.3, 0.5]
     },
     {
       "name": "K2",
       "distribution": "Uniform",
       "lower": 0.0,
       "upper": 0.05,
-      "default": 0.025
-    }
-  ],
-  "states": [
-    {
-      "name": "SWE",
-      "distribution": "Uniform",
-      "lower": 0.0,
-      "upper": 150.0,
-      "default": 0.0
-    },
-    {
-      "name": "SMS",
-      "distribution": "Uniform",
-      "lower": 0.0,
-      "upper": 250.0,
-      "default": 5.0
-    },
-    {
-      "name": "S1",
-      "distribution": "Uniform",
-      "lower": 0.0,
-      "upper": 100.0,
-      "default": 5.0
-    },
-    {
-      "name": "S2",
-      "distribution": "Uniform",
-      "lower": 0.0,
-      "upper": 100.0,
-      "default": 10.0
-    }
-  ],
-  "unused_parameters": [
-    {
-      "name": "beta",
-      "distribution": "Uniform",
-      "lower": 1.0,
-      "upper": 4.0,
-      "default": 2.0
+      "default": 0.025,
+      "values_list":[0.025, 0.06]
     },
     {
       "name": "LP",
@@ -144,8 +121,8 @@
     {
       "name": "beta",
       "distribution": "Uniform",
-      "lower": 0.4,
-      "upper": 7.0,
+      "lower": 1.0,
+      "upper": 3.0,
       "default": 2.0
     },
     {
@@ -163,20 +140,6 @@
       "default": 2.0
     },
     {
-      "name": "M",
-      "distribution": "Uniform",
-      "lower": 0.9,
-      "upper": 1.0,
-      "default": 1.0
-    },
-    {
-      "name": "VAR_M",
-      "distribution": "Uniform",
-      "lower": 1e-5,
-      "upper": 1e-3,
-      "default": 1.0
-    },
-    {
       "name": "UBAS",
       "distribution": "None",
       "lower": 1.0,
@@ -188,6 +151,20 @@
       "distribution": "None",
       "lower": 0.5,
       "upper": 2.0,
+      "default": 1.0
+    },
+    {
+      "name": "M",
+      "distribution": "Uniform",
+      "lower": 0.9,
+      "upper": 1.0,
+      "default": 1.0
+    },
+    {
+      "name": "VAR_M",
+      "distribution": "Uniform",
+      "lower": 1e-5,
+      "upper": 1e-3,
       "default": 1.0
     }
   ]
