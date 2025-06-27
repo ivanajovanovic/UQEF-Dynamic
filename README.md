@@ -9,6 +9,61 @@ UQEF-Dynamic is a comprehensive framework for Uncertainty Quantification (UQ) an
 <!-- This code is licensed under the GNU Lesser General Public License version 3 or
 later, see `COPYING` and `COPYING.LESSER`. -->
 
+## Installation
+
+UQEF-Dynamic can be installed in several ways depending on your needs:
+
+### Basic Installation
+
+For the core functionality without optional model dependencies:
+
+```bash
+pip install uqef_dynamic
+```
+
+### Installation with Optional Dependencies
+
+#### Battery Models Support
+
+To include support for battery models (requires PyBaMM):
+
+```bash
+pip install uqef_dynamic[battery]
+```
+
+#### All Optional Dependencies
+
+To install with all optional dependencies:
+
+```bash
+pip install uqef_dynamic[all]
+```
+
+### Development Installation
+
+For development or if you want to modify the code:
+
+```bash
+# Clone the repository
+git clone https://github.com/ivanajovanovic/UQEF-Dynamic.git
+cd UQEF-Dynamic
+
+# Basic development installation
+pip install -e .
+
+# Development installation with battery support
+pip install -e .[battery]
+
+# Development installation with all optional dependencies
+pip install -e .[all]
+```
+
+### Installation Notes
+
+- **Battery Models**: The `pybamm` package is only required if you plan to use battery models. It's included as an optional dependency to avoid forcing installation for users who don't need it.
+- **Python Version**: Compatible with Python 3.6+ (Python 3.11 recommended)
+- **Dependencies**: Core dependencies will be automatically installed with any of the above methods
+
 ## Framework Capabilities
 
 The UQEF-Dynamic framework provides the following key capabilities:

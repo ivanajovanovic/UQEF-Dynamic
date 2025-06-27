@@ -36,7 +36,7 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 #warnings.filterwarnings('ignore')
 pd.options.mode.chained_assignment = None
 
-sys.path.insert(0, os.getcwd())
+# sys.path.insert(0, os.getcwd())
 
 # instantiate UQsim
 uqsim = uqef.UQsim()

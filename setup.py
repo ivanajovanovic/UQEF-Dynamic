@@ -10,8 +10,7 @@ setup(
     author_email='ivana.jovanovic@tum.de',
     license='GNU GPL',
     platforms='any',
-    packages=find_packages("uqef_dynamic"),
-    package_dir={"": "uqef_dynamic"},
+    packages=find_packages(),
     install_requires=[
         'chaospy',
         'uqef',
@@ -29,6 +28,10 @@ setup(
         'seaborn',
         'setuptools'
     ],
+    extras_require={
+        'battery': ['pybamm'],
+        'all': ['pybamm'],
+    },
     classifiers=[
         'Development Status :: 5 - Production/Stable',
         'Intended Audience :: Science/Research',

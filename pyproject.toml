@@ -1,0 +1,72 @@
+[build-system]
+requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "uqef_dynamic"
+version = "0.1"
+description = "Framework for Efficient Uncertainty Quantification and Sensitivity Analysis of Time-dependent Model Outputs"
+readme = "README.rst"
+license = {text = "GNU GPL-3.0"}
+authors = [
+    {name = "Ivana Jovanovic Buha", email = "ivana.jovanovic@tum.de"}
+]
+keywords = ["uncertainty quantification", "sensitivity analysis", "time-dependent model outputs"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Natural Language :: English",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.6",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+]
+requires-python = ">=3.6"
+dependencies = [
+    "chaospy",
+    "uqef",
+    "dill",
+    "joblib",
+    "matplotlib",
+    "more_itertools",
+    "mpi4py",
+    "numpy",
+    "pandas",
+    "plotly",
+    "pyproj",
+    "scikit-learn",
+    "scipy",
+    "seaborn",
+    "setuptools"
+]
+
+[project.optional-dependencies]
+battery = ["pybamm"]
+all = ["pybamm"]
+
+[project.urls]
+Homepage = "https://github.com/ivanajovanovic/UQEF-Dynamic"
+Repository = "https://github.com/ivanajovanovic/UQEF-Dynamic"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+exclude = [
+    "common*",
+    "data*",
+    "docs*",
+    "misc*",
+    "Notebooks*",
+    "simulations*",
+    "tests*"
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--doctest-modules --doctest-glob='*.rst' --cov=uqef_dynamic --cov-report term-missing"
