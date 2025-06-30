@@ -1,6 +1,7 @@
 #!/bin/bash
 
-salloc --clusters=inter --partition=cm4_inter -N 1 -t 02:00:00
+salloc --clusters=inter --partition=cm4_inter -N 1 -n 112 -c 1 -t 02:00:00
+# salloc -M inter -p cm4_inter -N 1 -n 112 -c 1 -t 06:00:00
 #module unload python
 #module load anaconda3
 #module load python/3.6_intel
