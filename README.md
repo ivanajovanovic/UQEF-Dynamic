@@ -64,40 +64,6 @@ pip install -e .[all]
 - **Python Version**: Compatible with Python 3.6+ (Python 3.11 recommended)
 - **Dependencies**: Core dependencies will be automatically installed with any of the above methods
 
-## Framework Capabilities
-
-The UQEF-Dynamic framework provides the following key capabilities:
-
-1. **Model Integration**: Support for various models including hydrological models (HBV, LARSIM), test functions (Ishigami), and physical models (oscillators, batteries)
-
-2. **Uncertainty Quantification Methods**:
-   - Ensamble Analysis
-   - Monte Carlo (MC) sampling
-   - Polynomial Chaos Expansion (PCE) with Stochastic Collocation (SC) or Pseudo-Spectral Projection (PSP)
-   - Karhunen-Loève (KL) expansion for time-dependent processes
-
-3. **Sensitivity Analysis**:
-   - Sobol indices (main, total, and second-order)
-   - Generalized Sobol indices for time-dependent processes
-   - Active subspaces
-   - Gradient analysis
-
-4. **Statistical Analysis**:
-   - Computation of statistical moments (mean, variance, skewness, kurtosis)
-   - Percentile calculations
-   - Time-dependent statistics
-   - Goodness-of-fit metrics
-
-5. **Visualization and Post-processing**:
-   - Time series visualization
-   - Sensitivity indices visualization
-   - Statistical moments visualization
-   - Surrogate model validation
-
-6. **Parallel Computing**:
-   - MPI-based parallelization
-   - Thread-based parallelization or hybrid parallelization of some pipeline
-
 ## Requirements/Dependencies
 
 ### Core Dependencies
@@ -160,6 +126,40 @@ For convenience, you can use the provided setup script:
 bash set_up_conda_env.sh
 ```
 
+## Framework Capabilities
+
+The UQEF-Dynamic framework provides the following key capabilities:
+
+1. **Model Integration**: Support for various models including hydrological models (HBV, LARSIM), test functions (Ishigami), and physical models (oscillators, batteries)
+
+2. **Uncertainty Quantification Methods**:
+   - Ensamble Analysis
+   - Monte Carlo (MC) sampling
+   - Polynomial Chaos Expansion (PCE) with Stochastic Collocation (SC) or Pseudo-Spectral Projection (PSP)
+   - Karhunen-Loève (KL) expansion for time-dependent processes
+
+3. **Sensitivity Analysis**:
+   - Sobol indices (main, total, and second-order)
+   - Generalized Sobol indices for time-dependent processes
+   - Active subspaces
+   - Gradient analysis
+
+4. **Statistical Analysis**:
+   - Computation of statistical moments (mean, variance, skewness, kurtosis)
+   - Percentile calculations
+   - Time-dependent statistics
+   - Goodness-of-fit metrics
+
+5. **Visualization and Post-processing**:
+   - Time series visualization
+   - Sensitivity indices visualization
+   - Statistical moments visualization
+   - Surrogate model validation
+
+6. **Parallel Computing**:
+   - MPI-based parallelization
+   - Thread-based parallelization or hybrid parallelization of some pipeline
+
 ## Usage
 
 The framework is typically used through the scientific pipelines, with the main entry point being `uq_simulation_uqsim.py`. The workflow generally involves:
@@ -202,6 +202,19 @@ Example configuration files can be found in the `data/configurations/` directory
 - `model_settings`: Model-specific settings
 - `simulation_settings`: Settings for the simulation run
 - `parameters`: List of model parameters with their distributions
+
+#### Explanation of the relevant `simulation_settings` in the configuration file
+
+- `simulation_settings:mode` can be set to either `"continuous"` or `"sliding_window"`.
+
+If you want to run the simulation in **autoregressive** mode—where the Quantity of Interest (QoI) is defined as the difference between the current model output and a scaled version of the previous (observed) model output—you must set the following options in the configuration file:
+
+- `simulation_settings:autoregressive_model_first_order = True`
+- `simulation_settings:scale_factor_autoregressive_model_first_order = <value between 0 and 1>`, e.g., `0.7` or `0.9`
+
+> **Note:**  
+> If `Q_cms` is defined as a Goodness-of-Fit function, or if the mode is set to `"sliding_window"`, then `autoregressive_model_first_order` will automatically be set to `False`.
+
 
 ### UQ Methods
 
