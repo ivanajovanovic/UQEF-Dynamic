@@ -19,10 +19,6 @@ import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 pd.options.mode.chained_assignment = None
 
-# sys.path.insert(0, os.getcwd())
-# sys.path.insert(0, '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic')
-# sys.path.insert(0, "/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic")
-
 from uqef_dynamic.utils import utility
 
 from uqef_dynamic.models.hbv_sask import HBVSASKModelUQ
@@ -47,7 +43,7 @@ if local_debugging:
     uqsim.args.uq_method = "mc"  # "sc" | "saltelli" | "mc" | "ensemble"
     
     uqsim.args.mc_numevaluations = 10000
-    uqsim.args.sampling_rule = "latin_hypercube"  # "random" | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
+    uqsim.args.sampling_rule = "random"  # "random" | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
     
     uqsim.args.sc_q_order = 5  # 7 #10 3
     uqsim.args.sc_p_order = 3  # 4, 5, 6, 8
@@ -64,13 +60,14 @@ if local_debugging:
     uqsim.args.sc_poly_rule = "three_terms_recurrence"  # "gram_schmidt" | "three_terms_recurrence" | "cholesky"
     uqsim.args.sc_poly_normed = True  # True
     uqsim.args.sc_sparse_quadrature = False  # False
-    uqsim.args.regression = True
+    uqsim.args.regression = False
+    uqsim.args.regression_model_type = "OLS"  # None | "OLS" | "LARS"
     uqsim.args.cross_truncation = 1.0
 
     # paths, if necessary change them
     uqsim.args.inputModelDir = pathlib.Path("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/HBV-SASK-data")
     uqsim.args.sourceDir = pathlib.Path("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/HBV-SASK-data")
-    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/hbvsask_runs", 'mc_kl40_gpce_10d_p3_ct10_10000lhc_oldman_2007'))
+    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/hbvsask_runs", 'mc_10d_10000random_oldman_2007_parallel_stat_112'))
     uqsim.args.outputModelDir = uqsim.args.outputResultDir
     uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/configuration_hbv_10D.json'
 
@@ -104,15 +101,18 @@ if local_debugging:
 
     uqsim.setup_configuration_object()
 
+start_time = time.time()
+
 # TODO Eventually add these configurations to uqef.args
 utility.DEFAULT_DICT_WHAT_TO_PLOT = {
-    "E_minus_std": True, "E_plus_std": True, "E_minus_2std": False, "E_plus_2std":False, 
-    "P10": False, "P90": False,
-    "StdDev": True, "Skew": False, "Kurt": False, "Sobol_m": True, "Sobol_m2": False, "Sobol_t": True
+    "E_minus_std": False, "E_plus_std": False, "E_minus_2std": True, "E_plus_2std":True, 
+    "P10": True, "P90": True,
+    "StdDev": True, "Skew": False, "Kurt": False, "Sobol_m": True, "Sobol_m2": False, "Sobol_t": True,
+    "generalized_sobol_total_index": True, "generalized_sobol_main_index": True,
 }
 utility.DEFAULT_DICT_STAT_TO_COMPUTE = {
-    "Var": True, "StdDev": False, "P10": True, "P90": True,
-    "E_minus_std": True, "E_plus_std": True,
+    "Var": True, "StdDev": True, "P10": True, "P90": True,
+    "E_minus_std": False, "E_plus_std": False,
     "Skew": False, "Kurt": False, "Sobol_m": True, "Sobol_m2": False, "Sobol_t": True
 }
 dict_stat_to_compute = utility.DEFAULT_DICT_STAT_TO_COMPUTE
@@ -123,11 +123,11 @@ if uqsim.args.uq_method == "mc" and uqsim.args.compute_Sobol_m:
 save_gpce_surrogate = True  # if True a gpce surrogate for each QoI for each time step is saved in a separate file
 compute_other_stat_besides_pce_surrogate = True  # This is relevant only when uq_method == "sc" 
 
-compute_kl_expansion_of_qoi = True
+compute_kl_expansion_of_qoi = False
 kl_expansion_order = 40
 compute_timewise_gpce_next_to_kl_expansion = False
 
-compute_generalized_sobol_indices = True
+compute_generalized_sobol_indices = False
 compute_generalized_sobol_indices_over_time = False
 
 compute_covariance_matrix_in_time = False
@@ -285,6 +285,8 @@ time_computing_statistics = end_time_computing_statistics - start_time_computing
 
 uqsim.save_statistics()
 
+end_time = time.time()
+total_time = end_time - start_time
 # save the dictionary with the arguments once again
 if uqsim.is_master():
     size = uqsim.get_size()
@@ -295,6 +297,7 @@ if uqsim.is_master():
         # fp.write(f'time_producing_gpce: {time_producing_gpce}\n')
         fp.write(f'time_computing_statistics: {time_computing_statistics}\n')
         fp.write(f'number_mpi_processes: {size}')
+        fp.write(f'total_time: {total_time}')
 
 #####################################
 # tear down

@@ -467,7 +467,7 @@ class TimeDependentStatistics(ABC, Statistics):
         #####################################
         self.time_column_name = kwargs.get("time_column_name", utility.TIME_COLUMN_NAME)
         self.index_column_name = kwargs.get("index_column_name", utility.INDEX_COLUMN_NAME)
-        self.forcing_data_column_names = kwargs.get("forcing_data_column_names", "precipitation")
+        self.forcing_data_column_names = kwargs.get("forcing_data_column_names", ["precipitation",])
 
         try:
             self.resolution = self.configurationObject["time_settings"]["resolution"]
@@ -735,8 +735,8 @@ class TimeDependentStatistics(ABC, Statistics):
         list_of_columns_to_filter_from_results = self.list_qoi_column + list(
             self.dict_corresponding_original_qoi_column.values())
         if self.corrupt_forcing_data:
-            list_of_columns_to_filter_from_results = list_of_columns_to_filter_from_results + [
-                self.forcing_data_column_names]
+            # list_of_columns_to_filter_from_results.extend(self.forcing_data_column_names)
+            list_of_columns_to_filter_from_results = list_of_columns_to_filter_from_results + self.forcing_data_column_names
         list_of_columns_to_filter_from_results = list(set(list_of_columns_to_filter_from_results))
         return list_of_columns_to_filter_from_results
 
@@ -892,7 +892,9 @@ class TimeDependentStatistics(ABC, Statistics):
                 timestepRange=[self.timesteps_min_minus_one, self.timesteps_max],
                 qoi_column_name=self.list_original_model_output_columns  # or list(self.dict_corresponding_original_qoi_column.values)
             )
-        
+            print(f"DEBUGGING autoregressive_model_first_order self.df_measured - {self.df_measured}")
+            print(f"DEBUGGING autoregressive_model_first_order self.df_measured - {self.df_measured[utility.QOI_ENTRY]}")
+
         # This, though, does not hold for Saltelli's approach
         # self.numEvaluations = self.number_of_unique_index_runs
 
@@ -1495,13 +1497,13 @@ class TimeDependentStatistics(ABC, Statistics):
         if self.measured_fetched and self.df_measured is not None:
             if single_qoi_column in list(self.df_measured["qoi"].unique()):
                 df_measured_subset = self.df_measured.loc[self.df_measured["qoi"] == single_qoi_column][[
-                    self.time_column_name, "measured"]]
+                    self.time_column_name, utility.MEASURED_ENTRY]]
 
             elif self.dict_corresponding_original_qoi_column[single_qoi_column] \
                     in list(self.df_measured["qoi"].unique()):
                 df_measured_subset = self.df_measured.loc[
                     self.df_measured["qoi"] == self.dict_corresponding_original_qoi_column[single_qoi_column]][[
-                    self.time_column_name, "measured"]]
+                    self.time_column_name, utility.MEASURED_ENTRY]]
 
         if df_measured_subset is not None:
             reset_index = False
@@ -1510,7 +1512,7 @@ class TimeDependentStatistics(ABC, Statistics):
                 reset_index = True
             previous_timestamp = utility.compute_previous_timestamp(
                 timestamp=timestamp, resolution=self.resolution)
-            measured_qoi_at_previous_timestamp = df_measured_subset.loc[previous_timestamp]["measured"] #.values[0]
+            measured_qoi_at_previous_timestamp = df_measured_subset.loc[previous_timestamp][utility.MEASURED_ENTRY] #.values[0]
             if reset_index:
                 df_measured_subset.reset_index(inplace=True)
                 df_measured_subset.rename(columns={"index": self.time_column_name}, inplace=True)
@@ -1532,15 +1534,15 @@ class TimeDependentStatistics(ABC, Statistics):
         if self.scale_factor_autoregressive_model_first_order is None:
             self.scale_factor_autoregressive_model_first_order = 1.0
         if self.measured_fetched and self.df_measured is not None:
-            if single_qoi_column in list(self.df_measured["qoi"].unique()):
-                df_measured_subset = self.df_measured.loc[self.df_measured["qoi"] == single_qoi_column][[
-                    self.time_column_name, "measured"]]
+            if single_qoi_column in list(self.df_measured[utility.QOI_ENTRY].unique()):
+                df_measured_subset = self.df_measured.loc[self.df_measured[utility.QOI_ENTRY] == single_qoi_column][[
+                    self.time_column_name, utility.MEASURED_ENTRY]]
 
             elif self.dict_corresponding_original_qoi_column[single_qoi_column] \
-                    in list(self.df_measured["qoi"].unique()):
+                    in list(self.df_measured[utility.QOI_ENTRY].unique()):
                 df_measured_subset = self.df_measured.loc[
-                    self.df_measured["qoi"] == self.dict_corresponding_original_qoi_column[single_qoi_column]][[
-                    self.time_column_name, "measured"]]
+                    self.df_measured[utility.QOI_ENTRY] == self.dict_corresponding_original_qoi_column[single_qoi_column]][[
+                    self.time_column_name, utility.MEASURED_ENTRY]]
             if df_measured_subset.empty:
                 df_measured_subset = None
         else:
@@ -1555,14 +1557,15 @@ class TimeDependentStatistics(ABC, Statistics):
             # Compute the previous timestamp
             previous_timestamp = utility.compute_previous_timestamp(
                 timestamp=timestamp, resolution=self.resolution)
-            result_dict["E"] = result_dict["E"] + self.scale_factor_autoregressive_model_first_order*df_measured_subset.loc[previous_timestamp]["measured"] #.values[0]
-            # if result_dict["E"]<1e-10:
-            #     result_dict["E"] = 0.0
+            temp_value = self.scale_factor_autoregressive_model_first_order*df_measured_subset.loc[previous_timestamp][utility.MEASURED_ENTRY]
+            result_dict[utility.MEAN_ENTRY] = result_dict[utility.MEAN_ENTRY] + self.scale_factor_autoregressive_model_first_order*df_measured_subset.loc[previous_timestamp][utility.MEASURED_ENTRY] #.values[0]
+            # if result_dict[utility.MEAN_ENTRY]<1e-10:
+            #     result_dict[utility.MEAN_ENTRY] = 0.0
             if reset_index:
                 df_measured_subset.reset_index(inplace=True)
                 df_measured_subset.rename(columns={"index": self.time_column_name}, inplace=True)
         # else:
-        #     result_dict["E"] = result_dict["E"] + self.scale_factor_autoregressive_model_first_order*result_dict_previousr_timestamp["E"]
+        #     result_dict[utility.MEAN_ENTRY] = result_dict[utility.MEAN_ENTRY] + self.scale_factor_autoregressive_model_first_order*result_dict_previousr_timestamp["E"]
 
     def _save_statistics_dictionary_single_qoi_single_timestamp(self, single_qoi_column, timestamp, result_dict):
         fileName = f"statistics_dictionary_{single_qoi_column}_{timestamp}.pkl"
@@ -2725,7 +2728,7 @@ class TimeDependentStatistics(ABC, Statistics):
     # =================================================================================================
 
     def _get_measured_single_qoi(
-        self, timestepRange=None, time_column_name="TimeStamp", qoi_column_measured="measured", **kwargs):
+        self, timestepRange=None, time_column_name="TimeStamp", qoi_column_measured=utility.MEASURED_ENTRY, **kwargs):
         return None
         # raise NotImplementedError
 
@@ -2738,7 +2741,7 @@ class TimeDependentStatistics(ABC, Statistics):
          :param qoi_column_name:
          :param kwargs: transform_measured_data_as_original_model; if read measured data shold be transformed in the same way
          as original data; default is True
-         :return: set self.df_measured to be a pd.DataFrame with three columns "TimeStamp", "qoi", "measured"
+         :return: set self.df_measured to be a pd.DataFrame with three columns "TimeStamp", "qoi", utility.MEASURED_ENTRY
 
          Note: this function rely on previously computed dict_qoi_column_and_measured_info 
          (computed in utility.read_simulation_settings_from_configuration_object function)
@@ -2807,11 +2810,11 @@ class TimeDependentStatistics(ABC, Statistics):
                 df_measured_single_qoi.rename(columns={df_measured_single_qoi.index.name: time_column_name},
                                               inplace=True)
 
-            df_measured_single_qoi.rename(columns={single_qoi_column_measured: "measured"},
+            df_measured_single_qoi.rename(columns={single_qoi_column_measured: utility.MEASURED_ENTRY},
                                           inplace=True)
 
-            df_measured_single_qoi["qoi"] = single_qoi_column
-            df_measured_single_qoi = df_measured_single_qoi[[time_column_name, "measured", "qoi"]]
+            df_measured_single_qoi["qoi"] = single_qoi_column  # TODO This is probably the issue in situations where single_qoi_column was overwritten
+            df_measured_single_qoi = df_measured_single_qoi[[time_column_name, utility.MEASURED_ENTRY, "qoi"]]
             list_df_measured_single_qoi.append(df_measured_single_qoi)
 
         if list_df_measured_single_qoi:
@@ -3214,21 +3217,21 @@ class TimeDependentStatistics(ABC, Statistics):
             if qoi_column in list(self.df_measured["qoi"].unique()):
                 # print(f"{qoi_column}")
                 df_measured_subset = self.df_measured.loc[self.df_measured["qoi"] == qoi_column][[
-                    self.time_column_name, "measured"]]
+                    self.time_column_name, utility.MEASURED_ENTRY]]
                 # df_measured_subset.drop("qoi", inplace=True)
                 df_statistics_single_qoi = pd.merge(df_statistics_single_qoi, df_measured_subset,
                                                     on=[self.time_column_name, ], how='left')
             elif self.dict_corresponding_original_qoi_column[qoi_column] in list(self.df_measured["qoi"].unique()):
                 df_measured_subset = self.df_measured.loc[
                     self.df_measured["qoi"] == self.dict_corresponding_original_qoi_column[qoi_column]][[
-                    self.time_column_name, "measured"]]
+                    self.time_column_name, utility.MEASURED_ENTRY]]
                 # df_measured_subset.drop("qoi", inplace=True)
                 df_statistics_single_qoi = pd.merge(df_statistics_single_qoi, df_measured_subset,
                                                     on=[self.time_column_name, ], how='left')
             else:
-                df_statistics_single_qoi["measured"] = np.nan
+                df_statistics_single_qoi[utility.MEASURED_ENTRY] = np.nan
         else:
-            df_statistics_single_qoi["measured"] = np.nan
+            df_statistics_single_qoi[utility.MEASURED_ENTRY] = np.nan
 
         if self.unaltered_computed:
             pass  # TODO
@@ -3296,28 +3299,28 @@ class TimeDependentStatistics(ABC, Statistics):
         if self.measured_fetched and self.df_measured is not None:
             if qoi_column in list(self.df_measured["qoi"].unique()):
                 df_measured_subset = self.df_measured.loc[self.df_measured["qoi"] == qoi_column][[
-                    self.time_column_name, "measured"]]
+                    self.time_column_name, utility.MEASURED_ENTRY]]
                 si_df = pd.merge(si_df, df_measured_subset, on=[self.time_column_name,], how='left')
                 if compute_measured_normalized_data:
                     # df_statistics_single_qoi["measured_norm"] = MinMaxScaler().fit_transform(
-                    #     np.array(df_statistics_single_qoi["measured"]).reshape(-1, 1))
-                    si_df["measured_norm"] = (si_df["measured"] - si_df["measured"].min()) / (
-                            si_df["measured"].max() - si_df["measured"].min())
+                    #     np.array(df_statistics_single_qoi[utility.MEASURED_ENTRY]).reshape(-1, 1))
+                    si_df["measured_norm"] = (si_df[utility.MEASURED_ENTRY] - si_df[utility.MEASURED_ENTRY].min()) / (
+                            si_df[utility.MEASURED_ENTRY].max() - si_df[utility.MEASURED_ENTRY].min())
             elif self.dict_corresponding_original_qoi_column[qoi_column] in list(self.df_measured["qoi"].unique()):
                 df_measured_subset = self.df_measured.loc[
                     self.df_measured["qoi"] == self.dict_corresponding_original_qoi_column[qoi_column]][[
-                    self.time_column_name, "measured"]]
+                    self.time_column_name, utility.MEASURED_ENTRY]]
                 # df_measured_subset.drop("qoi", inplace=True)
                 si_df = pd.merge(si_df, df_measured_subset, on=[self.time_column_name, ], how='left')
                 if compute_measured_normalized_data:
                     # df_statistics_single_qoi["measured_norm"] = MinMaxScaler().fit_transform(
-                    #     np.array(df_statistics_single_qoi["measured"]).reshape(-1, 1))
-                    si_df["measured_norm"] = (si_df["measured"] - si_df["measured"].min()) / (
-                            si_df["measured"].max() - si_df["measured"].min())
+                    #     np.array(df_statistics_single_qoi[utility.MEASURED_ENTRY]).reshape(-1, 1))
+                    si_df["measured_norm"] = (si_df[utility.MEASURED_ENTRY] - si_df[utility.MEASURED_ENTRY].min()) / (
+                            si_df[utility.MEASURED_ENTRY].max() - si_df[utility.MEASURED_ENTRY].min())
             else:
-                si_df["measured"] = np.nan
+                si_df[utility.MEASURED_ENTRY] = np.nan
         else:
-            si_df["measured"] = np.nan
+            si_df[utility.MEASURED_ENTRY] = np.nan
 
         si_df.set_index(self.time_column_name, inplace=True)
         si_df.sort_index(ascending=True, inplace=True)
@@ -3508,7 +3511,7 @@ class TimeDependentStatistics(ABC, Statistics):
                     fig.add_trace(
                         go.Scatter(
                             x=df_measured_subset[self.time_column_name], 
-                            y=df_measured_subset["measured"],
+                            y=df_measured_subset[utility.MEASURED_ENTRY],
                             name=f"measured {single_qoi}",
                             line_color='red', mode="lines", opacity=1.0, showlegend=True,
                         ), row=n_rows, col=n_col
@@ -3517,7 +3520,7 @@ class TimeDependentStatistics(ABC, Statistics):
                     fig.add_trace(
                         go.Scatter(
                             x=df_measured_subset[self.time_column_name], 
-                            y=df_measured_subset["measured"],
+                            y=df_measured_subset[utility.MEASURED_ENTRY],
                             name=f"measured {single_qoi}",
                             line_color='red', mode="lines", opacity=1.0, showlegend=True,
                         )
@@ -3897,7 +3900,7 @@ class TimeDependentStatistics(ABC, Statistics):
         raise NotImplementedError
 
     def compute_gof_over_different_time_series_single_qoi(self, objective_function=None, qoi_column="Q",
-                                                          measuredDF_column_names="measured"):
+                                                          measuredDF_column_names=utility.MEASURED_ENTRY):
 
         self._check_if_df_statistics_is_computed(recompute_if_not=True)
         if objective_function is None:
@@ -3910,7 +3913,7 @@ class TimeDependentStatistics(ABC, Statistics):
 
     def calculate_p_factor_single_qoi(self, qoi_column, df_statistics=None,
                            column_lower_uncertainty_bound="P10", column_upper_uncertainty_bound="P90",
-                           observed_column="measured"):
+                           observed_column=utility.MEASURED_ENTRY):
 
         if df_statistics is None:
             df_statistics = self.create_df_from_statistics_data_single_qoi(qoi_column)
@@ -3930,7 +3933,7 @@ class TimeDependentStatistics(ABC, Statistics):
 
     def compute_stat_of_uncertainty_band(self, qoi_column, df_statistics=None,
                                          column_lower_uncertainty_bound="P10", column_upper_uncertainty_bound="P90",
-                                         observed_column="measured"):
+                                         observed_column=utility.MEASURED_ENTRY):
         if df_statistics is None:
             df_statistics = self.create_df_from_statistics_data_single_qoi(qoi_column)
 

@@ -1,6 +1,6 @@
 """
 Usage of the UQEF and UQEF-Dynamic with Hydrology models, more generally, models that produce time-dependent output.
-@author: Florian Kuenzner and Ivana Jovanovic
+@authors: Ivana Jovanovic Buha and Florian Kuenzner
 """
 import os
 import subprocess
@@ -18,10 +18,6 @@ import pathlib
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 pd.options.mode.chained_assignment = None
-
-# sys.path.insert(0, os.getcwd())
-# sys.path.insert(0, '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic')
-#sys.path.insert(0, '/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic')
 
 from uqef_dynamic.utils import utility
 
@@ -52,7 +48,6 @@ except ImportError:
     PYBAMM_AVAILABLE = False
     pybammmodel = None
     pybammStatistics = None
-
 
 # instantiate UQsim
 uqsim = uqef.UQsim()

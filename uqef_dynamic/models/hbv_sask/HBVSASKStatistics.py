@@ -7,6 +7,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 from uqef_dynamic.utils import colors
+from uqef_dynamic.utils import utility
 from uqef_dynamic.models.time_dependent_baseclass import time_dependent_statistics
 from uqef_dynamic.models.hbv_sask import hbvsask_utility as hbv
 
@@ -571,20 +572,35 @@ class HBVSASKStatistics(time_dependent_statistics.TimeDependentStatistics):
 
         dict_plot_rows = dict()
 
-        if single_qoi_column in self.list_original_model_output_columns:
-            if measured and self.measured_fetched and self.df_measured is not None and not self.df_measured.empty:
+        # This does not work in most cases
+        # We need something more general, like in e.g., get_measured_data/_if_autoregressive_model_first_order_do_modification
+        # elif self.dict_corresponding_original_qoi_column[single_qoi_column] \
+        # in list(self.df_measured[utility.QOI_ENTRY].unique()):
+        #     df_measured_subset = self.df_measured.loc[
+        #         self.df_measured[utility.QOI_ENTRY] == self.dict_corresponding_original_qoi_column[single_qoi_column]][[
+        #         self.time_column_name, utility.MEASURED_ENTRY]]
+        if measured and self.measured_fetched and self.df_measured is not None and not self.df_measured.empty:
+            list_of_qoi_columns_from_df_measured = self.df_measured[utility.QOI_ENTRY].unique().tolist()
+            if single_qoi_column in self.list_original_model_output_columns and single_qoi_column in list_of_qoi_columns_from_df_measured:
                 # column_to_draw = self.list_qoi_column_measured[idx]
                 # timestamp_column = kwargs.get('measured_df_timestamp_column', 'TimeStamp')
-                df_measured_subset = self.df_measured.loc[self.df_measured["qoi"] == single_qoi_column]
-                if not df_measured_subset.empty:
-                    column_to_draw = "measured"
-                    timestamp_column = self.time_column_name
-                    fig.add_trace(
-                        go.Scatter(x=df_measured_subset[timestamp_column], y=df_measured_subset[column_to_draw],
-                                   name=f"{single_qoi_column} (measured)", line_color='red', mode='lines',
-                                   line=dict(color='green'), showlegend=True),
-                        #line_color='red'
-                        row=starting_row, col=1)
+                qoi_column_from_df_measured = single_qoi_column
+                df_measured_subset = self.df_measured.loc[self.df_measured[utility.QOI_ENTRY] == qoi_column_from_df_measured]
+            elif self.dict_corresponding_original_qoi_column[single_qoi_column] in list_of_qoi_columns_from_df_measured:
+                qoi_column_from_df_measured = self.dict_corresponding_original_qoi_column[single_qoi_column]
+                df_measured_subset = self.df_measured.loc[self.df_measured[utility.QOI_ENTRY] == qoi_column_from_df_measured]
+            else:
+                df_measured_subset = None
+
+            if df_measured_subset is not None and not df_measured_subset.empty:
+                column_to_draw = utility.MEASURED_ENTRY
+                timestamp_column = self.time_column_name
+                fig.add_trace(
+                    go.Scatter(x=df_measured_subset[timestamp_column], y=df_measured_subset[column_to_draw],
+                                name=f"{qoi_column_from_df_measured} (measured)", line_color='red', mode='lines',
+                                line=dict(color='green'), showlegend=True),
+                    #line_color='red'
+                    row=starting_row, col=1)
 
         if "E" in dict_time_vs_qoi_stat[keyIter[0]]:
             fig.add_trace(go.Scatter(x=pdTimesteps,

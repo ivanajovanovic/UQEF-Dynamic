@@ -34,13 +34,6 @@ import plotly.offline as pyo
 import chaospy as cp
 import uqef
 
-linux_cluster_run = True
-# sys.path.insert(0, os.getcwd())
-# if linux_cluster_run:
-#     sys.path.insert(0, '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic')
-# else:
-#     sys.path.insert(0, '/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic')
-
 from uqef_dynamic.utils import parallel_statistics
 from uqef_dynamic.utils import utility
 from uqef_dynamic.utils import uqef_dynamic_utils
