@@ -1559,6 +1559,10 @@ class TimeDependentStatistics(ABC, Statistics):
                 timestamp=timestamp, resolution=self.resolution)
             temp_value = self.scale_factor_autoregressive_model_first_order*df_measured_subset.loc[previous_timestamp][utility.MEASURED_ENTRY]
             result_dict[utility.MEAN_ENTRY] = result_dict[utility.MEAN_ENTRY] + self.scale_factor_autoregressive_model_first_order*df_measured_subset.loc[previous_timestamp][utility.MEASURED_ENTRY] #.values[0]
+            if utility.P10_ENTRY in result_dict:
+                result_dict[utility.P10_ENTRY] = result_dict[utility.P10_ENTRY] + self.scale_factor_autoregressive_model_first_order*df_measured_subset.loc[previous_timestamp][utility.MEASURED_ENTRY]
+            if utility.P90_ENTRY in result_dict:
+                result_dict[utility.P90_ENTRY] = result_dict[utility.P90_ENTRY] + self.scale_factor_autoregressive_model_first_order*df_measured_subset.loc[previous_timestamp][utility.MEASURED_ENTRY]
             # if result_dict[utility.MEAN_ENTRY]<1e-10:
             #     result_dict[utility.MEAN_ENTRY] = 0.0
             if reset_index:
