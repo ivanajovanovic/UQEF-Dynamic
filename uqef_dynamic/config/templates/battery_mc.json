@@ -1,0 +1,15 @@
+{
+    "model_type": "battery",
+    "uq_method": "mc",
+    "mc_numevaluations": 10000,
+    "sampling_rule": "latin_hypercube",
+    "run_type": "mc_6d_10000_lhc",
+    "mpi": true,
+    "mpi_method": "MpiPoolSolver",
+    "num_cores": 1,
+    "compute_Sobol_m": true,
+    "compute_Sobol_t": true,
+    "save_all_simulations": true,
+    "parallel_statistics": true,
+    "description": "Standard Battery (PyBaMM) Monte Carlo configuration"
+}

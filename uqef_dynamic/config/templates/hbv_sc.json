@@ -1,0 +1,19 @@
+{
+    "model_type": "hbvsask",
+    "uq_method": "sc",
+    "sc_q_order": 5,
+    "sc_p_order": 2,
+    "sc_quadrature_rule": "g",
+    "sc_sparse_quadrature": false,
+    "config_variant": "10D",
+    "run_type": "sc_sparse",
+    "mpi": true,
+    "mpi_method": "MpiPoolSolver",
+    "num_cores": 1,
+    "compute_Sobol_m": true,
+    "compute_Sobol_t": true,
+    "save_all_simulations": true,
+    "parallel_statistics": true,
+    "cross_truncation": 0.7,
+    "description": "Standard HBV-SASK Stochastic Collocation configuration"
+}

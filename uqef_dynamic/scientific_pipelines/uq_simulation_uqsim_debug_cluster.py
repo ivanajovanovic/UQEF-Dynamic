@@ -58,112 +58,219 @@ uqsim = uqef.UQsim()
 # change args locally for testing and debugging
 #####################################
 
+#####################################
+# Configuration Management System
+#####################################
+
+# Import the new configuration system
+from uqef_dynamic.config import ConfigurationFactory
+
 local_debugging = True
 if local_debugging:
-    save_solver_results = False
 
-    uqsim.args.model = "hbvsask"  # "larsim" "hbvsask" "battery" "simple_oscillator" "ishigami"
-    if uqsim.args.model == "battery" and not PYBAMM_AVAILABLE:
-        raise ImportError("pybamm is not installed. Please install pybamm to run the battery model.")
-
-    uqsim.args.uncertain = "all"
-    uqsim.args.chunksize = 1
-
-    uqsim.args.uq_method = "mc"  # "sc" | "saltelli" | "mc" | "ensemble"
-    
-    uqsim.args.mc_numevaluations = 100000 # #10000
-    uqsim.args.sampling_rule = "latin_hypercube"  # "random" | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
-    
-    uqsim.args.sc_q_order = 5  # 7 8 8 #10 3
-    uqsim.args.sc_p_order = 2  # 3, 3, 4 5, 6, 8
-    uqsim.args.sc_quadrature_rule = "g"  # "p" "genz_keister_24" "leja" "clenshaw_curtis"
-
-    uqsim.args.read_nodes_from_file = False
-    l = 5  # 10
-    dim = 10
-    path_to_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/sparse_grid_nodes_weights")
-    uqsim.args.parameters_file = path_to_file / f"KPU_d{dim}_l{l}.asc" # f"KPU_d7_l{l}.asc"
-    uqsim.args.parameters_setup_file = None
-
-    uqsim.args.sc_poly_rule = "three_terms_recurrence"  # "gram_schmidt" | "three_terms_recurrence" | "cholesky"
-    uqsim.args.sc_poly_normed = True  # True
-    uqsim.args.sc_sparse_quadrature = False  # False
-    uqsim.args.regression = False
-    uqsim.args.regression_model_type = "OLS"  # None | "OLS" | "LARS"
-    uqsim.args.cross_truncation = 0.7
-
-    # paths, if necessary change them
-    uqsim.args.inputModelDir =  os.path.abspath(os.path.join('/dss/dsshome1/lxc0C/ga45met2', 'Repositories', 'UQEF-Dynamic'))
-    uqsim.args.sourceDir = os.path.abspath(os.path.join('/dss/dsshome1/lxc0C/ga45met2', 'Repositories', 'UQEF-Dynamic'))
-
-    # Larsim
-    # uqsim.args.inputModelDir = os.path.abspath(os.path.join('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2','Larsim-data'))
-    # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_ensemble_2013_all_tgb'))
-    # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_lai_may_cc_q_6_p_4_stat_trial'))
-    # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_sc_kpu_l_6_d_5_p_3_2013'))
-    # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/configurations_Larsim/configurations_larsim_boundery_values.json'
-    # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/configurations_Larsim/configurations_larsim_4_may.json'
-    # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/configurations_Larsim/configurations_larsim_high_flow.json'
-
-    # HBV-SASK
-    uqsim.args.inputModelDir = pathlib.Path("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/HBV-SASK-data")
-    uqsim.args.sourceDir = pathlib.Path("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/HBV-SASK-data")
-    # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs", 'mc_with_sobol_computation_delta_q')) #sliding_window or continuous
-    # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs", 'beta_2007_sc_sliding_window_rmse')) #sliding_window or continuous
-    # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs", 'ensemble_q6_p3_6d_2006_banff')) #sliding_window or continuous
-    # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs", 'mc_10d_short_banff'))
-    uqsim.args.outputResultDir = os.path.abspath(os.path.join("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/hbvsask_runs", 'mc_11d_corrupt_forcing_data_100000_autoregressive_07_qcms_oldman_2006_2007'))
-    # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/configurations/configuration_hbv_10D_MC.json'
-    # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/configurations/configuration_hbv_10D_MC_banff.json'
-    # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/configurations/configuration_hbv_12D_MC.json'
-    # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/configurations/configuration_hbv_10D_MC_banff.json'
-    # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/configuration_hbv_7D.json'
-    uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/configuration_hbv_10D.json'
-    uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/configuration_hbv_10D_single_qoi.json'
-    uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/configuration_hbv_10D_short.json'
-    uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/configuration_hbv_10D_single_qoi_autoregressive.json'
-
-    # Simple Oscillator
-    # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "simple_oscillator_model", 'sc_kl10_l7_p3_generalized'))  # mc_10000 mc_10000_terminal_voltage
-    # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/configuration_simple_oscillator.json'
-
-    # Ishigami
-    #uqsim.args.outputResultDir = os.path.abspath(os.path.join("/work/ga45met", "ishigami_runs", "simulations_sep_2024", 'sc_full_p5_q10_ct07'))
-    #uqsim.args.config_file = '/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic/data/configurations/configuration_ishigami.json'
-
-    # Battery
-    # # uqsim.args.inputModelDir = pathlib.Path('/dss/dsshome1/lxc0C/ga45met2/.conda/envs/py3.11_mpi/lib/python3.11/site-packages/pybamm/input/drive_cycles')
-    # uqsim.args.inputModelDir = pathlib.Path('/dss/dsshome1/lxc0C/ga45met2/.conda/envs/my_uq_env/lib/python3.11/site-packages/pybamm/input/drive_cycles')
-    # #uqsim.args.inputModelDir = pathlib.Path('/dss/dsshome1/lxc0C/ga45met2/.conda/envs/uq_env/lib/python3.7/site-packages/pybamm/input/drive_cycles')
-    # #  /dss/dsshome1/lxc0C/ga45met2/.conda/envs/uq_env/lib/python3.7/site-packages/pybamm/input/drive_cycles
-    # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/battery_runs", 'mc_kl10_p2_ct07_24d_1000_random'))  #'mc_kl10_p5_ct07_24d_10000_random'
-    # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/uqef_dynamic/models/pybamm/configuration_battery_24_shot_names.json' #configuration_battery.json' configuration_battery_24_shot_names.json
-
-    uqsim.args.outputModelDir = uqsim.args.outputResultDir
-
-    uqsim.args.sampleFromStandardDist = True
-
-    uqsim.args.mpi = True
-    uqsim.args.mpi_method = "MpiPoolSolver"  # "LinearSolver"
-
-    uqsim.args.disable_statistics = False
-    uqsim.args.disable_calc_statistics = False
-    uqsim.args.parallel_statistics = True
-
-    uqsim.args.instantly_save_results_for_each_time_step = False
-    uqsim.args.uqsim_store_to_file = False
-
-    uqsim.args.compute_Sobol_m = True
-    uqsim.args.compute_Sobol_t = True
-
-    uqsim.args.num_cores = 1
-
-    uqsim.args.save_all_simulations = False  # True for sc
-    uqsim.args.store_qoi_data_in_stat_dict = False  # if set to True, the qoi_values entry is stored in the stat_dict 
-    uqsim.args.store_gpce_surrogate_in_stat_dict = False
-    uqsim.args.collect_and_save_state_data = False # False 
+    # Use the new configuration system
+    try:
+        # Example configurations - choose one:
+        
+        # Option 1: HBV-SASK Monte Carlo
+        # config = ConfigurationFactory.create_hbv_mc_configuration(
+        #     mc_numevaluations=10000,
+        #     sampling_rule="latin_hypercube"
+        # )
+        
+        # Option 2: HBV-SASK Stochastic Collocation
+        # config = ConfigurationFactory.create_hbv_sc_configuration(
+        #     sc_q_order=5,
+        #     sc_p_order=2
+        # )
+        
+        # Option 3: HBV-SASK Sparse Grid PSP
+        # config = ConfigurationFactory.create_sparse_grid_configuration(
+                # base_uq_method='psp', 
+                # level=7,
+                # dimension=10, 
+                # base_path="/dss/dsshome1/lxc0C/ga45met2/Repositories/sparse_grid_nodes_weights",
+                # model_type="hbvsask",
+                # sc_p_order=2,
+                # cross_truncation=0.7,
+        # )
+        
+        # Option 4: Battery Monte Carlo
+        # config = ConfigurationFactory.create_battery_mc_configuration()
+        # if not PYBAMM_AVAILABLE:
+        #     raise ImportError("pybamm is not installed. Please install pybamm to run the battery model.")
+        
+        # Option 5: Ishigami test function
+        # config = ConfigurationFactory.create_ishigami_configuration('sc')
+        
+        # Option 6: From JSON template
+        # config = ConfigurationFactory.from_json_file(
+        #     'uqef_dynamic/config/templates/hbv_mc.json'
+        # )
+        
+        # Option 7: Custom configuration
+        config = ConfigurationFactory.create_configuration(
+            model_type="hbvsask",
+            uq_method="mc",
+            mc_numevaluations=5000,
+            sampling_rule="sobol",
+            mpi=True, 
+            sampleFromStandardDist=True, 
+            # parallel_statistics=True, 
+            compute_Sobol_m=True,
+            save_all_simulations=True,
+            config_file='/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/configuration_hbv_10D_single_qoi_autoregressive.json',
+            outputResultDir=os.path.abspath(os.path.join("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/hbvsask_runs", 'mc_10d_5000_sobol_autoregressive_09_qcms_oldman_2006_2007')),
+            # run_type="custom_run",
+            # custom_name='mc_10d_5000_sobol_autoregressive_09_qcms_oldman_2006_2007',
+        )
+        
+        # Apply configuration to uqsim
+        config.apply_to_uqsim(uqsim)
+        
+        print(f"Applied configuration: {config}")
+        print(f"Model: {config.model}, UQ Method: {config.uq_method}")
+        print(f"Output Directory: {config.outputResultDir}")
+        
+    except Exception as e:
+        print(f"Configuration error: {e}")
+        raise
+        # Fallback to a simple default configuration
+        # config = ConfigurationFactory.create_hbv_mc_configuration()
+        # config.apply_to_uqsim(uqsim)
+        # print("Using fallback HBV-SASK MC configuration")
 
     uqsim.setup_configuration_object()
+else:
+    # Cluster execution mode: Use configuration from command-line arguments
+    try:
+        # Create configuration from UQEF's parsed command-line arguments
+        config = ConfigurationFactory.from_uqsim_args(uqsim.args)
+        
+        # Apply configuration to uqsim
+        config.apply_to_uqsim(uqsim)
+        
+        print(f"Applied configuration from command-line args: {config}")
+        print(f"Model: {config.model}, UQ Method: {config.uq_method}")
+        print(f"Output Directory: {config.outputResultDir}")
+        
+    except Exception as e:
+        print(f"Configuration error when parsing command-line args: {e}")
+        print("Falling back to standard UQEF configuration handling")
+        # Let UQEF handle configuration as before
+        pass
+
+    uqsim.setup_configuration_object()
+
+# if local_debugging:
+#     # Use the new configuration system
+#     try:
+#         # Example configurations - choose one:
+#     except Exception as e:
+#         print(f"Configuration error: {e}")
+#         raise
+
+#     uqsim.args.model = "hbvsask"  # "larsim" "hbvsask" "battery" "simple_oscillator" "ishigami"
+#     if uqsim.args.model == "battery" and not PYBAMM_AVAILABLE:
+#         raise ImportError("pybamm is not installed. Please install pybamm to run the battery model.")
+
+#     uqsim.args.uncertain = "all"
+#     uqsim.args.chunksize = 1
+
+#     uqsim.args.uq_method = "mc"  # "sc" | "saltelli" | "mc" | "ensemble"
+    
+#     uqsim.args.mc_numevaluations = 100000 # #10000
+#     uqsim.args.sampling_rule = "latin_hypercube"  # "random" | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
+    
+#     uqsim.args.sc_q_order = 5  # 7 8 8 #10 3
+#     uqsim.args.sc_p_order = 2  # 3, 3, 4 5, 6, 8
+#     uqsim.args.sc_quadrature_rule = "g"  # "p" "genz_keister_24" "leja" "clenshaw_curtis"
+
+#     uqsim.args.read_nodes_from_file = False
+#     l = 5  # 10
+#     dim = 10
+#     path_to_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/sparse_grid_nodes_weights")
+#     uqsim.args.parameters_file = path_to_file / f"KPU_d{dim}_l{l}.asc" # f"KPU_d7_l{l}.asc"
+#     uqsim.args.parameters_setup_file = None
+
+#     uqsim.args.regression = False
+#     uqsim.args.regression_model_type = "OLS"  # None | "OLS" | "LARS"
+
+#     uqsim.args.sc_poly_rule = "three_terms_recurrence"  # "gram_schmidt" | "three_terms_recurrence" | "cholesky"
+#     uqsim.args.sc_poly_normed = True  # True
+#     uqsim.args.sc_sparse_quadrature = False  # False
+#     uqsim.args.cross_truncation = 0.7
+
+#     # paths, if necessary change them
+#     uqsim.args.inputModelDir =  os.path.abspath(os.path.join('/dss/dsshome1/lxc0C/ga45met2', 'Repositories', 'UQEF-Dynamic'))
+#     uqsim.args.sourceDir = os.path.abspath(os.path.join('/dss/dsshome1/lxc0C/ga45met2', 'Repositories', 'UQEF-Dynamic'))
+
+#     # Larsim
+#     # uqsim.args.inputModelDir = os.path.abspath(os.path.join('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2','Larsim-data'))
+#     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_ensemble_2013_all_tgb'))
+#     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_lai_may_cc_q_6_p_4_stat_trial'))
+#     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_sc_kpu_l_6_d_5_p_3_2013'))
+#     # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/configurations_Larsim/configurations_larsim_boundery_values.json'
+#     # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/configurations_Larsim/configurations_larsim_4_may.json'
+#     # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/configurations_Larsim/configurations_larsim_high_flow.json'
+
+#     # HBV-SASK
+#     uqsim.args.inputModelDir = pathlib.Path("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/HBV-SASK-data")
+#     uqsim.args.sourceDir = pathlib.Path("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/HBV-SASK-data")
+#     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs", 'mc_with_sobol_computation_delta_q')) #sliding_window or continuous
+#     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs", 'beta_2007_sc_sliding_window_rmse')) #sliding_window or continuous
+#     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs", 'ensemble_q6_p3_6d_2006_banff')) #sliding_window or continuous
+#     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs", 'mc_10d_short_banff'))
+#     uqsim.args.outputResultDir = os.path.abspath(os.path.join("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/hbvsask_runs", 'mc_11d_corrupt_forcing_data_100000_autoregressive_07_qcms_oldman_2006_2007'))
+#     # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/configurations/configuration_hbv_10D_MC.json'
+#     # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/configurations/configuration_hbv_10D_MC_banff.json'
+#     # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/configurations/configuration_hbv_12D_MC.json'
+#     # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/configurations/configuration_hbv_10D_MC_banff.json'
+#     # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/configuration_hbv_7D.json'
+#     uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/configuration_hbv_10D.json'
+#     uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/configuration_hbv_10D_single_qoi.json'
+#     uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/configuration_hbv_10D_short.json'
+#     uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/configuration_hbv_10D_single_qoi_autoregressive.json'
+
+#     # Simple Oscillator
+#     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "simple_oscillator_model", 'sc_kl10_l7_p3_generalized'))  # mc_10000 mc_10000_terminal_voltage
+#     # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/configuration_simple_oscillator.json'
+
+#     # Ishigami
+#     #uqsim.args.outputResultDir = os.path.abspath(os.path.join("/work/ga45met", "ishigami_runs", "simulations_sep_2024", 'sc_full_p5_q10_ct07'))
+#     #uqsim.args.config_file = '/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic/data/configurations/configuration_ishigami.json'
+
+#     # Battery
+#     # # uqsim.args.inputModelDir = pathlib.Path('/dss/dsshome1/lxc0C/ga45met2/.conda/envs/py3.11_mpi/lib/python3.11/site-packages/pybamm/input/drive_cycles')
+#     # uqsim.args.inputModelDir = pathlib.Path('/dss/dsshome1/lxc0C/ga45met2/.conda/envs/my_uq_env/lib/python3.11/site-packages/pybamm/input/drive_cycles')
+#     # #uqsim.args.inputModelDir = pathlib.Path('/dss/dsshome1/lxc0C/ga45met2/.conda/envs/uq_env/lib/python3.7/site-packages/pybamm/input/drive_cycles')
+#     # #  /dss/dsshome1/lxc0C/ga45met2/.conda/envs/uq_env/lib/python3.7/site-packages/pybamm/input/drive_cycles
+#     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/battery_runs", 'mc_kl10_p2_ct07_24d_1000_random'))  #'mc_kl10_p5_ct07_24d_10000_random'
+#     # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/uqef_dynamic/models/pybamm/configuration_battery_24_shot_names.json' #configuration_battery.json' configuration_battery_24_shot_names.json
+
+#     uqsim.args.outputModelDir = uqsim.args.outputResultDir
+
+#     uqsim.args.sampleFromStandardDist = True
+
+#     uqsim.args.mpi = True
+#     uqsim.args.mpi_method = "MpiPoolSolver"  # "LinearSolver"
+#     uqsim.args.num_cores = 1
+
+#     uqsim.args.disable_statistics = False
+#     uqsim.args.disable_calc_statistics = False
+#     uqsim.args.parallel_statistics = True
+#     uqsim.args.instantly_save_results_for_each_time_step = False
+
+#     uqsim.args.compute_Sobol_m = True
+#     uqsim.args.compute_Sobol_t = True
+
+#     uqsim.args.uqsim_store_to_file = False
+#     uqsim.args.save_all_simulations = False  # True for sc
+#     uqsim.args.store_qoi_data_in_stat_dict = False  # if set to True, the qoi_values entry is stored in the stat_dict 
+#     uqsim.args.store_gpce_surrogate_in_stat_dict = False
+#     uqsim.args.collect_and_save_state_data = False # False 
+
+#     uqsim.setup_configuration_object()
 
 start_time = time.time()
 

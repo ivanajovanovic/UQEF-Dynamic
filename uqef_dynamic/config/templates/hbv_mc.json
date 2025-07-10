@@ -1,0 +1,16 @@
+{
+    "model_type": "hbvsask",
+    "uq_method": "mc",
+    "mc_numevaluations": 10000,
+    "sampling_rule": "latin_hypercube",
+    "config_variant": "10D",
+    "run_type": "mc_short",
+    "mpi": true,
+    "mpi_method": "MpiPoolSolver",
+    "num_cores": 1,
+    "compute_Sobol_m": true,
+    "compute_Sobol_t": true,
+    "save_all_simulations": true,
+    "parallel_statistics": true,
+    "description": "Standard HBV-SASK Monte Carlo configuration with 10,000 evaluations"
+}
