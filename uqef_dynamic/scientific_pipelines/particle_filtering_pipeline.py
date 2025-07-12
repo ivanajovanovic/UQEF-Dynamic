@@ -319,8 +319,10 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
     # =========================================================
     # Defining paths
     # TODO - change these paths accordingly
-    hbv_model_data_path = pathlib.Path("/work/ga45met/Hydro_Models/HBV-SASK-data")
-    configuration_file = pathlib.Path('/work/ga45met/Hydro_Models/HBV-SASK-py-tool/configurations/configuration_hbv_6D.json')
+    hbv_model_data_path = pathlib.Path("/home/christoph/projects/thesis_code/HBV-SASK-data")
+    # change 6D to 10D
+    configuration_file = pathlib.Path('/home/christoph/projects/thesis_code/HBV-SASK-py-tool/configurations/configuration_hbv_6D.json')
+    # configuration_file = pathlib.Path('/home/christoph/projects/thesis_code/UQEF-Dynamic/data/configurations/configuration_hbv_10D.json')
     inputModelDir = hbv_model_data_path
     basin = "Oldman_Basin"  # 'Banff_Basin'
     workingDir = hbv_model_data_path / basin / "model_runs" / working_dir_name
@@ -371,7 +373,7 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
     # print(f"simulation_range is of length {len(hbvsaskModelObject.simulation_range)} hours")
 
     # Plot forcing data and observed streamflow
-    hbvsaskModelObject._plot_input_data(read_measured_streamflow=True)
+    hbvsaskModelObject.plot_input_data(read_measured_streamflow=True)
 
     list_of_dates_of_interest = list(pd.date_range(
         start=hbvsaskModelObject.start_date_predictions, end=hbvsaskModelObject.end_date, freq="1D"))
@@ -522,10 +524,10 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
 
             likelihood_over_rows.append(likelihood)
 
-        y_t_models_for_date = np.asfarray(y_t_models_for_date)
+        y_t_models_for_date = np.asarray(y_t_models_for_date, dtype=np.float64)
         current_model_output_max = np.max(y_t_models_for_date) if np.max(y_t_models_for_date) > current_model_output_max else current_model_output_max
         y_t_model_per_date_dict[date_of_interest] = y_t_models_for_date
-        updated_weights = np.asfarray(updated_weights)
+        updated_weights = np.asarray(updated_weights, dtype=np.float64)
 
         row[utility.TIME_COLUMN_NAME] = date_of_interest  # date_of_interest_over_rows
         row['y_t_model'] = y_t_models_for_date  # y_t_model_over_rows
@@ -546,8 +548,8 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
         else:
             normalized_weights = updated_weights / total_weight
         # Now normalized_weights contains the normalized likelihoods 
-        normalized_weights = np.asfarray(normalized_weights)
-        
+        normalized_weights = np.asarray(normalized_weights, dtype=np.float64)
+
         # Overwrite the lists storing the particles (i.e., state, parameter values and unique particle indices) for the next time-stamp
         list_unique_index_model_run_list = new_list_unique_index_model_run_list
         # list_state_values_particles  = copy.deepcopy(new_list_state_values_particles) 
@@ -582,7 +584,7 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
 
         # Save one big matrix of particle values, might be used later one for transformation of the samples
         parameter_samples_matrix = list(zip(*list_of_lists_with_parameter_values))  # this should be a matrix of size number_of_particles x number_of_parameters
-        parameter_samples_matrix = np.asfarray(parameter_samples_matrix).T
+        parameter_samples_matrix = np.asarray(parameter_samples_matrix, dtype=np.float64).T
 
         row['weights'] = normalized_weights
         row['resample_indices'] = resample_indices
@@ -644,7 +646,7 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
     for idx in range(len(param_names)):
         parameter_name = param_names[idx]
         # Visualize data from the last dict_of_distriubtions_over_parameters_for_a_date 
-        dict_of_distriubtions_over_parameters_for_a_date[parameter_name] = np.asfarray(dict_of_distriubtions_over_parameters_for_a_date[parameter_name])
+        dict_of_distriubtions_over_parameters_for_a_date[parameter_name] = np.asarray(dict_of_distriubtions_over_parameters_for_a_date[parameter_name], dtype=np.float64)
         min_value = dict_of_distriubtions_over_parameters_for_a_date[parameter_name].min() - abs(dict_of_distriubtions_over_parameters_for_a_date[parameter_name].min())*0.001
         max_value= dict_of_distriubtions_over_parameters_for_a_date[parameter_name].max() + abs(dict_of_distriubtions_over_parameters_for_a_date[parameter_name].max())*0.001
         t = np.linspace(min_value, max_value, 1000)
@@ -758,7 +760,7 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
     fig.update_xaxes(title_text="Date", autorange=True, range=[hbvsaskModelObject.start_date_predictions, hbvsaskModelObject.end_date], type="date")
 
     fig.update_yaxes(title_text="Q [cm/s]", side="left", domain=[0, 0.7], mirror=True, tickfont={"color": "#d62728"},
-                     tickmode="auto", ticks="inside", titlefont={"color": "#d62728"}, range=[0, 100])
+                     tickmode="auto", ticks="inside", title_font={"color": "#d62728"}, range=[0, 100])
 
     fig.update_layout(
         # legend=dict(yanchor="bottom", y=0.01, xanchor="right", x=0.99),
@@ -780,7 +782,7 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
             nticks=3,
             tickmode="auto",
             ticks="inside",
-            titlefont={"color": '#1f77b4'},
+            title_font={"color": '#1f77b4'},
             title="N [mm/h]",
             type="linear",
             )

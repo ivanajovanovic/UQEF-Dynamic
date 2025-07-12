@@ -126,7 +126,7 @@ def _plot_output_data_and_precipitation(input_data_df, simulated_data_df=None, i
             tickmode="auto",
             ticks="inside",
             title="Q [cm/s]",
-            titlefont={"color": "#d62728"},
+            title_font={"color": "#d62728"},
         )
     )
     if precipitation_columns in input_data_df.columns:
@@ -141,7 +141,7 @@ def _plot_output_data_and_precipitation(input_data_df, simulated_data_df=None, i
                 nticks=3,
                 tickmode="auto",
                 ticks="inside",
-                titlefont={"color": '#1f77b4'},
+                title_font={"color": '#1f77b4'},
                 title="N [mm/day]",
                 type="linear",
             ),
@@ -222,7 +222,7 @@ def plot_streamflow_and_precipitation(input_data_df, simulated_data_df=None, inp
             tickmode="auto",
             ticks="inside",
             title="Q [cm/s]",
-            titlefont={"color": "#d62728"},
+            title_font={"color": "#d62728"},
         ),
         yaxis2=dict(
             anchor="x",
@@ -234,7 +234,7 @@ def plot_streamflow_and_precipitation(input_data_df, simulated_data_df=None, inp
             nticks=3,
             tickmode="auto",
             ticks="inside",
-            titlefont={"color": '#1f77b4'},
+            title_font={"color": '#1f77b4'},
             title="N [mm/day]",
             type="linear",
         )
@@ -295,7 +295,7 @@ def extend_hbv_plot_with_observed_and_forcing_data_and_update_layout(
 
     # Update y-axis
     fig.update_yaxes(title_text="Q [cm/s]", side="left", domain=[0, 0.7], mirror=True, tickfont={"color": "#d62728"},
-                    tickmode="auto", ticks="inside", titlefont={"color": "#d62728"}, range=[0, 100])
+                    tickmode="auto", ticks="inside", title_font={"color": "#d62728"}, range=[0, 100])
 
     fig.update_layout(
         # legend=dict(yanchor="bottom", y=0.01, xanchor="right", x=0.99),
@@ -317,7 +317,7 @@ def extend_hbv_plot_with_observed_and_forcing_data_and_update_layout(
             nticks=3,
             tickmode="auto",
             ticks="inside",
-            titlefont={"color": '#1f77b4'},
+            title_font={"color": '#1f77b4'},
             title="N [mm/day]",
             type="linear",
             )
@@ -359,7 +359,7 @@ def extend_hbv_plot_with_forcing_and_update_layout(
 
     # Update y-axis
     fig.update_yaxes(title_text="Q [cm/s]", side="left", domain=[0, 0.7], mirror=True, tickfont={"color": "#d62728"},
-                    tickmode="auto", ticks="inside", titlefont={"color": "#d62728"}, range=[0, 100])
+                    tickmode="auto", ticks="inside", title_font={"color": "#d62728"}, range=[0, 100])
 
     fig.update_layout(
         # legend=dict(yanchor="bottom", y=0.01, xanchor="right", x=0.99),
@@ -381,7 +381,7 @@ def extend_hbv_plot_with_forcing_and_update_layout(
             nticks=3,
             tickmode="auto",
             ticks="inside",
-            titlefont={"color": '#1f77b4'},
+            title_font={"color": '#1f77b4'},
             title="N [mm/day]",
             type="linear",
             )
@@ -1385,10 +1385,11 @@ def run_the_model(hbv_model_path, config_file, par_values_dict, run_full_timespa
 
 if __name__ == "__main__":
     # Path definitions - change them accordingly
-    hbv_model_path = pathlib.Path("/work/ga45met/Hydro_Models/HBV-SASK-data")
+    hbv_model_path = pathlib.Path("/home/christoph/projects/thesis_code//HBV-SASK-data")
     # basin = 'Oldman_Basin'  # to read in data for the Oldman Basin
     basin = 'Banff_Basin'  # to read in data for the Banff Basin
-    config_file = pathlib.Path("/work/ga45met/mnt/linux_cluster_2/UQEFPP/configurations/configuration_hbv.json")
+    # config_file = pathlib.Path("/work/ga45met/mnt/linux_cluster_2/UQEFPP/configurations/configuration_hbv.json")
+    config_file = pathlib.Path("/home/christoph/projects/thesis_code/UQEF-Dynamic/data/configurations/configuration_hbv.json")
     output_path = hbv_model_path / basin / "model_runs" / "temp_7_constant_ic"
     output_path.mkdir(parents=True, exist_ok=True)
 
