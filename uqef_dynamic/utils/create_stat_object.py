@@ -265,7 +265,7 @@ def create_and_extend_statistics_object(configurationObject, uqsim_args_dict, wo
 
 def get_df_statistics_and_df_si_from_saved_files(workingDir, inputModelDir=None, **kwargs):
     """
-    Retrieves the statistics and sensitivity indices data from saved files.
+    Retrieves the statistics, sensitivity indices data, simulation results, nodes, parameters, and cofiguration parameters from saved files.
 
     Args:
         workingDir (str): The working directory where the saved files are located.

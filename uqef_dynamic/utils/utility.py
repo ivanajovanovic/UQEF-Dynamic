@@ -2128,7 +2128,7 @@ def read_all_saved_simulations(df_all_simulations_file):
     return df_simulation_result
 
 ###################################################################################################################
-# Plotting params and GoF values - mostly from df_index_parameter or df_index_parameter_gof filtered for a single station
+# Plotting params and GoF values - mostly from df_index_parameter or df_index_parameter_gof filtered for a single QoI (e.g., station)
 ###################################################################################################################
 
 

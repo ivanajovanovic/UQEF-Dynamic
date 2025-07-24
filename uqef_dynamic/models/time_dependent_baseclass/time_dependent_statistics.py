@@ -408,6 +408,8 @@ class TimeDependentStatistics(ABC, Statistics):
             self.name = MPI.Get_processor_name()
             self.version = MPI.Get_library_version()
             self.mpi_chunksize = kwargs.get('mpi_chunksize', 1)
+            self.chunksize = kwargs.get('chunksize', 1)
+            # self.mpi_chunksize = max(1, num_timesteps // num_processes)
             self.unordered = kwargs.get('unordered', False)
 
         # if set to True, different arguments of the Samples class will be saved, e.g., df_simulation_result
@@ -612,7 +614,7 @@ class TimeDependentStatistics(ABC, Statistics):
         """
         # TODO Make one general function from this one in uqef_dynamic_utils or utilities...
         # TODO Think if this function should be moved to the Model class or utility and then info propagated!?
-        # TODO Is this redundant with self.store_qoi_data_in_stat_dict
+        # TODO Is always_process_original_model_output redundant with self.store_qoi_data_in_stat_dict
         always_process_original_model_output = kwargs.get("always_process_original_model_output", False)
         list_qoi_column_processed = []
         dict_corresponding_original_qoi_column = defaultdict()
@@ -713,6 +715,7 @@ class TimeDependentStatistics(ABC, Statistics):
             if always_process_original_model_output:
                 self.list_qoi_column = self.list_original_model_output_columns + list_qoi_column_processed
                 for single_qoi_column in self.list_original_model_output_columns:
+                    # update dict_corresponding_original_qoi_column
                     dict_corresponding_original_qoi_column[single_qoi_column] = single_qoi_column
             else:
                 self.list_qoi_column = list_qoi_column_processed
@@ -892,8 +895,8 @@ class TimeDependentStatistics(ABC, Statistics):
                 timestepRange=[self.timesteps_min_minus_one, self.timesteps_max],
                 qoi_column_name=self.list_original_model_output_columns  # or list(self.dict_corresponding_original_qoi_column.values)
             )
-            print(f"DEBUGGING autoregressive_model_first_order self.df_measured - {self.df_measured}")
-            print(f"DEBUGGING autoregressive_model_first_order self.df_measured - {self.df_measured[utility.QOI_ENTRY]}")
+            # print(f"DEBUGGING autoregressive_model_first_order self.df_measured - {self.df_measured}")
+            # print(f"DEBUGGING autoregressive_model_first_order self.df_measured - {self.df_measured[utility.QOI_ENTRY]}")
 
         # This, though, does not hold for Saltelli's approach
         # self.numEvaluations = self.number_of_unique_index_runs
@@ -1530,6 +1533,9 @@ class TimeDependentStatistics(ABC, Statistics):
         :param result_dict:
         :return:
         """
+        if not single_qoi_column.startswith("delta_"):
+            return
+
         df_measured_subset = None
         if self.scale_factor_autoregressive_model_first_order is None:
             self.scale_factor_autoregressive_model_first_order = 1.0
@@ -1537,27 +1543,28 @@ class TimeDependentStatistics(ABC, Statistics):
             if single_qoi_column in list(self.df_measured[utility.QOI_ENTRY].unique()):
                 df_measured_subset = self.df_measured.loc[self.df_measured[utility.QOI_ENTRY] == single_qoi_column][[
                     self.time_column_name, utility.MEASURED_ENTRY]]
-
+                if df_measured_subset.empty:
+                    df_measured_subset = None
             elif self.dict_corresponding_original_qoi_column[single_qoi_column] \
                     in list(self.df_measured[utility.QOI_ENTRY].unique()):
                 df_measured_subset = self.df_measured.loc[
                     self.df_measured[utility.QOI_ENTRY] == self.dict_corresponding_original_qoi_column[single_qoi_column]][[
                     self.time_column_name, utility.MEASURED_ENTRY]]
-            if df_measured_subset.empty:
-                df_measured_subset = None
+                if df_measured_subset.empty:
+                    df_measured_subset = None
         else:
             df_measured_subset = None
 
+        # previous_timestamp = self.pdTimesteps[self.pdTimesteps.index(timestamp) - 1]
+        # Compute the previous timestamp
+        previous_timestamp = utility.compute_previous_timestamp(
+            timestamp=timestamp, resolution=self.resolution)
         if df_measured_subset is not None:
             reset_index = False
             if not df_measured_subset.index.name == self.time_column_name:
                 df_measured_subset.set_index(self.time_column_name, inplace=True)
                 reset_index = True
-            # previous_timestamp = self.pdTimesteps[self.pdTimesteps.index(timestamp) - 1]
-            # Compute the previous timestamp
-            previous_timestamp = utility.compute_previous_timestamp(
-                timestamp=timestamp, resolution=self.resolution)
-            temp_value = self.scale_factor_autoregressive_model_first_order*df_measured_subset.loc[previous_timestamp][utility.MEASURED_ENTRY]
+            # temp_value = self.scale_factor_autoregressive_model_first_order*df_measured_subset.loc[previous_timestamp][utility.MEASURED_ENTRY]
             result_dict[utility.MEAN_ENTRY] = result_dict[utility.MEAN_ENTRY] + self.scale_factor_autoregressive_model_first_order*df_measured_subset.loc[previous_timestamp][utility.MEASURED_ENTRY] #.values[0]
             if utility.P10_ENTRY in result_dict:
                 result_dict[utility.P10_ENTRY] = result_dict[utility.P10_ENTRY] + self.scale_factor_autoregressive_model_first_order*df_measured_subset.loc[previous_timestamp][utility.MEASURED_ENTRY]
@@ -1569,8 +1576,18 @@ class TimeDependentStatistics(ABC, Statistics):
                 df_measured_subset.reset_index(inplace=True)
                 df_measured_subset.rename(columns={"index": self.time_column_name}, inplace=True)
         # else:
-        #     result_dict[utility.MEAN_ENTRY] = result_dict[utility.MEAN_ENTRY] + self.scale_factor_autoregressive_model_first_order*result_dict_previousr_timestamp["E"]
-
+        #     result_dict[utility.MEAN_ENTRY] = result_dict[utility.MEAN_ENTRY] + self.scale_factor_autoregressive_model_first_order*result_dict_previousr_timestamp[utility.MEAN_ENTRY]
+        else:
+            # When measured data doesn't exist, use the mean from previous timestamp's result
+            # However, in the current implementation, we assume that the previous timestamp's result is already in self.result_dict,
+            # and this will only work in non-parallel statistics calculation.
+            if hasattr(self, 'result_dict') and self.result_dict and single_qoi_column in self.result_dict:
+                if previous_timestamp in self.result_dict[single_qoi_column]:
+                    previous_mean = self.result_dict[single_qoi_column][previous_timestamp].get(utility.MEAN_ENTRY, 0.0)
+                    result_dict[utility.MEAN_ENTRY] = result_dict[utility.MEAN_ENTRY] + self.scale_factor_autoregressive_model_first_order * previous_mean
+            else:
+                return
+                
     def _save_statistics_dictionary_single_qoi_single_timestamp(self, single_qoi_column, timestamp, result_dict):
         fileName = f"statistics_dictionary_{single_qoi_column}_{timestamp}.pkl"
         fullFileName = os.path.abspath(os.path.join(str(self.workingDir), fileName))
@@ -1802,6 +1819,12 @@ class TimeDependentStatistics(ABC, Statistics):
             self._groupby_df_simulation_results(columns_to_group_by=[self.time_column_name,])
             keyIter = list(self.groups.keys())
 
+            # Calculate optimal chunk size
+            num_timesteps = len(keyIter)  # len(self.timesteps)
+            num_processes = MPI.COMM_WORLD.Get_size() - 1  # Exclude master  # self.size - 1
+            chunksize = max(1, num_timesteps // num_processes)
+            print(f"[STAT INFO] chunksize-{chunksize}")
+
         compute_other_stat_besides_pce_surrogate = kwargs.get("compute_other_stat_besides_pce_surrogate", self.compute_other_stat_besides_pce_surrogate)
 
         for single_qoi_column in self.list_qoi_column:
@@ -1812,7 +1835,7 @@ class TimeDependentStatistics(ABC, Statistics):
             with futures.MPICommExecutor(MPI.COMM_WORLD, root=0) as executor:
                 if executor is not None:  # master proces; or .\executor.mpi_comm.rank == 0
                     self._compute_mc_statistic_single_qoi_parallel_in_time(
-                        executor, single_qoi_column, keyIter_chunk, list_of_qoi_values_chunk, chunks)
+                        executor, single_qoi_column, keyIter_chunk, list_of_qoi_values_chunk, chunks, chunksize)
                     self._postprocess_mc_chunk_results_single_qoi_after_parallel_in_time_analysis(single_qoi_column)
 
     def _prepare_chunks_mc(self, keyIter_chunk, compute_other_stat_besides_pce_surrogate=False):
@@ -1858,7 +1881,7 @@ class TimeDependentStatistics(ABC, Statistics):
         return chunks
 
     def _compute_mc_statistic_single_qoi_parallel_in_time(
-        self, executor, single_qoi_column, keyIter_chunk, list_of_qoi_values_chunk, chunks):
+        self, executor, single_qoi_column, keyIter_chunk, list_of_qoi_values_chunk, chunks, chunksize):
         print(f"{self.rank}: computation of statistics for qoi {single_qoi_column} started...")
         solver_time_start = time.time()
         if not self.regression or (self.compute_kl_expansion_of_qoi and not self.compute_timewise_gpce_next_to_kl_expansion):
@@ -1873,7 +1896,7 @@ class TimeDependentStatistics(ABC, Statistics):
                 chunks['compute_sobol_indices_with_samples_chunks'],
                 chunks['samples_chunks'],
                 chunks['dict_stat_to_compute_Chunks'],
-                chunksize=self.mpi_chunksize,
+                chunksize=chunksize, #self.mpi_chunksize,
                 unordered=self.unordered
             )
             # chunk_results_it = executor.map(
@@ -1887,7 +1910,7 @@ class TimeDependentStatistics(ABC, Statistics):
             #     self.compute_sobol_indices_with_samples,
             #     samples,
             #      self.dict_stat_to_compute,
-            #     chunksize=self.mpi_chunksize,
+            #     chunksize=chunksize #self.mpi_chunksize,
             #     unordered=self.unordered
             # )
         else:
@@ -1910,7 +1933,7 @@ class TimeDependentStatistics(ABC, Statistics):
                 chunks['compute_other_stat_besides_pce_surrogate_Chunks'],
                 chunks['dict_stat_to_compute_Chunks'],
                 chunks['regression_modelChunks'],
-                chunksize=self.mpi_chunksize,
+                chunksize=chunksize, #self.mpi_chunksize,
                 unordered=self.unordered
             )
 
@@ -1964,6 +1987,12 @@ class TimeDependentStatistics(ABC, Statistics):
         if self.rank == 0:
             self._groupby_df_simulation_results(columns_to_group_by=[self.time_column_name,])
             keyIter = list(self.groups.keys())
+            
+            # Calculate optimal chunk size
+            num_timesteps = len(keyIter)  # len(self.timesteps)
+            num_processes = MPI.COMM_WORLD.Get_size() - 1  # Exclude master  # self.size - 1
+            chunksize = max(1, num_timesteps // num_processes)
+            print(f"[STAT INFO] chunksize-{chunksize}")
 
         for single_qoi_column in self.list_qoi_column:
             if self.rank == 0:
@@ -1973,8 +2002,7 @@ class TimeDependentStatistics(ABC, Statistics):
             with futures.MPICommExecutor(MPI.COMM_WORLD, root=0) as executor:
                 if executor is not None:  # master process
                     self._compute_saltelli_statistic_single_qoi_parallel_in_time(\
-                    executor, single_qoi_column, keyIter_chunk, list_of_qoi_values_chunk, chunks
-                    )
+                    executor, single_qoi_column, keyIter_chunk, list_of_qoi_values_chunk, chunks, chunksize)
                     self._postprocess_saltelli_chunk_results_single_qoi_after_parallel_in_time_analysis(single_qoi_column)
 
     def _prepare_chunks_saltelli(self, keyIter_chunk):
@@ -1995,7 +2023,7 @@ class TimeDependentStatistics(ABC, Statistics):
         }
         return chunks
 
-    def _compute_saltelli_statistic_single_qoi_parallel_in_time(self, executor, single_qoi_column, keyIter_chunk, list_of_qoi_values_chunk, chunks):
+    def _compute_saltelli_statistic_single_qoi_parallel_in_time(self, executor, single_qoi_column, keyIter_chunk, list_of_qoi_values_chunk, chunks, chunksize):
         print(f"{self.rank}: computation of statistics for qoi {single_qoi_column} started...")
         solver_time_start = time.time()
         chunk_results_it = executor.map(
@@ -2010,7 +2038,7 @@ class TimeDependentStatistics(ABC, Statistics):
             chunks['compute_sobol_indices_with_samples_chunks'],
             chunks['samples_chunks'],
             chunks['dict_stat_to_compute_Chunks'],
-            chunksize=self.mpi_chunksize,
+            chunksize=chunksize, #self.mpi_chunksize,
             unordered=self.unordered
         )
         print(f"{self.rank}: computation for qoi {single_qoi_column} - waits for shutdown...")
@@ -2048,6 +2076,12 @@ class TimeDependentStatistics(ABC, Statistics):
         if self.rank == 0:
             self._groupby_df_simulation_results(columns_to_group_by=[self.time_column_name,])
             keyIter = list(self.groups.keys())
+
+            # Calculate optimal chunk size
+            num_timesteps = len(keyIter)  # len(self.timesteps)
+            num_processes = MPI.COMM_WORLD.Get_size() - 1  # Exclude master  # self.size - 1
+            chunksize = max(1, num_timesteps // num_processes)
+            print(f"[STAT INFO] chunksize-{chunksize}")
         
         compute_other_stat_besides_pce_surrogate = kwargs.get("compute_other_stat_besides_pce_surrogate", self.compute_other_stat_besides_pce_surrogate)
 
@@ -2058,7 +2092,7 @@ class TimeDependentStatistics(ABC, Statistics):
 
             with futures.MPICommExecutor(MPI.COMM_WORLD, root=0) as executor:
                 if executor is not None:  # master process
-                    self._compute_pce_statistic_single_qoi_parallel_in_time(executor, single_qoi_column, keyIter_chunk, list_of_qoi_values_chunk, chunks)
+                    self._compute_pce_statistic_single_qoi_parallel_in_time(executor, single_qoi_column, keyIter_chunk, list_of_qoi_values_chunk, chunks, chunksize)
                     self._postprocess_pce_chunk_results_single_qoi_after_parallel_in_time_analysis(single_qoi_column)
 
     def _prepare_chunks_pce(self, keyIter_chunk, compute_other_stat_besides_pce_surrogate):
@@ -2083,7 +2117,7 @@ class TimeDependentStatistics(ABC, Statistics):
         return chunks
 
     def _compute_pce_statistic_single_qoi_parallel_in_time(
-        self, executor, single_qoi_column, keyIter_chunk, list_of_qoi_values_chunk, chunks):
+        self, executor, single_qoi_column, keyIter_chunk, list_of_qoi_values_chunk, chunks, chunksize):
         print(f"{self.rank}: computation of statistics for qoi {single_qoi_column} started...")
         solver_time_start = time.time()
         if self.compute_kl_expansion_of_qoi and not self.compute_timewise_gpce_next_to_kl_expansion:
@@ -2116,7 +2150,7 @@ class TimeDependentStatistics(ABC, Statistics):
                 chunks['compute_other_stat_besides_pce_surrogate_Chunks'],
                 chunks['dict_stat_to_compute_Chunks'],
                 chunks['regression_modelChunks'],
-                chunksize=self.mpi_chunksize,
+                chunksize=chunksize, #self.mpi_chunksize,
                 unordered=self.unordered
             )
         print(f"{self.rank}: computation for qoi {single_qoi_column} - waits for shutdown...")
