@@ -16,7 +16,6 @@ class UQConfiguration(ABC):
         # Core simulation parameters
         self.model: Optional[str] = None
         self.uncertain: str = "all"
-        self.chunksize: int = 1
         self.uq_method: Optional[str] = None
         
         # Directory settings
@@ -27,12 +26,14 @@ class UQConfiguration(ABC):
         self.workingDir: Optional[Union[str, pathlib.Path]] = None
         self.config_file: Optional[Union[str, pathlib.Path]] = None
         
-        # Parallel computing settings
+        # Parallel / MPI computing settings
         self.mpi: bool = False
         self.mpi_method: str = "MpiPoolSolver"  # "LinearSolver"
         self.mpi_combined_parallel: bool = False
         self.parallel: bool = False
         self.num_cores: int = 1
+        self.mpi_chunksize: int = 1
+        self.chunksize: int = 1
 
         # Sampling and distribution settings
         self.sampleFromStandardDist: bool = False
@@ -71,6 +72,46 @@ class UQConfiguration(ABC):
         self.sc_poly_rule: str = "three_terms_recurrence"  # "gram_schmidt" | "cholesky"
         self.sc_poly_normed: bool = False
         self.cross_truncation: float = 1.0  #0.7
+        
+        # Advanced analysis options - in case PCE surrogate is learned
+        self.save_gpce_surrogate: bool = True
+        self.compute_other_stat_besides_pce_surrogate: bool = True
+
+        # In the case of MC - rank based computation of the Sobol Indices
+        self.compute_sobol_indices_with_samples: bool = False
+        
+        # KL expansion settings
+        self.compute_kl_expansion_of_qoi: bool = False
+        self.kl_expansion_order: int = 10
+        self.compute_timewise_gpce_next_to_kl_expansion: bool = False
+        
+        # Generalized Sobol indices settings
+        self.compute_generalized_sobol_indices: bool = False
+        self.compute_generalized_sobol_indices_over_time: bool = False
+        
+        # Covariance matrix settings
+        self.compute_covariance_matrix_in_time: bool = False
+        
+        # Conditional analysis settings
+        self.allow_conditioning_results_based_on_metric: bool = False
+        self.condition_results_based_on_metric: str = 'NSE'
+        self.condition_results_based_on_metric_value: float = 0.2
+        self.condition_results_based_on_metric_sign: str = "greater_or_equal"
+        
+        # Statistics computation configuration
+        self.dict_stat_to_compute: Dict[str, bool] = {
+            "Var": True, "StdDev": True, "P10": True, "P90": True,
+            "E_minus_std": False, "E_plus_std": False,
+            "Skew": False, "Kurt": False, "Sobol_m": True, "Sobol_m2": False, "Sobol_t": True
+        }
+        
+        # Plotting configuration
+        self.dict_what_to_plot: Dict[str, bool] = {
+            "E_minus_std": False, "E_plus_std": False, "E_minus_2std": True, "E_plus_2std": True, 
+            "P10": True, "P90": True,
+            "StdDev": True, "Skew": False, "Kurt": False, "Sobol_m": True, "Sobol_m2": False, "Sobol_t": True,
+            "generalized_sobol_total_index": True, "generalized_sobol_main_index": True,
+        }
 
     def apply_to_uqsim(self, uqsim):
         """Apply this configuration to a UQsim instance."""
@@ -103,6 +144,28 @@ class UQConfiguration(ABC):
     
     def validate(self) -> bool:
         """Validate configuration parameters. Override in subclasses."""
+        # Validate conditional analysis settings
+        valid_metric_signs = ["greater", "greater_or_equal", "less", "less_or_equal", "equal"]
+        if self.condition_results_based_on_metric_sign not in valid_metric_signs:
+            raise ValueError(f"condition_results_based_on_metric_sign must be one of {valid_metric_signs}")
+        
+        # Validate KL expansion order
+        if self.kl_expansion_order <= 0:
+            raise ValueError("kl_expansion_order must be positive")
+        
+        # Validate MPI chunksize
+        if self.mpi_chunksize <= 0:
+            raise ValueError("mpi_chunksize must be positive")
+        if self.chunksize <= 0:
+            raise ValueError("chunksize must be positive")
+
+        # Validate dictionary configurations
+        if not isinstance(self.dict_stat_to_compute, dict):
+            raise ValueError("dict_stat_to_compute must be a dictionary")
+        
+        if not isinstance(self.dict_what_to_plot, dict):
+            raise ValueError("dict_what_to_plot must be a dictionary")
+        
         return True
     
     def __repr__(self):

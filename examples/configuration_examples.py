@@ -216,6 +216,63 @@ def example_10_available_options():
     print()
 
 
+def example_11_extended_analysis_configuration():
+    """Example 11: Extended analysis configuration with new parameters."""
+    print("=== Example 11: Extended Analysis Configuration ===")
+    
+    config = ConfigurationFactory.create_configuration(
+        model_type="hbvsask",
+        uq_method="sc",
+        sc_p_order=3,
+        sc_q_order=7,
+        # New extended analysis parameters
+        compute_kl_expansion_of_qoi=True,
+        kl_expansion_order=12,
+        compute_generalized_sobol_indices=True,
+        compute_covariance_matrix_in_time=True,
+        # Advanced analysis options
+        save_gpce_surrogate=True,
+        compute_other_stat_besides_pce_surrogate=True
+    )
+    
+    print(f"Model: {config.model}")
+    print(f"UQ Method: {config.uq_method}")
+    print(f"Extended Analysis Features:")
+    print(f"  - KL expansion: {config.compute_kl_expansion_of_qoi} (order: {config.kl_expansion_order})")
+    print(f"  - Generalized Sobol: {config.compute_generalized_sobol_indices}")
+    print(f"  - Covariance matrix: {config.compute_covariance_matrix_in_time}")
+    print()
+
+
+def example_12_configuration_overrides():
+    """Example 12: Using configuration overrides for batch scripts."""
+    print("=== Example 12: Configuration Overrides ===")
+    
+    # Create a basic configuration (e.g., from command-line args)
+    base_config = ConfigurationFactory.create_configuration(
+        model_type="hbvsask",
+        uq_method="mc",
+        mc_numevaluations=1000
+    )
+    
+    print(f"Before overrides - KL expansion: {base_config.compute_kl_expansion_of_qoi}")
+    
+    # Apply overrides for advanced analysis (useful when starting from batch scripts)
+    ConfigurationFactory.apply_configuration_overrides(
+        base_config,
+        compute_kl_expansion_of_qoi=True,
+        kl_expansion_order=8,
+        compute_generalized_sobol_indices=True,
+        allow_conditioning_results_based_on_metric=True,
+        condition_results_based_on_metric="NSE",
+        condition_results_based_on_metric_value=0.7
+    )
+    
+    print(f"After overrides - KL expansion: {base_config.compute_kl_expansion_of_qoi}")
+    print(f"Conditional analysis: {base_config.allow_conditioning_results_based_on_metric}")
+    print()
+
+
 def main():
     """Run all configuration examples."""
     print("UQEF-Dynamic Configuration System Examples")
@@ -232,7 +289,10 @@ def main():
         example_7_configuration_validation,
         example_8_configuration_modification,
         example_9_batch_configurations,
-        example_10_available_options
+        example_10_available_options,
+        # New extended examples
+        example_11_extended_analysis_configuration,
+        example_12_configuration_overrides
     ]
     
     for example_func in examples:
@@ -243,6 +303,22 @@ def main():
             print()
     
     print("Examples completed!")
+    print("\n" + "=" * 50)
+    print("EXTENDED CONFIGURATION SYSTEM SUMMARY")
+    print("=" * 50)
+    print("The configuration system now supports:")
+    print("• KL expansion analysis with configurable order")
+    print("• Generalized Sobol indices computation")
+    print("• Covariance matrix computation in time")
+    print("• Conditional analysis based on performance metrics")
+    print("• Custom statistics computation dictionaries")
+    print("• Custom plotting configuration dictionaries")
+    print("• Configuration overrides for batch script compatibility")
+    print("• Method-specific automatic parameter adjustment")
+    print("\nTo use these features:")
+    print("1. Create configurations with new parameters using ConfigurationFactory")
+    print("2. Use apply_configuration_overrides() for batch script compatibility")
+    print("3. All parameters have sensible defaults for backward compatibility")
 
 
 if __name__ == "__main__":

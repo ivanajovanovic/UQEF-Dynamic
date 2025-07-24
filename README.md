@@ -169,6 +169,65 @@ The framework is typically used through the scientific pipelines, with the main 
 3. Running the simulation
 4. Post-processing and analyzing the results
 
+### Configuration Management System
+
+UQEF-Dynamic includes a comprehensive configuration management system that provides a structured approach to managing simulation parameters. The system supports:
+
+- **Extended Analysis Features**: KL expansion, generalized Sobol indices, covariance matrix analysis
+- **Conditional Analysis**: Results filtering based on performance metrics
+- **Custom Statistics and Plotting**: Configurable computation and visualization options
+- **Batch Script Compatibility**: Configuration overrides for existing workflows
+- **Extended Command-Line Arguments**: Access advanced features through bash scripts
+
+#### Quick Configuration Example
+
+```python
+from uqef_dynamic.config import ConfigurationFactory
+
+# Create configuration with advanced features
+config = ConfigurationFactory.create_configuration(
+    model_type="hbvsask",
+    uq_method="sc",
+    sc_p_order=3,
+    sc_q_order=7,
+    # Advanced analysis features
+    compute_kl_expansion_of_qoi=True,
+    kl_expansion_order=12,
+    compute_generalized_sobol_indices=True,
+    compute_covariance_matrix_in_time=True,
+    # Conditional analysis
+    allow_conditioning_results_based_on_metric=True,
+    condition_results_based_on_metric="NSE",
+    condition_results_based_on_metric_value=0.7
+)
+
+# Apply to simulation
+config.apply_to_uqsim(uqsim)
+```
+
+#### Extended Command-Line Arguments
+
+All advanced features can now be accessed through command-line arguments in bash scripts:
+
+```bash
+python uqef_dynamic/scientific_pipelines/uq_simulation_uqsim.py \
+    --model hbvsask \
+    --uq_method sc \
+    --sc_p_order 3 \
+    --sc_q_order 7 \
+    --config_file data/configurations/configuration_hbv_10D.json \
+    --compute_kl_expansion_of_qoi \
+    --kl_expansion_order 15 \
+    --compute_generalized_sobol_indices \
+    --compute_covariance_matrix_in_time \
+    --allow_conditioning_results_based_on_metric \
+    --condition_results_based_on_metric NSE \
+    --condition_results_based_on_metric_value 0.7
+```
+
+For detailed information about the configuration system, see `uqef_dynamic/config/README.md`.
+For extended command-line arguments, see `docs/extended_arguments.md`.
+
 
 ## How to Run the Code/Simulation
 

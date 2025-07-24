@@ -42,6 +42,9 @@ class MCConfiguration(UQConfiguration):
         self.sampling_rule: str = "latin_hypercube"  # "random" | "sobol" | "halton" | "hammersley"
 
         self.regression = False
+        
+        # For MC method, if compute_Sobol_m is True, then compute_sobol_indices_with_samples should be True
+        # This will be dynamically set based on compute_Sobol_m in the configuration factory
                 
     def validate(self) -> bool:
         """Validate MC-specific parameters."""
@@ -139,10 +142,10 @@ class SaltelliConfiguration(UQConfiguration):
         self.mc_numevaluations: int = 10000
         self.sampling_rule: str = "sobol"  # Usually sobol for Saltelli
         
-        # # Override defaults for Saltelli
+        # Override defaults for Saltelli - enable Sobol indices computation
         self.compute_Sobol_m = True
         self.compute_Sobol_t = True
-        # self.save_all_simulations = True
+        self.compute_sobol_indices_with_samples = False  # For Saltelli method this should be False
         
     def validate(self) -> bool:
         """Validate Saltelli-specific parameters."""

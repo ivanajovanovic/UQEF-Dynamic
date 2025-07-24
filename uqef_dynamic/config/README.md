@@ -29,6 +29,71 @@ config = ConfigurationFactory.create_hbv_mc_configuration(
 config.apply_to_uqsim(uqsim)
 ```
 
+### Extended Analysis Features (New!)
+
+```python
+# Create configuration with advanced analysis features
+config = ConfigurationFactory.create_configuration(
+    model_type="hbvsask",
+    uq_method="sc",
+    sc_p_order=3,
+    sc_q_order=7,
+    # KL expansion analysis
+    compute_kl_expansion_of_qoi=True,
+    kl_expansion_order=12,
+    # Generalized Sobol indices
+    compute_generalized_sobol_indices=True,
+    compute_generalized_sobol_indices_over_time=True,
+    # Covariance matrix computation
+    compute_covariance_matrix_in_time=True,
+    # Conditional analysis
+    allow_conditioning_results_based_on_metric=True,
+    condition_results_based_on_metric="NSE",
+    condition_results_based_on_metric_value=0.7
+)
+```
+
+### Configuration Overrides for Batch Scripts
+
+```python
+# For compatibility with existing batch scripts
+config = ConfigurationFactory.from_uqsim_args(uqsim.args)
+
+# Apply advanced features
+ConfigurationFactory.apply_configuration_overrides(
+    config,
+    compute_kl_expansion_of_qoi=True,
+    compute_generalized_sobol_indices=True,
+    dict_what_to_plot={
+        "Sobol_m": True, "Sobol_t": True,
+        "generalized_sobol_total_index": True,
+        "P10": True, "P90": True
+    }
+)
+```
+
+### Extended Command-Line Arguments (New!)
+
+All advanced features can now be accessed directly through command-line arguments:
+
+```bash
+python uqef_dynamic/scientific_pipelines/uq_simulation_uqsim.py \
+    --model hbvsask \
+    --uq_method sc \
+    --sc_p_order 3 \
+    --sc_q_order 7 \
+    --config_file data/configurations/configuration_hbv_10D.json \
+    --compute_kl_expansion_of_qoi \
+    --kl_expansion_order 15 \
+    --compute_generalized_sobol_indices \
+    --compute_covariance_matrix_in_time \
+    --allow_conditioning_results_based_on_metric \
+    --condition_results_based_on_metric NSE \
+    --condition_results_based_on_metric_value 0.7
+```
+
+For a complete list of extended arguments, see `docs/extended_arguments.md`.
+
 ### Available Factory Methods
 
 ```python
@@ -113,6 +178,80 @@ config.sc_quadrature_rule = "g"
 config = SparseGridConfiguration()
 config.set_sparse_grid_file(level=5, dimension=6, base_path="/path/to/grids")
 ```
+
+## Extended Configuration Parameters
+
+The configuration system now supports advanced analysis features that were previously hardcoded:
+
+### KL Expansion Analysis
+```python
+config.compute_kl_expansion_of_qoi = True          # Enable KL expansion
+config.kl_expansion_order = 12                     # Number of KL modes
+config.compute_timewise_gpce_next_to_kl_expansion = True  # Combine with gPCE
+```
+
+### Generalized Sobol Indices
+```python
+config.compute_generalized_sobol_indices = True           # Enable generalized Sobol
+config.compute_generalized_sobol_indices_over_time = True # Time-dependent analysis
+```
+
+### Covariance Matrix Analysis
+```python
+config.compute_covariance_matrix_in_time = True    # Enable covariance computation
+```
+
+### Conditional Analysis
+```python
+config.allow_conditioning_results_based_on_metric = True
+config.condition_results_based_on_metric = "NSE"           # Metric name
+config.condition_results_based_on_metric_value = 0.7       # Threshold value
+config.condition_results_based_on_metric_sign = "greater_or_equal"  # Condition
+```
+
+### Advanced Analysis Options
+```python
+config.save_gpce_surrogate = True                          # Save gPCE surrogates
+config.compute_other_stat_besides_pce_surrogate = True     # Additional statistics
+config.compute_sobol_indices_with_samples = False          # Method-specific setting
+```
+
+### Custom Statistics and Plotting
+```python
+# Custom statistics computation
+config.dict_stat_to_compute = {
+    "Var": True, "StdDev": True, "P10": True, "P90": True,
+    "E_minus_std": True, "E_plus_std": True,
+    "Skew": True, "Kurt": True, 
+    "Sobol_m": True, "Sobol_t": True
+}
+
+# Custom plotting configuration
+config.dict_what_to_plot = {
+    "E_minus_std": True, "E_plus_std": True, 
+    "E_minus_2std": True, "E_plus_2std": True,
+    "P10": True, "P90": True, "StdDev": True,
+    "Sobol_m": True, "Sobol_t": True,
+    "generalized_sobol_total_index": True, 
+    "generalized_sobol_main_index": True
+}
+```
+
+### Parameter Defaults
+
+All extended parameters have sensible defaults for backward compatibility:
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `compute_kl_expansion_of_qoi` | `False` | Enable KL expansion analysis |
+| `kl_expansion_order` | `10` | Number of KL modes |
+| `compute_generalized_sobol_indices` | `False` | Enable generalized Sobol indices |
+| `compute_covariance_matrix_in_time` | `False` | Enable covariance matrix computation |
+| `allow_conditioning_results_based_on_metric` | `False` | Enable conditional analysis |
+| `condition_results_based_on_metric` | `"NSE"` | Performance metric for conditioning |
+| `condition_results_based_on_metric_value` | `0.2` | Threshold value |
+| `save_gpce_surrogate` | `True` | Save gPCE surrogate models |
+| `compute_sobol_indices_with_samples` | `False` | Method-dependent (auto-set) |
 
 ### Model Configurations
 

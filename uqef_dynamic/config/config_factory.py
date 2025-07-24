@@ -82,12 +82,25 @@ class ConfigurationFactory:
         # Apply any overrides
         uq_config.update(**overrides)
         
+        # Apply method-specific logic for compute_sobol_indices_with_samples
+        cls._apply_sobol_indices_logic(uq_config)
+        
         # Validate if requested
         if validate:
             validator = ConfigurationValidator()
             validator.validate(uq_config)
         
         return uq_config
+    
+    @classmethod
+    def _apply_sobol_indices_logic(cls, config):
+        """Apply logic for compute_sobol_indices_with_samples based on UQ method and settings."""
+        # For MC method: if compute_Sobol_m is True, then compute_sobol_indices_with_samples should be True
+        if config.uq_method == "mc" and config.compute_Sobol_m:
+            config.compute_sobol_indices_with_samples = True
+        # For Saltelli method: compute_sobol_indices_with_samples should be False
+        elif config.uq_method == "saltelli":
+            config.compute_sobol_indices_with_samples = False
     
     @classmethod
     def _apply_model_config(cls, uq_config, model_config, **overrides):
@@ -304,7 +317,6 @@ class ConfigurationFactory:
         if hasattr(args, 'config_file') and args.config_file:
             config_params['config_file'] = args.config_file
         
-
         # UQ method specific parameters
         # if base_uq_method in ['mc', 'saltelli']:
         if hasattr(args, 'mc_numevaluations'):
@@ -448,10 +460,37 @@ class ConfigurationFactory:
         if not hasattr(config, 'run_type') or not config.run_type:
             config.run_type = cls._generate_run_type_from_args(args, config)
         
+        # Apply method-specific logic for compute_sobol_indices_with_samples
+        cls._apply_sobol_indices_logic(config)
+        
         # Validate if requested
         if validate:
             validator = ConfigurationValidator()
             validator.validate(config)
+        
+        return config
+    
+    @classmethod
+    def apply_configuration_overrides(cls, config, **overrides):
+        """
+        Apply configuration overrides to an existing configuration.
+        
+        This method allows updating configuration parameters that are not yet
+        supported in the UQEF argument system, enabling the use of new features
+        even when starting from batch scripts or command-line arguments.
+        
+        Args:
+            config: Existing configuration object
+            **overrides: Configuration parameters to override
+            
+        Returns:
+            Updated configuration object
+        """
+        # Apply overrides
+        config.update(**overrides)
+        
+        # Re-apply method-specific logic after overrides
+        cls._apply_sobol_indices_logic(config)
         
         return config
     

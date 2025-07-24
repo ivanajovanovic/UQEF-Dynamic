@@ -25,7 +25,7 @@
   "basin": "Oldman_Basin",
   "plotting": "False",
   "writing_results_to_a_file": "False",
-  "corrupt_forcing_data": "True"
+  "corrupt_forcing_data": "False"
 },
 "model_paths": {
   "hbv_model_path": "Hydro_Models/HBV-SASK-data"
