@@ -21,7 +21,7 @@ from uqef_dynamic.utils import transport_map
 from uqef_dynamic.models.hbv_sask import hbvsask_utility as hbv
 from uqef_dynamic.models.hbv_sask import HBVSASKModel as hbvmodel
 import transport
-import transport_example
+import standard_transport
 
 PLOT_FORCING_DATA = True
 
@@ -501,7 +501,8 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
     # print(f"DEBUGGING - {parameter_samples_matrix.shape}")
     print("DEBUGGING - START TRANSPORT MAP")
     
-    standar_parameter_samples_matrix = transport_example.transform_samples_with_transport_map(parameter_samples_matrix) # parameter_samples_matrix
+    # np.save("parameter_samples_matrix_before_transport1000.npy", parameter_samples_matrix)
+    standar_parameter_samples_matrix = standard_transport.transform_samples_with_transport_map(parameter_samples_matrix) # parameter_samples_matrix
    
     # print(f"DEBUGGING - {standar_parameter_samples_matrix.shape}")
     print("DEBUGGING - TRANSPORT MAP DONE")

@@ -3,10 +3,9 @@
 import mpart as mt
 import numpy as np
 from scipy.optimize import minimize
-import matplotlib.pyplot as plt
 from scipy.stats import multivariate_normal
 from scipy.optimize import minimize
-from torch import obj
+from sklearn.preprocessing import StandardScaler
 
 
 def transform_samples_with_transport_map(parameter_samples_matrix: np.ndarray):    
@@ -19,10 +18,27 @@ def transform_samples_with_transport_map(parameter_samples_matrix: np.ndarray):
     print("dim: ", parameter_samples_matrix.shape[0])
     print("num_samples: ", parameter_samples_matrix.shape[1])
     print("Input sample matrix shape:", parameter_samples_matrix.shape)
-
-
+    
+    
     dim = parameter_samples_matrix.shape[0]
     rho1 = multivariate_normal(np.zeros(dim), np.eye(dim))
+    
+        
+    ### LOGARITHM
+
+    for i in range(parameter_samples_matrix.shape[0]):
+        if np.all(parameter_samples_matrix[i, :] <= 0): 
+        ### NEED TO DECIDE BASED ON X0: data strictly positive (log) - data strictly negative (-log)
+            parameter_samples_matrix[i, :] = -np.log(-parameter_samples_matrix[i, :])
+        else:
+            parameter_samples_matrix[i, :] = np.log(parameter_samples_matrix[i, :])
+        #X[i, :] = np.log1p(X[i, :])
+
+
+    ### SCALING
+    scaler = StandardScaler()
+    parameter_samples_matrix = scaler.fit_transform(parameter_samples_matrix.T).T
+    
 
     def obj(coeffs, tri_map, x):
         """ Evaluates the log-likelihood of the samples using the map-induced density. """
@@ -59,7 +75,7 @@ def transform_samples_with_transport_map(parameter_samples_matrix: np.ndarray):
     # Options for the transport map
     map_options = mt.MapOptions()
     map_options.basisType = mt.BasisTypes.ProbabilistHermite
-    max_order = 8
+    max_order = 4
 
     tri_map = mt.CreateTriangular(
         dim, dim, max_order, map_options
@@ -76,7 +92,7 @@ def transform_samples_with_transport_map(parameter_samples_matrix: np.ndarray):
         args=(tri_map, parameter_samples_matrix),
         jac=grad_obj,
         method='L-BFGS-B',
-        options={'gtol': 1e-8, 'disp': True, 'maxiter': 1000}
+        options={'gtol': 1e-2, 'disp': True}
     )
     
 
@@ -93,7 +109,7 @@ def transform_samples_with_transport_map(parameter_samples_matrix: np.ndarray):
     ## ACCURACY CHECKS
 
     print('Mean of mapped samples:', np.mean(mapped_samples, axis=1))
-    print('Covariance of mapped samples:', np.cov(mapped_samples))
+    print('Covariance of mapped samples:', np.cov(mapped_samples))        
     
 
     # Tranform back to original shape
