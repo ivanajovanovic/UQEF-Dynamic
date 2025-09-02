@@ -26,7 +26,8 @@ import polynomial_chaos
 PLOT_FORCING_DATA = True
 
 def run_model_single_time_stamp_single_particle(hbvsaskModelObject, date_of_interest,
-                                    parameter_value_dict, state_values_dict, unique_index_model_run = 0):
+                                    parameter_value_dict, state_values_dict, unique_index_model_run = 0,
+                                    print_debug=False):
     """
     Runs the HBV-SASK model for a single time stamp and a single particle.
 
@@ -67,6 +68,10 @@ def run_model_single_time_stamp_single_particle(hbvsaskModelObject, date_of_inte
         forcing=forcing,
         initial_condition_df=initial_condition_df
     )
+    
+    if print_debug:
+        print("DEBUG PRINTING OF HBV-OUTPUT")
+        print(results_array_changed_param)
 
     # extract y_t produced by the model
     model_output_dict = results_array_changed_param[0][0]['result_time_series'].loc[date_of_interest].to_dict()
@@ -517,11 +522,12 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
     print("DEBUGGING - CHAOSPY START")
     
     
+    
     # mean of state variables
-    if new_list_state_values_particles:
+    if list_state_values_particles:
         state_df = pd.DataFrame(new_list_state_values_particles)
-        state_df = state_df.drop('WatershedArea_km2', axis=1)
-        state_df = state_df.drop('Index_run', axis=1)
+        # state_df = state_df.drop('WatershedArea_km2', axis=1)
+        # state_df = state_df.drop('Index_run', axis=1)
         # print(state_df)
         mean_states = state_df.mean(axis=0).to_dict()
         print(f"Mean state variables for all dates: {mean_states}")

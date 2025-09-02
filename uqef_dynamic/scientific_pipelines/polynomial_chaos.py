@@ -44,6 +44,7 @@ def setup_HBV():
 
 def construct_polynomial_chaos_expansion(standard_parameter_matrix: np.ndarray, mean_state_values_dict,transport_map, scaler):
     
+
     hbvsaskModelObject = setup_HBV()
 
     def inverse(standard_parameters):
@@ -68,10 +69,15 @@ def construct_polynomial_chaos_expansion(standard_parameter_matrix: np.ndarray, 
         # TODO: check argument values
         result = transport_pce_pipeline.run_model_single_time_stamp_single_particle(
             hbvsaskModelObject=hbvsaskModelObject,
-            date_of_interest=hbvsaskModelObject.start_date_predictions,
+            date_of_interest=hbvsaskModelObject.end_date,
             parameter_value_dict=original_parameters,
-            state_values_dict=mean_state_values_dict
+            state_values_dict=mean_state_values_dict,
+            print_debug=True
             )
+        # print("original_parameters shape:", np.shape(original_parameters))
+        # print("original_parameters:", original_parameters)
+    
+        # result = hbvsaskModelObject.run_model_single_time_stamp(hbvsaskModelObject.end_date, parameters=original_parameters, raise_exception_on_model_break=True)
         
         return result
         
