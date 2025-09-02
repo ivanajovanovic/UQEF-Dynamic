@@ -20,8 +20,8 @@ from uqef_dynamic.utils import utility
 from uqef_dynamic.utils import transport_map
 from uqef_dynamic.models.hbv_sask import hbvsask_utility as hbv
 from uqef_dynamic.models.hbv_sask import HBVSASKModel as hbvmodel
-import transport
 import standard_transport
+import polynomial_chaos
 
 PLOT_FORCING_DATA = True
 
@@ -501,12 +501,39 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
     # print(f"DEBUGGING - {parameter_samples_matrix.shape}")
     print("DEBUGGING - START TRANSPORT MAP")
     
-    # np.save("parameter_samples_matrix_before_transport1000.npy", parameter_samples_matrix)
-    standar_parameter_samples_matrix = standard_transport.transform_samples_with_transport_map(parameter_samples_matrix) # parameter_samples_matrix
+    np.save("parameter_samples_matrix_before_transport200.npy", parameter_samples_matrix)
+    standar_parameter_samples_matrix, transport_map, scaler = standard_transport.transform_samples_with_transport_map(parameter_samples_matrix) # parameter_samples_matrix
    
+    # np.save("standard_parameter_samples_matrix1000.npy", standar_parameter_samples_matrix)
     # print(f"DEBUGGING - {standar_parameter_samples_matrix.shape}")
     print("DEBUGGING - TRANSPORT MAP DONE")
     # Plotting final distribution of transformed parameter values
+    
+    
+    # =========================================================
+    # CHAOSPY
+    # =========================================================
+    
+    print("DEBUGGING - CHAOSPY START")
+    
+    
+    # mean of state variables
+    if new_list_state_values_particles:
+        state_df = pd.DataFrame(new_list_state_values_particles)
+        state_df = state_df.drop('WatershedArea_km2', axis=1)
+        state_df = state_df.drop('Index_run', axis=1)
+        # print(state_df)
+        mean_states = state_df.mean(axis=0).to_dict()
+        print(f"Mean state variables for all dates: {mean_states}")
+    
+    
+    polynomial_chaos.construct_polynomial_chaos_expansion(
+        standard_parameter_matrix=standar_parameter_samples_matrix, 
+        mean_state_values_dict=mean_states, 
+        transport_map=transport_map, 
+        scaler=scaler)
+    
+    print("DEBUGGING - CHAOSPY END")
     
     
     fig_plotly = make_subplots(rows=1, cols=len(param_names))
@@ -643,7 +670,7 @@ if __name__ == "__main__":
     num_processes = multiprocessing.cpu_count()
     print(f"Number of parallel processes = {num_processes}")
 
-    number_of_particles = ne = 1000  # 50, 100, 200, 500, 1000, 2000
+    number_of_particles = ne = 500  # 50, 100, 200, 500, 1000, 2000
 
     for i in range(1):
         # working_dir_name=f"trial_single_run_hbvsaskmodel_7d_filtering/run_{i}"

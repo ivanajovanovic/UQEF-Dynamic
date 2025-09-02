@@ -9,6 +9,8 @@ from sklearn.preprocessing import StandardScaler
 
 
 def transform_samples_with_transport_map(parameter_samples_matrix: np.ndarray):    
+    """Transforms the parameters from exponential distribution to standard Gauss."""
+    """Returns: transformed samples, transport_map object (need for inverse), scaler object (need for inverse)"""
     # shape[0] should be dimension, shape[1] should be num_points
     # MParT expects the input sample matrix of shape (dim, num_samples)
     if parameter_samples_matrix.shape[0] > parameter_samples_matrix.shape[1]:
@@ -117,4 +119,5 @@ def transform_samples_with_transport_map(parameter_samples_matrix: np.ndarray):
         print("Transposing the mapped samples back to original shape")
         mapped_samples = mapped_samples.T
     
-    return mapped_samples
+    
+    return mapped_samples, tri_map, scaler
