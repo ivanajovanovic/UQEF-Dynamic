@@ -506,7 +506,7 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
     # print(f"DEBUGGING - {parameter_samples_matrix.shape}")
     print("DEBUGGING - START TRANSPORT MAP")
     
-    np.save("parameter_samples_matrix_before_transport200.npy", parameter_samples_matrix)
+    # np.save("parameter_samples_matrix_before_transport200.npy", parameter_samples_matrix)
     standar_parameter_samples_matrix, transport_map, scaler = standard_transport.transform_samples_with_transport_map(parameter_samples_matrix) # parameter_samples_matrix
    
     # np.save("standard_parameter_samples_matrix1000.npy", standar_parameter_samples_matrix)
