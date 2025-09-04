@@ -106,6 +106,20 @@ surrogate_type, recompute_generalized_sobol_indices, polynomial_expansion=None, 
                 statistics_dictionary=statisticsObject.result_dict, 
                 throw_error=False, single_timestamp_single_file=single_timestamp_single_file)
 
+            # DEBUGGING: Check coefficient values after loading
+            if gpce_coeffs is not None:
+                print(f"DEBUGGING read_surrogate_model_single_working_dir: Loaded coefficients for {single_qoi}")
+                print(f"DEBUGGING: Type of gpce_coeffs: {type(gpce_coeffs)}")
+                if isinstance(gpce_coeffs, dict):
+                    print(f"DEBUGGING: Keys in gpce_coeffs: {list(gpce_coeffs.keys())[:5]}...")  # Show first 5 keys
+                    # Check a specific timestamp if it exists
+                    test_timestamps = [pd.Timestamp('2004-10-31 00:00:00'), pd.Timestamp('2005-10-01 00:00:00')]
+                    for test_ts in test_timestamps:
+                        if test_ts in gpce_coeffs:
+                            print(f"DEBUGGING: {gpce_coeffs[test_ts].shape}")
+                            print(f"DEBUGGING: Coeffs at {test_ts}: {gpce_coeffs[test_ts][:5] if hasattr(gpce_coeffs[test_ts], '__getitem__') else gpce_coeffs[test_ts]}")
+                            break
+
             # # NOTE: In this case gpce_coeffs.keys() with be of type str
             # gpce_coeffs = uqef_dynamic_utils.fetch_gpce_coeff_single_qoi(
             #     qoi_column_name=single_qoi, workingDir=workingDir,
@@ -177,7 +191,7 @@ surrogate_type, recompute_generalized_sobol_indices, polynomial_expansion=None, 
             fullFileName = workingDir / fileName
             if fullFileName.is_file():
                 eigenvalues = np.load(fullFileName)
-                eigenvalues_real = np.asarray([element.real for element in eigenvalues], dtype=np.float64)
+                eigenvalues_real = np.asarray([element.real for element in eigenvalues], dtype=np.float32)
                 eigenvalues_real_scaled = eigenvalues_real/eigenvalues_real[0]
             else:
                 eigenvalues = None
@@ -311,6 +325,20 @@ def _postprocess_kl_expansion_or_generalized_sobol_indices_computation_from_resu
             for ts, coeff in gpce_coeff_dict.items()
         }
 
+        # DEBUGGING: Check coefficient values before computing generalized Sobol indices
+        print(f"DEBUGGING _postprocess_kl_expansion_or_generalized_sobol_indices_computation_from_results_single_qoi for {single_qoi_column}")
+        print(f"DEBUGGING: Number of timestamps: {len(gpce_coeff_dict)}")
+        print(f"DEBUGGING: look_back_window_size: {look_back_window_size}")
+        
+        # Check a few specific timestamps
+        test_timestamps = [pd.Timestamp('2004-10-31 00:00:00'), pd.Timestamp('2005-10-01 00:00:00')]
+        for test_ts in test_timestamps:
+            if test_ts in gpce_coeff_dict:
+                coeff_vals = gpce_coeff_dict[test_ts]
+                print(f"DEBUGGING: Coeffs at {test_ts}: shape={coeff_vals.shape if hasattr(coeff_vals, 'shape') else 'no shape'}")
+                print(f"DEBUGGING: Coeffs at {test_ts}: first 5 values={coeff_vals[:5] if hasattr(coeff_vals, '__getitem__') else coeff_vals}")
+                break
+
         # single_time_stamp = pd.Timestamp('2006-10-31 00:00:00')
         # print(f"DEBUGGING _postprocess_kl_expansion_or_generalized_sobol_indices_computation_from_results_single_qoi {single_qoi_column}-{single_time_stamp}: {gpce_coeff_dict[single_time_stamp]}")
         # print(f"DEBUGGING _postprocess_kl_expansion_or_generalized_sobol_indices_computation_from_results_single_qoi {single_qoi_column}-{single_time_stamp}: {dict_with_gpce_coeff_and_generalized_indices[single_time_stamp][utility.PCE_COEFF_ENTRY]}")
@@ -340,7 +368,7 @@ def _postprocess_kl_expansion_or_generalized_sobol_indices_computation_from_resu
         if N_quad > 1:
             difference_between_two_time_stamps = utility.compute_difference_between_two_time_stamps(
                 end_timestamp=timesteps_max, start_timestamp=timesteps_min, resolution=resolution)
-            h = (difference_between_two_time_stamps)/(N_quad-1) #1/(self.N_quad-1) #
+            h = 1/(N_quad-1) #1/(self.N_quad-1) #(difference_between_two_time_stamps)/(N_quad-1)
             weights_time = [h for i in range(N_quad)]
             if len(weights_time) >= 3:
                 weights_time[0] /= 2
@@ -352,6 +380,16 @@ def _postprocess_kl_expansion_or_generalized_sobol_indices_computation_from_resu
         if compute_generalized_sobol_indices_over_time:
             # NOTE param_names / polynomial_expansion alphas / coefficients  result_dict_statistics[time_stamp][PCE_COEFF_ENTRY] have to match!
             fileName = workingDir / f"recomputed_generalized_sobol_indices_{single_qoi_column}_whole.txt"
+            
+            # DEBUGGING: Check inputs to the utility function
+            print(f"DEBUGGING: About to call utility.computing_generalized_sobol_total_indices_from_poly_expan_over_time")
+            print(f"DEBUGGING: polynomial_expansion type: {type(polynomial_expansion)}")
+            print(f"DEBUGGING: polynomial_expansion shape: {polynomial_expansion.shape}")
+            print(f"DEBUGGING: weights_time: {weights_time}")
+            print(f"DEBUGGING: param_names (labels): {labels}")
+            print(f"DEBUGGING: fileName: {fileName}")
+            print(f"DEBUGGING: resolution: {resolution}")
+            
             utility.computing_generalized_sobol_total_indices_from_poly_expan_over_time(
                 result_dict_statistics=dict_with_gpce_coeff_and_generalized_indices, 
                 polynomial_expansion=polynomial_expansion, 
@@ -361,15 +399,19 @@ def _postprocess_kl_expansion_or_generalized_sobol_indices_computation_from_resu
                 resolution=resolution,
                 )
             if look_back_window_size!='whole': 
-                fileName = workingDir / f"recomputed_generalized_sobol_indices_{single_qoi_column}_{look_back_window_size}.txt"
-                utility.computing_generalized_sobol_total_indices_from_poly_expan_over_time(
-                    result_dict_statistics=dict_with_gpce_coeff_and_generalized_indices, 
-                    polynomial_expansion=polynomial_expansion, 
-                    weights=weights_time, 
-                    param_names=labels,
-                    fileName=fileName, 
-                    look_back_window_size=look_back_window_size, 
-                    resolution=resolution)
+                # make sure that look_back_window_size is a list
+                if not isinstance(look_back_window_size, list):
+                    look_back_window_size = [look_back_window_size,]
+                for single_look_back_window_size in look_back_window_size:           
+                    fileName = workingDir / f"recomputed_generalized_sobol_indices_{single_qoi_column}_{single_look_back_window_size}.txt"
+                    utility.computing_generalized_sobol_total_indices_from_poly_expan_over_time(
+                        result_dict_statistics=dict_with_gpce_coeff_and_generalized_indices, 
+                        polynomial_expansion=polynomial_expansion, 
+                        weights=weights_time, 
+                        param_names=labels,
+                        fileName=fileName, 
+                        look_back_window_size=single_look_back_window_size, 
+                        resolution=resolution)
             print(f"INFO: computation of (over time) generalized S.S.I based on PCE finished...")
         else:
             # the computation of the generalized Sobol indices is done only for the last time step
@@ -644,6 +686,9 @@ def main(mpi, rank, workingDir=None, inputModelDir=None, directory_for_saving_pl
 
                 dict_of_kl_coeff_dict_over_qois_over_workingDir[single_workingDir] = kl_coeff_dict_over_qois
                 dict_of_kl_surrogate_df_dict_over_qois_over_workingDir[single_workingDir] = kl_surrogate_df_dict_over_qois
+
+                # TODO - be careful, this is here just temporarly
+                stochasticParameterNames = statisticsObject.labels
  
             if model is None:
                 model = uqsim_args_dict["model"]
@@ -868,14 +913,14 @@ def main(mpi, rank, workingDir=None, inputModelDir=None, directory_for_saving_pl
             jointStandard = simulationNodes.joinedStandardDists
             evaluateSurrogateAtStandardDist = statisticsObject.sampleFromStandardDist  # uqsim_args_dict['sampleFromStandardDist']
 
-            if statisticsObject.sampleFromStandardDist:
-                polynomial_expansion, polynomial_norms = cp.generate_expansion(
-                    order=uqsim_args_dict['sc_p_order'], dist=jointStandard, rule=uqsim_args_dict['sc_poly_rule'], normed=uqsim_args_dict['sc_poly_normed'],
-                    graded=True, reverse=True, cross_truncation=uqsim_args_dict['cross_truncation'], retall=True)
-            else:
-                polynomial_expansion, polynomial_norms = cp.generate_expansion(
-                    order=uqsim_args_dict['sc_p_order'], dist=jointDists, rule=uqsim_args_dict['sc_poly_rule'], normed=uqsim_args_dict['sc_poly_normed'],
-                    graded=True, reverse=True, cross_truncation=uqsim_args_dict['cross_truncation'], retall=True)
+            # if statisticsObject.sampleFromStandardDist:
+            #     polynomial_expansion, polynomial_norms = cp.generate_expansion(
+            #         order=uqsim_args_dict['sc_p_order'], dist=jointStandard, rule=uqsim_args_dict['sc_poly_rule'], normed=uqsim_args_dict['sc_poly_normed'],
+            #         graded=True, reverse=True, cross_truncation=uqsim_args_dict['cross_truncation'], retall=True)
+            # else:
+            #     polynomial_expansion, polynomial_norms = cp.generate_expansion(
+            #         order=uqsim_args_dict['sc_p_order'], dist=jointDists, rule=uqsim_args_dict['sc_poly_rule'], normed=uqsim_args_dict['sc_poly_normed'],
+            #         graded=True, reverse=True, cross_truncation=uqsim_args_dict['cross_truncation'], retall=True)
 
             # print(f"DEBUGGING polynomial_expansion - {polynomial_expansion}")
             # print(f"DEBUGGING polynomial_expansion - {type(polynomial_expansion)}")
@@ -1457,6 +1502,7 @@ def main(mpi, rank, workingDir=None, inputModelDir=None, directory_for_saving_pl
             if printing:
                 # print(f"statisticsObject.weights_time-{statisticsObject.weights_time}")
                 print(f"statisticsObject.labels-{statisticsObject.labels}")
+                print(f"stochasticParameterNames-{stochasticParameterNames}")
 
             list_of_single_qoi_dfs = []
             for single_qoi in list_qois:
@@ -1474,7 +1520,7 @@ def main(mpi, rank, workingDir=None, inputModelDir=None, directory_for_saving_pl
                     f_kl_surrogate_df=kl_surrogate_df_dict_over_qois[single_qoi],
                     polynomial_expansion=polynomial_expansion,
                     weights_time=statisticsObject.weights_time, 
-                    labels=statisticsObject.labels, 
+                    labels=stochasticParameterNames, #statisticsObject.labels, 
                     look_back_window_size=look_back_window_size, 
                     resolution=resolution
                 )
@@ -1493,7 +1539,8 @@ def main(mpi, rank, workingDir=None, inputModelDir=None, directory_for_saving_pl
                 df_with_generalized_indices_single_qoi = uqef_dynamic_utils.create_df_from_generalized_sobol_indices_single_qoi(
                     stat_dict=dict_with_generalized_indices, 
                     qoi_column=single_qoi, 
-                    list_of_uncertain_variables=statisticsObject.labels, 
+                    list_of_uncertain_variables=stochasticParameterNames, #statisticsObject.labels, 
+                    add_measured_data=True,
                     measured_qoi_column=statisticsObject.dict_qoi_column_and_measured_info[single_qoi][1],
                     set_lower_predictions_to_zero=set_lower_predictions_to_zero, 
                     measured_fetched=False, #statisticsObject.dict_qoi_column_and_measured_info[single_qoi][0], 
@@ -1527,7 +1574,6 @@ def main(mpi, rank, workingDir=None, inputModelDir=None, directory_for_saving_pl
                 fileName = f"df_recomputed_generalized_sobol_indices_dict_and_measured.pkl"
                 # if look_back_window_size != 'whole':
                 # fileName = f"df_recomputed_generalized_sobol_indices_dict_{look_back_window_size}_and_measured.pkl"
-                fileName = f"df_recomputed_generalized_sobol_indices_dict_and_measured.pkl"
                 df_generalized_sobol_indices_dict_and_measured.to_pickle(
                     os.path.abspath(os.path.join(str(directory_for_saving_plots), fileName)), compression="gzip")
 
@@ -1904,249 +1950,6 @@ def main(mpi, rank, workingDir=None, inputModelDir=None, directory_for_saving_pl
             #     )
             # )
             # fig.write_image(str(plot_filename), format="pdf", width=1100,) 
-        # =================================
-        # All above - step-by-step
-        # =================================
-
-        # dict_output_file_paths = utility.get_dict_with_output_file_paths_based_on_workingDir(workingDir)
-        # args_file = dict_output_file_paths.get("args_file")
-        # configuration_object_file = dict_output_file_paths.get("configuration_object_file")
-        # nodes_file = dict_output_file_paths.get("nodes_file")
-        # parameters_file = dict_output_file_paths.get("parameters_file")
-        # time_info_file = dict_output_file_paths.get("time_info_file")
-        # df_index_parameter_file = dict_output_file_paths.get("df_index_parameter_file")
-        # df_index_parameter_gof_file = dict_output_file_paths.get("df_index_parameter_gof_file")
-        # df_simulations_file = dict_output_file_paths.get("df_simulations_file")
-        # df_state_file = dict_output_file_paths.get("df_state_file")
-
-        # # Load the UQSim args dictionary
-        # uqsim_args_dict = utility.load_uqsim_args_dict(args_file)
-        # print("INFO: uqsim_args_dict: ", uqsim_args_dict)
-        # model = uqsim_args_dict["model"]
-        # inputModelDir = uqsim_args_dict["inputModelDir"]
-
-        # # Load the configuration object
-        # configurationObject = utility.load_configuration_object(configuration_object_file)
-        # print("configurationObject: ", configurationObject)
-        # simulation_settings_dict = utility.read_simulation_settings_from_configuration_object(configurationObject)
-
-        # if model == "hbvsask":
-        #     inputModelDir = uqsim_args_dict["inputModelDir"]
-        #     basin = configurationObject['model_settings']['basin']
-        
-        # # Reading Nodes and Parameters
-        # with open(nodes_file, 'rb') as f:
-        #     simulationNodes = pickle.load(f)
-        # print("INFO: simulationNodes: ", simulationNodes)
-        # dim = simulationNodes.nodes.shape[0]
-        # model_runs = simulationNodes.nodes.shape[1]
-        # distStandard = simulationNodes.joinedStandardDists
-        # dist = simulationNodes.joinedDists
-        # print(f"INFO: model-{model}; dim - {dim}; model_runs - {model_runs}")
-        # df_nodes = utility.get_df_from_simulationNodes(simulationNodes, nodes_or_paramters="nodes", params_list=params_list)
-        # df_nodes_params = utility.get_df_from_simulationNodes(simulationNodes, nodes_or_paramters="parameters",  params_list=params_list)
-
-        # if time_info_file.is_file():
-        #     with open(time_info_file, 'r') as f:
-        #         time_info = f.read()
-        #     print("INFO: time_info: ", time_info)
-
-        # # Reading Prameters and GoF Computed Data
-        # if df_index_parameter_file.is_file():
-        #     df_index_parameter = pd.read_pickle(df_index_parameter_file, compression="gzip")
-        #     params_list = utility._get_parameter_columns_df_index_parameter_gof(
-        #         df_index_parameter)
-        #     print(f"INFO: df_index_parameter - {df_index_parameter}")
-        # else:
-        #     params_list = []
-        #     for single_param in configurationObject["parameters"]:
-        #         params_list.append(single_param["name"])
-        # print(f"INFO: params_list - {params_list} (note - all the parameters)")
-
-        # if df_index_parameter_gof_file.is_file():
-        #     df_index_parameter_gof = pd.read_pickle(df_index_parameter_gof_file, compression="gzip")
-        #     gof_list = utility._get_gof_columns_df_index_parameter_gof(
-        #         df_index_parameter_gof)
-        #     print(f"INFO: df_index_parameter_gof - {df_index_parameter_gof}")
-        #     print(f"INFO: gof_list - {gof_list}")
-        # else:
-        #     gof_list = None
-
-        # # or in case of a big simulation, skip reading df_simulation_result
-        # df_simulation_result = None
-        # if read_all_saved_simulations_file and df_simulations_file.is_file():
-        #     # Reading Saved Simulations - Note: This migh be a huge file,
-        #     # especially for MC/Saltelli kind of simulations
-        #     df_simulation_result = pd.read_pickle(df_simulations_file, compression="gzip")
-        #     print(f"INFO: df_simulation_result - {df_simulation_result}")
-
-        # # Re-create Statistics Object and DataFrame Object That contains all the Statistics Data
-        # statisticsObject = create_stat_object.create_statistics_object(
-        #     configuration_object=configurationObject, uqsim_args_dict=uqsim_args_dict, \
-        #     workingDir=workingDir, model=model)
-
-        # # Recreate statisticsObject.result_dict
-        # statistics_dictionary = uqef_dynamic_utils.read_all_saved_statistics_dict(\
-        #     workingDir=workingDir, list_qoi_column=statisticsObject.list_qoi_column, 
-        #     single_timestamp_single_file=uqsim_args_dict.get("instantly_save_results_for_each_time_step", False), 
-        #     throw_error=False
-        #     )
-
-        # # print(f"DEBUGGING - statistics_dictionary.keys()={statistics_dictionary.keys()}")  # should be a list of list_qoi_column
-        # for single_qoi in statisticsObject.list_qoi_column:
-        #     print(f"DEBUGGING - single_qoi={single_qoi}; statistics_dictionary[single_qoi].keys()={statistics_dictionary[single_qoi].keys()}")
-
-        # # Once you have satistics_dictionary extend StatisticsObject...
-        # uqef_dynamic_utils.extend_statistics_object(
-        #     statisticsObject=statisticsObject, 
-        #     statistics_dictionary=statistics_dictionary, 
-        #     df_simulation_result=df_simulation_result,
-        #     get_measured_data=False, 
-        #     get_unaltered_data=False
-        # )
-
-        # # Add measured Data
-        # if model == "larsim":
-        #     raise NotImplementedError
-        # elif model == "hbvsask":
-        #     # This is hard-coded for HBV
-        #     statisticsObject.inputModelDir_basin = inputModelDir / basin
-        #     statisticsObject.get_measured_data(
-        #         timestepRange=(statisticsObject.timesteps_min, statisticsObject.timesteps_max),
-        #         transforme_mesured_data_as_original_model="False")
-        # else:
-        #     raise NotImplementedError
-
-        # # Add forcing Data
-        # statisticsObject.get_forcing_data(time_column_name=utility.TIME_COLUMN_NAME)
-
-        # # Create a Pandas.DataFrame
-        # statisticsObject.create_df_from_statistics_data()
-
-        # # Merge Everything into a single DataFrame
-        # df_statistics_and_measured = pd.merge(
-        #     statisticsObject.df_statistics, statisticsObject.forcing_df, 
-        #     left_on=statisticsObject.time_column_name, right_index=True)
-        # df_statistics_and_measured[utility.TIME_COLUMN_NAME] = pd.to_datetime(df_statistics_and_measured[utility.TIME_COLUMN_NAME])
-        # df_statistics_and_measured = df_statistics_and_measured.sort_values(by=utility.TIME_COLUMN_NAME)
-
-        # print(df_statistics_and_measured)
-
-        # ========================================================
-        # Read the gPCE surrogate model and its coefficients
-        # ========================================================
-
-        # # In case gPCE surrogate and the coefficeints are not saved in the stat_dictionary but as a separate files
-        # try_reading_gPCE_from_statisticsObject = False
-        # try_reading_gPCE_coeff_from_statisticsObject = False
-        # gpce_surrogate_dictionary = uqef_dynamic_utils.read_all_saved_gpce_surrogate_models(workingDir, statisticsObject.list_qoi_column, throw_error=False)
-        # if gpce_surrogate_dictionary is None:
-        #     try_reading_gPCE_from_statisticsObject = True
-        # gpce_coeff_dictionary = uqef_dynamic_utils.read_all_saved_gpce_coeffs(workingDir, statisticsObject.list_qoi_column, throw_error=False)
-        # if gpce_coeff_dictionary is None:
-        #     try_reading_gPCE_coeff_from_statisticsObject = True
-
-        # extended_result_dict = defaultdict(dict)
-        # for single_qoi in statisticsObject.list_qoi_column:
-        #     extended_result_dict[single_qoi] = {}
-        #     print(f"Computation for single_qoi={single_qoi} is just starting!")
-        #     df_statistics_and_measured_subset = df_statistics_and_measured[df_statistics_and_measured['qoi']==single_qoi]
-        #     # print(f"DEBUGGING - single_qoi={single_qoi}; df_statistics_and_measured_subset--{df_statistics_and_measured_subset}")
-        #     # print(f"DEBUGGING - single_qoi={single_qoi}; df_statistics_and_measured_subset.columns--{df_statistics_and_measured_subset.columns}")
-
-        #     # gpce_surrogate_dictionary_subset = gpce_surrogate_dictionary[single_qoi]
-        #     # gpce_coeff_dictionary_subset = gpce_coeff_dictionary[single_qoi]
-        #     # print(f"DEBUGGING - single_qoi={single_qoi}; gpce_surrogate_dictionary_subset--{gpce_surrogate_dictionary_subset}; gpce_coeff_dictionary_subset--{gpce_coeff_dictionary_subset}")
-
-        #     statistics_pdTimesteps_to_process = []
-        #     # for single_timestamp in statistics_pdTimesteps:
-        #     # for single_timestamp in [pd.Timestamp('2007-04-24 00:00:00'), pd.Timestamp('2007-04-25 00:00:00'),\
-        #     # pd.Timestamp('2007-04-26 00:00:00'), pd.Timestamp('2007-04-27 00:00:00'), pd.Timestamp('2007-04-28 00:00:00'), \
-        #     # pd.Timestamp('2007-04-29 00:00:00'), pd.Timestamp('2007-04-30 00:00:00')]:
-        #     for single_timestamp in [pd.Timestamp('2005-10-06 00:00:00'), ]: # 2007-04-24
-        #         print(f"{single_qoi} - Started computation for date {single_timestamp}")
-        #     #     exists = df_statistics_and_measured['TimeStamp'].isin([single_timestamp]).any()
-        #         if not single_timestamp in df_statistics_and_measured_subset[utility.TIME_COLUMN_NAME].values:
-        #             print(f"{single_qoi}-Sorry there is no {single_timestamp} in the statistics dataframe!")
-        #             continue
-                
-        #         statistics_pdTimesteps_to_process.append(single_timestamp)
-
-        #         # ========================================================
-        #         # Fatch the gPCE surrogate model and its coefficients; either from the saved files or from the statisticsObject
-        #         # ========================================================
-
-        #         if not try_reading_gPCE_from_statisticsObject:
-        #             try:
-        #                 if gpce_surrogate_dictionary[single_qoi] is None or gpce_surrogate_dictionary[single_qoi][single_timestamp] is None:
-        #                     try_reading_gPCE_from_statisticsObject = True
-        #                 else:
-        #                     temp_gpce_model = gpce_surrogate_dictionary[single_qoi][single_timestamp]  
-        #                     # print(f"DEBUGGING - gPCE surrogate model was read from saved file")
-        #                     # print(f"DEBUGGING - {type(temp_gpce_model)}")     
-        #             except:
-        #                 try_reading_gPCE_from_statisticsObject = True
-
-        #         if try_reading_gPCE_from_statisticsObject:
-        #             if 'gPCE' in statisticsObject.result_dict[single_qoi][single_timestamp].keys():
-        #                 temp_gpce_model = statisticsObject.result_dict[single_qoi][single_timestamp]['gPCE']
-        #             elif 'gPCE' in df_statistics_and_measured_subset.columns:
-        #                 temp_gpce_model = df_statistics_and_measured_subset[df_statistics_and_measured_subset[utility.TIME_COLUMN_NAME]==single_timestamp]['gPCE'].values[0]
-        #             else:
-        #                 raise ValueError(f"{single_qoi}-{single_timestamp}-gPCE surrogate model is not found in files in the working directory, nor in the statistics dictionary or in the statistics dataframe")
-        #         # print(f"DEBUGGING - gPCE surrogate model for date {single_timestamp} - {temp_gpce_model}")
-
-        #         if not try_reading_gPCE_coeff_from_statisticsObject:
-        #             try:
-        #                 if gpce_coeff_dictionary[single_qoi] is None or gpce_coeff_dictionary[single_qoi][single_timestamp] is None:
-        #                     try_reading_gPCE_coeff_from_statisticsObject = True
-        #                 else:
-        #                     temp_gpce_coeff = gpce_coeff_dictionary[single_qoi][single_timestamp]  
-        #                     # print(f"DEBUGGING - gPCE surrogate model was read from saved file")
-        #                     # print(f"DEBUGGING - {type(temp_gpce_model)}")     
-        #             except:
-        #                 try_reading_gPCE_coeff_from_statisticsObject = True
-
-        #         if try_reading_gPCE_coeff_from_statisticsObject:
-        #             if 'gpce_coeff' in statisticsObject.result_dict[single_qoi][single_timestamp].keys():
-        #                 temp_gpce_coeff = statisticsObject.result_dict[single_qoi][single_timestamp]['gpce_coeff']
-        #             elif 'gPCE' in df_statistics_and_measured_subset.columns:
-        #                 temp_gpce_coeff = df_statistics_and_measured_subset[df_statistics_and_measured_subset[utility.TIME_COLUMN_NAME]==single_timestamp]['gpce_coeff'].values[0]
-        #             else:
-        #                 raise ValueError(f"{single_qoi}-{single_timestamp}-Coeff of the gPCE surrogate model were not found in files in the working directory, nor in the statistics dictionary or in the statistics dataframe")
-        #         # print(f"DEBUGGING - gPCE coefficients model for date {single_timestamp} - {temp_gpce_coeff}")
-
-        #         # ========================================================
-
-        #         # Check if the mean value is computed and saved in the statistics dictionary
-        #         if 'E' in df_statistics_and_measured_subset.columns:
-        #             temp_E = df_statistics_and_measured_subset[df_statistics_and_measured_subset[utility.TIME_COLUMN_NAME]==single_timestamp]['E'].values[0]
-        #             print(f"{single_qoi}-{single_timestamp}-Reading mean from saved statistics dictionary E={temp_E} \n")
-                
-        #         # Start the computation of the additional statistics
-        #         start = time.time()
-        #         local_result_dict = {}
-        #         qoi_gPCE = temp_gpce_model
-        #         start = time.time()
-        #         parallelStatistics.calculate_stats_gpce(
-        #             local_result_dict, qoi_gPCE, distStandard, compute_other_stat_besides_pce_surrogate=True,
-        #             compute_Sobol_t=True, compute_Sobol_m=True)
-        #         local_result_dict
-        #         extended_result_dict[single_qoi][single_timestamp] = local_result_dict
-        #         end = time.time()
-        #         duration = end - start
-        #         print(f"{single_qoi}-{single_timestamp}-Time needed for statistics computation for single date {single_timestamp} in {dim}D space, with in total {model_runs} executions of model runs is {duration}")
-        #         print(f"{single_qoi}-{single_timestamp}-local_result_dict={local_result_dict} \n")
-
-        #         # Check if the 'autoregressive mode' mode is activated - then (re)compute the mean value to correspond to the mean of final QoI
-        #         if strtobool(configurationObject["simulation_settings"]["autoregressive_model_first_order"]):
-        #             previous_timestamp  = utility.compute_previous_timestamp(single_timestamp, resolution="daily")
-        #             temp_E = local_result_dict["E"]  # float(cp.E(temp_gpce_model, distStandard))
-        #             temp_E += 0.8*df_statistics_and_measured_subset[df_statistics_and_measured_subset[utility.TIME_COLUMN_NAME]==previous_timestamp]['measured'].values[0]
-        #                 # print(f"E original={local_result_dict['E']}")
-        #                 # print(f"Measured={df_statistics_and_measured_subset[df_statistics_and_measured_subset[utility.TIME_COLUMN_NAME]==single_timestamp]['measured'].values[0]}")
-        #             print(f"{single_qoi}-{single_timestamp}-E recomputed={temp_E}\n")
-
         # # TODO Extend statisticsObject.result_dict, i.e., merge statisticsObject.result_dict and extended_result_dict[single_qoi][single_timestamp]
         # # TODO Rely on statisticsObject plotting and re-computing stat dataframe subroutines
 
@@ -2184,71 +1987,84 @@ inputModelDir = pathlib.Path("/work/ga45met/Hydro_Models/HBV-SASK-data")
 directory_for_saving_plots = pathlib.Path('/work/ga45met/paper_uqef_dynamic_sim/hbv_sask/mc_gpce_p4_ct07_100000_lhc_nse02_2004_2007_oldman')
 directory_for_saving_plots = pathlib.Path('/work/ga45met/paper_uqef_dynamic_sim/hbv_sask/mc_gpce_p5_ct07_30000_lhc_2004_2007_oldman')
 
-# Linux Cluster
-basis_workingDir = pathlib.Path('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/hbvsask_runs/kl_analysis')
-workingDir = basis_workingDir / 'mc_kl40_gpce_10d_p3_ct10_10000lhc_oldman_2007'
-inputModelDir = pathlib.Path("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/HBV-SASK-data")
-directory_for_saving_plots = workingDir
-basis_workingDir = pathlib.Path('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/hbvsask_runs')
-# MC 150 000 Random gpce p=5 ct=0.7 2004--2007 NSE>0.2
-workingDir = [
-    basis_workingDir / 'hbv_uq_cm4.0087',
-    basis_workingDir / 'hbv_uq_cm4.0085',
-    basis_workingDir / 'hbv_uq_cm4.0088',
-]    
-# PSP KPU(l=7) p=5 ct=0.7 2004--2007
-workingDir = [
-    basis_workingDir / 'hbv_uq_cm4.0089',
-    basis_workingDir / 'hbv_uq_cm4.0090',
-    basis_workingDir / 'hbv_uq_cm4.0091',
-]  
-directory_for_saving_plots = basis_workingDir / 'psp_p5_ct07_kpu7_2004_2007_oldman'
-workingDir = [
-    basis_workingDir / 'hbv_uq_cm4.0092',
-    basis_workingDir / 'hbv_uq_cm4.0093',
-    basis_workingDir / 'hbv_uq_cm4.0094',
-]   
-directory_for_saving_plots = basis_workingDir / 'mc_gpce_p5_ct07_150000_random_2004_2007_oldman'
+workingDir = basis_workingDir / 'hbv_uq_cm4.0138'
+directory_for_saving_plots = pathlib.Path('/work/ga45met/paper_uqef_dynamic_sim/hbv_sask/oldman_2004_2007/mc_gpce_p4_ct07_10000_lhc_2004_2007_oldman_v2')
+
+workingDir = basis_workingDir / 'hbv_uq_cm4.0225'
+directory_for_saving_plots = pathlib.Path('/work/ga45met/paper_uqef_dynamic_sim/hbv_sask/mc_gpce_p4_ct07_500000_random_2004_2005_oldman')
 
 workingDir = [
-    basis_workingDir / 'hbv_uq_cm4.0095',
-    basis_workingDir / 'hbv_uq_cm4.0096',
-    basis_workingDir / 'hbv_uq_cm4.0097',
-]   
-directory_for_saving_plots = basis_workingDir / 'psp_p4_sgl6_ct07_2004_2007_oldman'
+    basis_workingDir / 'hbv_uq_cm4.0240',
+    basis_workingDir / 'hbv_uq_cm4.0241',
+    basis_workingDir / 'hbv_uq_cm4.0242',
+]
+directory_for_saving_plots = pathlib.Path('/work/ga45met/paper_uqef_dynamic_sim/hbv_sask/oldman_2004_2007/mc_gpce_10d_p4_ct07_500000_random_nse02_2004_2007_oldman')
 
-# 10 MC gPCE p=4 CT0.7 20 000 Random 2006-07 Q_cms; AET
-workingDir = basis_workingDir / "hbv_uq_cm4.0111"  #"hbv_uq_cm4.0105"  #"hbv_uq_cm4.0094"
-# workingDir = basis_workingDir / "mc_600_10d_p2_ct07_oldman_short"
-# workingDir = basis_workingDir / "mc_600_10d_p2_ct07_oldman_short_2004"
-workingDir = basis_workingDir / "mc_600_10d_p2_ct07_oldman_short_two_months_2006"
-workingDir = basis_workingDir / "hbv_uq_mpp3.0041"  #"hbv_uq_cm4.0095"
-directory_for_saving_plots = workingDir  #basis_workingDir / "mc_gpce_p5_150000_ct07_2006_07_oldman"
+# # Linux Cluster
+# basis_workingDir = pathlib.Path('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/hbvsask_runs/kl_analysis')
+# workingDir = basis_workingDir / 'mc_kl40_gpce_10d_p3_ct10_10000lhc_oldman_2007'
+# inputModelDir = pathlib.Path("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/HBV-SASK-data")
+# directory_for_saving_plots = workingDir
+# basis_workingDir = pathlib.Path('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/hbvsask_runs')
+# # MC 150 000 Random gpce p=5 ct=0.7 2004--2007 NSE>0.2
+# workingDir = [
+#     basis_workingDir / 'hbv_uq_cm4.0087',
+#     basis_workingDir / 'hbv_uq_cm4.0085',
+#     basis_workingDir / 'hbv_uq_cm4.0088',
+# ]    
+# # PSP KPU(l=7) p=5 ct=0.7 2004--2007
+# workingDir = [
+#     basis_workingDir / 'hbv_uq_cm4.0089',
+#     basis_workingDir / 'hbv_uq_cm4.0090',
+#     basis_workingDir / 'hbv_uq_cm4.0091',
+# ]  
+# directory_for_saving_plots = basis_workingDir / 'psp_p5_ct07_kpu7_2004_2007_oldman'
+# workingDir = [
+#     basis_workingDir / 'hbv_uq_cm4.0092',
+#     basis_workingDir / 'hbv_uq_cm4.0093',
+#     basis_workingDir / 'hbv_uq_cm4.0094',
+# ]   
+# directory_for_saving_plots = basis_workingDir / 'mc_gpce_p5_ct07_150000_random_2004_2007_oldman'
 
-# 10 MC MC+gPCE p=5 CT0.7 150 000 Random 2004-07 Q_cms; AET
-workingDir = [
-    basis_workingDir / 'hbv_uq_cm4.0092',
-    basis_workingDir / 'hbv_uq_cm4.0093',
-    basis_workingDir / 'hbv_uq_cm4.0094',
-]   
-directory_for_saving_plots = basis_workingDir / 'mc_gpce_p5_ct07_150000_random_2004_2007_oldman'
+# workingDir = [
+#     basis_workingDir / 'hbv_uq_cm4.0095',
+#     basis_workingDir / 'hbv_uq_cm4.0096',
+#     basis_workingDir / 'hbv_uq_cm4.0097',
+# ]   
+# directory_for_saving_plots = basis_workingDir / 'psp_p4_sgl6_ct07_2004_2007_oldman'
 
-# 10 MC MC+gPCE p=5 CT0.7 150 000 Random NSE > 0.2 2004-07 Q_cms; AET
-workingDir = [
-    basis_workingDir / 'hbv_uq_cm4.0087',
-    basis_workingDir / 'hbv_uq_cm4.0085',
-    basis_workingDir / 'hbv_uq_cm4.0088',
-]   
-directory_for_saving_plots = basis_workingDir / "mc_gpce_p5_ct07_150000_random_nse02_2004_2007_oldman"
+# # 10 MC gPCE p=4 CT0.7 20 000 Random 2006-07 Q_cms; AET
+# workingDir = basis_workingDir / "hbv_uq_cm4.0111"  #"hbv_uq_cm4.0105"  #"hbv_uq_cm4.0094"
+# # workingDir = basis_workingDir / "mc_600_10d_p2_ct07_oldman_short"
+# # workingDir = basis_workingDir / "mc_600_10d_p2_ct07_oldman_short_2004"
+# workingDir = basis_workingDir / "mc_600_10d_p2_ct07_oldman_short_two_months_2006"
+# workingDir = basis_workingDir / "hbv_uq_mpp3.0041"  #"hbv_uq_cm4.0095"
+# directory_for_saving_plots = workingDir  #basis_workingDir / "mc_gpce_p5_150000_ct07_2006_07_oldman"
 
-workingDir = basis_workingDir / 'hbv_uq_cm4.0093'
-directory_for_saving_plots = basis_workingDir / "mc_gpce_p5_ct07_150000_random_2005_2006_oldman"
+# # 10 MC MC+gPCE p=5 CT0.7 150 000 Random 2004-07 Q_cms; AET
+# workingDir = [
+#     basis_workingDir / 'hbv_uq_cm4.0092',
+#     basis_workingDir / 'hbv_uq_cm4.0093',
+#     basis_workingDir / 'hbv_uq_cm4.0094',
+# ]   
+# directory_for_saving_plots = basis_workingDir / 'mc_gpce_p5_ct07_150000_random_2004_2007_oldman'
+
+# # 10 MC MC+gPCE p=5 CT0.7 150 000 Random NSE > 0.2 2004-07 Q_cms; AET
+# workingDir = [
+#     basis_workingDir / 'hbv_uq_cm4.0087',
+#     basis_workingDir / 'hbv_uq_cm4.0085',
+#     basis_workingDir / 'hbv_uq_cm4.0088',
+# ]   
+# directory_for_saving_plots = basis_workingDir / "mc_gpce_p5_ct07_150000_random_nse02_2004_2007_oldman"
+
+# workingDir = basis_workingDir / 'hbv_uq_cm4.0093'
+# directory_for_saving_plots = basis_workingDir / "mc_gpce_p5_ct07_150000_random_2005_2006_oldman"
 
 set_lower_predictions_to_zero = True # True
 set_mean_prediction_to_zero = True
 dict_set_lower_predictions_to_zero = True # True
-add_measured_data=True
-add_forcing_data=True
+add_measured_data = True
+add_forcing_data = True
 single_timestamp_single_file = False
 
 # battery model
@@ -2259,31 +2075,33 @@ single_timestamp_single_file = False
 # # workingDir = pathlib.Path('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/battery_runs/mc_kl10_p3_ct07_24d_10000_random')
 # # workingDir = pathlib.Path('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/battery_runs/mc_kl10_p4_ct07_24d_100000_random')
 # workingDir = pathlib.Path('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/battery_runs/mc_kl10_p2_ct07_24d_10000_random')
-workingDir = pathlib.Path('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/battery_runs/battery_uq_cm4.0101')
-inputModelDir = pathlib.Path('/dss/dsshome1/lxc0C/ga45met2/.conda/envs/my_uq_env/lib/python3.11/site-packages/pybamm/input/drive_cycles')
-directory_for_saving_plots = workingDir / 'surrogate_analysis'
-set_lower_predictions_to_zero = False
-set_mean_prediction_to_zero = False
-dict_set_lower_predictions_to_zero = False
-add_measured_data=False
-add_forcing_data=False
-single_timestamp_single_file = False
+# workingDir = pathlib.Path('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/battery_runs/battery_uq_cm4.0101')
+# inputModelDir = pathlib.Path('/dss/dsshome1/lxc0C/ga45met2/.conda/envs/my_uq_env/lib/python3.11/site-packages/pybamm/input/drive_cycles')
+# directory_for_saving_plots = workingDir / 'surrogate_analysis'
+# set_lower_predictions_to_zero = False
+# set_mean_prediction_to_zero = False
+# dict_set_lower_predictions_to_zero = False
+# add_measured_data=False
+# add_forcing_data=False
+# single_timestamp_single_file = False
+
+##################
 
 set_up_statistics_from_scratch = False
 
 recompute_statistics = False
-reevaluate_original_model = True 
-reevaluate_surrogate = True
-recompute_generalized_sobol_indices = False
+reevaluate_original_model = False 
+reevaluate_surrogate = False
+recompute_generalized_sobol_indices = True
 analyse_pce_surrogate = False  # for now, only possible with standard PCE model
 
 # TODO These variables do not seem to be relevant at the moment...
 recompute_gpce = False
 recompute_sobol_indices = False
 
-read_saved_simulations = True
+read_saved_simulations = False
 
-surrogate_type = 'kl+pce' # 'pce' | 'kl+pce'
+surrogate_type ='pce'  # 'pce' | 'kl+pce'
 
 compute_other_stat_besides_pce_surrogate = True
 compute_Sobol_t = True
@@ -2297,7 +2115,7 @@ dict_stat_to_compute = {
 
 compute_generalized_sobol_indices_from_kl_expansion = False
 compute_generalized_sobol_indices_over_time = True
-look_back_window_size = 'whole'  #365 
+look_back_window_size = [30, 60, 90, 365] #30 #'whole'  # 30  #365 
 
 printing = True #True
 plotting = True #True

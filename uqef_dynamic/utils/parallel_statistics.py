@@ -51,15 +51,15 @@ def parallel_calc_stats_for_MC(
         if store_qoi_data_in_stat_dict:
             local_result_dict["qoi_values"] = qoi_values
 
-        # local_result_dict["E"] = np.sum(qoi_values, axis=0, dtype=np.float64) / numEvaluations
+        # local_result_dict["E"] = np.sum(qoi_values, axis=0, dtype=np.float32) / numEvaluations
         local_result_dict["E"] = np.mean(qoi_values, 0)
 
         if dict_stat_to_compute.get("Var", False):
             local_result_dict["Var"] = np.var(qoi_values, ddof=1)
             # local_result_dict["Var"] = np.sum((qoi_values - local_result_dict["E"]) ** 2, axis=0,
-            #                                   dtype=np.float64) / (numEvaluations - 1)
+            #                                   dtype=np.float32) / (numEvaluations - 1)
         if dict_stat_to_compute.get("StdDev", False):
-            # local_result_dict["StdDev"] = np.sqrt(local_result_dict["Var"], dtype=np.float64)
+            # local_result_dict["StdDev"] = np.sqrt(local_result_dict["Var"], dtype=np.float32)
             local_result_dict["StdDev"] = np.std(qoi_values, 0, ddof=1)
         if dict_stat_to_compute.get("Skew", False):
             local_result_dict["Skew"] = scipy.stats.skew(qoi_values, axis=0, bias=True)
@@ -170,7 +170,7 @@ def parallel_calc_stats_for_gPCE(
 
         if store_gpce_surrogate_in_stat_dict:
             local_result_dict[utility.PCE_ENTRY] = qoi_gPCE
-        local_result_dict[utility.PCE_COEFF_ENTRY] = np.asarray(qoi_coeff, dtype=np.float64)
+        local_result_dict[utility.PCE_COEFF_ENTRY] = np.asarray(qoi_coeff, dtype=np.float32)
 
         if save_gpce_surrogate: # and "gPCE" in local_result_dict:
             # # TODO - propagate workingDir and single_qoi_column
@@ -182,7 +182,7 @@ def parallel_calc_stats_for_gPCE(
             local_result_dict=local_result_dict, qoi_gPCE=qoi_gPCE, dist=dist, 
             compute_other_stat_besides_pce_surrogate=compute_other_stat_besides_pce_surrogate,
             compute_Sobol_t=compute_Sobol_t, compute_Sobol_m=compute_Sobol_m, compute_Sobol_m2=compute_Sobol_m2,
-            dict_stat_to_compute=dict_stat_to_compute
+            dict_stat_to_compute=dict_stat_to_compute, qoi_coeff=qoi_coeff, polynomial_expansion=polynomial_expansion
             )
 
         results.append([timestamp, local_result_dict])
@@ -192,7 +192,8 @@ def parallel_calc_stats_for_gPCE(
 # TODO Remove eventually time_info_dict computation and printing
 def calculate_stats_gpce(
     local_result_dict, qoi_gPCE, dist, compute_other_stat_besides_pce_surrogate=True,
-    compute_Sobol_t=False, compute_Sobol_m=False, compute_Sobol_m2=False, dict_stat_to_compute=utility.DEFAULT_DICT_STAT_TO_COMPUTE):
+    compute_Sobol_t=False, compute_Sobol_m=False, compute_Sobol_m2=False, 
+    dict_stat_to_compute=utility.DEFAULT_DICT_STAT_TO_COMPUTE, qoi_coeff=None, polynomial_expansion=None):
     
     #start = time.time()
     #time_info_dict = {}
@@ -249,21 +250,31 @@ def calculate_stats_gpce(
             if isinstance(local_result_dict["P90"], list) and len(local_result_dict["P90"]) == 1:
                 local_result_dict["P90"] = local_result_dict["P90"][0]
 
-        if compute_Sobol_t or dict_stat_to_compute.get("Sobol_t", False):
-            #start = time.time()
-            local_result_dict["Sobol_t"] = cp.Sens_t(qoi_gPCE, dist)
-            #end = time.time()
-            #time_info_dict["duration_Sobol_t"] = end - start
-        if compute_Sobol_m or dict_stat_to_compute.get("Sobol_m", False):
-            #start = time.time()
-            local_result_dict["Sobol_m"] = cp.Sens_m(qoi_gPCE, dist)
-            #end = time.time()
-            #time_info_dict["duration_Sobol_m"] = end - start
-        if compute_Sobol_m2 or dict_stat_to_compute.get("Sobol_m2", False):
-            #start = time.time()
-            local_result_dict["Sobol_m2"] = cp.Sens_m2(qoi_gPCE, dist) # second order sensitivity indices
-            #end = time.time()
-            #time_info_dict["duration_Sobol_m2"] = end - start
+        if polynomial_expansion is not None and qoi_coeff is not None:
+            if compute_Sobol_t or dict_stat_to_compute.get("Sobol_t", False):
+                #start = time.time()
+                # local_result_dict["Sobol_t"] = cp.Sens_t(qoi_gPCE, dist)
+                #end = time.time()
+                #start = time.time()
+                local_result_dict["Sobol_t"] = cp.TotalOrderSobol(polynomial_expansion, qoi_coeff)
+                #end = time.time()
+                #time_info_dict["duration_Sobol_t"] = end - start
+            if compute_Sobol_m or dict_stat_to_compute.get("Sobol_m", False):
+                #start = time.time()
+                # local_result_dict["Sobol_m"] = cp.Sens_m(qoi_gPCE, dist)
+                #end = time.time()
+                #start = time.time()
+                local_result_dict["Sobol_m"] = cp.FirstOrderSobol(polynomial_expansion, qoi_coeff)
+                #end = time.time()
+                #time_info_dict["duration_Sobol_m"] = end - start
+            if compute_Sobol_m2 or dict_stat_to_compute.get("Sobol_m2", False):
+                #start = time.time()
+                # local_result_dict["Sobol_m2"] = cp.Sens_m2(qoi_gPCE, dist) # second order sensitivity indices
+                #end = time.time()
+                #start = time.time()
+                local_result_dict["Sobol_m2"] = cp.SecondOrderSobol(polynomial_expansion, qoi_coeff)
+                #end = time.time()
+                #time_info_dict["duration_Sobol_m2"] = end - start
 
     #print(f"DEBUGGING - time_info_dict - {time_info_dict}")
 
@@ -309,9 +320,9 @@ def parallel_calc_stats_for_mc_saltelli(
 
         if dict_stat_to_compute.get("Var", False):
             local_result_dict["Var"] = np.sum((standard_qoi_values - local_result_dict["E"]) ** 2,
-                                            axis=0, dtype=np.float64) / (numEvaluations - 1)
+                                            axis=0, dtype=np.float32) / (numEvaluations - 1)
             # local_result_dict["Var"] = np.sum((qoi_values[:numEvaluations] - local_result_dict["E"]) ** 2,
-            #                                    axis=0, dtype=np.float64)/(numEvaluations - 1)
+            #                                    axis=0, dtype=np.float32)/(numEvaluations - 1)
         if dict_stat_to_compute.get("StdDev", False):
             local_result_dict["StdDev"] = np.std(standard_qoi_values, 0, ddof=1)
         if dict_stat_to_compute.get("Skew", False):

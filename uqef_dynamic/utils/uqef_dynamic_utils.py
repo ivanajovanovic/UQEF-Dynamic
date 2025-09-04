@@ -1303,7 +1303,7 @@ def add_measured_data_to_dataframe(
 
 
 def create_df_from_generalized_sobol_indices_single_qoi(
-    stat_dict, qoi_column, list_of_uncertain_variables, measured_qoi_column=None, 
+    stat_dict, qoi_column, list_of_uncertain_variables, add_measured_data=False, measured_qoi_column=None, 
     set_lower_predictions_to_zero=False, measured_fetched=False, df_measured=None,
     time_column_name=utility.TIME_COLUMN_NAME):
     if not stat_dict:
@@ -1345,9 +1345,10 @@ def create_df_from_generalized_sobol_indices_single_qoi(
     # TODO - maybe this is not always required, e.g., battery!
     # df_single_qoi[utility.TIME_COLUMN_NAME] = pd.to_datetime(df_single_qoi[utility.TIME_COLUMN_NAME])
 
-    add_measured_data_to_dataframe(
-        df_single_qoi, qoi_column, 
-        measured_qoi_column, measured_fetched, df_measured, time_column_name)
+    if add_measured_data:
+        add_measured_data_to_dataframe(
+            df_single_qoi, qoi_column, 
+            measured_qoi_column, measured_fetched, df_measured, time_column_name)
 
     # df_single_qoi.set_index(self.time_column_name, inplace=True)
     # df_single_qoi.sort_index(ascending=True, inplace=True)
@@ -1963,7 +1964,7 @@ surrogate_type, recompute_generalized_sobol_indices, polynomial_expansion=None, 
             fullFileName = workingDir / fileName
             if fullFileName.is_file():
                 eigenvalues = np.load(fullFileName)
-                eigenvalues_real = np.asarray([element.real for element in eigenvalues], dtype=np.float64)
+                eigenvalues_real = np.asarray([element.real for element in eigenvalues], dtype=np.float32)
                 eigenvalues_real_scaled = eigenvalues_real/eigenvalues_real[0]
             else:
                 eigenvalues = None
@@ -2361,7 +2362,7 @@ def compute_gPCE_for_uqef_dynamic_model(model, expansion_order: int, joint_dist,
                 gPCE_over_time[timestamps[idx]], coeff[timestamps[idx]] = cp.fit_quadrature(polynomial_expansion, nodes, weights_quad, model_runs[idx], retall=True)
             else:
                 gPCE_over_time[idx], coeff[idx] = cp.fit_quadrature(polynomial_expansion, nodes, weights_quad, model_runs[idx], retall=True)
-    return gPCE_over_time, polynomial_expansion, np.asarray(norms, dtype=np.float64), coeff
+    return gPCE_over_time, polynomial_expansion, np.asarray(norms, dtype=np.float32), coeff
 
 
 def compute_PSP_for_uqef_dynamic_model(model, joint_dist, \
@@ -2422,7 +2423,7 @@ def compute_PSP_for_uqef_dynamic_model(model, joint_dist, \
         else:
             gPCE_over_time[idx], coeff[idx] = cp.fit_quadrature(polynomial_expansion, nodes_quad, weights_quad, model_runs[idx], retall=True)
     # return gPCE_over_time, polynomial_expansion, np.asarray(norms), np.asarray(coeff)
-    return gPCE_over_time, polynomial_expansion, np.asarray(norms, dtype=np.float64), coeff
+    return gPCE_over_time, polynomial_expansion, np.asarray(norms, dtype=np.float32), coeff
 
 
 def compute_PSP_for_uqef_dynamic_model_ionuts_approach(model, joint_dist, joint_dist_standard,\
@@ -2472,7 +2473,7 @@ def compute_PSP_for_uqef_dynamic_model_ionuts_approach(model, joint_dist, joint_
         else:
             gPCE_over_time[idx], coeff[idx] = cp.fit_quadrature(polynomial_expansion, nodes_quad, weights_quad, model_runs[idx], retall=True)
     # return gPCE_over_time, polynomial_expansion, np.asarray(norms), np.asarray(coeff)
-    return gPCE_over_time, polynomial_expansion, np.asarray(norms, dtype=np.float64), coeff
+    return gPCE_over_time, polynomial_expansion, np.asarray(norms, dtype=np.float32), coeff
 
 
 # ==============================================================================================================
