@@ -21,7 +21,7 @@ from uqef_dynamic.utils import transport_map
 from uqef_dynamic.models.hbv_sask import hbvsask_utility as hbv
 from uqef_dynamic.models.hbv_sask import HBVSASKModel as hbvmodel
 import standard_transport
-import polynomial_chaos
+import polynomial_chaos, polynomial_chaos_metrics
 
 PLOT_FORCING_DATA = True
 
@@ -533,11 +533,20 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
         print(f"Mean state variables for all dates: {mean_states}")
     
     
-    polynomial_chaos.construct_polynomial_chaos_expansion(
+    surrogate = polynomial_chaos.construct_polynomial_chaos_expansion(
         standard_parameter_matrix=standar_parameter_samples_matrix, 
         mean_state_values_dict=mean_states, 
         transport_map=transport_map, 
         scaler=scaler)
+    
+    
+    print("chaos: start metrics")
+    polynomial_chaos_metrics.metrics(surrogate, 
+                                     list_of_dates_of_interest, 
+                                     standar_parameter_samples_matrix, 
+                                     final_predicted_streamflow, 
+                                     final_observed_streamflow)
+    
     
     print("DEBUGGING - CHAOSPY END")
     
