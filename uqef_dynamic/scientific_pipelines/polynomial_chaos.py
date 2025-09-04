@@ -11,6 +11,9 @@ from uqef_dynamic.models.hbv_sask import hbvsask_utility as hbv
 from uqef_dynamic.models.hbv_sask import HBVSASKModel as hbvmodel
 
 
+num_samples = 2000
+
+
 def setup_HBV():
     working_dir_name=f"trial_single_run_hbvsaskmodel_7d_filtering_III"
     hbv_model_data_path = pathlib.Path("/home/christoph/projects/thesis_code/HBV-SASK-data")
@@ -123,7 +126,7 @@ def construct_polynomial_chaos_expansion(standard_parameter_matrix: np.ndarray, 
     
     
     # i.i.d. sample in standard Gauss
-    samples_r = distribution_r.sample(2000, rule="L") # sobol quasi random --> try pure random (Latin Hypercube)
+    samples_r = distribution_r.sample(num_samples, rule="L") # sobol quasi random --> try pure random (Latin Hypercube)
     print(f"num_samples: ", samples_r.shape)
     
     # DEFAULT_PAR_VALUES_DICT = {'TT': 0.0, 'C0': 0.5, 'ETF': 0.2, 'FC': 250,
@@ -153,10 +156,11 @@ def construct_polynomial_chaos_expansion(standard_parameter_matrix: np.ndarray, 
     # }
     
     # TT, C0, beta, ETF, FC, FRAC, K2   
-    inverted_min_max = np.array([[-4.0, 4.0], [0.0, 5.0], [1.0, 3.0], [0.0, 1.0], [50.0, 500.0], [0.1, 0.9], [0.0, 0.1]])
-    inverted_min_max = np.array([[-13.0, 13.0], [0.0, 5.0], [0.0, 3.0], [0.0, 3.0], [50.0, 700.0], [0.0, 0.3], [0.0, 0.2]])
-    lower_bounds = inverted_min_max[:, 0]
-    upper_bounds = inverted_min_max[:, 1]   
+    # PARAMETER BOUNDS
+    # inverted_min_max = np.array([[-4.0, 4.0], [0.0, 5.0], [1.0, 3.0], [0.0, 1.0], [50.0, 500.0], [0.1, 0.9], [0.0, 0.1]])
+    # inverted_min_max = np.array([[-13.0, 13.0], [0.0, 5.0], [0.0, 3.0], [0.0, 3.0], [50.0, 700.0], [0.0, 0.3], [0.0, 0.2]])
+    # lower_bounds = inverted_min_max[:, 0]
+    # upper_bounds = inverted_min_max[:, 1]   
     
     print("TODO: inverse! need to adjust logarithm for different distributions!")
     samples_q_list = []
@@ -176,9 +180,10 @@ def construct_polynomial_chaos_expansion(standard_parameter_matrix: np.ndarray, 
             
             # check if inverted sample within physical bounds
             
-            checksample = np.asarray(sample_q).flatten()
-            within_bounds = (checksample >= lower_bounds) & (checksample <= upper_bounds)
-            all_within_bounds = np.all(within_bounds)
+            # checksample = np.asarray(sample_q).flatten()
+            # within_bounds = (checksample >= lower_bounds) & (checksample <= upper_bounds)
+            # all_within_bounds = np.all(within_bounds)
+            all_within_bounds = True
             
             if not all_within_bounds:
                 print("not in bound: ", sample_q)
@@ -199,7 +204,7 @@ def construct_polynomial_chaos_expansion(standard_parameter_matrix: np.ndarray, 
     samples_q = np.hstack(samples_q_list)
     
     print("finished inversion")
-    print(f"{2000 - (countNaN + countBounds)}/2000 samples were correctly inversed / could be used for chaospy")
+    print(f"{num_samples - (countNaN + countBounds)}/{num_samples} samples were correctly inversed / could be used for chaospy")
     print(f"{countNaN} times there was an issue with NaN")
     print(f"{countBounds} times the values were out of bounds")
 
@@ -207,11 +212,36 @@ def construct_polynomial_chaos_expansion(standard_parameter_matrix: np.ndarray, 
     # TODO: check expansion order
     expansion = chaospy.generate_expansion(3, distribution_r)
     print("chaos: generated expansion")
-    evaluations = np.array([evaluate(sample) for sample in samples_q.T])
-    print("Done evaluations in chaos")
     
-    samples_r_list = np.hstack(samples_r_list)
-    model_approx = chaospy.fit_regression(expansion, samples_r_list, evaluations)
+    
+    evaluations = []
+    valid_samples_q = []
+    valid_samples_r = []
+    
+    countSkip = 0
+    
+    for sample_q, sample_r in zip(samples_q.T, samples_r_list):
+        y = evaluate(sample_q.reshape(-1, 1))
+        # Refuse abnormal outputs (e.g., outside [0, 100])
+        if np.isnan(y) or np.isinf(y) or y < 0 or y > 100: 
+            print(f"Abnormal evaluation: {y}, skipping sample.")
+            countSkip += 1
+            continue
+        evaluations.append(y)
+        valid_samples_q.append(sample_q.reshape(-1, 1))
+        valid_samples_r.append(sample_r)
+    
+    print("Done evaluations in chaos")
+    print(f"Skipped {countSkip}/{num_samples - (countNaN + countBounds)} samples")
+    print(f"Remaining samples: {num_samples - (countNaN + countBounds + countSkip)}")
+    
+    evaluations = np.array(evaluations)
+    valid_samples_r = np.hstack(valid_samples_r)   
+    
+    print("Approximating model...")
+    # samples_r_list = np.hstack(samples_r_list)
+    # model_approx = chaospy.fit_regression(expansion, samples_r_list, evaluations)
+    model_approx = chaospy.fit_regression(expansion, valid_samples_r, evaluations)
     
     mean = chaospy.E(model_approx, distribution_r)
     std = chaospy.Std(model_approx, distribution_r)

@@ -34,11 +34,17 @@ def metrics(surrogate, list_of_dates_of_interest, standar_parameter_samples_matr
     last_date = list_of_dates_of_interest[-1]
 
     # Get the mean of standard parameters
-    mean_standard_params = np.mean(standar_parameter_samples_matrix, axis=0).reshape(-1, 1)
-    print(mean_standard_params.shape)
+    # mean_standard_params = np.mean(standar_parameter_samples_matrix, axis=0).reshape(-1, 1)
+    # print(mean_standard_params.shape)
 
     # Evaluate PCE surrogate
-    pce_output = float(chaospy.call(surrogate, mean_standard_params))
+    surrogate_outputs = []
+    for params in standar_parameter_samples_matrix:
+        params_col = params.reshape(-1, 1)
+        pce_output = float(chaospy.call(surrogate, params_col))
+        surrogate_outputs.append(pce_output)
+
+    mean_pce_output = np.mean(surrogate_outputs)
 
     # Get real model output and observation for the last date
     real_model_output = final_predicted_streamflow[last_date]
@@ -46,7 +52,7 @@ def metrics(surrogate, list_of_dates_of_interest, standar_parameter_samples_matr
 
     # Plot
     categories = ['Observation', 'Real Model', 'PCE Surrogate']
-    values = [real_observation, real_model_output, pce_output]
+    values = [real_observation, real_model_output, mean_pce_output]
 
     fig = go.Figure(data=[
         go.Scatter(
