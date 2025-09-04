@@ -2533,7 +2533,7 @@ def plot_all_model_runs(df_simulation_result: pd.DataFrame, single_qoi_column: s
     return fig
 
 
-# TODO Add more of there kind of utility functions for plotting
+# TODO Add more of this kind of utility functions for plotting
 def _add_10_90_percentiles(fig, df_temp, name=f'10th-90th Percentile', row=1, col=1, showlegend=True):
     if "P10" in df_temp.columns:
         fig.add_trace(go.Scatter(x=df_temp[TIME_COLUMN_NAME], y=df_temp["P10"],
@@ -2544,6 +2544,46 @@ def _add_10_90_percentiles(fig, df_temp, name=f'10th-90th Percentile', row=1, co
                       row=row, col=col)
     if "P90" in df_temp.columns:
         fig.add_trace(go.Scatter(x=df_temp[TIME_COLUMN_NAME], y=df_temp["P90"],
+                                 name=name,
+                                 mode='lines',
+                                 line=dict(color='rgba(128,128,128, 0.4)'), fill='tonexty',
+                                 fillcolor='rgba(128,128,128, 0.4)',
+                                 showlegend=showlegend,
+                                ),
+                      row=row, col=col)
+    return fig
+
+
+def _add_e_2std(fig, df_temp, name=f'E+-2std', row=1, col=1, showlegend=True):
+    if "E_minus_2std" in df_temp.columns:
+        fig.add_trace(go.Scatter(x=df_temp[utility.TIME_COLUMN_NAME], y=df_temp["E_minus_2std"],
+                                 name=f'10th Percentile',
+                                 line_color='rgba(128,128,128, 0.4)', mode='lines',
+                                 showlegend=False,
+                                ),
+                      row=row, col=col)
+    if "E_plus_2std" in df_temp.columns:
+        fig.add_trace(go.Scatter(x=df_temp[utility.TIME_COLUMN_NAME], y=df_temp["E_plus_2std"],
+                                 name=name,
+                                 mode='lines',
+                                 line=dict(color='rgba(128,128,128, 0.4)'), fill='tonexty',
+                                 fillcolor='rgba(128,128,128, 0.4)',
+                                 showlegend=showlegend,
+                                ),
+                      row=row, col=col)
+    return fig
+
+
+def _add_e_std(fig, df_temp, name=f'E+-std', row=1, col=1, showlegend=True):
+    if "E_minus_std" in df_temp.columns:
+        fig.add_trace(go.Scatter(x=df_temp[utility.TIME_COLUMN_NAME], y=df_temp["E_minus_std"],
+                                 name=f'10th Percentile',
+                                 line_color='rgba(128,128,128, 0.4)', mode='lines',
+                                 showlegend=False,
+                                ),
+                      row=row, col=col)
+    if "E_plus_std" in df_temp.columns:
+        fig.add_trace(go.Scatter(x=df_temp[utility.TIME_COLUMN_NAME], y=df_temp["E_plus_std"],
                                  name=name,
                                  mode='lines',
                                  line=dict(color='rgba(128,128,128, 0.4)'), fill='tonexty',
@@ -2640,6 +2680,98 @@ def _update_fig_layout_and_save(fig, directory_for_saving_plots, fileName, \
     pyo.plot(fig, filename=plot_filename, auto_open=False)
     plot_filename = pathlib.Path(directory_for_saving_plots) / f"{fileName_without_ext}.pdf"
     fig.write_image(str(plot_filename), format="pdf", width=1100,)
+    return fig
+
+# ===================================================================================================================
+# Functions for extracting parameter name from columns of pd.DataFrame storing info on Sobol or Generalized Sobol indices
+# The functions are useful when plotting
+# ===================================================================================================================
+
+import re
+
+pattern = re.compile(
+    r"^generalized_sobol_total_index_(?P<paramname>[^_]+)(?:_(?P<timestamp>[^_]+))?$"
+)
+
+
+def extract_paramname(whole_string, prefix="generalized_sobol_total_index"):
+    # Regular expression pattern to match both cases
+    pattern = r"generalized_sobol_total_index_(.*?)(?:_\d+)?$"
+    # pattern = rf"{re.escape(prefix)}_(.*?)(?:_\d+)?$"
+    
+    match = re.search(pattern, whole_string)
+    
+    if match:
+        return match.group(1)  # Extract the paramname
+    return None  # Return None if no match is found
+    
+def extract_param_name_from_column_generlized_index(column_name):
+    match = pattern.match(column_name)
+    if match:
+        paramname = match.group("paramname")
+        # print(f"'{s}' --> paramname: '{paramname}'")
+    else:
+        paramname = None
+        # print(f"'{s}' does not match the pattern")
+    return paramname
+
+
+def identify_column_generlized_index_form(column_name):
+    match = pattern.fullmatch(column_name)
+    if not match:
+        return "invalid", None
+    paramname = match.group("paramname")
+    look_back_window_size = match.group("timestamp")
+    if look_back_window_size is None:
+        return "whole", paramname  # generalized_sobol_total_index_{paramname}
+    else:
+        return look_back_window_size, paramname  # generalized_sobol_total_index_{paramname}_{timestamp}
+
+
+def _add_sensitvity_indices_as_time_signals(fig, df_temp, substring="generalized_sobol_total_index_", row=1, col=1, showlegend=False):
+    for single_column in df_temp.columns:
+        if single_column!=TIME_COLUMN_NAME and single_column!=QOI_ENTRY and single_column!=MEASURED_ENTRY:
+            current_parameter_name = single_column.split(substring, 1)[1]  # TODO Maybe this does not hold always!
+            fig.add_trace(
+                go.Scatter(
+                    x=df_temp[TIME_COLUMN_NAME], y=df_temp[single_column],
+                    name=current_parameter_name, mode='lines',
+                    line=dict(color=COLORS_DICT[current_parameter_name]),
+                    showlegend=showlegend
+                ),
+                row=row, col=col
+            )
+    return fig
+    
+
+def _add_sensitvity_indices_as_heatmap(fig, df_temp, substring="generalized_sobol_total_index_", row=1, col=1, showscale=False):
+    # df_temp = df_statistics_and_measured_generalized.loc[
+    #     df_statistics_and_measured_generalized[QOI_ENTRY] == single_qoi] 
+    si_columns_to_plot = []
+    for single_column in df_temp.columns:
+        if single_column!=TIME_COLUMN_NAME and single_column!=QOI_ENTRY and single_column!=MEASURED_ENTRY:
+            if single_column.startswith(substring):
+                si_columns_to_plot.append(single_column)
+    #si_columns_to_label = si_columns_to_label.reverse()
+    df_generalized = df_temp[si_columns_to_plot].T
+    # si_columns_to_label = [single_column.split('_')[-1] for single_column in si_columns_to_plot]
+    si_columns_to_label = [extract_paramname(single_column, prefix=substring) for single_column in si_columns_to_plot]
+    # print(f"DEBUGGING si_columns_to_label-{si_columns_to_label}")        
+    trace=go.Heatmap(
+        z=df_generalized[::-1],
+        x=df_temp[TIME_COLUMN_NAME],
+        y=si_columns_to_label[::-1],
+        showscale=showscale,
+        colorbar=dict(
+            x=1.0,        # Position on the x-axis (1.0 is the far right, 1.1 moves it further right)
+            y=0.5,        # Position on the y-axis (0.5 is centered vertically)
+            len=0.35,     # Length of the colorbar as a fraction of the plot height
+            thickness=20, # Thickness of the colorbar
+            title='S.I. Scale' # Title of the colorbar
+        )
+        # colorscale='Viridis'
+     )
+    fig.add_trace(trace,row=row, col=col)
     return fig
 
 # ===================================================================================================================
@@ -2894,7 +3026,7 @@ def compute_gPCE_over_time(model, t: Union[np.array, np.ndarray, List[Union[int,
                 orth=polynomial_expansion, nodes=nodes, weights=weights_quad, 
                 solves=model_runs[idx], retall=True, norms=norms
                 )
-    return gPCE_over_time, polynomial_expansion, np.asarray(norms, dtype=np.float64), np.asarray(coeff, dtype=np.float64)
+    return gPCE_over_time, polynomial_expansion, np.asarray(norms, dtype=np.float32), np.asarray(coeff, dtype=np.float32)
 
 
 def compute_PSP_over_time(model, t: Union[np.array, np.ndarray, List[Union[int, float]]], joint_dist_standard, joint_dist, \
@@ -2912,7 +3044,7 @@ def compute_PSP_over_time(model, t: Union[np.array, np.ndarray, List[Union[int, 
             orth=polynomial_expansion, nodes=nodes_quad, weights=weights_quad, 
             solves=model_runs[idx], retall=True, norms=norms
             )
-    return gPCE_over_time, polynomial_expansion, np.asarray(norms, dtype=np.float64), np.asarray(coeff, dtype=np.float64)
+    return gPCE_over_time, polynomial_expansion, np.asarray(norms, dtype=np.float32), np.asarray(coeff, dtype=np.float32)
 
 
 def build_gpce_surrogate_from_coefficients(gpce_coeffs, polynomial_expansion, polynomial_norms=None):
@@ -3328,7 +3460,7 @@ def computing_mc_statistics_simple(
         if dict_stat_to_compute.get("Var", False):
             result_dict['Var'] = np.var(qoi_values, ddof=1) 
             # result_dict['Var'] = np.sum((qoi_values - result_dict["E"]) ** 2, \
-            # axis=0, dtype=np.float64) / (numEvaluations - 1)
+            # axis=0, dtype=np.float32) / (numEvaluations - 1)
         if dict_stat_to_compute.get("StdDev", False):
             result_dict["StdDev"] = np.std(qoi_values, 0, ddof=1)
         if dict_stat_to_compute.get("Skew", False):
@@ -3539,7 +3671,7 @@ def compute_mc_quantity(model, jointDists, jointStandard=None, numSamples=1000, 
         print(f"MC_expectation = {expectedInterp}")
     if compute_var:
         qoi_values = evaluations - expectedInterp
-        # varianceInterp = np.sum(qoi_values ** 2, axis=0, dtype=np.float64) / (numEvaluations - 1)
+        # varianceInterp = np.sum(qoi_values ** 2, axis=0, dtype=np.float32) / (numEvaluations - 1)
         varianceInterp = np.var(qoi_values, ddof=1)
         print(f"MC_variance = {varianceInterp}")
     end_time_computing_statistics = time.time()
@@ -3714,7 +3846,7 @@ def solve_eigenvalue_problem(covariance_matrix, weights):
     sorted_eigenvectors = eigenvectors[:, idx]
     eigenvalues = sorted_eigenvalues
     eigenvectors = sorted_eigenvectors
-    eigenvalues_real = np.asarray([element.real for element in eigenvalues], dtype=np.float64)
+    eigenvalues_real = np.asarray([element.real for element in eigenvalues], dtype=np.float32)
     eigenvalues_real_scaled = eigenvalues_real/eigenvalues_real[0]
     final_eigenvectors = np.linalg.inv(sqrt_W)@eigenvectors
     eigenvectors = final_eigenvectors
@@ -3730,7 +3862,7 @@ def plot_eigenvalues(eigenvalues, directory_for_saving_plots, qoi=None):
         fileName = f"eigenvalues_covariance_operator_{qoi}.png"
         fileName_scaled = f"scaled_eigenvalues_covariance_operator_{qoi}.png"
     # Plotting the eigenvalues
-    eigenvalues_real = np.asarray([element.real for element in eigenvalues], dtype=np.float64)
+    eigenvalues_real = np.asarray([element.real for element in eigenvalues], dtype=np.float32)
     eigenvalues_real_scaled = eigenvalues_real/eigenvalues_real[0]
     plt.figure()
     plt.yscale("log")
@@ -3787,8 +3919,8 @@ def pce_of_kl_expansion(
         f_kl_surrogate_dict[i][PCE_ENTRY] = f_kl_gPCE
         f_kl_surrogate_dict[i][PCE_COEFF_ENTRY] = f_kl_coeff
         # f_kl_surrogate_coefficients[i] = np.asfarray(f_kl_coeff).T
-        f_kl_surrogate_coefficients.append(np.asarray(f_kl_coeff, dtype=np.float64)) 
-    f_kl_surrogate_coefficients = np.asarray(f_kl_surrogate_coefficients, dtype=np.float64)
+        f_kl_surrogate_coefficients.append(np.asarray(f_kl_coeff, dtype=np.float32)) 
+    f_kl_surrogate_coefficients = np.asarray(f_kl_surrogate_coefficients, dtype=np.float32)
     return f_kl_surrogate_dict, f_kl_surrogate_coefficients
 
 # =================================================================================================
@@ -3872,7 +4004,7 @@ def computing_generalized_sobol_indices_from_kl_expan_elia(
     sum_coeff_per_param_first = np.zeros((N_kl, num_params))
     for i in range(len(param_names)):
         for j in range(f_kl_surrogate_coefficients.shape[0]):
-            coefficients = np.asarray(f_kl_surrogate_coefficients[j,:], dtype=np.float64)
+            coefficients = np.asarray(f_kl_surrogate_coefficients[j,:], dtype=np.float32)
             sum_coeff_per_param_total[j, i] = np.sum(
                 coefficients ** 2 * masks_total[i]
                 )
@@ -3990,7 +4122,7 @@ def computing_generalized_sobol_indices_from_kl_expan(
             ]
         )
         for i in range(f_kl_surrogate_coefficients.shape[0]):
-            coefficients = np.asarray(f_kl_surrogate_coefficients[i,:], dtype=np.float64)
+            coefficients = np.asarray(f_kl_surrogate_coefficients[i,:], dtype=np.float32)
             dict_of_num_total[idx, i] = np.sum(coefficients[index_local_total] ** 2, axis=0)
             dict_of_num_main[idx, i] = np.sum(coefficients[index_local_main] ** 2, axis=0)
             # dict_of_num_total[idx].append(np.sum(coefficients[index_local_total] ** 2, axis=0))
@@ -4009,13 +4141,13 @@ def computing_generalized_sobol_indices_from_kl_expan(
     sum_all_s_main_generalized = 0
     for idx in range(len(alphas[0])):  # iterate through all the parameters
         param_name = param_names[idx]
-        # num = np.dot(np.asarray(dict_of_num_total[idx], dtype=np.float64), weights)
-        # num_tot = np.sum(np.asarray(dict_of_num_total[idx,:], dtype=np.float64), axis=0)
-        num_tot = np.sum(np.asarray(dict_of_num_total[idx,:], dtype=np.float64))
+        # num = np.dot(np.asarray(dict_of_num_total[idx], dtype=np.float32), weights)
+        # num_tot = np.sum(np.asarray(dict_of_num_total[idx,:], dtype=np.float32), axis=0)
+        num_tot = np.sum(np.asarray(dict_of_num_total[idx,:], dtype=np.float32))
         s_tot_generalized = num_tot/denum
         sum_all_s_tot_generalized+=s_tot_generalized
-        # num_main = np.sum(np.asarray(dict_of_num_main[idx,:], dtype=np.float64), axis=0)
-        num_main = np.sum(np.asarray(dict_of_num_main[idx,:], dtype=np.float64))      
+        # num_main = np.sum(np.asarray(dict_of_num_main[idx,:], dtype=np.float32), axis=0)
+        num_main = np.sum(np.asarray(dict_of_num_main[idx,:], dtype=np.float32))      
         s_main_generalized = num_main/denum
         sum_all_s_main_generalized+=s_main_generalized
         param_name_generalized_sobol_total_indices[param_name] = s_tot_generalized
@@ -4078,7 +4210,7 @@ def computing_generalized_sobol_total_indices_from_poly_expan(
 
     max_time = max(result_dict_statistics.keys())
     for time_stamp in result_dict_statistics.keys():  
-        coefficients = np.asarray(result_dict_statistics[time_stamp][PCE_COEFF_ENTRY], dtype=np.float64)
+        coefficients = np.asarray(result_dict_statistics[time_stamp][PCE_COEFF_ENTRY], dtype=np.float32)
         # if "Var" in result_dict_statistics[time_stamp]:
         #     variance = result_dict_statistics[time_stamp]['Var']
         # else:
@@ -4095,7 +4227,7 @@ def computing_generalized_sobol_total_indices_from_poly_expan(
             # )
             dict_of_num[idx].append(np.sum(coefficients[index_local] ** 2, axis=0))  # scaling with norm of the polynomial corresponding to the index_local
 
-    variance_over_time_array = np.asarray(variance_over_time_array, dtype=np.float64)
+    variance_over_time_array = np.asarray(variance_over_time_array, dtype=np.float32)
     if total_variance is None:
         denum = np.dot(variance_over_time_array, weights)
     else:
@@ -4103,7 +4235,7 @@ def computing_generalized_sobol_total_indices_from_poly_expan(
     print(f"[INFO computing_generalized_sobol_total_indices_from_poly_expan] total_variance={denum}")
     for idx in range(len(alphas[0])):
         param_name = param_names[idx]
-        num = np.dot(np.asarray(dict_of_num[idx], dtype=np.float64), weights)
+        num = np.dot(np.asarray(dict_of_num[idx], dtype=np.float32), weights)
         s_tot_generalized = num/denum
         result_dict_statistics[max_time][f"generalized_sobol_total_index_{param_name}"] = s_tot_generalized
         print(f"Generalized Total Sobol Index for {param_name} is {s_tot_generalized}")
@@ -4190,7 +4322,6 @@ def computing_generalized_sobol_indices_from_poly_expan_single_timesample(
     for idx in range(len(param_names)):
         dict_of_num[idx] = []
 
-
     total_number_of_timestamps = len(result_dict_statistics.keys())
     total_number_of_weights = len(weights)
     # assert total_number_of_timestamps == total_number_of_weights, "The number of timestamps and weights must be the same!"
@@ -4212,7 +4343,7 @@ def computing_generalized_sobol_indices_from_poly_expan_single_timesample(
                 continue
         list_of_used_time_stamps.append(time_stamp)
         number_of_timestamps += 1
-        coefficients = np.asarray(result_dict_statistics[time_stamp][PCE_COEFF_ENTRY], dtype=np.float64) # TODO This is probably the source!!!
+        coefficients = np.asarray(result_dict_statistics[time_stamp][PCE_COEFF_ENTRY], dtype=np.float32) # TODO This is probably the source!!!
         variance_single_time_stamp = np.sum(coefficients[1:] ** 2, axis=0) # np.sum(coefficients[index] ** 2) #, axis=0)
         variance_over_time_array.append(variance_single_time_stamp)
         # for idx in range(len(alphas[0])):
@@ -4245,7 +4376,7 @@ def computing_generalized_sobol_indices_from_poly_expan_single_timesample(
         # h = (timesteps_max - timesteps_min)/(number_of_timestamps-1)
         difference_between_two_time_stamps = compute_difference_between_two_time_stamps(
             end_timestamp=timesteps_max, start_timestamp=timesteps_min, resolution=resolution)
-        h = (difference_between_two_time_stamps)/(number_of_timestamps-1)  # 1/(number_of_timestamps-1)
+        h = 1/(number_of_timestamps-1)  #(difference_between_two_time_stamps)/(number_of_timestamps-1)
         weights = [h for i in range(number_of_timestamps)]
         if len(weights) >= 3:
             weights[0] /= 2
@@ -4255,7 +4386,7 @@ def computing_generalized_sobol_indices_from_poly_expan_single_timesample(
     else:
         weights = np.asarray([1.0], dtype=np.float32)
 
-    variance_over_time_array = np.asarray(variance_over_time_array, dtype=np.float64)
+    variance_over_time_array = np.asarray(variance_over_time_array, dtype=np.float32)
 
     if total_variance is None:
         denum = np.dot(variance_over_time_array, weights)
@@ -4268,7 +4399,7 @@ def computing_generalized_sobol_indices_from_poly_expan_single_timesample(
     for idx in range(len(param_names)):
         param_name = param_names[idx]
         # print(f"DEBUGGING idx-{idx}; param_name-{param_name}")
-        numerator = np.asarray(dict_of_num[idx], dtype=np.float64)
+        numerator = np.asarray(dict_of_num[idx], dtype=np.float32)
         num = np.dot(numerator, weights)
         s_generalized = num/denum
         if type_of_sobol_index.lower()=='total':
@@ -4276,7 +4407,7 @@ def computing_generalized_sobol_indices_from_poly_expan_single_timesample(
             if look_back_window_size!='whole':
                 key_name = f"generalized_sobol_total_index_{param_name}_{look_back_window_size}"
             result_dict_statistics[qoi_time_stamp][key_name] = s_generalized
-            print(f"Generalized Total Sobol Index for {param_name} for {qoi_time_stamp} is {s_generalized}")
+            # print(f"Generalized Total Sobol Index for {param_name} for {qoi_time_stamp} is {s_generalized}")
         elif type_of_sobol_index.lower()=='main':
             key_name = f"generalized_sobol_main_index_{param_name}"
             if look_back_window_size!='whole':
