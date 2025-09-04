@@ -7,27 +7,43 @@ for advanced analysis features without modifying the original UQEF code.
 
 import argparse
 from typing import Dict, Any
+import uqef
 
-
-class ExtendedUQSimArgumentParser:
-    """
-    Extends UQSim's argument parser with additional UQEF-Dynamic specific arguments.
-    
-    This class adds new command-line arguments to UQSim's existing parser,
-    allowing users to specify advanced analysis options through bash scripts
-    without modifying the original UQEF UQSim.py file.
-    """
-    
-    def __init__(self, uqsim_instance):
-        """
-        Initialize the extended argument parser.
+# Create a custom UQSim class that adds extended arguments before parsing
+class ExtendedUQSim(uqef.UQsim):
+    def __init__(self):
+        # Initialize the parser but don't parse args yet
+        self._init_parser()
         
-        Args:
-            uqsim_instance: The UQSim instance with its argument parser
-        """
-        self.uqsim = uqsim_instance
-        self.parser = uqsim_instance.parser
+        # Add extended arguments before parsing
         self._add_extended_arguments()
+        
+        # Now parse args and continue with normal initialization
+        self.args = None
+        self.configuration_object = None
+        self.parse_args()
+
+        if self.args.uqsim_restore_from_file:
+            self.restore_from_file()
+            self.parse_args()  # reparse args to overwrite old arguments
+            self._UQsim__restored = True
+        else:
+            self.models = {
+                "testmodel": (lambda: uqef.model.TestModel())
+            }
+
+            self.statistics = {
+                "testmodel": (lambda: uqef.stat.TestModelStatistics()),
+                "runtime": (lambda: uqef.stat.RuntimeStatistics())
+            }
+
+            self.simulationNodes = None
+            self.simulation = None
+            self.runtime_estimator = None
+            self.solver = None
+            self.statistic = None
+            self.runtime_statistic = None
+            self._UQsim__restored = False
     
     def _add_extended_arguments(self):
         """Add all extended UQEF-Dynamic arguments to UQSim's parser."""
@@ -130,7 +146,6 @@ class ExtendedUQSimArgumentParser:
         )
         
         # Custom statistics computation dictionary arguments
-        # Note: These are more complex and will be handled via JSON strings or separate files
         self.parser.add_argument(
             '--dict_stat_to_compute_json', 
             type=str, 
@@ -152,16 +167,37 @@ class ExtendedUQSimArgumentParser:
             default=None,
             help='JSON file with extended configuration parameters'
         )
+   
+   
+class ExtendedUQSimArgumentParser:
+    """
+    Processes extended arguments from an ExtendedUQSim instance.
+    
+    This class handles post-processing of parsed extended arguments for 
+    configuration management. It assumes the arguments have already been 
+    added to the parser by ExtendedUQSim.
+    """
+    
+    def __init__(self, uqsim_instance):
+        """
+        Initialize the extended argument parser.
+        
+        Args:
+            uqsim_instance: The ExtendedUQSim instance with parsed arguments
+        """
+        self.uqsim = uqsim_instance
+        self.parser = uqsim_instance.parser
+        # Note: Arguments are already added by ExtendedUQSim, no need to add them again
     
     def parse_extended_args(self) -> Dict[str, Any]:
         """
-        Parse and extract extended arguments from the command line.
+        Extract extended arguments from the already parsed UQSim arguments.
         
         Returns:
             Dict[str, Any]: Dictionary of extended configuration parameters
         """
-        # Re-parse arguments to get the extended ones
-        args = self.parser.parse_args()
+        # Use the already parsed arguments from the UQSim instance
+        args = self.uqsim.args
         
         extended_params = {}
         
@@ -187,7 +223,6 @@ class ExtendedUQSimArgumentParser:
         
         for arg_name in extended_arg_names:
             if hasattr(args, arg_name):
-                # TODO can I pop out the arguement...
                 value = getattr(args, arg_name)
                 # Only include non-default values to avoid overriding configuration defaults
                 if value is not None:

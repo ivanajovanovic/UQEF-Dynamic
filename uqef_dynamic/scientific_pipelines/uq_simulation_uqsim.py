@@ -49,15 +49,20 @@ except ImportError:
     pybammmodel = None
     pybammStatistics = None
 
-# instantiate UQsim
-uqsim = uqef.UQsim()
-
 #####################################
 # Configuration Management System
 #####################################
 
 # Import the new configuration system
-from uqef_dynamic.config import ConfigurationFactory
+from uqef_dynamic.config import ConfigurationFactory, ExtendedUQSimArgumentParser, ExtendedUQSim
+
+#####################################
+
+# instantiate Extended UQsim
+uqsim = ExtendedUQSim()
+
+# Create extended parser for configuration processing
+extended_parser = ExtendedUQSimArgumentParser(uqsim)
 
 local_debugging = False
 if local_debugging:
@@ -73,7 +78,6 @@ if local_debugging:
             mpi=True, 
             sampleFromStandardDist=True, 
             parallel_statistics=True, 
-            sc_poly_normed=True, 
             compute_Sobol_m=True,
             save_all_simulations=True,
             config_file='/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/configuration_hbv_10D_single_qoi_autoregressive.json',
@@ -97,8 +101,16 @@ if local_debugging:
 else:
     # Cluster execution mode: Use configuration from command-line arguments
     try:
+        # Parse extended arguments from command line
+        extended_args = extended_parser.parse_extended_args()
+        
         # Create configuration from UQEF's parsed command-line arguments
         config = ConfigurationFactory.from_uqsim_args(uqsim.args)
+        
+        # Apply extended arguments as configuration overrides
+        if extended_args:
+            print(f"Applying extended configuration arguments: {list(extended_args.keys())}")
+            ConfigurationFactory.apply_configuration_overrides(config, **extended_args)
         
         # Apply configuration to uqsim
         config.apply_to_uqsim(uqsim)
@@ -107,51 +119,95 @@ else:
         print(f"Model: {config.model}, UQ Method: {config.uq_method}")
         print(f"Output Directory: {config.outputResultDir}")
         
+        # Print extended configuration info if any extended args were used
+        if extended_args:
+            print("Extended analysis features enabled:")
+            for key, value in extended_args.items():
+                if value not in [False, None, {}]:  # Only show non-default values
+                    print(f"  - {key}: {value}")
+        
     except Exception as e:
         print(f"Configuration error when parsing command-line args: {e}")
         print("Falling back to standard UQEF configuration handling")
-        # Let UQEF handle configuration as before
-        pass
+        raise
+        # # Let UQEF handle configuration as before
+        # # Create a minimal config object with defaults for fallback
+        # config = type('Config', (), {
+        #     'dict_what_to_plot': {
+        #         "E_minus_std": False, "E_plus_std": False, "E_minus_2std": True, "E_plus_2std": True, 
+        #         "P10": True, "P90": True,
+        #         "StdDev": True, "Skew": False, "Kurt": False, "Sobol_m": True, "Sobol_m2": False, "Sobol_t": True,
+        #         "generalized_sobol_total_index": True, "generalized_sobol_main_index": True,
+        #     },
+        #     'dict_stat_to_compute': {
+        #         "Var": True, "StdDev": True, "P10": True, "P90": True,
+        #         "E_minus_std": False, "E_plus_std": False,
+        #         "Skew": False, "Kurt": False, "Sobol_m": True, "Sobol_m2": False, "Sobol_t": True
+        #     },
+        #     'compute_sobol_indices_with_samples': False,
+        #     'save_gpce_surrogate': True,
+        #     'compute_other_stat_besides_pce_surrogate': True,
+        #     'compute_kl_expansion_of_qoi': False,
+        #     'kl_expansion_order': 10,
+        #     'compute_timewise_gpce_next_to_kl_expansion': False,
+        #     'compute_generalized_sobol_indices': False,
+        #     'compute_generalized_sobol_indices_over_time': False,
+        #     'compute_covariance_matrix_in_time': False,
+        #     'allow_conditioning_results_based_on_metric': False,
+        #     'condition_results_based_on_metric': 'NSE',
+        #     'condition_results_based_on_metric_value': 0.2,
+        #     'condition_results_based_on_metric_sign': "greater_or_equal"
+        # })()
 
     uqsim.setup_configuration_object()
 
 start_time = time.time()
 
-# TODO Eventually add these configurations to uqef.args
-utility.DEFAULT_DICT_WHAT_TO_PLOT = {
-    "E_minus_std": False, "E_plus_std": False, "E_minus_2std": True, "E_plus_2std":True, 
-    "P10": True, "P90": True,
-    "StdDev": True, "Skew": False, "Kurt": False, "Sobol_m": True, "Sobol_m2": False, "Sobol_t": True,
-    "generalized_sobol_total_index": True, "generalized_sobol_main_index": True,
-}
-utility.DEFAULT_DICT_STAT_TO_COMPUTE = {
+# Configuration-driven variables (previously hardcoded)
+# These values are now taken from the configuration system
+# If you need to override these values, use ConfigurationFactory.apply_configuration_overrides()
+
+# Get configuration values or use defaults if not available
+dict_stat_to_compute = getattr(config, 'dict_stat_to_compute', {
     "Var": True, "StdDev": True, "P10": True, "P90": True,
     "E_minus_std": False, "E_plus_std": False,
     "Skew": False, "Kurt": False, "Sobol_m": True, "Sobol_m2": False, "Sobol_t": True
-}
-dict_stat_to_compute = utility.DEFAULT_DICT_STAT_TO_COMPUTE
-compute_sobol_indices_with_samples = False  # This is only relevant in the mc-saltelli's approach
-# TODO Think about when regression is True, what do you prefer gPCE-based indices or MC?
-if uqsim.args.uq_method == "mc" and uqsim.args.compute_Sobol_m:
-    compute_sobol_indices_with_samples = True
+})
 
-save_gpce_surrogate = True  # if True a gpce surrogate for each QoI for each time step is saved in a separate file
-compute_other_stat_besides_pce_surrogate = True  # This is relevant only when uq_method == "sc" 
+dict_what_to_plot = getattr(config, 'dict_what_to_plot', {
+    "E_minus_std": False, "E_plus_std": False, "E_minus_2std": True, "E_plus_2std": True, 
+    "P10": True, "P90": True,
+    "StdDev": True, "Skew": False, "Kurt": False, "Sobol_m": True, "Sobol_m2": False, "Sobol_t": True,
+    "generalized_sobol_total_index": True, "generalized_sobol_main_index": True,
+})
 
-compute_kl_expansion_of_qoi = False
-kl_expansion_order = 10
-compute_timewise_gpce_next_to_kl_expansion = False
+# Advanced analysis options from configuration
+compute_sobol_indices_with_samples = getattr(config, 'compute_sobol_indices_with_samples', False)
+save_gpce_surrogate = getattr(config, 'save_gpce_surrogate', True)
+compute_other_stat_besides_pce_surrogate = getattr(config, 'compute_other_stat_besides_pce_surrogate', True)
 
-compute_generalized_sobol_indices = False #True
-compute_generalized_sobol_indices_over_time = False #True
+# KL expansion settings from configuration
+compute_kl_expansion_of_qoi = getattr(config, 'compute_kl_expansion_of_qoi', False)
+kl_expansion_order = getattr(config, 'kl_expansion_order', 10)
+compute_timewise_gpce_next_to_kl_expansion = getattr(config, 'compute_timewise_gpce_next_to_kl_expansion', False)
 
-compute_covariance_matrix_in_time = False
+# Generalized Sobol indices settings from configuration
+compute_generalized_sobol_indices = getattr(config, 'compute_generalized_sobol_indices', False)
+compute_generalized_sobol_indices_over_time = getattr(config, 'compute_generalized_sobol_indices_over_time', False)
 
-allow_conditioning_results_based_on_metric = False
+# Covariance matrix settings from configuration
+compute_covariance_matrix_in_time = getattr(config, 'compute_covariance_matrix_in_time', False)
 
-condition_results_based_on_metric = 'NSE'
-condition_results_based_on_metric_value = 0.2
-condition_results_based_on_metric_sign = "greater_or_equal"
+# Conditional analysis settings from configuration
+allow_conditioning_results_based_on_metric = getattr(config, 'allow_conditioning_results_based_on_metric', False)
+condition_results_based_on_metric = getattr(config, 'condition_results_based_on_metric', 'NSE')
+condition_results_based_on_metric_value = getattr(config, 'condition_results_based_on_metric_value', 0.2)
+condition_results_based_on_metric_sign = getattr(config, 'condition_results_based_on_metric_sign', "greater_or_equal")
+
+# Update utility defaults for backward compatibility
+utility.DEFAULT_DICT_STAT_TO_COMPUTE = dict_stat_to_compute
+utility.DEFAULT_DICT_WHAT_TO_PLOT = dict_what_to_plot
+
 #####################################
 # additional path settings:
 #####################################
@@ -264,6 +320,7 @@ uqsim.statistics.update({"hbvsask"         : (lambda: HBVSASKStatistics.HBVSASKS
     sampleFromStandardDist=uqsim.args.sampleFromStandardDist,
     parallel_statistics=uqsim.args.parallel_statistics,
     mpi_chunksize=uqsim.args.mpi_chunksize,
+    chunksize=uqsim.args.chunksize,
     unordered=False,
     uq_method=uqsim.args.uq_method,
     compute_Sobol_t=uqsim.args.compute_Sobol_t,
@@ -290,6 +347,7 @@ uqsim.statistics.update({"hbvsask"         : (lambda: HBVSASKStatistics.HBVSASKS
     compute_generalized_sobol_indices_over_time = compute_generalized_sobol_indices_over_time,
     compute_covariance_matrix_in_time = compute_covariance_matrix_in_time,
     dict_stat_to_compute=dict_stat_to_compute,
+    # always_process_original_model_output=True,
 ))})
 uqsim.statistics.update({"simple_oscillator"         : (lambda: simpleOscillatorStatistics(
     configurationObject=uqsim.configuration_object,  # uqsim.args.config_file,

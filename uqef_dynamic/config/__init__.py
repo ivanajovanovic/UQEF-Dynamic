@@ -10,7 +10,7 @@ from .uq_configs import MCConfiguration, SCConfiguration, SaltelliConfiguration,
 from .model_configs import ModelConfiguration, HBVSASKConfig, BatteryConfig, IshigamiConfig, LarsimConfig
 from .config_factory import ConfigurationFactory
 from .config_validator import ConfigurationValidator
-from .extended_args import ExtendedUQSimArgumentParser, extend_uqsim_parser
+from .extended_args import ExtendedUQSimArgumentParser, extend_uqsim_parser, ExtendedUQSim
 
 __all__ = [
     'UQConfiguration',
@@ -26,5 +26,6 @@ __all__ = [
     'ConfigurationFactory',
     'ConfigurationValidator',
     'ExtendedUQSimArgumentParser',
-    'extend_uqsim_parser'
+    'extend_uqsim_parser',
+    'ExtendedUQSim'
 ]

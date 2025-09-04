@@ -408,6 +408,7 @@ class ConfigurationFactory:
         if hasattr(args, 'uncertain'):
             config_params['uncertain'] = args.uncertain
         
+        # TODO Change this, I do not like that it is hardcoded
         # Handle special case for sparse grid configurations
         if (hasattr(args, 'parameters_file') and args.parameters_file and 
             'sparse_grid_nodes_weights' in str(args.parameters_file)):

@@ -46,8 +46,8 @@ start_uq_sim(){
     modelMasterPath=$WORK/HBV-SASK-data
     resultsPath=$baseResultsPath/hbv_uq_cm4.$counter
 
-    conda_env=uq_env
-    #conda_env="uq_env"
+    #conda_env=uq_env
+    conda_env="my_uq_env"
 
     if [ "$sched_strut" = "SWPT" -o "$sched_strut" = "SWPT_OPT" ] ; then
         cpus=112
@@ -93,27 +93,22 @@ echo "#!/bin/bash
 #SBATCH --exclusive
 ###--mem=55G
 
-# load modules and activate the conda env
+# newer versions
 module load slurm_setup
-module load spack/23.1.0
+module load stack/24.4.0
 source /etc/profile.d/modules.sh
-# module unload python
-# module load python/3.6_intel
-# module load anaconda3
-# module load intel
-# module load intel-mpi
-module load intel/2023.1.0
-module load intel-mpi/2021.11
+#module load intel/2025.2.0
+#module load intel-mpi/2021.16.0
+module load intel/2024.1.0
+module load intel-mpi/2021.12.0
 module load mpi.intel/2018
-# module load mpi.intel/2019
-# if [[ $HOSTNAME  == "mpp3"* ]]; then
-#   module load mpi.intel/2019
-#   #module load mpi.intel/2020
-# elif [[ $HOSTNAME  == "cm2"* ]]; then
-#   module unload intel-mpi
-#  module load intel-mpi/2019.8.254 #intel-mpi/2018-intel
-# fi
-source /dss/dsshome1/lxc0C/ga45met2/.conda/envs/$conda_env/bin/activate $conda_env
+
+# Initialize conda and activate environment
+# For older Python versions
+# source /dss/dsshome1/lxc0C/ga45met2/.conda/envs/$conda_env/bin/activate $conda_env
+# For newer Python versions
+eval \"\$(/dss/lrzsys/sys/spack/release/23.1.0/opt/x86_64/anaconda3/2022.10-gcc-2f4y4xz/condabin/conda shell.bash hook)\"
+conda activate $conda_env
 
 # export num threads for OMP
 export OMP_NUM_THREADS=$threads
@@ -140,7 +135,6 @@ echo "---- start HBV sim: \`date\`"
                             --sampling_rule "$sampling_rule" \
                             --sc_poly_rule "$sc_poly_rule" \
                             --sc_quadrature_rule "$sc_quadrature_rule" \
-                            --parameters_file "$parameters_file" \
                             --regression_model_type "$regression_model_type" \
                             --cross_truncation 1.0 \
                             $opt
@@ -155,7 +149,7 @@ echo "---- end HBV sim: \`date\`"
 }
 
 model="hbvsask"
-opt_add="--parallel_statistics --save_all_simulations --sampleFromStandardDist --compute_Sobol_m --compute_Sobol_t --sc_poly_normed --store_gpce_surrogate_in_stat_dict --allow_conditioning_results_based_on_metric" # --instantly_save_results_for_each_time_step  --read_nodes_from_file --regression
+opt_add="--parallel_statistics --sampleFromStandardDist --compute_Sobol_m --compute_Sobol_t" #--save_all_simulations --allow_conditioning_results_based_on_metric --sc_poly_normed --store_gpce_surrogate_in_stat_dict --read_nodes_from_file --regression --save_all_simulations 
 nodes=4
 tasks_per_node=112  #22
 low_time="2:30:00"

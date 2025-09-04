@@ -15,7 +15,7 @@
 
     "run_full_timespan":"False",
     "spin_up_length":1096,
-    "simulation_length": 364,
+    "simulation_length": 90,
     "resolution": "daily",
     
     "cut_runs": "False",
@@ -33,10 +33,11 @@
 "simulation_settings": {
   "qoi":"Q_cms",
   "qoi_column":"Q_cms",
-  "autoregressive_model_first_order":"False",
   "transform_model_output":"None",
   "read_measured_data":"True",
   "qoi_column_measured":"streamflow",
+  "autoregressive_model_first_order":"True",
+  "scale_factor_autoregressive_model_first_order":0.8,
   "objective_function_qoi":["RMSE", "LogNSE", "KGE"],
   "calculate_GoF":"True",
   "objective_function":["MAE", "MSE", "RMSE", "NRMSE", "NSE", "LogNSE", "KGE"],

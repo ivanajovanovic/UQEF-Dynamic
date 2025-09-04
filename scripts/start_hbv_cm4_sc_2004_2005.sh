@@ -46,7 +46,7 @@ start_uq_sim(){
     modelMasterPath=$WORK/HBV-SASK-data
     resultsPath=$baseResultsPath/hbv_uq_cm4.$counter
 
-    #conda_env=uq_env
+    # conda_env=uq_env
     conda_env="my_uq_env"
 
     if [ "$sched_strut" = "SWPT" -o "$sched_strut" = "SWPT_OPT" ] ; then
@@ -120,7 +120,7 @@ echo "---- start HBV sim: \`date\`"
                             --outputResultDir $resultsPath \
                             --inputModelDir $modelMasterPath \
                             --sourceDir $baseSourcePath \
-                            --config_file $baseSourcePath/data/configurations/configuration_hbv_10D_2006_2007.json \
+                            --config_file $baseSourcePath/data/configurations/configuration_hbv_10D_2004_2005.json \
                             --model "$model" \
                             --uncertain "$uncertain" \
                             --opt_strategy "$strategy" --opt_algorithm "$algorithm" \
@@ -136,36 +136,37 @@ echo "---- start HBV sim: \`date\`"
                             --sc_poly_rule "$sc_poly_rule" \
                             --sc_quadrature_rule "$sc_quadrature_rule" \
                             --regression_model_type "$regression_model_type" \
-                            --cross_truncation 1.0 \
+                            --parameters_file "$parameters_file" \
+                            --cross_truncation 0.7 \
                             $opt
 
 echo "---- end HBV sim: \`date\`"
 
-" > $baseSourcePath/hbv_mc_500000_random_oldman_2006_2007.cmd
+" > $baseSourcePath/hbv_sc_11d_p4_l6_oldman_2004_2005.cmd
 
     #execute batch file
-    sbatch $baseSourcePath/hbv_mc_500000_random_oldman_2006_2007.cmd
+    sbatch $baseSourcePath/hbv_sc_11d_p4_l6_oldman_2004_2005.cmd
 
 }
 
 model="hbvsask"
-opt_add="--parallel_statistics --sampleFromStandardDist --compute_Sobol_m --compute_Sobol_t" #--save_all_simulations --allow_conditioning_results_based_on_metric --sc_poly_normed --store_gpce_surrogate_in_stat_dict --read_nodes_from_file --regression --save_all_simulations 
+opt_add="--parallel_statistics --sampleFromStandardDist --compute_Sobol_m --compute_Sobol_t --sc_poly_normed --compute_other_stat_besides_pce_surrogate --save_gpce_surrogate --store_gpce_surrogate_in_stat_dict --compute_generalized_sobol_indices --compute_generalized_sobol_indices_over_time --read_nodes_from_file" #--allow_conditioning_results_based_on_metric  --store_gpce_surrogate_in_stat_dict --read_nodes_from_file 
 nodes=4
 tasks_per_node=112  #22
 low_time="2:30:00"
-mid_time="4:00:00"
+mid_time="12:00:00"
 max_time="72:00:00"
-uq_method="mc"
+uq_method="sc"
 q_order=6
 p_order=4
-mc_numevaluations=500000
+mc_numevaluations=30471
 uc="all"
 sampling_rule="random"
 sc_poly_rule="three_terms_recurrence"
 sc_quadrature_rule="p" # "clenshaw_curtis" "genz_keister_24" "p"
 mpi_method="MpiPoolSolver"
-regression_model_type="OLS"
-parameters_file="/dss/dsshome1/lxc0C/ga45met2/Repositories/sparse_grid_nodes_weights/KPU_d10_l6.asc"
+regression_model_type="OLS"  #"LARS" "OLS"
+parameters_file="/dss/dsshome1/lxc0C/ga45met2/Repositories/sparse_grid_nodes_weights/KPU_d11_l6.asc"
 
 # start_uq_sim "DWP" "DYNAMIC" "FCFS" saltelli 0 0 50 "$model" "$opt_add" "MpiPoolSolver" "$nodes" "$max_time" "$uc" "$sampling_rule"
 # start_uq_sim "DWP" "DYNAMIC" "FCFS" "$uq_method" 20 10 50 "$model" "$opt_add" "MpiPoolSolver" "$nodes" "$max_time" "$uc" "$sampling_rule"

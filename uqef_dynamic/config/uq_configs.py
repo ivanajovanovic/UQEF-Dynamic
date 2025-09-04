@@ -274,6 +274,7 @@ class SparseGridConfigurationBuilder:
         config.sparse_grid_level = level
         config.sparse_grid_dimension = dimension
         
+        # TODO Change this - I do not like that it is hardcoded like this!
         # Set the sparse grid file path
         base_path = pathlib.Path(base_path)
         config.parameters_file = base_path / f"KPU_d{dimension}_l{level}.asc"
