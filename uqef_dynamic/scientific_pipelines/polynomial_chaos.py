@@ -58,15 +58,19 @@ def construct_polynomial_chaos_expansion(standard_parameter_matrix: np.ndarray, 
         # Inverse transport map approximation
         X_reconstruct = transport_map.Inverse(np.empty((0, standard_parameters.shape[1])), standard_parameters)
         # print("After transport_map.Inverse: any nan?", np.any(np.isnan(X_reconstruct)), "any inf?", np.any(np.isinf(X_reconstruct)))
-
+        # print("After inverse map:", X_reconstruct)
+    
         # Inverse scaling
         X_reconstruct = scaler.inverse_transform(X_reconstruct.T).T
         # print("After scaler.inverse_transform: any nan?", np.any(np.isnan(X_reconstruct)), "any inf?", np.any(np.isinf(X_reconstruct)))
-
+        # print("After inverse scaling:", X_reconstruct)
+    
         # Inverse logarithm
-        print("TODO: need to adjust logarithm for different distributions!")
         for i in range(X_reconstruct.shape[0]):
             X_reconstruct[i, :] = np.exp(X_reconstruct[i, :])
+        
+        # print("After exponentiation:", X_reconstruct)
+
         # print("After np.exp: any nan?", np.any(np.isnan(X_reconstruct)), "any inf?", np.any(np.isinf(X_reconstruct)))
 
         
@@ -127,26 +131,77 @@ def construct_polynomial_chaos_expansion(standard_parameter_matrix: np.ndarray, 
     #                        'K1': 0.5, 'alpha': 2.0, 
     #                        'UBAS': 1, 'PM': 1, "M": 1.0, "VAR_M": 1e-4}
     
+    # TT, C0, beta, ETF, FC, FRAC, K2
     default_sample = [[0.0], [0.5], [2.0], [0.2], [250], [0.3], [0.05]]
     
+    
+    # DEFAULT_PAR_INFO_DICT = {
+    #     'TT': {"lower": -4.0, "upper": 4.0, "default": 0.0},
+    #     'C0': {"lower": 0.0, "upper": 5.0, "default": 0.5},
+    #     'ETF': {"lower": 0.0, "upper": 1.0, "default": 0.2},
+    #     'LP': {"lower": 0.0, "upper": 1.0, "default": 0.5},
+    #     'FC': {"lower": 50.0, "upper": 1000.0, "default": 250.0},
+    #     'beta': {"lower": 1.0, "upper": 3.0, "default": 2.0},
+    #     'FRAC': {"lower": 0.1, "upper": 0.9, "default": 0.3},
+    #     'K1': {"lower": 0.05, "upper": 1.0, "default": 0.5},
+    #     'alpha': {"lower": 1.0, "upper": 3.0, "default": 2.0},
+    #     'K2': {"lower": 0.0, "upper": 0.1, "default": 0.05},
+    #     'UBAS': {"lower": 1.0, "upper": 3.0, "default": 1.0},
+    #     'PM':{"lower": 0.5, "upper": 2.0, "default": 1.0},
+    #     'M':{"lower": 0.9, "upper": 1.0, "default": 1.0},
+    #     'VAR_M':{"lower": 1e-5, "upper": 1e-3, "default": 1e-4}
+    # }
+    
+    # TT, C0, beta, ETF, FC, FRAC, K2   
+    inverted_min_max = np.array([[-4.0, 4.0], [0.0, 5.0], [1.0, 3.0], [0.0, 1.0], [50.0, 500.0], [0.1, 0.9], [0.0, 0.1]])
+    inverted_min_max = np.array([[-13.0, 13.0], [0.0, 5.0], [0.0, 3.0], [0.0, 3.0], [50.0, 700.0], [0.0, 0.3], [0.0, 0.2]])
+    lower_bounds = inverted_min_max[:, 0]
+    upper_bounds = inverted_min_max[:, 1]   
+    
+    print("TODO: inverse! need to adjust logarithm for different distributions!")
     samples_q_list = []
+    samples_r_list = []
+    countBounds = 0
+    countNaN = 0
     for i in range(samples_r.shape[1]):
         try:
             sample = samples_r[:, i:i+1]  # shape (n_params, 1)
+            # print("Original sample: ", sample)
             sample_q = inverse(sample)
+            
             if np.any(np.isnan(sample_q)):
+                # samples_q_list.append(default_sample)
+                countNaN += 1
+                continue
+            
+            # check if inverted sample within physical bounds
+            
+            checksample = np.asarray(sample_q).flatten()
+            within_bounds = (checksample >= lower_bounds) & (checksample <= upper_bounds)
+            all_within_bounds = np.all(within_bounds)
+            
+            if not all_within_bounds:
+                print("not in bound: ", sample_q)
+                # print(sample)
                 # print(f"NaN detected in inverted sample {i}:")
                 # print("Input sample_r:", sample.flatten())
                 # print("Output sample_q:", sample_q.flatten())
-                samples_q_list.append(default_sample)
+                # samples_q_list.append(default_sample)
+                # samples_q_list.append(default_sample)
+                countBounds += 1
             else:   
                 samples_q_list.append(sample_q)
+                # filter samples_r for those samples that are invalid
+                samples_r_list.append(sample)
         except Exception as e:
             print(f"Exception for sample {i}: {e}")
             print("Input sample_r:", sample.flatten())
     samples_q = np.hstack(samples_q_list)
     
     print("finished inversion")
+    print(f"{2000 - (countNaN + countBounds)}/2000 samples were correctly inversed / could be used for chaospy")
+    print(f"{countNaN} times there was an issue with NaN")
+    print(f"{countBounds} times the values were out of bounds")
 
 
     # TODO: check expansion order
@@ -155,14 +210,15 @@ def construct_polynomial_chaos_expansion(standard_parameter_matrix: np.ndarray, 
     evaluations = np.array([evaluate(sample) for sample in samples_q.T])
     print("Done evaluations in chaos")
     
-    model_approx = chaospy.fit_regression(expansion, samples_r, evaluations)
+    samples_r_list = np.hstack(samples_r_list)
+    model_approx = chaospy.fit_regression(expansion, samples_r_list, evaluations)
     
     mean = chaospy.E(model_approx, distribution_r)
     std = chaospy.Std(model_approx, distribution_r)
 
     # print(model_approx)
-    print(mean)
-    print(std)
+    print(f"chaospy approximated mean: {mean}")
+    print(f"chaospy approximated std: {std}")
     
     
     return model_approx

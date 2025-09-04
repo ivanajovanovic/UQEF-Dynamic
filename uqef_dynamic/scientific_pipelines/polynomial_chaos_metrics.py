@@ -35,6 +35,7 @@ def metrics(surrogate, list_of_dates_of_interest, standar_parameter_samples_matr
 
     # Get the mean of standard parameters
     mean_standard_params = np.mean(standar_parameter_samples_matrix, axis=0).reshape(-1, 1)
+    print(mean_standard_params.shape)
 
     # Evaluate PCE surrogate
     pce_output = float(chaospy.call(surrogate, mean_standard_params))
