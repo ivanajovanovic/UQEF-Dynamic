@@ -528,6 +528,38 @@ def plot_input_output_state(modelObject, result_df, state_df, **kwargs):
     # )
 
     return fig
+
+
+def _add_forcing_data(fig, df_temp):
+    fig.add_trace(
+        go.Scatter(
+            x=df_temp[utility.TIME_COLUMN_NAME], y=df_temp['temperature'],
+            text=df_temp['temperature'],
+            name="Temperature", mode='lines+markers',
+            showlegend=False,
+            marker_color='blue',
+        ),
+        row=1, col=1
+    )
+    
+    fig.add_trace(
+        go.Scatter(
+            x=df_temp[utility.TIME_COLUMN_NAME], y=df_temp['precipitation'],
+            text=df_temp['precipitation'],
+            name="Precipitation",
+            showlegend=False,
+            line=dict(color='#CC79A7')
+            # marker_color='red',
+            # mode="lines",
+            #         line=dict(
+            #             color='LightSkyBlue')
+        ),
+        row=2, col=1
+    )
+    fig.update_yaxes(autorange="reversed", row=2, col=1)
+    return fig
+
+    
 #####################################
 # Now comes the set of functiones copied from https://github.com/vars-tool/vars-tool/blob/master/tutorials/hbv.py
 # Original authors: Saman Razavi, Hoshin Gupta, Kasra Keshavarz, and Cordell Blanchard
