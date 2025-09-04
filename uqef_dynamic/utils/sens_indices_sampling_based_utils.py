@@ -1,5 +1,4 @@
 import numpy as np
-np.random.seed(10)
 
 # Functions needed for calculating Sobol indices using MC samples and Saltelli method
 
