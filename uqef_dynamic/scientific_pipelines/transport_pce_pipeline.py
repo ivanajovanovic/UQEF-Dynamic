@@ -685,7 +685,7 @@ if __name__ == "__main__":
     num_processes = multiprocessing.cpu_count()
     print(f"Number of parallel processes = {num_processes}")
 
-    number_of_particles = ne = 1000  # 50, 100, 200, 500, 1000, 2000
+    number_of_particles = ne = 500  # 50, 100, 200, 500, 1000, 2000
 
     for i in range(1):
         # working_dir_name=f"trial_single_run_hbvsaskmodel_7d_filtering/run_{i}"
