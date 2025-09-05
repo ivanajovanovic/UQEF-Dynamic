@@ -21,7 +21,7 @@ from uqef_dynamic.utils import transport_map
 from uqef_dynamic.models.hbv_sask import hbvsask_utility as hbv
 from uqef_dynamic.models.hbv_sask import HBVSASKModel as hbvmodel
 import standard_transport
-import polynomial_chaos, polynomial_chaos_metrics
+import polynomial_chaos, polynomial_chaos_quadrature, polynomial_chaos_metrics
 
 PLOT_FORCING_DATA = True
 
@@ -514,15 +514,22 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
     print("DEBUGGING - TRANSPORT MAP DONE")
     # Plotting final distribution of transformed parameter values
     
+    mus = standar_parameter_samples_matrix.mean(axis=0)
+    sigmas = standar_parameter_samples_matrix.std(axis=0)
+
+    print("== Standard parameter samples matrix metric ==")
+    print(mus)
+    print(sigmas)
+    
+    
+    
     
     # =========================================================
     # CHAOSPY
     # =========================================================
     
     print("DEBUGGING - CHAOSPY START")
-    
-    
-    
+        
     # mean of state variables
     if list_state_values_particles:
         state_df = pd.DataFrame(new_list_state_values_particles)
@@ -533,8 +540,16 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
         print(f"Mean state variables for all dates: {mean_states}")
     
     
-    surrogate = polynomial_chaos.construct_polynomial_chaos_expansion(
-        standard_parameter_matrix=standar_parameter_samples_matrix, 
+    regression = True
+    
+    
+    if regression:
+        surrogate = polynomial_chaos.construct_polynomial_chaos_expansion(
+            mean_state_values_dict=mean_states, 
+            transport_map=transport_map, 
+            scaler=scaler)
+    else:
+        surrogate = polynomial_chaos_quadrature.construct_polynomial_chaos_expansion(
         mean_state_values_dict=mean_states, 
         transport_map=transport_map, 
         scaler=scaler)

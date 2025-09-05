@@ -45,7 +45,7 @@ def setup_HBV():
 
 
 
-def construct_polynomial_chaos_expansion(standard_parameter_matrix: np.ndarray, mean_state_values_dict,transport_map, scaler):
+def construct_polynomial_chaos_expansion(mean_state_values_dict,transport_map, scaler):
     
 
     hbvsaskModelObject = setup_HBV()
@@ -105,15 +105,6 @@ def construct_polynomial_chaos_expansion(standard_parameter_matrix: np.ndarray, 
         
         return y_t_model
         
-
-
-    mus = standard_parameter_matrix.mean(axis=0)
-    sigmas = standard_parameter_matrix.std(axis=0)
-
-    print("== Standard parameter samples matrix metric ==")
-    print(mus)
-    print(sigmas)
-
 
     distribution_r = chaospy.J(
         chaospy.Normal(0, 1), 

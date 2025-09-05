@@ -11,7 +11,7 @@ from uqef_dynamic.models.hbv_sask import hbvsask_utility as hbv
 from uqef_dynamic.models.hbv_sask import HBVSASKModel as hbvmodel
 
 
-num_samples = 2000
+num_samples = 1000
 
 
 def setup_HBV():
@@ -45,7 +45,7 @@ def setup_HBV():
 
 
 
-def construct_polynomial_chaos_expansion(standard_parameter_matrix: np.ndarray, mean_state_values_dict,transport_map, scaler):
+def construct_polynomial_chaos_expansion(mean_state_values_dict, transport_map, scaler):
     
 
     hbvsaskModelObject = setup_HBV()
@@ -107,12 +107,7 @@ def construct_polynomial_chaos_expansion(standard_parameter_matrix: np.ndarray, 
         
 
 
-    mus = standard_parameter_matrix.mean(axis=0)
-    sigmas = standard_parameter_matrix.std(axis=0)
-
-    print("== Standard parameter samples matrix metric ==")
-    print(mus)
-    print(sigmas)
+    
 
 
     distribution_r = chaospy.J(
@@ -126,7 +121,7 @@ def construct_polynomial_chaos_expansion(standard_parameter_matrix: np.ndarray, 
     
     
     # i.i.d. sample in standard Gauss
-    samples_r = distribution_r.sample(num_samples, rule="L") # sobol quasi random --> try pure random (Latin Hypercube)
+    samples_r = distribution_r.sample(num_samples, rule="latin_hypercube") # sobol quasi random --> try pure random (Latin Hypercube)
     print(f"num_samples: ", samples_r.shape)
     
     # DEFAULT_PAR_VALUES_DICT = {'TT': 0.0, 'C0': 0.5, 'ETF': 0.2, 'FC': 250,
