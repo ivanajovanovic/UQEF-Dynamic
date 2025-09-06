@@ -507,19 +507,35 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
     print("DEBUGGING - START TRANSPORT MAP")
     
     # np.save("parameter_samples_matrix_before_transport200.npy", parameter_samples_matrix)
-    standar_parameter_samples_matrix, transport_map, scaler = standard_transport.transform_samples_with_transport_map(parameter_samples_matrix) # parameter_samples_matrix
+    standard_parameter_samples_matrix, params_transport_map, params_scaler = standard_transport.transform_parameters_with_transport_map(parameter_samples_matrix) # parameter_samples_matrix
+    
+    state_names = list(new_list_state_values_particles[0].keys())
+    states_matrix = np.array([[state_dict[name] for name in state_names] for state_dict in new_list_state_values_particles])
+    
+    standard_states, states_transport_map, states_scaler = standard_transport.transform_states_with_transport_map(states_matrix) # states_matrix
+   
+   
    
     # np.save("standard_parameter_samples_matrix1000.npy", standar_parameter_samples_matrix)
     # print(f"DEBUGGING - {standar_parameter_samples_matrix.shape}")
     print("DEBUGGING - TRANSPORT MAP DONE")
     # Plotting final distribution of transformed parameter values
     
-    mus = standar_parameter_samples_matrix.mean(axis=0)
-    sigmas = standar_parameter_samples_matrix.std(axis=0)
+    mus = standard_parameter_samples_matrix.mean(axis=0)
+    sigmas = standard_parameter_samples_matrix.std(axis=0)
 
     print("== Standard parameter samples matrix metric ==")
     print(mus)
     print(sigmas)
+    
+    mus = standard_states.mean(axis=0)
+    sigmas = standard_states.std(axis=0)
+
+    print("== Standard states matrix metric ==")
+    print(mus)
+    print(sigmas)
+    
+    
     
     
     
@@ -546,24 +562,24 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
     if regression:
         surrogate = polynomial_chaos.construct_polynomial_chaos_expansion(
             mean_state_values_dict=mean_states, 
-            transport_map=transport_map, 
-            scaler=scaler)
-    else:
-        surrogate = polynomial_chaos_quadrature.construct_polynomial_chaos_expansion(
-        mean_state_values_dict=mean_states, 
-        transport_map=transport_map, 
-        scaler=scaler)
+            params_transport_map=params_transport_map, 
+            params_scaler=params_scaler,
+            states_transport_map=states_transport_map,
+            states_scaler=states_scaler)
+    # else:
+    #     surrogate = polynomial_chaos_quadrature.construct_polynomial_chaos_expansion(
+    #     mean_state_values_dict=mean_states, 
+    #     transport_map=params_transport_map, 
+    #     scaler=params_scaler)
     
     
     print("chaos: start metrics")
     polynomial_chaos_metrics.metrics(surrogate, 
                                      list_of_dates_of_interest, 
-                                     standar_parameter_samples_matrix, 
+                                     standard_parameter_samples_matrix, 
+                                     standard_states,
                                      final_predicted_streamflow, 
-                                     final_observed_streamflow,
-                                     mean_states,
-                                     transport_map,
-                                     scaler)
+                                     final_observed_streamflow)
     
     
     print("DEBUGGING - CHAOSPY END")
@@ -574,7 +590,7 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
         parameter_name = param_names[idx]
         fig_plotly.append_trace(
                 go.Histogram(
-                    x=standar_parameter_samples_matrix[:,idx],
+                    x=standard_parameter_samples_matrix[:,idx],
                     name=parameter_name
                 ), row=1, col=idx + 1)
     fileName = os.path.abspath(os.path.join(str(directory_for_saving_plots), "final_transformed_param_distribution.html"))
