@@ -11,7 +11,7 @@ from uqef_dynamic.models.hbv_sask import hbvsask_utility as hbv
 from uqef_dynamic.models.hbv_sask import HBVSASKModel as hbvmodel
 
 
-num_samples = 1000
+num_samples = 5000
 
 
 def setup_HBV():
@@ -153,9 +153,9 @@ def construct_polynomial_chaos_expansion(mean_state_values_dict, transport_map, 
     # TT, C0, beta, ETF, FC, FRAC, K2   
     # PARAMETER BOUNDS
     # inverted_min_max = np.array([[-4.0, 4.0], [0.0, 5.0], [1.0, 3.0], [0.0, 1.0], [50.0, 500.0], [0.1, 0.9], [0.0, 0.1]])
-    # inverted_min_max = np.array([[-13.0, 13.0], [0.0, 5.0], [0.0, 3.0], [0.0, 3.0], [50.0, 700.0], [0.0, 0.3], [0.0, 0.2]])
-    # lower_bounds = inverted_min_max[:, 0]
-    # upper_bounds = inverted_min_max[:, 1]   
+    inverted_min_max = np.array([[-13.0, 13.0], [0.0, 5.0], [0.0, 5.0], [0.0, 2.0], [0.0, 700.0], [0.0, 0.3], [0.0, 0.1]])
+    lower_bounds = inverted_min_max[:, 0]
+    upper_bounds = inverted_min_max[:, 1]   
     
     print("TODO: inverse! need to adjust logarithm for different distributions!")
     samples_q_list = []
@@ -175,9 +175,9 @@ def construct_polynomial_chaos_expansion(mean_state_values_dict, transport_map, 
             
             # check if inverted sample within physical bounds
             
-            # checksample = np.asarray(sample_q).flatten()
-            # within_bounds = (checksample >= lower_bounds) & (checksample <= upper_bounds)
-            # all_within_bounds = np.all(within_bounds)
+            checksample = np.asarray(sample_q).flatten()
+            within_bounds = (checksample >= lower_bounds) & (checksample <= upper_bounds)
+            all_within_bounds = np.all(within_bounds)
             all_within_bounds = True
             
             if not all_within_bounds:
