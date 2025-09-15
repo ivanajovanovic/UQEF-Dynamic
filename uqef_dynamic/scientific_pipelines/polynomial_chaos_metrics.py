@@ -33,7 +33,7 @@ directory_for_saving_plots = workingDir
 
 
 
-def metrics(surrogate, list_of_dates_of_interest, standard_parameter_samples_matrix, standard_states_matrix, final_predicted_streamflow, final_observed_streamflow):
+def metrics(surrogate, list_of_dates_of_interest, standard_parameter_samples_matrix, standard_states_matrix, final_predicted_streamflow, final_observed_streamflow, pce_samples):
     last_date = list_of_dates_of_interest[-1]
 
     # Get the mean of standard parameters
@@ -59,8 +59,31 @@ def metrics(surrogate, list_of_dates_of_interest, standard_parameter_samples_mat
     # Get real model output and observation for the last date
     real_model_output = final_predicted_streamflow[last_date]
     real_observation = final_observed_streamflow[last_date]
+    
+    distribution_r = chaospy.J(
+        chaospy.Normal(0, 1), 
+        chaospy.Normal(0, 1), 
+        chaospy.Normal(0, 1),
+        chaospy.Normal(0, 1), 
+        chaospy.Normal(0, 1), 
+        chaospy.Normal(0, 1),
+        chaospy.Normal(0, 1),
+        chaospy.Normal(0, 1),
+        chaospy.Normal(0, 1),
+        chaospy.Normal(0, 1),
+        chaospy.Normal(0, 1)
+        )
+    
+    mean = chaospy.E(surrogate, distribution_r)
+    std = chaospy.Std(surrogate, distribution_r)
 
     print(f"PCE-output: {pce_output}")
+    
+    
+    with open("/mnt/f/projects/hydro-parameter-uncertainty/model_runs.txt", "a") as myfile:
+        myfile.write(f"SAMPLE_COUNT: {pce_samples}\n")
+        myfile.write(f"PCE_OUTPUT, PCE_MEAN, PCE_STD: {pce_samples}\n")
+        myfile.write(f"{pce_output}\t\t{mean}\t\t{std}\n\n")
     
     
     # Plot

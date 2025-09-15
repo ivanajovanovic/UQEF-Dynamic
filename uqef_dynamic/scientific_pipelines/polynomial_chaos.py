@@ -11,7 +11,6 @@ from uqef_dynamic.models.hbv_sask import hbvsask_utility as hbv
 from uqef_dynamic.models.hbv_sask import HBVSASKModel as hbvmodel
 
 
-num_samples = 4000
 
 
 def setup_HBV():
@@ -45,10 +44,11 @@ def setup_HBV():
 
 
 
-def construct_polynomial_chaos_expansion(mean_state_values_dict, params_transport_map, params_scaler, states_transport_map, states_scaler):
+def construct_polynomial_chaos_expansion(mean_state_values_dict, params_transport_map, params_scaler, states_transport_map, states_scaler, pce_samples):
     
 
     hbvsaskModelObject = setup_HBV()
+    num_samples = pce_samples
     
     
     
@@ -269,7 +269,7 @@ def construct_polynomial_chaos_expansion(mean_state_values_dict, params_transpor
     for parameter_sample_q, parameter_sample_r, states_sample_q, states_sample_r in zip(parameter_samples_q.T, parameter_samples_r_list, states_samples_q.T, states_samples_r_list):
         y = evaluate(parameter_sample_q.reshape(-1, 1), states_sample_q.reshape(-1, 1))
         # Refuse abnormal outputs (e.g., outside [0, 100])
-        if np.isnan(y) or np.isinf(y) or y < 0 or y > 100: 
+        if np.isnan(y) or np.isinf(y) or y < 0 or y > 150: 
             print(f"Abnormal evaluation: {y}, skipping sample.")
             countSkip += 1
             continue

@@ -559,27 +559,34 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
     regression = True
     
     
-    if regression:
-        surrogate = polynomial_chaos.construct_polynomial_chaos_expansion(
-            mean_state_values_dict=mean_states, 
-            params_transport_map=params_transport_map, 
-            params_scaler=params_scaler,
-            states_transport_map=states_transport_map,
-            states_scaler=states_scaler)
-    # else:
-    #     surrogate = polynomial_chaos_quadrature.construct_polynomial_chaos_expansion(
-    #     mean_state_values_dict=mean_states, 
-    #     transport_map=params_transport_map, 
-    #     scaler=params_scaler)
+    pce_samples = 8000
     
     
-    print("chaos: start metrics")
-    polynomial_chaos_metrics.metrics(surrogate, 
-                                     list_of_dates_of_interest, 
-                                     standard_parameter_samples_matrix, 
-                                     standard_states,
-                                     final_predicted_streamflow, 
-                                     final_observed_streamflow)
+    for pce_samples in range(12000, 17000, 1000):
+        print(f"CHAOSPY START SAMPLE COUNT {pce_samples}")
+        if regression:
+            surrogate = polynomial_chaos.construct_polynomial_chaos_expansion(
+                mean_state_values_dict=mean_states, 
+                params_transport_map=params_transport_map, 
+                params_scaler=params_scaler,
+                states_transport_map=states_transport_map,
+                states_scaler=states_scaler,
+                pce_samples=pce_samples)
+        # else:
+        #     surrogate = polynomial_chaos_quadrature.construct_polynomial_chaos_expansion(
+        #     mean_state_values_dict=mean_states, 
+        #     transport_map=params_transport_map, 
+        #     scaler=params_scaler)
+        
+        
+        print("chaos: start metrics")
+        polynomial_chaos_metrics.metrics(surrogate, 
+                                        list_of_dates_of_interest, 
+                                        standard_parameter_samples_matrix, 
+                                        standard_states,
+                                        final_predicted_streamflow, 
+                                        final_observed_streamflow,
+                                        pce_samples=pce_samples)
     
     
     print("DEBUGGING - CHAOSPY END")
