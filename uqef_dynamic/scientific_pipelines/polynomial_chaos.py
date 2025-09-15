@@ -13,6 +13,7 @@ from uqef_dynamic.models.hbv_sask import HBVSASKModel as hbvmodel
 
 
 
+
 def setup_HBV():
     working_dir_name=f"trial_single_run_hbvsaskmodel_7d_filtering_III"
     hbv_model_data_path = pathlib.Path("/home/christoph/projects/thesis_code/HBV-SASK-data")
@@ -44,32 +45,13 @@ def setup_HBV():
 
 
 
-def construct_polynomial_chaos_expansion(mean_state_values_dict, params_transport_map, params_scaler, states_transport_map, states_scaler, pce_samples):
+def construct_polynomial_chaos_expansion(mean_state_values_dict, transport_map, scaler, pce_samples):
     
 
     hbvsaskModelObject = setup_HBV()
     num_samples = pce_samples
-    
-    
-    
-    def states_inverse(standard_states):
-        """Inverse states from reference (SNV) back to target (original / exponential)"""
-        
-        # Inverse transport map approximation
-        X_reconstruct = states_transport_map.Inverse(np.empty((0, standard_states.shape[1])), standard_states)
-    
-        # Inverse scaling
-        X_reconstruct = states_scaler.inverse_transform(X_reconstruct.T).T
-    
-        # Inverse logarithm
-        for i in range(3):
-            X_reconstruct[i, :] = np.exp(X_reconstruct[i, :])
-        
-        return X_reconstruct
 
-
-
-    def parameter_inverse(standard_parameters):
+    def inverse(standard_parameters):
         """Inverse parameter distribution from reference (SNV) back to target (original / exponential)"""
         
         # print()
@@ -78,12 +60,12 @@ def construct_polynomial_chaos_expansion(mean_state_values_dict, params_transpor
         # print()
         
         # Inverse transport map approximation
-        X_reconstruct = params_transport_map.Inverse(np.empty((0, standard_parameters.shape[1])), standard_parameters)
+        X_reconstruct = transport_map.Inverse(np.empty((0, standard_parameters.shape[1])), standard_parameters)
         # print("After transport_map.Inverse: any nan?", np.any(np.isnan(X_reconstruct)), "any inf?", np.any(np.isinf(X_reconstruct)))
         # print("After inverse map:", X_reconstruct)
     
         # Inverse scaling
-        X_reconstruct = params_scaler.inverse_transform(X_reconstruct.T).T
+        X_reconstruct = scaler.inverse_transform(X_reconstruct.T).T
         # print("After scaler.inverse_transform: any nan?", np.any(np.isnan(X_reconstruct)), "any inf?", np.any(np.isinf(X_reconstruct)))
         # print("After inverse scaling:", X_reconstruct)
     
@@ -100,13 +82,9 @@ def construct_polynomial_chaos_expansion(mean_state_values_dict, params_transpor
 
 
     
-    
-    
-    def evaluate(inverted_parameters, inverted_states):
+    def evaluate(inverted_parameters):
         """Evaluates the hydrological model for given parameters in original (target / exponential) form"""
         
-        state_names = ["SWE", "SMS", "S1", "S2"]
-        state_dict = dict(zip(state_names, inverted_states))
         
         # print()
         # print("== INVERTED PARAMETERS ==")
@@ -119,7 +97,7 @@ def construct_polynomial_chaos_expansion(mean_state_values_dict, params_transpor
             hbvsaskModelObject=hbvsaskModelObject,
             date_of_interest=hbvsaskModelObject.end_date,
             parameter_value_dict=inverted_parameters, # ! dictionary
-            state_values_dict=state_dict
+            state_values_dict=mean_state_values_dict
             )
         # print("original_parameters shape:", np.shape(original_parameters))
         # print("original_parameters:", original_parameters)
@@ -140,23 +118,11 @@ def construct_polynomial_chaos_expansion(mean_state_values_dict, params_transpor
         chaospy.Normal(0, 1), 
         chaospy.Normal(0, 1), 
         chaospy.Normal(0, 1),
-        chaospy.Normal(0, 1),
-        chaospy.Normal(0, 1),
-        chaospy.Normal(0, 1),
-        chaospy.Normal(0, 1),
-        chaospy.Normal(0, 1)
-        )
+        chaospy.Normal(0, 1))
     
-    
-    
-    
-       
     
     # i.i.d. sample in standard Gauss
     samples_r = distribution_r.sample(num_samples, rule="latin_hypercube") # sobol quasi random --> try pure random (Latin Hypercube)
-    
-    parameters_samples_r = samples_r[:7, :]  # shape (7, n_samples)
-    states_samples_r = samples_r[7:, :]      # shape (4, n_samples)
     print(f"num_samples: ", samples_r.shape)
     
     # DEFAULT_PAR_VALUES_DICT = {'TT': 0.0, 'C0': 0.5, 'ETF': 0.2, 'FC': 250,
@@ -193,38 +159,30 @@ def construct_polynomial_chaos_expansion(mean_state_values_dict, params_transpor
     upper_bounds = inverted_min_max[:, 1]   
     
     print("TODO: inverse! need to adjust logarithm for different distributions!")
-    parameter_samples_q_list = []
-    states_samples_q_list = []
-    parameter_samples_r_list = []
-    states_samples_r_list = []
+    samples_q_list = []
+    samples_r_list = []
     countBounds = 0
     countNaN = 0
     for i in range(samples_r.shape[1]):
         try:
-            parameter_sample = parameters_samples_r[:, i:i+1]  # shape (n_params, 1)
-            states_sample = states_samples_r[:, i:i+1]
-            
+            sample = samples_r[:, i:i+1]  # shape (n_params, 1)
             # print("Original sample: ", sample)
-            parameter_sample_q = parameter_inverse(parameter_sample)
-            states_sample_q = states_inverse(states_sample)
+            sample_q = inverse(sample)
             
-            
-            if np.any(np.isnan(parameter_sample_q)) or np.any(np.isnan(states_sample_q)):
+            if np.any(np.isnan(sample_q)):
                 # samples_q_list.append(default_sample)
                 countNaN += 1
                 continue
             
             # check if inverted sample within physical bounds
             
-            # TODO: do later maybe the bounds check !!
-            
-            checksample = np.asarray(parameter_sample_q).flatten()
+            checksample = np.asarray(sample_q).flatten()
             within_bounds = (checksample >= lower_bounds) & (checksample <= upper_bounds)
             all_within_bounds = np.all(within_bounds)
             # all_within_bounds = True
             
             if not all_within_bounds:
-                # print("not in bound: ", parameter_sample_q)
+                # print("not in bound: ", sample_q)
                 # print(sample)
                 # print(f"NaN detected in inverted sample {i}:")
                 # print("Input sample_r:", sample.flatten())
@@ -233,19 +191,14 @@ def construct_polynomial_chaos_expansion(mean_state_values_dict, params_transpor
                 # samples_q_list.append(default_sample)
                 countBounds += 1
             else:   
-                parameter_samples_q_list.append(parameter_sample_q)
-                states_samples_q_list.append(states_sample_q)
+                samples_q_list.append(sample_q)
                 # filter samples_r for those samples that are invalid
-                
-                parameter_samples_r_list.append(parameter_sample)
-                states_samples_r_list.append(states_sample)
+                samples_r_list.append(sample)
         except Exception as e:
             print(f"Exception for sample {i}: {e}")
-            print("Input parameter_sample_r:", parameter_sample.flatten())
-    
-    
-    parameter_samples_q = np.hstack(parameter_samples_q_list)
-    states_samples_q = np.hstack(states_samples_q_list)
+            print("Input sample_r:", sample.flatten())
+            
+    samples_q = np.hstack(samples_q_list)
     
     print("finished inversion")
     print(f"{num_samples - (countNaN + countBounds)}/{num_samples} samples were correctly inversed / could be used for chaospy")
@@ -259,32 +212,21 @@ def construct_polynomial_chaos_expansion(mean_state_values_dict, params_transpor
     
     
     evaluations = []
-    valid_parameter_samples_q = []
-    valid_parameter_samples_r = [] 
-    valid_states_samples_q = []
-    valid_states_samples_r = []
+    valid_samples_q = []
+    valid_samples_r = []
     
     countSkip = 0
     
-    for parameter_sample_q, parameter_sample_r, states_sample_q, states_sample_r in zip(parameter_samples_q.T, parameter_samples_r_list, states_samples_q.T, states_samples_r_list):
-        y = evaluate(parameter_sample_q.reshape(-1, 1), states_sample_q.reshape(-1, 1))
+    for sample_q, sample_r in zip(samples_q.T, samples_r_list):
+        y = evaluate(sample_q.reshape(-1, 1))
         # Refuse abnormal outputs (e.g., outside [0, 100])
-        if np.isnan(y) or np.isinf(y) or y < 0 or y > 150: 
+        if np.isnan(y) or np.isinf(y) or y < 0 or y > 100: 
             print(f"Abnormal evaluation: {y}, skipping sample.")
             countSkip += 1
             continue
         evaluations.append(y)
-        
-        valid_parameter_samples_q.append(parameter_sample_q.reshape(-1, 1))
-        valid_states_samples_q.append(states_sample_q.reshape(-1, 1))
-        
-        valid_parameter_samples_r.append(parameter_sample_r)
-        valid_states_samples_r.append(states_sample_r)
-    
-    
-    
-    valid_samples_r = np.hstack([valid_parameter_samples_r, valid_states_samples_r])  # shape (11, n_samples)
-    
+        valid_samples_q.append(sample_q.reshape(-1, 1))
+        valid_samples_r.append(sample_r)
     
     print("Done evaluations in chaos")
     print(f"Skipped {countSkip}/{num_samples - (countNaN + countBounds)} samples")
