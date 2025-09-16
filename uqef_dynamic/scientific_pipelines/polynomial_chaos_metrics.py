@@ -142,7 +142,7 @@ def metrics(surrogate, list_of_dates_of_interest, standar_parameter_samples_matr
     print(standar_parameter_samples_matrix.shape)
     
     start_time = time.time()
-    surrogate_outputs = chaospy.call(surrogate, standar_parameter_samples_matrix.T)
+    surrogate_outputs = chaospy.call(surrogate, standar_parameter_samples_matrix)
     end_time = time.time()
     surrogate_total_time = end_time - start_time
     surrogate_avg_time = surrogate_total_time / standar_parameter_samples_matrix.shape[1]
@@ -158,14 +158,19 @@ def metrics(surrogate, list_of_dates_of_interest, standar_parameter_samples_matr
     print("PARAMETER SAMPLE MATRIX SHAPE")
     param_HBV_matrix = parameter_samples_matrix.T
     print(parameter_samples_matrix.shape)
+    
+    # for i in range(parameter_samples_matrix.shape[0]):
+    #     param_vec = parameter_samples_matrix[i, :]
+    #     model_output = evaluate(param_vec, mean_state_values)
+    #     model_outputs.append(model_output)
+     
     for i in range(param_HBV_matrix.shape[1]):
-        param_HBV = param_HBV_matrix[:, i]
         params = standar_parameter_samples_matrix[:, i].reshape(-1, 1)
         params_inv = inverse(params, transport_map, scaler)
         model_output = evaluate(params_inv, mean_state_values)
         model_outputs.append(model_output)
     
-    
+      
     end_time = time.time()
     model_total_time = end_time - start_time
     model_avg_time = model_total_time / standar_parameter_samples_matrix.shape[1]
@@ -179,8 +184,8 @@ def metrics(surrogate, list_of_dates_of_interest, standar_parameter_samples_matr
     pce_output = mean_pce_output
 
     # Get real model output and observation for the last date
-    real_model_output = final_predicted_streamflow[last_date]
-    real_observation = final_observed_streamflow[last_date]
+    # real_model_output = final_predicted_streamflow[last_date]
+    # real_observation = final_observed_streamflow[last_date]
 
     print(f"PCE-output: {pce_output}")
     
@@ -194,48 +199,46 @@ def metrics(surrogate, list_of_dates_of_interest, standar_parameter_samples_matr
         chaospy.Normal(0, 1), 
         chaospy.Normal(0, 1), 
         chaospy.Normal(0, 1),
-        chaospy.Normal(0, 1),
-        chaospy.Normal(0, 1),
-        chaospy.Normal(0, 1),
-        chaospy.Normal(0, 1),
-        chaospy.Normal(0, 1)
-        )
+        chaospy.Normal(0, 1))
     mean = chaospy.E(surrogate, distribution_r)
     std = chaospy.Std(surrogate, distribution_r)
       
     
     
-    with open("/mnt/f/projects/hydro-parameter-uncertainty/model_runs7D.txt", "a") as myfile:
-        myfile.write(f"SAMPLE_COUNT: {pce_samples}\n")
-        myfile.write(f"HBV evaluated with mean_states: {mean_model}\n")
-        myfile.write(f"Surrogate time: {surrogate_total_time}\n")
-        myfile.write(f"Model time: {model_total_time}\n")
-        myfile.write(f"PCE_OUTPUT, PCE_MEAN, PCE_STD:\n")
-        myfile.write(f"{pce_output}\t\t{mean}\t\t{std}\n")
-        def truncate(val):
-            return int(val * 100) / 100
-        myfile.write(f"{truncate(pce_output):.2f}\t\t{truncate(mean):.2f}\t\t{truncate(std):.2f}\n\n")
+    # with open("/mnt/f/projects/hydro-parameter-uncertainty/model_runs7D.txt", "a") as myfile:
+    #     myfile.write(f"SAMPLE_COUNT: {pce_samples}\n")
+    #     myfile.write(f"HBV evaluated with mean_states: {mean_model}\n")
+    #     myfile.write(f"Surrogate time: {surrogate_total_time}\n")
+    #     myfile.write(f"Model time: {model_total_time}\n")
+    #     myfile.write(f"PCE_OUTPUT, PCE_MEAN, PCE_STD:\n")
+    #     myfile.write(f"{pce_output}\t\t{mean}\t\t{std}\n")
+    #     def truncate(val):
+    #         return int(val * 100) / 100
+    #     myfile.write(f"{truncate(pce_output):.2f}\t\t{truncate(mean):.2f}\t\t{truncate(std):.2f}\n\n")
     
     
     # Plot
-    categories = ['Observation', 'Real Model', 'PCE Surrogate']
-    values = [real_observation, real_model_output, pce_output]
-
-    fig = go.Figure(data=[
-        go.Scatter(
-            x=categories,
-            y=values,
-            mode='lines+markers',
-            marker=dict(size=12, color='black'),
-            line=dict(color='black')
-        )
-    ])
-    fig.update_layout(
-        title=f"Comparison for {last_date.strftime('%Y-%m-%d')}",
-        yaxis_title="Streamflow [m³/s]",
-        xaxis_title="",
-        template="simple_white"
-    )
-
-    save_path = os.path.join(str(directory_for_saving_plots), f"comparison_last_date_{last_date.strftime('%Y%m%d')}.html")
-    fig.write_html(save_path, auto_open=True)
+    # categories = ['Observation', 'Real Model', 'PCE Surrogate']
+    # values = [real_observation, real_model_output, pce_output]
+ 
+    # fig = go.Figure(data=[
+    #     go.Scatter(
+    #         x=categories,
+    #         y=values,
+    #         mode='lines+markers',
+    #         marker=dict(size=12, color='black'),
+    #         line=dict(color='black')
+    #     )
+    # ])
+    # fig.update_layout(
+    #     title=f"Comparison for {last_date.strftime('%Y-%m-%d')}",
+    #     yaxis_title="Streamflow [m³/s]",
+    #     xaxis_title="",
+    #     template="simple_white"
+    # )
+ 
+    # save_path = os.path.join(str(directory_for_saving_plots), f"comparison_last_date_{last_date.strftime('%Y%m%d')}.html")
+    # fig.write_html(save_path, auto_open=True)
+    
+    
+    return pce_output, mean_model

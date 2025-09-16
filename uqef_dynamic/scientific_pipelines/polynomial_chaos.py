@@ -193,7 +193,7 @@ def construct_polynomial_chaos_expansion(mean_state_values_dict, transport_map, 
             checksample = np.asarray(sample_q).flatten()
             within_bounds = (checksample >= lower_bounds) & (checksample <= upper_bounds)
             all_within_bounds = np.all(within_bounds)
-            # all_within_bounds = True
+            all_within_bounds = True
             
             if not all_within_bounds:
                 # print("not in bound: ", sample_q)
@@ -222,7 +222,7 @@ def construct_polynomial_chaos_expansion(mean_state_values_dict, transport_map, 
 
 
     # TODO: check expansion order
-    expansion = chaospy.generate_expansion(4, distribution_r)
+    expansion = chaospy.generate_expansion(3, distribution_r)
     print("chaos: generated expansion")
     
     

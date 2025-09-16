@@ -25,6 +25,100 @@ import polynomial_chaos, polynomial_chaos_quadrature, polynomial_chaos_metrics
 
 PLOT_FORCING_DATA = True
 
+
+
+def apply_pipeline(parameter_samples_matrix, new_list_state_values_particles, list_of_dates_of_interest, final_predicted_streamflow, final_observed_streamflow):
+        # =========================================================
+        # TRANSPORT MAP
+        # =========================================================
+        
+        
+        state_names = list(new_list_state_values_particles[0].keys())
+        # states_matrix = np.array([[state_dict[name] for name in state_names] for state_dict in new_list_state_values_particles])
+        # np.save(f"final_states_{number_of_particles}.npy", states_matrix)
+        
+        # print(f"DEBUGGING - {parameter_samples_matrix.shape}")
+        print("DEBUGGING - START TRANSPORT MAP")
+        
+        # np.save("parameter_samples_matrix_before_transport200.npy", parameter_samples_matrix)
+        standar_parameter_samples_matrix, transport_map, scaler = standard_transport.transform_samples_with_transport_map(parameter_samples_matrix) # parameter_samples_matrix
+        
+        # SHOULD BE [dim, num_samples]
+        print(f"SHAPE #1: standar_parameter_samples_matrix, {standar_parameter_samples_matrix.shape}")
+    
+        # np.save("standard_parameter_samples_matrix1000.npy", standar_parameter_samples_matrix)
+        # print(f"DEBUGGING - {standar_parameter_samples_matrix.shape}")
+        print("DEBUGGING - TRANSPORT MAP DONE")
+        # Plotting final distribution of transformed parameter values
+        
+        mus = standar_parameter_samples_matrix.mean(axis=0)
+        sigmas = standar_parameter_samples_matrix.std(axis=0)
+
+        print("== Standard parameter samples matrix metric ==")
+        print(mus)
+        print(sigmas)
+        
+        
+        
+        
+        # =========================================================
+        # CHAOSPY
+        # =========================================================
+        
+        print("DEBUGGING - CHAOSPY START")
+            
+        # mean of state variables
+        state_df = pd.DataFrame(new_list_state_values_particles)
+        # state_df = state_df.drop('WatershedArea_km2', axis=1)
+        # state_df = state_df.drop('Index_run', axis=1)
+        # print(state_df)
+        state_df = state_df.drop(['WatershedArea_km2', 'Index_run'], axis=1)
+        print(f"SHAPE #2: state_df, {state_df.shape}")
+        mean_states = state_df.mean(axis=0).to_dict()
+        print(f"Mean state variables for all dates: {mean_states}")
+        
+        
+        
+        
+        for pce_samples in range(8000, 9000, 1000):
+            print(f"CHAOSPY START SAMPLE COUNT {pce_samples}")
+            
+            surrogate = polynomial_chaos.construct_polynomial_chaos_expansion(
+                mean_state_values_dict=mean_states, 
+                transport_map=transport_map, 
+                scaler=scaler,
+                pce_samples=pce_samples)
+
+            
+            print("chaos: start metrics")
+            pce_output, model_output = polynomial_chaos_metrics.metrics(surrogate, 
+                                            list_of_dates_of_interest, 
+                                            standar_parameter_samples_matrix, 
+                                            parameter_samples_matrix=parameter_samples_matrix,
+                                            final_predicted_streamflow=final_predicted_streamflow, 
+                                            final_observed_streamflow=final_observed_streamflow,
+                                            mean_state_values=mean_states,
+                                            transport_map=transport_map,
+                                            scaler=scaler,
+                                            pce_samples=pce_samples)
+        
+        
+        print("DEBUGGING - CHAOSPY END")
+
+
+        return pce_output, model_output
+
+
+
+
+
+
+
+
+
+
+
+
 def run_model_single_time_stamp_single_particle(hbvsaskModelObject, date_of_interest,
                                     parameter_value_dict, state_values_dict, unique_index_model_run = 0,
                                     print_debug=False):
@@ -177,7 +271,7 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
 
     # In case one wants to modify dates compared to those set up in the configuration object / deverge from these setting
     start_date = '2006-03-30 00:00:00'
-    end_date = '2007-06-30 00:00:00'
+    end_date = '2007-08-30 00:00:00'
     spin_up_length = 365  # 365*3
     start_date = pd.to_datetime(start_date)
     end_date = pd.to_datetime(end_date)
@@ -300,6 +394,13 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
     mse = 0
     error_variance = 5.0
     current_model_output_max = 0.0
+    
+    # Initialize comparison results list
+    comparison_results = []
+    pce_results = []
+    model_results = []
+    predicted_results = []
+    observed_results = []
 
     # =========================================================
     # Particle Filtering
@@ -428,6 +529,21 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
         final_predicted_streamflow[date_of_interest] = average_predicted_streamflow
         final_observed_streamflow[date_of_interest] = y_t_observed
         dates.append(date_of_interest)
+        
+        
+        
+        
+        if date_of_interest >= pd.to_datetime("2007-06-30 00:00:00"):
+            pce_output, model_output = apply_pipeline(parameter_samples_matrix, new_list_state_values_particles, list_of_dates_of_interest, final_predicted_streamflow, final_observed_streamflow)
+            
+            # Save the three values into a list for later printing
+            comparison_results.append([pce_output, model_output, average_predicted_streamflow, y_t_observed])
+            pce_results.append(pce_output)
+            model_results.append(model_output)
+            predicted_results.append(average_predicted_streamflow)
+            observed_results.append(y_t_observed)
+
+        
 
     mse_total = mse / len(dates)
     print(f"Final predicted streamflow: {final_predicted_streamflow}")
@@ -435,6 +551,33 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
     print(f"Total MSE: {mse_total}; RMSE: {np.sqrt(mse_total)}")
     
     print(f"FINISH")
+    
+    
+    # print("RESULTS LIST")
+    # print(f"Results List: {comparison_results}")
+     
+    # print("PCE RESULT LIST")
+    # print(pce_results)
+     
+    # print("MODEL RESULT LIST")
+    # print(model_results)
+     
+    # print("PREDICTED RESULT LIST")
+    # print(predicted_results)
+     
+    # print("OBSERVED RESULT LIST")
+    # print(observed_results)
+    
+    
+    save_dir = "/mnt/f/projects/hydro-parameter-uncertainty/two_month_runs"
+    os.makedirs(save_dir, exist_ok=True)
+    
+    np.save(os.path.join(save_dir, "pce_results.npy"), pce_results)
+    np.save(os.path.join(save_dir, "model_results.npy"), model_results)
+    np.save(os.path.join(save_dir, "predicted_results.npy"), predicted_results)
+    np.save(os.path.join(save_dir, "observed_results.npy"), observed_results)
+    
+    
         
     # =========================================================
     # Creating Data Structures which will be used for further analysis (saving it) and plotting
@@ -497,84 +640,9 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
     pyo.plot(fig_plotly, filename=fileName)
 
 
-
-    # =========================================================
-    # TRANSPORT MAP
-    # =========================================================
-    
-    
-    state_names = list(new_list_state_values_particles[0].keys())
-    # states_matrix = np.array([[state_dict[name] for name in state_names] for state_dict in new_list_state_values_particles])
-    # np.save(f"final_states_{number_of_particles}.npy", states_matrix)
-    
-    # print(f"DEBUGGING - {parameter_samples_matrix.shape}")
-    print("DEBUGGING - START TRANSPORT MAP")
-    
-    # np.save("parameter_samples_matrix_before_transport200.npy", parameter_samples_matrix)
     standar_parameter_samples_matrix, transport_map, scaler = standard_transport.transform_samples_with_transport_map(parameter_samples_matrix) # parameter_samples_matrix
     
-    # SHOULD BE [dim, num_samples]
-    print(f"SHAPE #1: standar_parameter_samples_matrix, {standar_parameter_samples_matrix.shape}")
-   
-    # np.save("standard_parameter_samples_matrix1000.npy", standar_parameter_samples_matrix)
-    # print(f"DEBUGGING - {standar_parameter_samples_matrix.shape}")
-    print("DEBUGGING - TRANSPORT MAP DONE")
-    # Plotting final distribution of transformed parameter values
-    
-    mus = standar_parameter_samples_matrix.mean(axis=0)
-    sigmas = standar_parameter_samples_matrix.std(axis=0)
 
-    print("== Standard parameter samples matrix metric ==")
-    print(mus)
-    print(sigmas)
-    
-    
-    
-    
-    # =========================================================
-    # CHAOSPY
-    # =========================================================
-    
-    print("DEBUGGING - CHAOSPY START")
-        
-    # mean of state variables
-    if list_state_values_particles:
-        state_df = pd.DataFrame(new_list_state_values_particles)
-        # state_df = state_df.drop('WatershedArea_km2', axis=1)
-        # state_df = state_df.drop('Index_run', axis=1)
-        # print(state_df)
-        state_df = state_df.drop(['WatershedArea_km2', 'Index_run'], axis=1)
-        print(f"SHAPE #2: state_df, {state_df.shape}")
-        mean_states = state_df.mean(axis=0).to_dict()
-        print(f"Mean state variables for all dates: {mean_states}")
-    
-    
-    
-    
-    for pce_samples in range(8000, 9000, 1000):
-        print(f"CHAOSPY START SAMPLE COUNT {pce_samples}")
-        
-        surrogate = polynomial_chaos.construct_polynomial_chaos_expansion(
-            mean_state_values_dict=mean_states, 
-            transport_map=transport_map, 
-            scaler=scaler,
-            pce_samples=pce_samples)
-
-        
-        print("chaos: start metrics")
-        polynomial_chaos_metrics.metrics(surrogate, 
-                                        list_of_dates_of_interest, 
-                                        standar_parameter_samples_matrix, 
-                                        parameter_samples_matrix=parameter_samples_matrix,
-                                        final_predicted_streamflow=final_predicted_streamflow, 
-                                        final_observed_streamflow=final_observed_streamflow,
-                                        mean_state_values=mean_states,
-                                        transport_map=transport_map,
-                                        scaler=scaler,
-                                        pce_samples=pce_samples)
-    
-    
-    print("DEBUGGING - CHAOSPY END")
     
     
     # go back to [num_samples, dim] for plotting
