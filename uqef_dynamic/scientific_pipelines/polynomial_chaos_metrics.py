@@ -6,6 +6,7 @@ import transport_pce_pipeline
 import pathlib
 import matplotlib.pyplot as plt
 import os
+import time
 
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
@@ -63,7 +64,7 @@ def setup_HBV():
 
 hbvsaskModelObject = setup_HBV()
 
-def evaluate(inverted_parameters, mean_state_values_dict):
+def evaluate(inverted_parameters, mean_state_values):
         """Evaluates the hydrological model for given parameters in original (target / exponential) form"""
         
         
@@ -72,13 +73,18 @@ def evaluate(inverted_parameters, mean_state_values_dict):
         # print(inverted_parameters)
         # print()
         
+        param_names = ['TT', 'C0', 'beta', 'ETF', 'FC', 'FRAC', 'K2']
+        param_dict = {name: float(val) for name, val in zip(param_names, inverted_parameters)}
+        # print("=== PARAM DICT ===")
+        # print(param_dict)
+        
         # TODO: check argument values
         # unique_index_model_run, y_t_model, y_t_observed, x_t_plus_1, parameter_value_dict
         _, y_t_model, _, _, _ = transport_pce_pipeline.run_model_single_time_stamp_single_particle(
             hbvsaskModelObject=hbvsaskModelObject,
             date_of_interest=hbvsaskModelObject.end_date,
-            parameter_value_dict=inverted_parameters, # ! dictionary
-            state_values_dict=mean_state_values_dict
+            parameter_value_dict=param_dict, # ! dictionary
+            state_values_dict=mean_state_values
             )
         # print("original_parameters shape:", np.shape(original_parameters))
         # print("original_parameters:", original_parameters)
@@ -119,7 +125,7 @@ def inverse(standard_parameters, transport_map, scaler):
 
 
 
-def metrics(surrogate, list_of_dates_of_interest, standar_parameter_samples_matrix, final_predicted_streamflow, final_observed_streamflow, mean_state_values, transport_map, scaler, pce_samples):
+def metrics(surrogate, list_of_dates_of_interest, standar_parameter_samples_matrix, parameter_samples_matrix, final_predicted_streamflow, final_observed_streamflow, mean_state_values, transport_map, scaler, pce_samples):
     last_date = list_of_dates_of_interest[-1]
 
     # Get the mean of standard parameters
@@ -130,22 +136,45 @@ def metrics(surrogate, list_of_dates_of_interest, standar_parameter_samples_matr
     # pce_output = float(chaospy.call(surrogate, mean_standard_params))
 
     # Evaluate PCE surrogate
-    surrogate_outputs = []
-    for params in standar_parameter_samples_matrix:
-        params_col = params.reshape(-1, 1)
-        pce_output = float(chaospy.call(surrogate, params_col))
-        surrogate_outputs.append(pce_output)
-        
-        
+    # surrogate_outputs = []
     
+    print("SHAPE")
+    print(standar_parameter_samples_matrix.shape)
+    
+    start_time = time.time()
+    surrogate_outputs = chaospy.call(surrogate, standar_parameter_samples_matrix.T)
+    end_time = time.time()
+    surrogate_total_time = end_time - start_time
+    surrogate_avg_time = surrogate_total_time / standar_parameter_samples_matrix.shape[1]
+
+    print(f"SURROGATE PERFORMANCE: {surrogate_total_time:.4f} seconds (based on {standar_parameter_samples_matrix.shape[1]} samples) "
+          f"(~{surrogate_avg_time*1000:.6f} ms per sample)")
+
+
+
     model_outputs = []
-    for i in range(standar_parameter_samples_matrix.shape[1]):
+    start_time = time.time()
+    # for i in range(standar_parameter_samples_matrix.shape[0]):
+    print("PARAMETER SAMPLE MATRIX SHAPE")
+    param_HBV_matrix = parameter_samples_matrix.T
+    print(parameter_samples_matrix.shape)
+    for i in range(param_HBV_matrix.shape[1]):
+        param_HBV = param_HBV_matrix[:, i]
         params = standar_parameter_samples_matrix[:, i].reshape(-1, 1)
         params_inv = inverse(params, transport_map, scaler)
-        params_col = params_inv.reshape(-1, 1)
-        model_output = evaluate(params_col, mean_state_values)
+        model_output = evaluate(params_inv, mean_state_values)
         model_outputs.append(model_output)
+    
+    
+    end_time = time.time()
+    model_total_time = end_time - start_time
+    model_avg_time = model_total_time / standar_parameter_samples_matrix.shape[1]
 
+    print(f"MODEL PERFORMANCE: {model_total_time:.4f} seconds (based on {standar_parameter_samples_matrix.shape[1]} samples) "
+          f"(~{model_avg_time*1000:.6f} ms per sample)")
+
+    
+    
     mean_pce_output = np.mean(surrogate_outputs)
     pce_output = mean_pce_output
 
@@ -179,6 +208,8 @@ def metrics(surrogate, list_of_dates_of_interest, standar_parameter_samples_matr
     with open("/mnt/f/projects/hydro-parameter-uncertainty/model_runs7D.txt", "a") as myfile:
         myfile.write(f"SAMPLE_COUNT: {pce_samples}\n")
         myfile.write(f"HBV evaluated with mean_states: {mean_model}\n")
+        myfile.write(f"Surrogate time: {surrogate_total_time}\n")
+        myfile.write(f"Model time: {model_total_time}\n")
         myfile.write(f"PCE_OUTPUT, PCE_MEAN, PCE_STD:\n")
         myfile.write(f"{pce_output}\t\t{mean}\t\t{std}\n")
         def truncate(val):

@@ -504,7 +504,7 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
     
     
     state_names = list(new_list_state_values_particles[0].keys())
-    states_matrix = np.array([[state_dict[name] for name in state_names] for state_dict in new_list_state_values_particles])
+    # states_matrix = np.array([[state_dict[name] for name in state_names] for state_dict in new_list_state_values_particles])
     # np.save(f"final_states_{number_of_particles}.npy", states_matrix)
     
     # print(f"DEBUGGING - {parameter_samples_matrix.shape}")
@@ -512,6 +512,9 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
     
     # np.save("parameter_samples_matrix_before_transport200.npy", parameter_samples_matrix)
     standar_parameter_samples_matrix, transport_map, scaler = standard_transport.transform_samples_with_transport_map(parameter_samples_matrix) # parameter_samples_matrix
+    
+    # SHOULD BE [dim, num_samples]
+    print(f"SHAPE #1: standar_parameter_samples_matrix, {standar_parameter_samples_matrix.shape}")
    
     # np.save("standard_parameter_samples_matrix1000.npy", standar_parameter_samples_matrix)
     # print(f"DEBUGGING - {standar_parameter_samples_matrix.shape}")
@@ -540,42 +543,42 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
         # state_df = state_df.drop('WatershedArea_km2', axis=1)
         # state_df = state_df.drop('Index_run', axis=1)
         # print(state_df)
+        state_df = state_df.drop(['WatershedArea_km2', 'Index_run'], axis=1)
+        print(f"SHAPE #2: state_df, {state_df.shape}")
         mean_states = state_df.mean(axis=0).to_dict()
         print(f"Mean state variables for all dates: {mean_states}")
     
     
-    regression = True
     
     
-    for pce_samples in range(1000, 15000, 1000):
+    for pce_samples in range(8000, 9000, 1000):
         print(f"CHAOSPY START SAMPLE COUNT {pce_samples}")
-        if regression:
-            surrogate = polynomial_chaos.construct_polynomial_chaos_expansion(
-                mean_state_values_dict=mean_states, 
-                transport_map=transport_map, 
-                scaler=scaler,
-                pce_samples=pce_samples)
-        else:
-            surrogate = polynomial_chaos_quadrature.construct_polynomial_chaos_expansion(
+        
+        surrogate = polynomial_chaos.construct_polynomial_chaos_expansion(
             mean_state_values_dict=mean_states, 
             transport_map=transport_map, 
-            scaler=scaler)
-        
+            scaler=scaler,
+            pce_samples=pce_samples)
+
         
         print("chaos: start metrics")
         polynomial_chaos_metrics.metrics(surrogate, 
                                         list_of_dates_of_interest, 
                                         standar_parameter_samples_matrix, 
-                                        final_predicted_streamflow, 
-                                        final_observed_streamflow,
-                                        mean_states,
-                                        transport_map,
-                                        scaler,
+                                        parameter_samples_matrix=parameter_samples_matrix,
+                                        final_predicted_streamflow=final_predicted_streamflow, 
+                                        final_observed_streamflow=final_observed_streamflow,
+                                        mean_state_values=mean_states,
+                                        transport_map=transport_map,
+                                        scaler=scaler,
                                         pce_samples=pce_samples)
     
     
     print("DEBUGGING - CHAOSPY END")
     
+    
+    # go back to [num_samples, dim] for plotting
+    standar_parameter_samples_matrix = standar_parameter_samples_matrix.T
     
     fig_plotly = make_subplots(rows=1, cols=len(param_names))
     for idx in range(len(param_names)):

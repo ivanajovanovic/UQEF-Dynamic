@@ -47,10 +47,16 @@ def setup_HBV():
 
 def construct_polynomial_chaos_expansion(mean_state_values_dict, transport_map, scaler, pce_samples):
     
+    # mean_state_values_dict: dictionary with keys {SWE, SMS, S1, S2}
+    # transport_map
+    # scaler
+    # pce_samples: (num_samples, dim) --> (particle_count, 7)
 
     hbvsaskModelObject = setup_HBV()
     num_samples = pce_samples
 
+
+    # !! standard_parameters (dim, num_samples) / (dim, 1) [chaospy format, transportmap format, standard_params_matrix format]
     def inverse(standard_parameters):
         """Inverse parameter distribution from reference (SNV) back to target (original / exponential)"""
         
@@ -81,7 +87,7 @@ def construct_polynomial_chaos_expansion(mean_state_values_dict, transport_map, 
         return X_reconstruct
 
 
-    
+    # inverted_parameters: (dim, 1)
     def evaluate(inverted_parameters):
         """Evaluates the hydrological model for given parameters in original (target / exponential) form"""
         
@@ -91,12 +97,17 @@ def construct_polynomial_chaos_expansion(mean_state_values_dict, transport_map, 
         # print(inverted_parameters)
         # print()
         
+        param_names = ['TT', 'C0', 'beta', 'ETF', 'FC', 'FRAC', 'K2']
+        param_dict = {name: float(val) for name, val in zip(param_names, inverted_parameters)}
+        # print("=== PARAM DICT ===")
+        # print(param_dict)
+        
         # TODO: check argument values
         # unique_index_model_run, y_t_model, y_t_observed, x_t_plus_1, parameter_value_dict
         _, y_t_model, _, _, _ = transport_pce_pipeline.run_model_single_time_stamp_single_particle(
             hbvsaskModelObject=hbvsaskModelObject,
             date_of_interest=hbvsaskModelObject.end_date,
-            parameter_value_dict=inverted_parameters, # ! dictionary
+            parameter_value_dict=param_dict, # ! dictionary
             state_values_dict=mean_state_values_dict
             )
         # print("original_parameters shape:", np.shape(original_parameters))
@@ -122,6 +133,7 @@ def construct_polynomial_chaos_expansion(mean_state_values_dict, transport_map, 
     
     
     # i.i.d. sample in standard Gauss
+    # !! samples_r (dim, num_samples) [chaospy format]
     samples_r = distribution_r.sample(num_samples, rule="latin_hypercube") # sobol quasi random --> try pure random (Latin Hypercube)
     print(f"num_samples: ", samples_r.shape)
     
@@ -163,6 +175,8 @@ def construct_polynomial_chaos_expansion(mean_state_values_dict, transport_map, 
     samples_r_list = []
     countBounds = 0
     countNaN = 0
+    
+    # !! samples_r (dim, num_samples) [chaospy format]
     for i in range(samples_r.shape[1]):
         try:
             sample = samples_r[:, i:i+1]  # shape (n_params, 1)
@@ -198,7 +212,8 @@ def construct_polynomial_chaos_expansion(mean_state_values_dict, transport_map, 
             print(f"Exception for sample {i}: {e}")
             print("Input sample_r:", sample.flatten())
             
-    samples_q = np.hstack(samples_q_list)
+    # samples_q: (dim, num_samples)
+    # samples_q = np.hstack(samples_q_list)
     
     print("finished inversion")
     print(f"{num_samples - (countNaN + countBounds)}/{num_samples} samples were correctly inversed / could be used for chaospy")
@@ -207,7 +222,7 @@ def construct_polynomial_chaos_expansion(mean_state_values_dict, transport_map, 
 
 
     # TODO: check expansion order
-    expansion = chaospy.generate_expansion(3, distribution_r)
+    expansion = chaospy.generate_expansion(4, distribution_r)
     print("chaos: generated expansion")
     
     
@@ -217,8 +232,8 @@ def construct_polynomial_chaos_expansion(mean_state_values_dict, transport_map, 
     
     countSkip = 0
     
-    for sample_q, sample_r in zip(samples_q.T, samples_r_list):
-        y = evaluate(sample_q.reshape(-1, 1))
+    for sample_q, sample_r in zip(samples_q_list, samples_r_list):
+        y = evaluate(sample_q)
         # Refuse abnormal outputs (e.g., outside [0, 100])
         if np.isnan(y) or np.isinf(y) or y < 0 or y > 100: 
             print(f"Abnormal evaluation: {y}, skipping sample.")

@@ -115,9 +115,10 @@ def transform_samples_with_transport_map(parameter_samples_matrix: np.ndarray):
     
 
     # Tranform back to original shape
-    if parameter_samples_matrix.shape[1] > parameter_samples_matrix.shape[0]:
-        print("Transposing the mapped samples back to original shape")
-        mapped_samples = mapped_samples.T
+    # if parameter_samples_matrix.shape[1] > parameter_samples_matrix.shape[0]:
+    #     print("Transposing the mapped samples back to original shape")
+    #     mapped_samples = mapped_samples.T
     
     
+    # MAPPED SAMPLES IS NOW [dim, num_samples]!!!!!!!
     return mapped_samples, tri_map, scaler
