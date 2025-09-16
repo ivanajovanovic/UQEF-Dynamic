@@ -235,7 +235,7 @@ def construct_polynomial_chaos_expansion(mean_state_values_dict, transport_map, 
     for sample_q, sample_r in zip(samples_q_list, samples_r_list):
         y = evaluate(sample_q)
         # Refuse abnormal outputs (e.g., outside [0, 100])
-        if np.isnan(y) or np.isinf(y) or y < 0 or y > 100: 
+        if np.isnan(y) or np.isinf(y) or y < 0 or y > 600: 
             print(f"Abnormal evaluation: {y}, skipping sample.")
             countSkip += 1
             continue

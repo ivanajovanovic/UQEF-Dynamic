@@ -241,4 +241,4 @@ def metrics(surrogate, list_of_dates_of_interest, standar_parameter_samples_matr
     # fig.write_html(save_path, auto_open=True)
     
     
-    return pce_output, mean_model
+    return pce_output, mean_model, surrogate_total_time, surrogate_avg_time, model_total_time, model_avg_time

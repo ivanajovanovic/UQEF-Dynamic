@@ -21,7 +21,7 @@ from uqef_dynamic.utils import transport_map
 from uqef_dynamic.models.hbv_sask import hbvsask_utility as hbv
 from uqef_dynamic.models.hbv_sask import HBVSASKModel as hbvmodel
 import standard_transport
-import polynomial_chaos, polynomial_chaos_quadrature, polynomial_chaos_metrics
+import polynomial_chaos, polynomial_chaos_metrics
 
 PLOT_FORCING_DATA = True
 
@@ -51,8 +51,8 @@ def apply_pipeline(parameter_samples_matrix, new_list_state_values_particles, li
         print("DEBUGGING - TRANSPORT MAP DONE")
         # Plotting final distribution of transformed parameter values
         
-        mus = standar_parameter_samples_matrix.mean(axis=0)
-        sigmas = standar_parameter_samples_matrix.std(axis=0)
+        mus = standar_parameter_samples_matrix.mean(axis=1)
+        sigmas = standar_parameter_samples_matrix.std(axis=1)
 
         print("== Standard parameter samples matrix metric ==")
         print(mus)
@@ -79,34 +79,34 @@ def apply_pipeline(parameter_samples_matrix, new_list_state_values_particles, li
         
         
         
+        pce_samples = 2000
+        # for pce_samples in range(8000, 9000, 1000):
+        print(f"CHAOSPY START SAMPLE COUNT {pce_samples}")
         
-        for pce_samples in range(8000, 9000, 1000):
-            print(f"CHAOSPY START SAMPLE COUNT {pce_samples}")
-            
-            surrogate = polynomial_chaos.construct_polynomial_chaos_expansion(
-                mean_state_values_dict=mean_states, 
-                transport_map=transport_map, 
-                scaler=scaler,
-                pce_samples=pce_samples)
+        surrogate = polynomial_chaos.construct_polynomial_chaos_expansion(
+            mean_state_values_dict=mean_states, 
+            transport_map=transport_map, 
+            scaler=scaler,
+            pce_samples=pce_samples)
 
             
-            print("chaos: start metrics")
-            pce_output, model_output = polynomial_chaos_metrics.metrics(surrogate, 
-                                            list_of_dates_of_interest, 
-                                            standar_parameter_samples_matrix, 
-                                            parameter_samples_matrix=parameter_samples_matrix,
-                                            final_predicted_streamflow=final_predicted_streamflow, 
-                                            final_observed_streamflow=final_observed_streamflow,
-                                            mean_state_values=mean_states,
-                                            transport_map=transport_map,
-                                            scaler=scaler,
-                                            pce_samples=pce_samples)
+        print("chaos: start metrics")
+        pce_output, model_output, surrogate_total_time, surrogate_avg_time, model_total_time, model_avg_time = polynomial_chaos_metrics.metrics(surrogate, 
+                                        list_of_dates_of_interest, 
+                                        standar_parameter_samples_matrix, 
+                                        parameter_samples_matrix=parameter_samples_matrix,
+                                        final_predicted_streamflow=final_predicted_streamflow, 
+                                        final_observed_streamflow=final_observed_streamflow,
+                                        mean_state_values=mean_states,
+                                        transport_map=transport_map,
+                                        scaler=scaler,
+                                        pce_samples=pce_samples)
         
         
         print("DEBUGGING - CHAOSPY END")
 
 
-        return pce_output, model_output
+        return pce_output, model_output, surrogate_total_time, surrogate_avg_time, model_total_time, model_avg_time
 
 
 
@@ -401,6 +401,11 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
     model_results = []
     predicted_results = []
     observed_results = []
+    
+    surrogate_total_times = []
+    surrogate_avg_times = []
+    model_total_times = []
+    model_avg_times = []
 
     # =========================================================
     # Particle Filtering
@@ -534,7 +539,7 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
         
         
         if date_of_interest >= pd.to_datetime("2007-06-30 00:00:00"):
-            pce_output, model_output = apply_pipeline(parameter_samples_matrix, new_list_state_values_particles, list_of_dates_of_interest, final_predicted_streamflow, final_observed_streamflow)
+            pce_output, model_output, surrogate_total_time, surrogate_avg_time, model_total_time, model_avg_time = apply_pipeline(parameter_samples_matrix, new_list_state_values_particles, list_of_dates_of_interest, final_predicted_streamflow, final_observed_streamflow)
             
             # Save the three values into a list for later printing
             comparison_results.append([pce_output, model_output, average_predicted_streamflow, y_t_observed])
@@ -542,6 +547,11 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
             model_results.append(model_output)
             predicted_results.append(average_predicted_streamflow)
             observed_results.append(y_t_observed)
+            
+            surrogate_total_times.append(surrogate_total_time)
+            surrogate_avg_times.append(surrogate_avg_time)
+            model_total_times.append(model_total_time)
+            model_avg_times.append(model_avg_time)
 
         
 
@@ -568,7 +578,7 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
     # print("OBSERVED RESULT LIST")
     # print(observed_results)
     
-    
+    time_dir = "/mnt/f/projects/hydro-parameter-uncertainty/time_analysis"
     save_dir = "/mnt/f/projects/hydro-parameter-uncertainty/two_month_runs"
     os.makedirs(save_dir, exist_ok=True)
     
@@ -576,6 +586,12 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
     np.save(os.path.join(save_dir, "model_results.npy"), model_results)
     np.save(os.path.join(save_dir, "predicted_results.npy"), predicted_results)
     np.save(os.path.join(save_dir, "observed_results.npy"), observed_results)
+    
+    
+    np.save(os.path.join(time_dir, "surrogate_avg_times.npy"), surrogate_avg_times)
+    np.save(os.path.join(time_dir, "surrogate_total_times.npy"), surrogate_total_times)
+    np.save(os.path.join(time_dir, "model_avg_times.npy"), model_avg_times)
+    np.save(os.path.join(time_dir, "model_total_times.npy"), model_total_times)
     
     
         

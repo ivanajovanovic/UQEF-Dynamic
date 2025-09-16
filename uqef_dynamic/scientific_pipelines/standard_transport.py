@@ -110,8 +110,8 @@ def transform_samples_with_transport_map(parameter_samples_matrix: np.ndarray):
       
     ## ACCURACY CHECKS
 
-    print('Mean of mapped samples:', np.mean(mapped_samples, axis=1))
-    print('Covariance of mapped samples:', np.cov(mapped_samples))        
+    # print('Mean of mapped samples:', np.mean(mapped_samples, axis=1))
+    # print('Covariance of mapped samples:', np.cov(mapped_samples))        
     
 
     # Tranform back to original shape
