@@ -136,20 +136,20 @@ echo "---- start HBV sim: \`date\`"
                             --sc_poly_rule "$sc_poly_rule" \
                             --sc_quadrature_rule "$sc_quadrature_rule" \
                             --regression_model_type "$regression_model_type" \
-                            --cross_truncation 1.0 \
+                            --cross_truncation 0.7 \
                             $opt
 
 echo "---- end HBV sim: \`date\`"
 
-" > $baseSourcePath/hbv_mc_500000_random_oldman_2005_2006.cmd
+" > $baseSourcePath/hbv_mc_10000_random_oldman_2005_2006.cmd
 
     #execute batch file
-    sbatch $baseSourcePath/hbv_mc_500000_random_oldman_2005_2006.cmd
+    sbatch $baseSourcePath/hbv_mc_10000_random_oldman_2005_2006.cmd
 
 }
 
 model="hbvsask"
-opt_add="--parallel_statistics --sampleFromStandardDist --compute_Sobol_m --compute_Sobol_t" #--save_all_simulations --allow_conditioning_results_based_on_metric --sc_poly_normed --store_gpce_surrogate_in_stat_dict --read_nodes_from_file --regression --save_all_simulations 
+opt_add="--parallel_statistics --regression --sampleFromStandardDist --compute_Sobol_m --compute_Sobol_t --sc_poly_normed --compute_other_stat_besides_pce_surrogate --save_gpce_surrogate --store_gpce_surrogate_in_stat_dict --compute_generalized_sobol_indices --compute_generalized_sobol_indices_over_time" #--save_all_simulations --allow_conditioning_results_based_on_metric --sc_poly_normed --store_gpce_surrogate_in_stat_dict --read_nodes_from_file --regression --save_all_simulations 
 nodes=4
 tasks_per_node=112  #22
 low_time="2:30:00"
@@ -158,7 +158,7 @@ max_time="72:00:00"
 uq_method="mc"
 q_order=6
 p_order=4
-mc_numevaluations=500000
+mc_numevaluations=10000
 uc="all"
 sampling_rule="random"
 sc_poly_rule="three_terms_recurrence"

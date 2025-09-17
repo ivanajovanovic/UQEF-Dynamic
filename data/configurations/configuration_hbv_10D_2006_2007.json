@@ -123,13 +123,6 @@
       "lower": 1.0,
       "upper": 3.0,
       "default": 2.0
-    },
-    {
-      "name": "PM",
-      "distribution": "Uniform",
-      "lower": 0.5,
-      "upper": 2.0,
-      "default": 1.0
     }
   ],
   "unused_parameters": [
