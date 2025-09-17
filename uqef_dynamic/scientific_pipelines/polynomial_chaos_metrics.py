@@ -67,18 +67,10 @@ hbvsaskModelObject = setup_HBV()
 def evaluate(inverted_parameters, mean_state_values):
         """Evaluates the hydrological model for given parameters in original (target / exponential) form"""
         
-        
-        # print()
-        # print("== INVERTED PARAMETERS ==")
-        # print(inverted_parameters)
-        # print()
-        
         param_names = ['TT', 'C0', 'beta', 'ETF', 'FC', 'FRAC', 'K2']
         param_dict = {name: float(val) for name, val in zip(param_names, inverted_parameters)}
-        # print("=== PARAM DICT ===")
-        # print(param_dict)
+
         
-        # TODO: check argument values
         # unique_index_model_run, y_t_model, y_t_observed, x_t_plus_1, parameter_value_dict
         _, y_t_model, _, _, _ = transport_pce_pipeline.run_model_single_time_stamp_single_particle(
             hbvsaskModelObject=hbvsaskModelObject,
@@ -86,61 +78,31 @@ def evaluate(inverted_parameters, mean_state_values):
             parameter_value_dict=param_dict, # ! dictionary
             state_values_dict=mean_state_values
             )
-        # print("original_parameters shape:", np.shape(original_parameters))
-        # print("original_parameters:", original_parameters)
-    
-        # result = hbvsaskModelObject.run_model_single_time_stamp(hbvsaskModelObject.end_date, parameters=original_parameters, raise_exception_on_model_break=True)
-        
+
         return y_t_model
     
     
 def inverse(standard_parameters, transport_map, scaler):
         """Inverse parameter distribution from reference (SNV) back to target (original / exponential)"""
         
-        # print()
-        # print("== SAMPLED PARAMETERS ==")
-        # print(standard_parameters)
-        # print()
         
         # Inverse transport map approximation
         X_reconstruct = transport_map.Inverse(np.empty((0, standard_parameters.shape[1])), standard_parameters)
-        # print("After transport_map.Inverse: any nan?", np.any(np.isnan(X_reconstruct)), "any inf?", np.any(np.isinf(X_reconstruct)))
-        # print("After inverse map:", X_reconstruct)
     
         # Inverse scaling
         X_reconstruct = scaler.inverse_transform(X_reconstruct.T).T
-        # print("After scaler.inverse_transform: any nan?", np.any(np.isnan(X_reconstruct)), "any inf?", np.any(np.isinf(X_reconstruct)))
-        # print("After inverse scaling:", X_reconstruct)
-    
+
         # Inverse logarithm
         for i in range(X_reconstruct.shape[0]):
             X_reconstruct[i, :] = np.exp(X_reconstruct[i, :])
         
-        # print("After exponentiation:", X_reconstruct)
-
-        # print("After np.exp: any nan?", np.any(np.isnan(X_reconstruct)), "any inf?", np.any(np.isinf(X_reconstruct)))
-
         
         return X_reconstruct
 
 
 
-def metrics(surrogate, list_of_dates_of_interest, standar_parameter_samples_matrix, parameter_samples_matrix, final_predicted_streamflow, final_observed_streamflow, mean_state_values, transport_map, scaler, pce_samples):
-    last_date = list_of_dates_of_interest[-1]
-
-    # Get the mean of standard parameters
-    # mean_standard_params = np.mean(standar_parameter_samples_matrix, axis=0).reshape(-1, 1)   
-    
-    # print(mean_standard_params)
-    # print(mean_standard_params.shape)
-    # pce_output = float(chaospy.call(surrogate, mean_standard_params))
-
-    # Evaluate PCE surrogate
-    # surrogate_outputs = []
-    
-    print("SHAPE")
-    print(standar_parameter_samples_matrix.shape)
-    
+def metrics(surrogate, standar_parameter_samples_matrix, parameter_samples_matrix, mean_state_values, transport_map, scaler):
+   
     start_time = time.time()
     surrogate_outputs = chaospy.call(surrogate, standar_parameter_samples_matrix)
     end_time = time.time()
@@ -182,63 +144,12 @@ def metrics(surrogate, list_of_dates_of_interest, standar_parameter_samples_matr
     
     mean_pce_output = np.mean(surrogate_outputs)
     pce_output = mean_pce_output
-
-    # Get real model output and observation for the last date
-    # real_model_output = final_predicted_streamflow[last_date]
-    # real_observation = final_observed_streamflow[last_date]
-
-    print(f"PCE-output: {pce_output}")
     
+    
+    print(f"PCE-output: {pce_output}")
     mean_model = np.mean(model_outputs)
     print(f"MODEL-output: {mean_model}")
-
-    distribution_r = chaospy.J(
-        chaospy.Normal(0, 1), 
-        chaospy.Normal(0, 1), 
-        chaospy.Normal(0, 1),
-        chaospy.Normal(0, 1), 
-        chaospy.Normal(0, 1), 
-        chaospy.Normal(0, 1),
-        chaospy.Normal(0, 1))
-    mean = chaospy.E(surrogate, distribution_r)
-    std = chaospy.Std(surrogate, distribution_r)
-      
-    
-    
-    # with open("/mnt/f/projects/hydro-parameter-uncertainty/model_runs7D.txt", "a") as myfile:
-    #     myfile.write(f"SAMPLE_COUNT: {pce_samples}\n")
-    #     myfile.write(f"HBV evaluated with mean_states: {mean_model}\n")
-    #     myfile.write(f"Surrogate time: {surrogate_total_time}\n")
-    #     myfile.write(f"Model time: {model_total_time}\n")
-    #     myfile.write(f"PCE_OUTPUT, PCE_MEAN, PCE_STD:\n")
-    #     myfile.write(f"{pce_output}\t\t{mean}\t\t{std}\n")
-    #     def truncate(val):
-    #         return int(val * 100) / 100
-    #     myfile.write(f"{truncate(pce_output):.2f}\t\t{truncate(mean):.2f}\t\t{truncate(std):.2f}\n\n")
-    
-    
-    # Plot
-    # categories = ['Observation', 'Real Model', 'PCE Surrogate']
-    # values = [real_observation, real_model_output, pce_output]
- 
-    # fig = go.Figure(data=[
-    #     go.Scatter(
-    #         x=categories,
-    #         y=values,
-    #         mode='lines+markers',
-    #         marker=dict(size=12, color='black'),
-    #         line=dict(color='black')
-    #     )
-    # ])
-    # fig.update_layout(
-    #     title=f"Comparison for {last_date.strftime('%Y-%m-%d')}",
-    #     yaxis_title="Streamflow [m³/s]",
-    #     xaxis_title="",
-    #     template="simple_white"
-    # )
- 
-    # save_path = os.path.join(str(directory_for_saving_plots), f"comparison_last_date_{last_date.strftime('%Y%m%d')}.html")
-    # fig.write_html(save_path, auto_open=True)
+   
     
     
     return pce_output, mean_model, surrogate_total_time, surrogate_avg_time, model_total_time, model_avg_time
