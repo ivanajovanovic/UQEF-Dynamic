@@ -27,15 +27,21 @@ def transform_samples_with_transport_map(parameter_samples_matrix: np.ndarray):
     
         
     ### LOGARITHM
+    
+    exponentials = []
 
     for i in range(parameter_samples_matrix.shape[0]):
         if np.all(parameter_samples_matrix[i, :] <= 0): 
         ### NEED TO DECIDE BASED ON X0: data strictly positive (log) - data strictly negative (-log)
+            exponentials.append(1)
             parameter_samples_matrix[i, :] = -np.log(-parameter_samples_matrix[i, :])
         else:
+            exponentials.append(0)
             parameter_samples_matrix[i, :] = np.log(parameter_samples_matrix[i, :])
         #X[i, :] = np.log1p(X[i, :])
 
+    print("NEGATIVE / EXPONENTIALLY DISTRIBUTED:")
+    print(exponentials)
 
     ### SCALING
     scaler = StandardScaler()
@@ -121,4 +127,4 @@ def transform_samples_with_transport_map(parameter_samples_matrix: np.ndarray):
     
     
     # MAPPED SAMPLES IS NOW [dim, num_samples]!!!!!!!
-    return mapped_samples, tri_map, scaler
+    return mapped_samples, tri_map, scaler, exponentials

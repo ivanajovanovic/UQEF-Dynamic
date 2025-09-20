@@ -110,7 +110,7 @@ def metrics(surrogate, standar_parameter_samples_matrix, parameter_samples_matri
     surrogate_avg_time = surrogate_total_time / standar_parameter_samples_matrix.shape[1]
 
     print(f"SURROGATE PERFORMANCE: {surrogate_total_time:.4f} seconds (based on {standar_parameter_samples_matrix.shape[1]} samples) "
-          f"(~{surrogate_avg_time*1000:.6f} ms per sample)")
+          f"(~{surrogate_avg_time*standar_parameter_samples_matrix.shape[1]:.6f} ms per sample)")
 
 
 
@@ -138,7 +138,7 @@ def metrics(surrogate, standar_parameter_samples_matrix, parameter_samples_matri
     model_avg_time = model_total_time / standar_parameter_samples_matrix.shape[1]
 
     print(f"MODEL PERFORMANCE: {model_total_time:.4f} seconds (based on {standar_parameter_samples_matrix.shape[1]} samples) "
-          f"(~{model_avg_time*1000:.6f} ms per sample)")
+          f"(~{model_avg_time*standar_parameter_samples_matrix.shape[1]:.6f} ms per sample)")
 
     
     

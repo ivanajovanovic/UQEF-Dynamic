@@ -35,7 +35,7 @@ def apply_pipeline(parameter_samples_matrix, new_list_state_values_particles, pc
         print("START TRANSPORT MAP")
         
         # SHOULD BE [dim, num_samples]
-        standar_parameter_samples_matrix, transport_map, scaler = standard_transport.transform_samples_with_transport_map(parameter_samples_matrix) # parameter_samples_matrix
+        standar_parameter_samples_matrix, transport_map, scaler, exponentials = standard_transport.transform_samples_with_transport_map(parameter_samples_matrix) # parameter_samples_matrix
         
         print("TRANSPORT MAP DONE")
         
@@ -69,6 +69,7 @@ def apply_pipeline(parameter_samples_matrix, new_list_state_values_particles, pc
             mean_state_values_dict=mean_states, 
             transport_map=transport_map, 
             scaler=scaler,
+            exponentials=exponentials,
             pce_samples=pce_samples,
             eval_cap=eval_cap, 
             expansion_order=expansion_order)
@@ -574,6 +575,7 @@ def main_routine(num_processes, number_of_particles, pce_regression_samples, eva
     np.save(os.path.join(save_dir, "chaos_means.npy"), chaos_means)
     np.save(os.path.join(save_dir, "chaos_stds.npy"), chaos_stds)
     
+    return
     
         
     # =========================================================
@@ -779,10 +781,10 @@ if __name__ == "__main__":
     num_processes = multiprocessing.cpu_count()
     print(f"Number of parallel processes = {num_processes}")
 
-    number_of_particles = ne = 1000  # 50, 100, 200, 500, 1000, 2000
-    pce_regression_samples = 8000
+    number_of_particles = ne = 2000  # 50, 100, 200, 500, 1000, 2000
+    pce_regression_samples = 500
     eval_cap = 1000     # any value that is physically plausible (> 600; flood of 1995 had max value of 539)
-    expansion_order = 3
+    expansion_order = 2
     
     
 

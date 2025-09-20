@@ -45,7 +45,7 @@ def setup_HBV():
 
 
 
-def construct_polynomial_chaos_expansion(mean_state_values_dict, transport_map, scaler, pce_samples, eval_cap, expansion_order):
+def construct_polynomial_chaos_expansion(mean_state_values_dict, transport_map, scaler, exponentials, pce_samples, eval_cap, expansion_order):
     
     # mean_state_values_dict: dictionary with keys {SWE, SMS, S1, S2}
     # transport_map
@@ -70,7 +70,12 @@ def construct_polynomial_chaos_expansion(mean_state_values_dict, transport_map, 
     
         # Inverse logarithm
         for i in range(X_reconstruct.shape[0]):
-            X_reconstruct[i, :] = np.exp(X_reconstruct[i, :])
+            if exponentials[i] == 1:
+                # Inverse of: -np.log(-x) -> x = -np.exp(-y)
+                X_reconstruct[i, :] = -np.exp(-X_reconstruct[i, :])
+            else:
+                # Inverse of: np.log(x) -> x = np.exp(y)
+                X_reconstruct[i, :] = np.exp(X_reconstruct[i, :])
         
         return X_reconstruct
 
@@ -121,7 +126,6 @@ def construct_polynomial_chaos_expansion(mean_state_values_dict, transport_map, 
     lower_bounds = inverted_min_max[:, 0]
     upper_bounds = inverted_min_max[:, 1]   
     
-    print("TODO: inverse! need to adjust logarithm for different distributions!")
     samples_q_list = []
     samples_r_list = []
     countBounds = 0
@@ -162,7 +166,6 @@ def construct_polynomial_chaos_expansion(mean_state_values_dict, transport_map, 
     print(f"{countBounds} times the inverted parameter values were out of bounds")
 
 
-    # TODO: check expansion order
     expansion = chaospy.generate_expansion(expansion_order, distribution_r)
     print(f"chaos: generated expansion of order {expansion_order}.")
     
