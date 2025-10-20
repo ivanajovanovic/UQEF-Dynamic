@@ -142,10 +142,10 @@ echo "---- start HBV sim: \`date\`"
 
 echo "---- end HBV sim: \`date\`"
 
-" > $baseSourcePath/hbv_sc_11d_p4_l6_oldman_2004_2005.cmd
+" > $baseSourcePath/hbv_sc_10d_p4_l6_oldman_2004_2005.cmd
 
     #execute batch file
-    sbatch $baseSourcePath/hbv_sc_11d_p4_l6_oldman_2004_2005.cmd
+    sbatch $baseSourcePath/hbv_sc_10d_p4_l6_oldman_2004_2005.cmd
 
 }
 
@@ -154,19 +154,19 @@ opt_add="--parallel_statistics --sampleFromStandardDist --compute_Sobol_m --comp
 nodes=4
 tasks_per_node=112  #22
 low_time="2:30:00"
-mid_time="12:00:00"
+mid_time="4:00:00"
 max_time="72:00:00"
 uq_method="sc"
 q_order=6
 p_order=4
-mc_numevaluations=30471
+mc_numevaluations=19105
 uc="all"
 sampling_rule="random"
 sc_poly_rule="three_terms_recurrence"
 sc_quadrature_rule="p" # "clenshaw_curtis" "genz_keister_24" "p"
 mpi_method="MpiPoolSolver"
 regression_model_type="OLS"  #"LARS" "OLS"
-parameters_file="/dss/dsshome1/lxc0C/ga45met2/Repositories/sparse_grid_nodes_weights/KPU_d11_l6.asc"
+parameters_file="/dss/dsshome1/lxc0C/ga45met2/Repositories/sparse_grid_nodes_weights/KPU_d10_l6.asc"
 
 # start_uq_sim "DWP" "DYNAMIC" "FCFS" saltelli 0 0 50 "$model" "$opt_add" "MpiPoolSolver" "$nodes" "$max_time" "$uc" "$sampling_rule"
 # start_uq_sim "DWP" "DYNAMIC" "FCFS" "$uq_method" 20 10 50 "$model" "$opt_add" "MpiPoolSolver" "$nodes" "$max_time" "$uc" "$sampling_rule"

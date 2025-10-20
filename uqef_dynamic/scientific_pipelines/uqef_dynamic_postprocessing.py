@@ -2000,6 +2000,59 @@ workingDir = [
 ]
 directory_for_saving_plots = pathlib.Path('/work/ga45met/paper_uqef_dynamic_sim/hbv_sask/oldman_2004_2007/mc_gpce_10d_p4_ct07_500000_random_nse02_2004_2007_oldman')
 
+workingDir = [
+    basis_workingDir / 'hbv_uq_cm4.0276',
+    basis_workingDir / 'hbv_uq_cm4.0277',
+    basis_workingDir / 'hbv_uq_cm4.0278',
+]
+directory_for_saving_plots = pathlib.Path('/work/ga45met/paper_uqef_dynamic_sim/hbv_sask/oldman_2004_2007/mc_gpce_11d_p4_ct07_20000_random_2004_2007_oldman')
+
+# 24
+# # 10D MC gPCE p=4 CT0.7 10 000 LHC LARS 2004-07 Q_cms; AET Oldman
+workingDir = [
+    basis_workingDir / 'hbv_uq_cm4.0313',
+    basis_workingDir / 'hbv_uq_cm4.0314',
+    basis_workingDir / 'hbv_uq_cm4.0315',
+]
+directory_for_saving_plots = pathlib.Path('/work/ga45met/paper_uqef_dynamic_sim/hbv_sask/oldman_2004_2007/mc_gpce_10d_p4_ct07_10000_lhc_lars_2004_2007_oldman/')
+
+# 20
+# # 10D MC gPCE p=4 CT0.7 10 000 Random 2004-07 Q_cms; AET Oldman
+workingDir = [
+    basis_workingDir / 'hbv_uq_cm4.0273',
+    basis_workingDir / 'hbv_uq_cm4.0274',
+    basis_workingDir / 'hbv_uq_cm4.0275',
+]
+directory_for_saving_plots = pathlib.Path('/work/ga45met/paper_uqef_dynamic_sim/hbv_sask/oldman_2004_2007/mc_gpce_10d_p4_ct07_10000_random_2004_2007_oldman/')
+
+# # 23
+# # 11D MC gPCE p=4 CT0.7 20 000 LHC LARS 2004-07 Q_cms; AET Oldman
+workingDir = [
+    basis_workingDir / 'hbv_uq_cm4.0312',
+    basis_workingDir / 'hbv_uq_cm4.0310',
+    basis_workingDir / 'hbv_uq_cm4.0311',
+]
+directory_for_saving_plots = pathlib.Path('/work/ga45met/paper_uqef_dynamic_sim/hbv_sask/oldman_2004_2007/mc_gpce_11d_p4_ct07_20000_lhc_lars_2004_2007_oldman/')
+
+# # 14
+# # 11D (PM) MC gPCE p=4 CT0.7 500 000 Random NSE>0.2 2004-05 Q_cms; AET Oldman
+# workingDir = [
+#     basis_workingDir / 'hbv_uq_cm4.0307',
+#     basis_workingDir / 'hbv_uq_cm4.0308',
+#     basis_workingDir / 'hbv_uq_cm4.0309',
+# ]
+# directory_for_saving_plots = pathlib.Path('/work/ga45met/paper_uqef_dynamic_sim/hbv_sask/oldman_2004_2007/mc_gpce_11d_p4_ct07_500000_random_nse02_2004_2007_oldman/')
+
+# # 16
+# # 10D (PM) MC gPCE p=4 CT0.7 500 000 Random NSE>0.2 2004-05 Q_cms; AET Oldman
+workingDir = [
+    basis_workingDir / 'hbv_uq_cm4.0240',
+    basis_workingDir / 'hbv_uq_cm4.0241',
+    basis_workingDir / 'hbv_uq_cm4.0242',
+]
+directory_for_saving_plots = pathlib.Path('/work/ga45met/paper_uqef_dynamic_sim/hbv_sask/oldman_2004_2007/mc_gpce_10d_p4_ct07_500000_random_nse02_2004_2007_oldman/')
+
+
 # # Linux Cluster
 # basis_workingDir = pathlib.Path('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/hbvsask_runs/kl_analysis')
 # workingDir = basis_workingDir / 'mc_kl40_gpce_10d_p3_ct10_10000lhc_oldman_2007'
