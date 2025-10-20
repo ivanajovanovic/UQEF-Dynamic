@@ -16,14 +16,13 @@ import time
 #####################################
 
 epsilon = sys.float_info.epsilon
-DEFAULT_PAR_VALUES_DICT = {'TT': 0.0, 'C0': 0.5, 'ETF': 0.2, 'FC': 250,
-                           'beta': 2.0, 'FRAC': 0.3, 'K2': 0.05,  'LP': 0.5,
-                           'K1': 0.5, 'alpha': 2.0, 
+DEFAULT_PAR_VALUES_DICT = {'TT': 0.0, 'C0': 0.5, 'ETF': 0.2, 'LP': 0.5, 'FC': 250,
+                           'beta': 2.0, 'FRAC': 0.3, 'K1': 0.5, 'alpha': 2.0, 'K2': 0.05,
                            'UBAS': 1, 'PM': 1, "M": 1.0, "VAR_M": 1e-4}
 
 DEFAULT_PAR_VALUES_DICT_EXTEND = {'TT': 0.0, 'C0': 0.5, 'ETF': 0.2, 'LP': 0.5, 'FC': 250,
                            'beta': 2.0, 'FRAC': 0.3, 'K1': 0.5, 'alpha': 2.0, 'K2': 0.05,
-                           'UBAS': 1, 'PM': 1, "M": 1.0, "VAR_M": 1e-4}
+                           'UBAS': 1.0, 'PM': 1.0, "M": 1.0, "VAR_M": 1e-4}
 
 DEFAULT_PAR_INFO_DICT = {
     'TT': {"lower": -4.0, "upper": 4.0, "default": 0.0},
@@ -395,7 +394,7 @@ def plot_input_output_state(modelObject, result_df, state_df, **kwargs):
 
     fig = make_subplots(
         rows=6, cols=1,
-        subplot_titles=("Temperature [°C]", "Precipitation [mm/day]", "Measured Streamflow [m^3/s]", \
+        subplot_titles=("Temperature [°C]", "Precipitation [mm/day]", "Streamflow [m^3/s]", \
         "Evapotranspiration", "Snow Storage", "Soil Storage + Reservoirs"),
         vertical_spacing=0.05
     )
@@ -533,7 +532,7 @@ def plot_input_output_state(modelObject, result_df, state_df, **kwargs):
 def _add_forcing_data(fig, df_temp):
     fig.add_trace(
         go.Scatter(
-            x=df_temp[utility.TIME_COLUMN_NAME], y=df_temp['temperature'],
+            x=df_temp[TIME_COLUMN_NAME], y=df_temp['temperature'],
             text=df_temp['temperature'],
             name="Temperature", mode='lines+markers',
             showlegend=False,
@@ -544,7 +543,7 @@ def _add_forcing_data(fig, df_temp):
     
     fig.add_trace(
         go.Scatter(
-            x=df_temp[utility.TIME_COLUMN_NAME], y=df_temp['precipitation'],
+            x=df_temp[TIME_COLUMN_NAME], y=df_temp['precipitation'],
             text=df_temp['precipitation'],
             name="Precipitation",
             showlegend=False,
@@ -812,7 +811,7 @@ def PlotEverything(flux, state, forcing, start, end, freq):
 #####################################
 
 
-def read_streamflow(streamflow_inp, time_column_name="TimeStamp", streamflow_column_name="streamflow"):
+def read_streamflow(streamflow_inp, time_column_name=TIME_COLUMN_NAME, streamflow_column_name="streamflow"):
     streamflow_dict = dict()
     with open(streamflow_inp, "r") as file:
         for line in file.readlines():
@@ -826,7 +825,7 @@ def read_streamflow(streamflow_inp, time_column_name="TimeStamp", streamflow_col
 
 
 def read_precipitation_temperature(precipitation_temperature_inp,
-                                   time_column_name="TimeStamp",
+                                   time_column_name=TIME_COLUMN_NAME,
                                    precipitation_column_name="precipitation",
                                    temperature_column_name="temperature"):
     precipitation_temperature_inp_dict = defaultdict(list)
@@ -849,35 +848,89 @@ def read_precipitation_temperature(precipitation_temperature_inp,
     return precipitation_temperature_df
 
 
-def read_initial_conditions(initial_condition_file, return_dict_or_df="dict", timestamp=None,
-                            time_column_name="TimeStamp"):
+def read_initial_conditions(initial_condition_file, timestamp=None,
+                            time_column_name=TIME_COLUMN_NAME, **kwargs):
+    import gzip
+    import pickle
+    def load_file_different_options(path):
+        """Load file that may be:
+        - plain text (.inp, .txt)
+        - gzipped text (.gz)
+        - pickled pandas DataFrame (.pkl or .pkl.gz)
+        """
+        path = pathlib.Path(path)
+
+        # Handle pickled DataFrames directly
+        if path.suffix in [".pkl", ".pickle"]:
+            return pd.read_pickle(path)
+
+        if path.suffixes[-2:] == [".pkl", ".gz"]:
+            return pd.read_pickle(path, compression="gzip")
+
+        # Try gzip first (for gzipped text or pickles)
+        try:
+            with gzip.open(path, "rb") as f:
+                # Peek into first few bytes
+                head = f.read(4)
+                f.seek(0)
+
+                # If it looks like pickle magic bytes (\x80\x04)
+                if head.startswith(b"\x80\x04"):
+                    return pickle.load(f)
+                else:
+                    # Assume text gzip
+                    return f.read().decode("utf-8")
+        except (OSError, EOFError, pickle.UnpicklingError):
+            pass  # not gzip or not readable
+
+        # Try plain text
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return f.read()
+        except UnicodeDecodeError:
+            # fallback to latin1
+            with open(path, "r", encoding="latin1") as f:
+                return f.read()
+
+        # Try pickle without gzip
+        try:
+            with open(path, "rb") as f:
+                return pickle.load(f)
+        except Exception as e:
+            raise ValueError(f"Unsupported or unreadable file format: {path}") from e
+
     if str(initial_condition_file).endswith('.inp'):
-        initial_condition_dict = defaultdict(list)
-        initial_condition_dict["WatershedArea_km2"] = []
-        initial_condition_dict["SWE"] = []
-        initial_condition_dict["SMS"] = []
-        initial_condition_dict["S1"] = []
-        initial_condition_dict["S2"] = []
+        # initial_condition_dict = defaultdict(list)
+        # initial_condition_dict["WatershedArea_km2"] = []
+        # initial_condition_dict["SWE"] = []
+        # initial_condition_dict["SMS"] = []
+        # initial_condition_dict["S1"] = []
+        # initial_condition_dict["S2"] = []
 
-        with open(initial_condition_file, "r") as file:
-            for line in file.readlines():
-                line = line.strip()
-                list_of_values_per_line = line.split()
-                if len(list_of_values_per_line) == 2:
-                    initial_condition_dict[list_of_values_per_line[0]].append(float(list_of_values_per_line[1]))
+        # with open(initial_condition_file, "r") as file:
+        #     for line in file.readlines():
+        #         line = line.strip()
+        #         list_of_values_per_line = line.split()
+        #         if len(list_of_values_per_line) == 2:
+        #             initial_condition_dict[list_of_values_per_line[0]].append(float(list_of_values_per_line[1]))
 
-        if return_dict_or_df == "dict":
-            return initial_condition_dict
-        else:
-            initial_condition_df = pd.DataFrame(initial_condition_dict)
-            return initial_condition_df
-    else:
+        # if return_dict_or_df == "dict":
+        #     return initial_condition_dict
+        # else:
+        #     initial_condition_df = pd.DataFrame(initial_condition_dict)
+        #     return initial_condition_df
+        initial_condition_data = load_file_different_options(initial_condition_file)
+        return initial_condition_data
+    elif str(initial_condition_file).endswith(".pkl") or str(initial_condition_file).endswith(".pickle"):
         initial_condition_df = pd.read_pickle(initial_condition_file, compression="gzip")
         if timestamp is None:
             timestamp = initial_condition_df[time_column_name].min()  # initial_condition_df.loc[0].TimeStamp
         else:
             timestamp = pd.Timestamp(timestamp)
         return initial_condition_df.loc[initial_condition_df[time_column_name] == timestamp]
+    else:
+        initial_condition_data = load_file_different_options(initial_condition_file)
+        return initial_condition_data   
 
 
 def read_long_term_data(monthly_data_inp, time_column_name="month", precipitation_column_name="monthly_average_PE",
@@ -1076,7 +1129,7 @@ def triangle_routing(Q, UBAS):
 
 
 #####################################
-def HBV_SASK(forcing, long_term, par_values_dict, initial_condition_df, printing=False, time_column_name="TimeStamp",
+def HBV_SASK(forcing, long_term, par_values_dict, initial_condition_df, printing=False, time_column_name=TIME_COLUMN_NAME,
              precipitation_column_name="precipitation", temperature_column_name="temperature",
              long_term_precipitation_column_name="monthly_average_PE",
              long_term_temperature_column_name="monthly_average_T", corrupt_forcing_data=False, input_error_model="multiplicative"):
@@ -1091,9 +1144,13 @@ def HBV_SASK(forcing, long_term, par_values_dict, initial_condition_df, printing
     : input_error_model: "multiplicative" or "additive"
     """
     if par_values_dict is None:
+        # par_values_dict = {
+        #     'TT': 0.0, 'C0': 5.0, 'ETF': 0.5, 'LP': 0.5, 'FC': 100, 'beta': 2.0, 'FRAC': 0.5,
+        #     'K1': 0.5, 'alpha': 2.0, 'K2': 0.025, 'UBAS': 1, 'PM': 1
+        # }
         par_values_dict = {
-            'TT': 0.0, 'C0': 5.0, 'ETF': 0.5, 'LP': 0.5, 'FC': 100, 'beta': 2.0, 'FRAC': 0.5,
-            'K1': 0.5, 'alpha': 2.0, 'K2': 0.025, 'UBAS': 1, 'PM': 1
+            'TT': 0.0, 'C0': 0.5, 'ETF': 0.2, 'LP': 0.5, 'FC': 250.0, 'beta': 2.0, 'FRAC': 0.3,
+            'K1': 0.5, 'alpha': 2.0, 'K2': 0.05, 'UBAS': 1, 'PM': 1
         }
     try:
         TT = par_values_dict.get("TT", DEFAULT_PAR_VALUES_DICT["TT"])  # float(par_values_dict["TT"])
@@ -1297,7 +1354,7 @@ def run_the_model(hbv_model_path, config_file, par_values_dict, run_full_timespa
     # assert len(time_series_data_df[start_date:end_date]) == len(full_data_range)
 
     # Reading the input data
-    time_column_name = "TimeStamp"
+    time_column_name = TIME_COLUMN_NAME
     streamflow_column_name = "streamflow"
     precipitation_column_name = "precipitation"
     temperature_column_name = "temperature"
