@@ -29,6 +29,7 @@ from typing import List, Optional, Dict, Any, Union, Tuple
 # Third party imports
 import chaospy as cp
 import dill
+import gzip
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -2594,11 +2595,16 @@ def _add_e_std(fig, df_temp, name=f'E+-std', row=1, col=1, showlegend=True):
     return fig
 
 
-def _update_fig_with_si_data_for_single_df(fig, current_df, plot_heatmap, si_columns_to_plot, si_columns_to_label, current_row, color_dict, showscale=False, showlegend=False):
+def _update_fig_with_si_data_for_single_df(
+    fig, current_df, plot_heatmap, si_columns_to_plot, si_columns_to_label, color_dict, 
+    current_row=1, current_col=1, showscale=False, showlegend=False, colorscale='Plasma'):
+    """
+    some colorscale options, e.g. 'Plasma', 'Inferno', 'Viridis'
+    """
     if plot_heatmap:
-        si_m_df_single_qoi_columns_to_plot = current_df[si_columns_to_plot].T
+        si_df_single_qoi_columns_to_plot = current_df[si_columns_to_plot].T
         trace=go.Heatmap(
-                z=si_m_df_single_qoi_columns_to_plot,
+                z=si_df_single_qoi_columns_to_plot,
                 x=current_df[TIME_COLUMN_NAME],
                 y=si_columns_to_label,
                 showscale=showscale,
@@ -2608,12 +2614,12 @@ def _update_fig_with_si_data_for_single_df(fig, current_df, plot_heatmap, si_col
                     len=0.35,     # Length of the colorbar as a fraction of the plot height
                     thickness=20, # Thickness of the colorbar
                     title='S.I. Scale' # Title of the colorbar
-                )
-                # colorscale='Viridis'
+                ),
+                colorscale=colorscale,
          )
-        fig.add_trace(trace, row=current_row, col=1)
+        fig.add_trace(trace, row=current_row, col=current_col)
     else:
-        si_m_df_single_qoi_columns_to_plot = current_df[si_columns_to_plot]
+        si_df_single_qoi_columns_to_plot = current_df[si_columns_to_plot]
         for idx, single_column in enumerate(si_columns_to_plot):
             current_parameter_name = si_columns_to_label[idx] #single_column.split(substring, 1)[1]
             fig.add_trace(
@@ -2624,7 +2630,7 @@ def _update_fig_with_si_data_for_single_df(fig, current_df, plot_heatmap, si_col
                     line=dict(color=color_dict[current_parameter_name]),
                     showlegend=showlegend
                 ),
-                row=current_row, col=1
+                row=current_row, col=current_col
             )  
     return fig
 
@@ -2728,7 +2734,8 @@ def identify_column_generlized_index_form(column_name):
         return look_back_window_size, paramname  # generalized_sobol_total_index_{paramname}_{timestamp}
 
 
-def _add_sensitvity_indices_as_time_signals(fig, df_temp, substring="generalized_sobol_total_index_", row=1, col=1, showlegend=False):
+def _add_sensitvity_indices_as_time_signals(
+    fig, df_temp, color_dict, substring="generalized_sobol_total_index_", row=1, col=1, showlegend=False):
     for single_column in df_temp.columns:
         if single_column!=TIME_COLUMN_NAME and single_column!=QOI_ENTRY and single_column!=MEASURED_ENTRY:
             current_parameter_name = single_column.split(substring, 1)[1]  # TODO Maybe this does not hold always!
@@ -2736,7 +2743,7 @@ def _add_sensitvity_indices_as_time_signals(fig, df_temp, substring="generalized
                 go.Scatter(
                     x=df_temp[TIME_COLUMN_NAME], y=df_temp[single_column],
                     name=current_parameter_name, mode='lines',
-                    line=dict(color=COLORS_DICT[current_parameter_name]),
+                    line=dict(color=color_dict[current_parameter_name]),
                     showlegend=showlegend
                 ),
                 row=row, col=col
@@ -4649,3 +4656,51 @@ def is_nested_dict_empty_or_none(nested_dict):
     if not nested_dict:
         return True
     return all(is_nested_dict_empty_or_none(val) for val in nested_dict.values())
+
+
+def load_file_different_options(path):
+    """Load file that may be:
+       - plain text (.inp, .txt)
+       - gzipped text (.gz)
+       - pickled pandas DataFrame (.pkl or .pkl.gz)
+    """
+    path = pathlib.Path(path)
+
+    # Handle pickled DataFrames directly
+    if path.suffix in [".pkl", ".pickle"]:
+        return pd.read_pickle(path)
+
+    if path.suffixes[-2:] == [".pkl", ".gz"]:
+        return pd.read_pickle(path, compression="gzip")
+
+    # Try gzip first (for gzipped text or pickles)
+    try:
+        with gzip.open(path, "rb") as f:
+            # Peek into first few bytes
+            head = f.read(4)
+            f.seek(0)
+
+            # If it looks like pickle magic bytes (\x80\x04)
+            if head.startswith(b"\x80\x04"):
+                return pickle.load(f)
+            else:
+                # Assume text gzip
+                return f.read().decode("utf-8")
+    except (OSError, EOFError, pickle.UnpicklingError):
+        pass  # not gzip or not readable
+
+    # Try plain text
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read()
+    except UnicodeDecodeError:
+        # fallback to latin1
+        with open(path, "r", encoding="latin1") as f:
+            return f.read()
+
+    # Try pickle without gzip
+    try:
+        with open(path, "rb") as f:
+            return pickle.load(f)
+    except Exception as e:
+        raise ValueError(f"Unsupported or unreadable file format: {path}") from e
