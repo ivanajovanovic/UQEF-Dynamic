@@ -20,7 +20,7 @@ class FileBasedNodesMixin:
         self.read_nodes_from_file: bool = True
         self.parameters_file: Optional[Union[str, pathlib.Path]] = None
 
-    def set_parameters_file(parameters_file: Optional[Union[str, pathlib.Path]]):
+    def set_parameters_file(self, parameters_file: Optional[Union[str, pathlib.Path]]):
         self.parameters_file = parameters_file
         
     def validate_file_based_nodes(self) -> bool:
