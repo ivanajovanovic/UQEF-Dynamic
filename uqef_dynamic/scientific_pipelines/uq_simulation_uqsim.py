@@ -508,6 +508,9 @@ uqsim.save_statistics()
 
 end_time = time.time()
 total_time = end_time - start_time
+
+uqsim.print_statistics()
+
 # save the dictionary with the arguments once again
 if uqsim.is_master():
     time_infoFileName = os.path.abspath(os.path.join(uqsim.args.outputResultDir, utility.TIME_INFO_FILE))

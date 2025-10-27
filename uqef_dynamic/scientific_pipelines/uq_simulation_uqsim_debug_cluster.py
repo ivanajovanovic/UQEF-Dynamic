@@ -119,7 +119,7 @@ if local_debugging:
         # Option 7: Custom configuration
         config = ConfigurationFactory.create_configuration(
             model_type="hbvsask",
-            uq_method="mc",
+            uq_method="ensemble", # ensemble
             mc_numevaluations=10000,
             sampling_rule="random",
             regression=False, 
@@ -134,18 +134,22 @@ if local_debugging:
             sampleFromStandardDist=True,
             disable_statistics=False, 
             disable_calc_statistics=False,
-            parallel_statistics=False, 
+            parallel_statistics=False, # True
             instantly_save_results_for_each_time_step=False,
             chunksize=1,
-            compute_Sobol_m=True,
-            compute_Sobol_t=True,
+            compute_Sobol_m=False,
+            compute_Sobol_t=False,
             save_all_simulations=True,
             allow_conditioning_results_based_on_metric = False, #True
             condition_results_based_on_metric = 'NSE',
             condition_results_based_on_metric_value = 0.2,
             condition_results_based_on_metric_sign = "greater_or_equal",
+            inputModelDir="/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/HBV-SASK-data",
             config_file='/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/configuration_hbv_10D_single_qoi.json', #configuration_hbv_11D_2004_2005_long.json',
-            outputResultDir=os.path.abspath(os.path.join("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/hbvsask_runs/debugging_autoregressive", 'mc_10d_10000_random_90days_autoregressive08_with_non_parallel_stat_oldman_v3')), #mc_10d_10000_random_nse02_autoregressive_09_qcms_oldman_2006_2007
+            outputResultDir=os.path.abspath(os.path.join("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/hbvsask_runs", 'mc_10d_ensemble_whole_timespan_non_parallel_stat_oldman')), #mc_10d_10000_random_nse02_autoregressive_09_qcms_oldman_2006_2007
+            analyse_runtime=False,
+            opt_strategy= "DYNAMIC", # DYNAMIC
+            opt_algorithm="LPT", #LPT FCFS LPT Default
             # run_type="custom_run",
             # custom_name='mc_10d_5000_sobol_autoregressive_09_qcms_oldman_2006_2007',
         )
@@ -691,6 +695,9 @@ uqsim.save_statistics()
 
 end_time = time.time()
 total_time = end_time - start_time
+
+uqsim.print_statistics()
+
 # save the dictionary with the arguments once again
 if uqsim.is_master():
     time_infoFileName = os.path.abspath(os.path.join(uqsim.args.outputResultDir, utility.TIME_INFO_FILE))
