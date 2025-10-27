@@ -1401,8 +1401,21 @@ class TimeDependentStatistics(ABC, Statistics):
             print(f"Variable time_dependent_statistics.instantly_save_results_for_each_time_step will be set to False")
             self.instantly_save_results_for_each_time_step = False
 
+    def ensemble_set_initial_values(self, simulationNodes, numEvaluations):
+        self.compute_Sobol_t = False
+        self.compute_Sobol_m = False
+        self.compute_Sobol_m2 = False
+        self.compute_sobol_indices_with_samples = False
+        self.regression = False
+        self.numEvaluations = self.N = numEvaluations
+        if simulationNodes is not None and simulationNodes:
+            self.nodes = simulationNodes.nodes
+            self.dim = self.nodes.shape[0]
+        else:
+            self.nodes = None
+        self.dist = None
     # =================================================================================================
-
+        
     def prepareForMcStatistics(self, simulationNodes, numEvaluations, regression=False, order=None,
                               poly_normed=False, poly_rule='three_terms_recurrence', cross_truncation=1.0, regression_model_type=None, *args, **kwargs):
         """
@@ -1498,7 +1511,12 @@ class TimeDependentStatistics(ABC, Statistics):
         # else:
         #self.handle_unsuccessful_runs()  # TODO - let's try this...
         self.handle_unsuccessful_runs_psp_saltelli()
-            
+
+    def prepareForEnsembleStatistics(self, simulationNodes, numEvaluations, *args, **kwargs):
+        self.ensemble_set_initial_values(simulationNodes=simulationNodes, numEvaluations=numEvaluations)
+        self.handle_unsuccessful_runs()
+        if self.allow_conditioning_results_based_on_metric:
+            self.handle_conditioning_model_runs(kwargs)         
     # =================================================================================================
 
     def _get_measured_qoi_at_previous_timestamp_if_autoregressive_module_first_order(self, single_qoi_column, timestamp):
@@ -2077,6 +2095,7 @@ class TimeDependentStatistics(ABC, Statistics):
             print(f"covariance_matrix for {single_qoi_column} is computed: {covariance_matrix_loc}")
 
     # =================================================================================================
+    
     def calcStatisticsForEnsembleParallel(self, chunksize=1, *args, **kwargs):
         self.calcStatisticsForMcParallel(chunksize=chunksize, *args, **kwargs)
 
@@ -2169,7 +2188,7 @@ class TimeDependentStatistics(ABC, Statistics):
 
     def _postprocess_saltelli_results_single_qoi(self, single_qoi_column):
         pass
-# =================================================================================================
+    # =================================================================================================
 
     def calcStatisticsForScParallel(self, chunksize=1, *args, **kwargs):
         self.result_dict = defaultdict(dict)
@@ -2288,6 +2307,7 @@ class TimeDependentStatistics(ABC, Statistics):
             print(f"covariance_matrix for {single_qoi_column} is computed: {covariance_matrix_loc}")
 
     # =================================================================================================
+    
     def calcStatisticsForMc(self, rawSamples=None, timesteps=None,
                             simulationNodes=None, numEvaluations=None, order=None, regression=None, solverTimes=None,
                             work_package_indexes=None, original_runtime_estimator=None, 
@@ -2374,6 +2394,16 @@ class TimeDependentStatistics(ABC, Statistics):
             solver_time_end = time.time()
             solver_time = solver_time_end - solver_time_start
             print(f"solver_time for qoi {single_qoi_column}: {solver_time}")
+
+    # =================================================================================================
+
+    def calcStatisticsForEnsemble(self, rawSamples=None, timesteps=None, simulationNodes=None, numEvaluations=None, solverTimes=None,
+                                  work_package_indexes=None, original_runtime_estimator=None, *args, **kwargs):
+        self.calcStatisticsForMc(
+            rawSamples=rawSamples, timesteps=timesteps, simulationNodes=simulationNodes, numEvaluations=numEvaluations, solverTimes=solverTimes,
+            work_package_indexes=work_package_indexes, original_runtime_estimator=original_runtime_estimator,
+            *args, **kwargs
+        )
 
     # =================================================================================================
 
