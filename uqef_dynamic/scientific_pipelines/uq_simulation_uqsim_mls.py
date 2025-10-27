@@ -1,6 +1,6 @@
 """
 Usage of the UQEF and UQEF-Dynamic with Hydrology models, more generally, models that produce time-dependent output.
-@author: Florian Kuenzner and Ivana Jovanovic
+@authors: Ivana Jovanovic Buha and Florian Kuenzner
 """
 import os
 import subprocess
@@ -9,6 +9,9 @@ import pickle
 import dill
 from distutils.util import strtobool
 import time
+
+import numpy as np
+# np.random.seed(10)
 
 import uqef
 
@@ -49,141 +52,210 @@ except ImportError:
     pybammmodel = None
     pybammStatistics = None
 
-# instantiate UQsim
-uqsim = uqef.UQsim()
-
 #####################################
 # change args locally for testing and debugging
 #####################################
 
+#####################################
+# Configuration Management System
+#####################################
+
+# Import the new configuration system
+from uqef_dynamic.config import ConfigurationFactory, ExtendedUQSimArgumentParser, ExtendedUQSim
+
+# instantiate Extended UQsim
+uqsim = ExtendedUQSim()
+# instantiate UQsim
+# uqsim = uqef.UQsim()
+
+# Create extended parser for configuration processing
+extended_parser = ExtendedUQSimArgumentParser(uqsim)
+
 local_debugging = True
 if local_debugging:
-    save_solver_results = False
 
-    uqsim.args.model = "hbvsask"  # "larsim" "hbvsask" "battery" "oscillator" "simple_oscillator"
-    if uqsim.args.model == "battery" and not PYBAMM_AVAILABLE:
-        raise ImportError("pybamm is not installed. Please install pybamm to run the battery model.")
+    # Use the new configuration system
+    try:
+        # Example configurations - choose one:
+        
+        # Option 1: HBV-SASK Monte Carlo
+        # config = ConfigurationFactory.create_hbv_mc_configuration(
+        #     mc_numevaluations=10000,
+        #     sampling_rule="latin_hypercube"
+        # )
+        
+        # Option 2: HBV-SASK Stochastic Collocation
+        # config = ConfigurationFactory.create_hbv_sc_configuration(
+        #     sc_q_order=5,
+        #     sc_p_order=2
+        # )
+        
+        # Option 3: HBV-SASK Sparse Grid PSP
+        # config = ConfigurationFactory.create_sparse_grid_configuration(
+                # base_uq_method='psp', 
+                # level=7,
+                # dimension=10, 
+                # base_path="/dss/dsshome1/lxc0C/ga45met2/Repositories/sparse_grid_nodes_weights",
+                # model_type="hbvsask",
+                # sc_p_order=2,
+                # cross_truncation=0.7,
+        # )
+        
+        # Option 4: Battery Monte Carlo
+        # config = ConfigurationFactory.create_battery_mc_configuration()
+        # if not PYBAMM_AVAILABLE:
+        #     raise ImportError("pybamm is not installed. Please install pybamm to run the battery model.")
+        
+        # Option 5: Ishigami test function
+        # config = ConfigurationFactory.create_ishigami_configuration('sc')
+        
+        # Option 6: From JSON template
+        # config = ConfigurationFactory.from_json_file(
+        #     'uqef_dynamic/config/templates/hbv_mc.json'
+        # )
+        
+        # Option 7: Custom configuration
+        config = ConfigurationFactory.create_configuration(
+            model_type="hbvsask",
+            uq_method="ensemble", # ensemble
+            mc_numevaluations=10000,
+            sampling_rule="random",
+            regression=False, 
+            sc_poly_normed=True,
+            cross_truncation=0.7,
+            sc_p_order=4,
+            save_gpce_surrogate=True,
+            compute_other_stat_besides_pce_surrogate=True,
+            compute_generalized_sobol_indices=False,
+            compute_generalized_sobol_indices_over_time=False,
+            mpi=True, 
+            sampleFromStandardDist=True,
+            disable_statistics=False, 
+            disable_calc_statistics=False,
+            parallel_statistics=False, # True
+            instantly_save_results_for_each_time_step=False,
+            chunksize=1,
+            compute_Sobol_m=False,
+            compute_Sobol_t=False,
+            save_all_simulations=True,
+            allow_conditioning_results_based_on_metric = False, #True
+            condition_results_based_on_metric = 'NSE',
+            condition_results_based_on_metric_value = 0.2,
+            condition_results_based_on_metric_sign = "greater_or_equal",
+            inputModelDir="/work/ga45met/Hydro_Models/HBV-SASK-data",
+            # sourceDir="",
+            config_file='/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic/data/configurations/configuration_hbv_10D_single_qoi.json', #configuration_hbv_11D_2004_2005_long.json',
+            outputResultDir=os.path.abspath(os.path.join("/work/ga45met/Hydro_Models/HBV-SASK-data/analysis_model_runs", 'mc_2d_ensemble_whole_timespan_non_parallel_stat_oldman')), #mc_10d_10000_random_nse02_autoregressive_09_qcms_oldman_2006_2007
+            analyse_runtime=False,
+            opt_strategy= "DYNAMIC", # DYNAMIC
+            opt_algorithm="FCFS", #LPT Default
+            # run_type="custom_run",
+            # custom_name='mc_10d_5000_sobol_autoregressive_09_qcms_oldman_2006_2007',
+            dict_stat_to_compute={
+                "Var": True, "StdDev": True, "P10": True, "P90": True,
+                "E_minus_std": False, "E_plus_std": False,
+                "Skew": False, "Kurt": False, "Sobol_m": False, "Sobol_m2": False, "Sobol_t": False
+                },
+        )
+        
+        # Apply configuration to uqsim
+        config.apply_to_uqsim(uqsim)
+        
+        print(f"Applied configuration: {config}")
+        print(f"Model: {config.model}, UQ Method: {config.uq_method}")
+        print(f"Output Directory: {config.outputResultDir}")
+        
+    except Exception as e:
+        print(f"Configuration error: {e}")
+        raise
+        # Fallback to a simple default configuration
+        # config = ConfigurationFactory.create_hbv_mc_configuration()
+        # config.apply_to_uqsim(uqsim)
+        # print("Using fallback HBV-SASK MC configuration")
 
-    uqsim.args.uncertain = "all"
-    uqsim.args.chunksize = 1
+    uqsim.setup_configuration_object()
+else:
+    # Cluster execution mode: Use configuration from command-line arguments
+    try:
+        # Parse extended arguments from command line
+        extended_args = extended_parser.parse_extended_args()
 
-    uqsim.args.uq_method = "mc"  # "sc" | "saltelli" | "mc" | "ensemble"
-    
-    uqsim.args.mc_numevaluations = 1000 #7800
-    uqsim.args.sampling_rule = "random"  # "random" | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
-    
-    uqsim.args.sc_q_order = 5  # 7 #10 3
-    uqsim.args.sc_p_order = 3  # 4, 5, 6, 8
-    uqsim.args.sc_quadrature_rule = "g"  # "p" "genz_keister_24" "leja" "clenshaw_curtis"
+        # Create configuration from UQEF's parsed command-line arguments
+        config = ConfigurationFactory.from_uqsim_args(uqsim.args)
 
-    uqsim.args.read_nodes_from_file = False
-    l = 5  # 10
-    dim = 6
-    path_to_file = pathlib.Path("/work/ga45met/sparseSpACE/sparse_grid_nodes_weights")
-    uqsim.args.parameters_file = path_to_file / f"KPU_d{dim}_l{l}.asc" # f"KPU_d7_l{l}.asc"
-    uqsim.args.parameters_setup_file = None #pathlib.Path("/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic/data/configurations/KPU_HBV_d3.json")
+        # Apply extended arguments as configuration overrides
+        if extended_args:
+            print(f"Applying extended configuration arguments: {list(extended_args.keys())}")
+            ConfigurationFactory.apply_configuration_overrides(config, **extended_args)
+                
+        # Apply configuration to uqsim
+        config.apply_to_uqsim(uqsim)
+        
+        print(f"Applied configuration from command-line args: {config}")
+        print(f"Model: {config.model}, UQ Method: {config.uq_method}")
+        print(f"Output Directory: {config.outputResultDir}")
 
-    uqsim.args.sc_poly_rule = "three_terms_recurrence"  # "gram_schmidt" | "three_terms_recurrence" | "cholesky"
-    uqsim.args.sc_poly_normed = True  # True
-    uqsim.args.sc_sparse_quadrature = False  # False
-    uqsim.args.regression = False
-    uqsim.args.regression_model_type = "OLS"  # None | "OLS" | "LARS"
-    uqsim.args.cross_truncation = 0.7  #0.7
+        # Print extended configuration info if any extended args were used
+        if extended_args:
+            print("Extended analysis features enabled:")
+            for key, value in extended_args.items():
+                if value not in [False, None, {}]:  # Only show non-default values
+                    print(f"  - {key}: {value}")
 
-    # paths, if necessary change them
-    uqsim.args.inputModelDir = os.path.abspath(os.path.join('/work/ga45met/mnt/linux_cluster_2', 'UQEF-Dynamic'))
-    uqsim.args.sourceDir = os.path.abspath(os.path.join('/work/ga45met/mnt/linux_cluster_2', 'UQEF-Dynamic'))
-    
-    # Larsim
-    # uqsim.args.inputModelDir = str(pathlib.Path('/work/ga45met/Larsim-data'))
-
-    # Linear Damped Oscillator
-    uqsim.args.inputModelDir = None
-    uqsim.args.sourceDir = None
-    uqsim.args.outputResultDir = os.path.abspath(os.path.join('/work/ga45met/uqef_dynamic_runs/linear_damped_runs', 'trying_out_mc_1000_random')) 
-    uqsim.args.config_file = '/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic/data/configurations/configuration_oscillator.json'
-
-    # Simple Oscillator
-    uqsim.args.outputResultDir = os.path.abspath(os.path.join('/work/ga45met/uqef_dynamic_runs/simple_oscillator', 'trying_out_p4_sg_l5_generalized_over_time_N10')) 
-    uqsim.args.config_file = '/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic/data/configurations/configuration_simple_oscillator.json'
-
-    # HBV-SASK
-    uqsim.args.inputModelDir = pathlib.Path("/work/ga45met/Hydro_Models/HBV-SASK-data")
-    uqsim.args.sourceDir = pathlib.Path("/work/ga45met/Hydro_Models/HBV-SASK-data")
-    uqsim.args.outputResultDir = os.path.abspath(os.path.join('/work/ga45met/uqef_dynamic_runs/hbv_sask_runs/Oldman_Basin', 'mc10d_3000_regression_autoregressive'))
-    uqsim.args.config_file = '/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic/data/configurations/configuration_hbv_10D_short.json'
-    uqsim.args.outputResultDir = os.path.abspath(os.path.join('/work/ga45met/Hydro_Models/HBV-SASK-data', 'Oldman_Basin/model_runs', 'mc_10d_1000_stat_no_parallel'))
-    uqsim.args.config_file = '/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic/data/configurations/configuration_hbv_10D_single_qoi.json'
-
-    # Battery
-    # uqsim.args.inputModelDir = pathlib.Path('/work/ga45met/anaconda3/envs/py3115_uq/lib/python3.11/site-packages/pybamm/input/drive_cycles')
-    # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/work/ga45met/uqef_dynamic_runs/battery_results", 'mc_gpcep3_ct07_1000_lhc_6d'))  # mc_10000 mc_10000_terminal_voltage
-    # uqsim.args.config_file = '/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic/uqef_dynamic/models/pybamm/configuration_battery_24_shot_names.json'  # configuration_battery_24.json'
-    # uqsim.args.config_file = '/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic/uqef_dynamic/models/pybamm/configuration_battery.json'  # configuration_battery_24.json'
-
-    uqsim.args.outputModelDir = uqsim.args.outputResultDir
-
-    uqsim.args.sampleFromStandardDist = True
-
-    uqsim.args.mpi = True
-    uqsim.args.mpi_method = "MpiPoolSolver"  # "LinearSolver"
-
-    uqsim.args.disable_statistics = False
-    uqsim.args.disable_calc_statistics = False
-    uqsim.args.parallel_statistics = False
-
-    uqsim.args.instantly_save_results_for_each_time_step = False
-    uqsim.args.uqsim_store_to_file = False
-
-    uqsim.args.compute_Sobol_m = True
-    uqsim.args.compute_Sobol_t = True
-
-    uqsim.args.num_cores = 1
-
-    uqsim.args.save_all_simulations = False  # True for sc
-    uqsim.args.store_qoi_data_in_stat_dict = False  # if set to True, the qoi_values entry is stored in the stat_dict 
-    uqsim.args.store_gpce_surrogate_in_stat_dict = True
-    uqsim.args.collect_and_save_state_data = False
+    except Exception as e:
+        print(f"Configuration error when parsing command-line args: {e}")
+        print("Falling back to standard UQEF configuration handling")
+        raise
 
     uqsim.setup_configuration_object()
 
 start_time = time.time()
 
-# TODO Eventually add these configurations to uqef.args
-utility.DEFAULT_DICT_WHAT_TO_PLOT = {
-    "E_minus_std": False, "E_plus_std": False, "E_minus_2std": True, "E_plus_2std":True, 
-    "P10": True, "P90": True,
-    "StdDev": True, "Skew": False, "Kurt": False, "Sobol_m": True, "Sobol_m2": False, "Sobol_t": True,
-    "generalized_sobol_total_index": True, "generalized_sobol_main_index": True,
-}
-utility.DEFAULT_DICT_STAT_TO_COMPUTE = {
+# Configuration-driven variables (previously hardcoded)
+# These values are now taken from the configuration system
+# If you need to override these values, use ConfigurationFactory.apply_configuration_overrides()
+
+# Get configuration values or use defaults if not available
+dict_stat_to_compute = getattr(config, 'dict_stat_to_compute', {
     "Var": True, "StdDev": True, "P10": True, "P90": True,
     "E_minus_std": False, "E_plus_std": False,
     "Skew": False, "Kurt": False, "Sobol_m": True, "Sobol_m2": False, "Sobol_t": True
-}
-dict_stat_to_compute = utility.DEFAULT_DICT_STAT_TO_COMPUTE
-compute_sobol_indices_with_samples = True  # This is only relevant in the mc-saltelli's approach
-if uqsim.args.uq_method == "mc" and uqsim.args.compute_Sobol_m:
-    compute_sobol_indices_with_samples = True
+})
 
-save_gpce_surrogate = True  # if True a gpce surrogate for each QoI for each time step is saved in a separate file
-compute_other_stat_besides_pce_surrogate = True  # This is relevant only when uq_method == "sc" 
+dict_what_to_plot = getattr(config, 'dict_what_to_plot', {
+    "E_minus_std": False, "E_plus_std": False, "E_minus_2std": True, "E_plus_2std": True, 
+    "P10": True, "P90": True,
+    "StdDev": True, "Skew": False, "Kurt": False, "Sobol_m": True, "Sobol_m2": False, "Sobol_t": True,
+    "generalized_sobol_total_index": True, "generalized_sobol_main_index": True,
+})
 
-# TODO Currently we only support KL and final time generalized S.S.I computation
-compute_kl_expansion_of_qoi = False  # If True, the KL expansion of the QoI is computed
-kl_expansion_order = 10
-compute_timewise_gpce_next_to_kl_expansion = False
+# Advanced analysis options from configuration
+compute_sobol_indices_with_samples = getattr(config, 'compute_sobol_indices_with_samples', False)
+save_gpce_surrogate = getattr(config, 'save_gpce_surrogate', True)
+compute_other_stat_besides_pce_surrogate = getattr(config, 'compute_other_stat_besides_pce_surrogate', True)
 
-compute_generalized_sobol_indices = False
-compute_generalized_sobol_indices_over_time = False
+# KL expansion settings from configuration
+compute_kl_expansion_of_qoi = getattr(config, 'compute_kl_expansion_of_qoi', False)
+kl_expansion_order = getattr(config, 'kl_expansion_order', 10)
+compute_timewise_gpce_next_to_kl_expansion = getattr(config, 'compute_timewise_gpce_next_to_kl_expansion', False)
 
-compute_covariance_matrix_in_time = True
+# Generalized Sobol indices settings from configuration
+compute_generalized_sobol_indices = getattr(config, 'compute_generalized_sobol_indices', False)
+compute_generalized_sobol_indices_over_time = getattr(config, 'compute_generalized_sobol_indices_over_time', False)
 
-allow_conditioning_results_based_on_metric = False
+# Covariance matrix settings from configuration
+compute_covariance_matrix_in_time = getattr(config, 'compute_covariance_matrix_in_time', False)
 
-condition_results_based_on_metric = ['NSE', 'KGE']
-condition_results_based_on_metric_value = [0.2, 0.0]
-condition_results_based_on_metric_sign = ["greater_or_equal", "greater_or_equal"]
+# Conditional analysis settings from configuration
+allow_conditioning_results_based_on_metric = getattr(config, 'allow_conditioning_results_based_on_metric', False)
+condition_results_based_on_metric = getattr(config, 'condition_results_based_on_metric', 'NSE')
+condition_results_based_on_metric_value = getattr(config, 'condition_results_based_on_metric_value', 0.2)
+condition_results_based_on_metric_sign = getattr(config, 'condition_results_based_on_metric_sign', "greater_or_equal")
+
+# Update utility defaults for backward compatibility
+utility.DEFAULT_DICT_STAT_TO_COMPUTE = dict_stat_to_compute
+utility.DEFAULT_DICT_WHAT_TO_PLOT = dict_what_to_plot
+
 #####################################
 # additional path settings:
 #####################################
@@ -250,6 +322,7 @@ if PYBAMM_AVAILABLE:
     inputModelDir=uqsim.args.inputModelDir,
     workingDir=uqsim.args.workingDir,
     ))})
+
 #####################################
 # register statistics
 #####################################
@@ -267,34 +340,6 @@ uqsim.statistics.update({"larsim"         : (lambda: LarsimStatistics.LarsimStat
     compute_Sobol_t=uqsim.args.compute_Sobol_t,
     compute_Sobol_m=uqsim.args.compute_Sobol_m,
     save_gpce_surrogate=save_gpce_surrogate,
-))})
-uqsim.statistics.update({"oscillator"     : (lambda: LinearDampedOscillatorStatistics.LinearDampedOscillatorStatistics(
-    configurationObject=uqsim.configuration_object,
-    workingDir=uqsim.args.workingDir,
-    sampleFromStandardDist=uqsim.args.sampleFromStandardDist,
-    parallel_statistics=uqsim.args.parallel_statistics,
-    mpi_chunksize=uqsim.args.mpi_chunksize,
-    unordered=False,
-    uq_method=uqsim.args.uq_method,
-    compute_Sobol_t=uqsim.args.compute_Sobol_t,
-    compute_Sobol_m=uqsim.args.compute_Sobol_m,
-    compute_Sobol_m2=uqsim.args.compute_Sobol_m2,
-    save_all_simulations=uqsim.args.save_all_simulations,
-    collect_and_save_state_data=uqsim.args.collect_and_save_state_data,
-    store_qoi_data_in_stat_dict=uqsim.args.store_qoi_data_in_stat_dict,
-    store_gpce_surrogate_in_stat_dict=uqsim.args.store_gpce_surrogate_in_stat_dict,
-    instantly_save_results_for_each_time_step=uqsim.args.instantly_save_results_for_each_time_step,
-    dict_what_to_plot=utility.DEFAULT_DICT_WHAT_TO_PLOT,
-    compute_sobol_indices_with_samples=compute_sobol_indices_with_samples,
-    save_gpce_surrogate=save_gpce_surrogate,
-    compute_other_stat_besides_pce_surrogate=compute_other_stat_besides_pce_surrogate,
-    compute_kl_expansion_of_qoi = compute_kl_expansion_of_qoi,
-    compute_timewise_gpce_next_to_kl_expansion=compute_timewise_gpce_next_to_kl_expansion,
-    kl_expansion_order = kl_expansion_order,
-    compute_generalized_sobol_indices = compute_generalized_sobol_indices,
-    compute_generalized_sobol_indices_over_time = compute_generalized_sobol_indices_over_time,
-    compute_covariance_matrix_in_time = compute_covariance_matrix_in_time,
-    dict_stat_to_compute=dict_stat_to_compute,
 ))})
 uqsim.statistics.update({"ishigami"       : (lambda: IshigamiStatistics.IshigamiStatistics(
     configurationObject=uqsim.configuration_object,
@@ -338,7 +383,7 @@ uqsim.statistics.update({"hbvsask"         : (lambda: HBVSASKStatistics.HBVSASKS
     save_gpce_surrogate=save_gpce_surrogate,
     compute_other_stat_besides_pce_surrogate=compute_other_stat_besides_pce_surrogate,
     compute_kl_expansion_of_qoi = compute_kl_expansion_of_qoi,
-    index_column_name = "Index_run",
+    index_column_name = utility.INDEX_COLUMN_NAME,
     allow_conditioning_results_based_on_metric=allow_conditioning_results_based_on_metric,
     condition_results_based_on_metric = condition_results_based_on_metric,
     condition_results_based_on_metric_value = condition_results_based_on_metric_value,
@@ -349,10 +394,39 @@ uqsim.statistics.update({"hbvsask"         : (lambda: HBVSASKStatistics.HBVSASKS
     compute_generalized_sobol_indices_over_time = compute_generalized_sobol_indices_over_time,
     compute_covariance_matrix_in_time = compute_covariance_matrix_in_time,
     dict_stat_to_compute=dict_stat_to_compute,
+    # always_process_original_model_output=True,
 ))})
 uqsim.statistics.update({"simple_oscillator"         : (lambda: simpleOscillatorStatistics(
     configurationObject=uqsim.configuration_object,  # uqsim.args.config_file,
     workingDir=uqsim.args.outputResultDir,  # .args.workingDir,
+    sampleFromStandardDist=uqsim.args.sampleFromStandardDist,
+    parallel_statistics=uqsim.args.parallel_statistics,
+    mpi_chunksize=uqsim.args.mpi_chunksize,
+    unordered=False,
+    uq_method=uqsim.args.uq_method,
+    compute_Sobol_t=uqsim.args.compute_Sobol_t,
+    compute_Sobol_m=uqsim.args.compute_Sobol_m,
+    compute_Sobol_m2=uqsim.args.compute_Sobol_m2,
+    save_all_simulations=uqsim.args.save_all_simulations,
+    collect_and_save_state_data=uqsim.args.collect_and_save_state_data,
+    store_qoi_data_in_stat_dict=uqsim.args.store_qoi_data_in_stat_dict,
+    store_gpce_surrogate_in_stat_dict=uqsim.args.store_gpce_surrogate_in_stat_dict,
+    instantly_save_results_for_each_time_step=uqsim.args.instantly_save_results_for_each_time_step,
+    dict_what_to_plot=utility.DEFAULT_DICT_WHAT_TO_PLOT,
+    compute_sobol_indices_with_samples=compute_sobol_indices_with_samples,
+    save_gpce_surrogate=save_gpce_surrogate,
+    compute_other_stat_besides_pce_surrogate=compute_other_stat_besides_pce_surrogate,
+    compute_kl_expansion_of_qoi = compute_kl_expansion_of_qoi,
+    compute_timewise_gpce_next_to_kl_expansion=compute_timewise_gpce_next_to_kl_expansion,
+    kl_expansion_order = kl_expansion_order,
+    compute_generalized_sobol_indices = compute_generalized_sobol_indices,
+    compute_generalized_sobol_indices_over_time = compute_generalized_sobol_indices_over_time,
+    compute_covariance_matrix_in_time = compute_covariance_matrix_in_time,
+    dict_stat_to_compute=dict_stat_to_compute,
+))})
+uqsim.statistics.update({"oscillator"     : (lambda: LinearDampedOscillatorStatistics.LinearDampedOscillatorStatistics(
+    configurationObject=uqsim.configuration_object,
+    workingDir=uqsim.args.workingDir,
     sampleFromStandardDist=uqsim.args.sampleFromStandardDist,
     parallel_statistics=uqsim.args.parallel_statistics,
     mpi_chunksize=uqsim.args.mpi_chunksize,
@@ -418,7 +492,8 @@ uqsim.setup()
 if uqsim.is_master():
     simulationNodes_save_file = "nodes"
     uqsim.save_simulationNodes(fileName=simulationNodes_save_file)
-    number_full_model_evaluations = len(uqsim.simulationNodes.nodes.T)
+    number_full_model_evaluations = uqsim.get_simulation_parameters_shape()[0]
+    #number_full_model_evaluations = len(uqsim.simulationNodes.nodes.T)
 
 # save the dictionary with the arguments - once before the simulation
 if uqsim.is_master():
@@ -480,6 +555,9 @@ uqsim.save_statistics()
 
 end_time = time.time()
 total_time = end_time - start_time
+
+uqsim.print_statistics()
+
 # save the dictionary with the arguments once again
 if uqsim.is_master():
     time_infoFileName = os.path.abspath(os.path.join(uqsim.args.outputResultDir, utility.TIME_INFO_FILE))
@@ -488,6 +566,7 @@ if uqsim.is_master():
         fp.write(f'time_model_simulations: {time_model_simulations}\n')
         # fp.write(f'time_producing_gpce: {time_producing_gpce}\n')
         fp.write(f'time_computing_statistics: {time_computing_statistics}\n')
+        # fp.write(f'number_mpi_processes: {size}\n')
         fp.write(f'total_time: {total_time}')
 
 #####################################
