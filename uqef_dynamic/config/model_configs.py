@@ -36,7 +36,7 @@ class HBVSASKConfig(ModelConfiguration):
         super().__init__("hbvsask")
         
         # HBV-SASK specific paths
-        self.basin = "Oldman_Basin"
+        # self.basin = "Oldman_Basin"
         
         # Default configuration files
         self.config_files = {
