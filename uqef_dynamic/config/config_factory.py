@@ -99,8 +99,9 @@ class ConfigurationFactory:
         if config.uq_method == "mc" and config.compute_Sobol_m:
             config.compute_sobol_indices_with_samples = True
         # For Saltelli method: compute_sobol_indices_with_samples should be False
-        elif config.uq_method == "saltelli":
+        elif config.uq_method == "saltelli" or config.uq_method == "ensemble":
             config.compute_sobol_indices_with_samples = False
+
     
     @classmethod
     def _apply_model_config(cls, uq_config, model_config, **overrides):
