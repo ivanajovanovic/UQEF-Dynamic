@@ -3,13 +3,13 @@
     {
       "start_day": 2,
       "start_month": 10,
-      "start_year": 2002,
+      "start_year": 2005,
       "start_hour": 0,
       "start_minute": 0,
 
       "end_day": 1,
       "end_month": 10,
-      "end_year": 2006,
+      "end_year": 2009,
       "end_hour": 0,
       "end_minute": 0,
 
@@ -22,7 +22,7 @@
       "timestep": 5
     },
   "model_settings": {
-    "basin": "Oldman_Basin",
+    "basin": "Banff_Basin",
     "plotting": "False",
     "writing_results_to_a_file": "False",
     "corrupt_forcing_data": "False"
@@ -123,6 +123,13 @@
       "lower": 1.0,
       "upper": 3.0,
       "default": 2.0
+    },
+    {
+      "name": "PM",
+      "distribution": "Uniform",
+      "lower": 0.5,
+      "upper": 2.0,
+      "default": 1.0
     }
   ],
   "unused_parameters": [

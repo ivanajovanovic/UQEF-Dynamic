@@ -171,14 +171,32 @@ start_time = time.time()
 dict_stat_to_compute = getattr(config, 'dict_stat_to_compute', {
     "Var": True, "StdDev": True, "P10": True, "P90": True,
     "E_minus_std": False, "E_plus_std": False,
-    "Skew": False, "Kurt": False, "Sobol_m": True, "Sobol_m2": False, "Sobol_t": True
+    "Skew": False, "Kurt": False, 
+    "Sobol_m": True, "Sobol_m2": False, "Sobol_t": True
 })
 
 dict_what_to_plot = getattr(config, 'dict_what_to_plot', {
     "E_minus_std": False, "E_plus_std": False, "E_minus_2std": True, "E_plus_2std": True, 
     "P10": True, "P90": True,
-    "StdDev": True, "Skew": False, "Kurt": False, "Sobol_m": True, "Sobol_m2": False, "Sobol_t": True,
+    "StdDev": True, "Skew": False, "Kurt": False, 
+    "Sobol_m": True, "Sobol_m2": False, "Sobol_t": True,
     "generalized_sobol_total_index": True, "generalized_sobol_main_index": True,
+})
+
+# for the ensemble runs we want to have different defaults
+dict_stat_to_compute = getattr(config, 'dict_stat_to_compute', {
+    "Var": True, "StdDev": True, "P10": True, "P90": True,
+    "E_minus_std": False, "E_plus_std": False,
+    "Skew": False, "Kurt": False, 
+    "Sobol_m": False, "Sobol_m2": False, "Sobol_t": False
+})
+
+dict_what_to_plot = getattr(config, 'dict_what_to_plot', {
+    "E_minus_std": False, "E_plus_std": False, "E_minus_2std": True, "E_plus_2std": True, 
+    "P10": True, "P90": True,
+    "StdDev": True, "Skew": False, "Kurt": False, 
+    "Sobol_m": False, "Sobol_m2": False, "Sobol_t": False,
+    "generalized_sobol_total_index": False, "generalized_sobol_main_index": False,
 })
 
 # Advanced analysis options from configuration

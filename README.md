@@ -1,6 +1,9 @@
 # UQEF-Dynamic Framework
 
-Software tool for efficient forward uncertainty quantification and global sensitivity analysis of different models that produce time-varying output-of-interest (e.g., environmental models, dynamical models) 
+Software tool for efficient forward uncertainty quantification and global sensitivity analysis of different models that produce time-varying output-of-interest (e.g., environmental models, dynamical models)
+
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/)
 
 ## Overview
 
@@ -61,7 +64,7 @@ pip install -e .[all]
 ### Installation Notes
 
 - **Battery Models**: The `pybamm` package is only required if you plan to use battery models. It's included as an optional dependency to avoid forcing installation for users who don't need it.
-- **Python Version**: Compatible with Python 3.6+ (Python 3.11 recommended)
+- **Python Version**: Compatible with Python 3.11
 - **Dependencies**: Core dependencies will be automatically installed with any of the above methods
 
 ## Requirements/Dependencies
@@ -80,7 +83,7 @@ pip install -e .[all]
 The project includes several requirements files:
 
 - `requirements.txt`: Basic dependencies list
-- `requirements/requirements_py311.txt`: Dependencies with fixed versions for Python 3.11
+- `requirements_py311_version.txt`: Dependencies with fixed versions for Python 3.11
 
 ### Other Dependencies
 
@@ -95,11 +98,12 @@ The recommended way to set up the environment is using conda:
 ```bash
 # Create a new conda environment with Python 3.11
 conda create -n uqef_env python=3.11
-conda install -n uqef_env --file requirements/requirements_py311.txt
+conda install -n uqef_env --file requirements.txt --update-deps
 conda activate uqef_env
 
-# Install Chaospy
-$(which pip) install chaospy
+## In case Chaospy was not installed properly via conda, install it via pip from the source code, 
+## however, this is not recommended and you make sure that the dependencies are not broken
+$(which pip) install --no-deps chaospy
 
 # Install UQEF (assuming the repository is cloned)
 cd UQEF/

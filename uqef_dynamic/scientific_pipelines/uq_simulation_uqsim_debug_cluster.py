@@ -134,7 +134,7 @@ if local_debugging:
             sampleFromStandardDist=True,
             disable_statistics=False, 
             disable_calc_statistics=False,
-            parallel_statistics=False, # True
+            parallel_statistics=True, # True
             instantly_save_results_for_each_time_step=False,
             chunksize=1,
             compute_Sobol_m=False,
@@ -148,10 +148,16 @@ if local_debugging:
             config_file='/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/configuration_hbv_10D_single_qoi.json', #configuration_hbv_11D_2004_2005_long.json',
             outputResultDir=os.path.abspath(os.path.join("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/hbvsask_runs", 'mc_10d_ensemble_whole_timespan_non_parallel_stat_oldman')), #mc_10d_10000_random_nse02_autoregressive_09_qcms_oldman_2006_2007
             analyse_runtime=False,
+            mpi_method="MpiPoolSolver",
             opt_strategy= "DYNAMIC", # DYNAMIC
             opt_algorithm="LPT", #LPT FCFS LPT Default
             # run_type="custom_run",
             # custom_name='mc_10d_5000_sobol_autoregressive_09_qcms_oldman_2006_2007',
+            dict_stat_to_compute={
+                "Var": True, "StdDev": True, "P10": True, "P90": True,
+                "E_minus_std": False, "E_plus_std": False,
+                "Skew": False, "Kurt": False, "Sobol_m": False, "Sobol_m2": False, "Sobol_t": False
+            },
         )
         
         # Apply configuration to uqsim

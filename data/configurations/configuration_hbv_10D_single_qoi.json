@@ -13,16 +13,14 @@
     "end_hour": 0,
     "end_minute": 0,
 
-    "run_full_timespan":"False",
-    "spin_up_length":1096,
-    "simulation_length": 90,
+    "run_full_timespan":"True",
     "resolution": "daily",
     
     "cut_runs": "False",
     "timestep": 5
   },
 "model_settings": {
-  "basin": "Oldman_Basin",
+  "basin": "Banff_Basin",
   "plotting": "False",
   "writing_results_to_a_file": "False",
   "corrupt_forcing_data": "False"
@@ -36,7 +34,7 @@
   "transform_model_output":"None",
   "read_measured_data":"True",
   "qoi_column_measured":"streamflow",
-  "autoregressive_model_first_order":"True",
+  "autoregressive_model_first_order":"False",
   "scale_factor_autoregressive_model_first_order":0.8,
   "objective_function_qoi":["RMSE", "LogNSE", "KGE"],
   "calculate_GoF":"True",
@@ -59,73 +57,83 @@
     "distribution": "Uniform",
     "lower": -4.0,
     "upper": 4.0,
-    "default": 0.0
+    "default": 0.0,
+    "values_list":[-4.0, 0.0, 4.0]
   },
   {
     "name": "C0",
     "distribution": "Uniform",
     "lower": 0.0,
     "upper": 10.0,
-    "default": 0.5
-  },
+    "default": 0.5,
+    "values_list":[0.0, 0.5, 10.0]
+  }
+],
+"unused_parameters": [
   {
     "name": "ETF",
     "distribution": "Uniform",
     "lower": 0.0,
     "upper": 1.0,
-    "default": 0.2
+    "default": 0.2,
+    "values_list":[0.0, 0.2, 1.0]
   },    
   {
     "name": "FC",
     "distribution": "Uniform",
     "lower": 50.0,
     "upper": 500.0,
-    "default": 250
+    "default": 250,
+    "values_list":[50.0, 250, 500.0]
   },
   {
     "name": "beta",
     "distribution": "Uniform",
     "lower": 1.0,
     "upper": 3.0,
-    "default": 2.0
+    "default": 2.0,
+    "values_list":[1.0, 2.0, 3.0]
   },
   {
     "name": "FRAC",
     "distribution": "Uniform",
     "lower": 0.1,
     "upper": 0.9,
-    "default": 0.3
+    "default": 0.3,
+    "values_list":[0.1, 0.3, 0.9]
   },
   {
     "name": "K2",
     "distribution": "Uniform",
     "lower": 0.0,
     "upper": 0.05,
-    "default": 0.05
+    "default": 0.05,
+    "values_list":[0.0, 0.05, 0.05]
   },
   {
     "name": "LP",
     "distribution": "Uniform",
     "lower": 0.0,
     "upper": 1.0,
-    "default": 0.5
+    "default": 0.5,
+    "values_list":[0.0, 0.5, 1.0]
   },
   {
     "name": "K1",
     "distribution": "Uniform",
     "lower": 0.05,
     "upper": 1.0,
-    "default": 0.5
+    "default": 0.5,
+    "values_list":[0.05, 0.5, 1.0]
   },
   {
     "name": "alpha",
     "distribution": "Uniform",
     "lower": 1.0,
     "upper": 3.0,
-    "default": 2.0
-  }
-],
-"unused_parameters": [
+    "default": 2.0,
+    "values_list":[1.0, 2.0, 3.0]
+  },
   {
     "name": "M",
     "distribution": "Uniform",

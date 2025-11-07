@@ -1,3 +1,4 @@
+chaospy
 dill
 importlib-metadata
 ipython
@@ -10,6 +11,7 @@ multiprocess
 notebook
 nb_conda_kernels
 numpy
+numpoly
 pandas
 pip
 plotly

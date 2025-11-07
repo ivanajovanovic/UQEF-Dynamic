@@ -141,10 +141,10 @@ echo "---- start HBV sim: \`date\`"
 
 echo "---- end HBV sim: \`date\`"
 
-" > $baseSourcePath/hbv_mc_10000_lhc_oldman_2005_2006.cmd
+" > $baseSourcePath/hbv_mc_20000_lhc_banff_2005_2006.cmd
 
     #execute batch file
-    sbatch $baseSourcePath/hbv_mc_10000_lhc_oldman_2005_2006.cmd
+    sbatch $baseSourcePath/hbv_mc_20000_lhc_banff_2005_2006.cmd
 
 }
 
@@ -158,7 +158,7 @@ max_time="72:00:00"
 uq_method="mc"
 q_order=6
 p_order=4
-mc_numevaluations=10000
+mc_numevaluations=20000
 uc="all"
 sampling_rule="latin_hypercube"
 sc_poly_rule="three_terms_recurrence"

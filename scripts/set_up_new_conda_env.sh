@@ -1,4 +1,5 @@
 #!/bin/bash
+# Note: This file is old and depricated! Please refer to set_up_conda_env.sh in the main UQEF-Dynamic folder
 
 ## Some conda update and setting channels commands
 # conda update -n base --override-channels -c defaults conda
