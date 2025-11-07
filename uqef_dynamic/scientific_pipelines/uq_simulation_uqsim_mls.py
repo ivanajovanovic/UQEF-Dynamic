@@ -13,8 +13,6 @@ import time
 import numpy as np
 # np.random.seed(10)
 
-import uqef
-
 # additionally added for the debugging of the nodes
 import pandas as pd
 import pathlib
@@ -24,8 +22,15 @@ pd.options.mode.chained_assignment = None
 
 from uqef_dynamic.utils import utility
 
-from uqef_dynamic.models.larsim import LarsimModelUQ
-from uqef_dynamic.models.larsim import LarsimStatistics
+# Optional LARSIM imports
+try:
+    from uqef_dynamic.models.larsim import LarsimModelUQ
+    from uqef_dynamic.models.larsim import LarsimStatistics
+    LARSIM_AVAILABLE = True
+except ImportError:
+    LARSIM_AVAILABLE = False
+    LarsimModelUQ = None
+    LarsimStatistics = None
 
 from uqef_dynamic.models.linearDampedOscillator import LinearDampedOscillatorModel
 from uqef_dynamic.models.linearDampedOscillator import LinearDampedOscillatorStatistics
@@ -53,10 +58,6 @@ except ImportError:
     pybammStatistics = None
 
 #####################################
-# change args locally for testing and debugging
-#####################################
-
-#####################################
 # Configuration Management System
 #####################################
 
@@ -73,7 +74,9 @@ extended_parser = ExtendedUQSimArgumentParser(uqsim)
 
 local_debugging = True
 if local_debugging:
-
+    #####################################
+    # change args locally for testing and debugging
+    #####################################
     # Use the new configuration system
     try:
         # Example configurations - choose one:
@@ -210,7 +213,7 @@ else:
     uqsim.setup_configuration_object()
 
 start_time = time.time()
-
+#####################################
 # Configuration-driven variables (previously hardcoded)
 # These values are now taken from the configuration system
 # If you need to override these values, use ConfigurationFactory.apply_configuration_overrides()
@@ -287,13 +290,14 @@ if uqsim.is_master() and not uqsim.is_restored():
 # register model
 #####################################
 
-uqsim.models.update({"larsim"         : (lambda: LarsimModelUQ.LarsimModelUQ(
-    configurationObject=uqsim.configuration_object,
-    inputModelDir=uqsim.args.inputModelDir,
-    workingDir=uqsim.args.workingDir,
-    sourceDir=uqsim.args.sourceDir,
-    disable_statistics=uqsim.args.disable_statistics,
-    uq_method=uqsim.args.uq_method))})
+if LARSIM_AVAILABLE:
+    uqsim.models.update({"larsim"         : (lambda: LarsimModelUQ.LarsimModelUQ(
+        configurationObject=uqsim.configuration_object,
+        inputModelDir=uqsim.args.inputModelDir,
+        workingDir=uqsim.args.workingDir,
+        sourceDir=uqsim.args.sourceDir,
+        disable_statistics=uqsim.args.disable_statistics,
+        uq_method=uqsim.args.uq_method))})
 uqsim.models.update({"oscillator"     : (lambda: LinearDampedOscillatorModel.LinearDampedOscillatorModel(
     configurationObject=uqsim.configuration_object,
     workingDir=uqsim.args.workingDir,
@@ -327,20 +331,21 @@ if PYBAMM_AVAILABLE:
 # register statistics
 #####################################
 
-uqsim.statistics.update({"larsim"         : (lambda: LarsimStatistics.LarsimStatistics(
-    configurationObject=uqsim.configuration_object,
-    workingDir=uqsim.args.workingDir,
-    sampleFromStandardDist=uqsim.args.sampleFromStandardDist,
-    store_qoi_data_in_stat_dict=uqsim.args.store_qoi_data_in_stat_dict,
-    store_gpce_surrogate=uqsim.args.store_gpce_surrogate_in_stat_dict,
-    parallel_statistics=uqsim.args.parallel_statistics,
-    mpi_chunksize=uqsim.args.mpi_chunksize,
-    unordered=False,
-    uq_method=uqsim.args.uq_method,
-    compute_Sobol_t=uqsim.args.compute_Sobol_t,
-    compute_Sobol_m=uqsim.args.compute_Sobol_m,
-    save_gpce_surrogate=save_gpce_surrogate,
-))})
+if LARSIM_AVAILABLE:
+    uqsim.statistics.update({"larsim"         : (lambda: LarsimStatistics.LarsimStatistics(
+        configurationObject=uqsim.configuration_object,
+        workingDir=uqsim.args.workingDir,
+        sampleFromStandardDist=uqsim.args.sampleFromStandardDist,
+        store_qoi_data_in_stat_dict=uqsim.args.store_qoi_data_in_stat_dict,
+        store_gpce_surrogate=uqsim.args.store_gpce_surrogate_in_stat_dict,
+        parallel_statistics=uqsim.args.parallel_statistics,
+        mpi_chunksize=uqsim.args.mpi_chunksize,
+        unordered=False,
+        uq_method=uqsim.args.uq_method,
+        compute_Sobol_t=uqsim.args.compute_Sobol_t,
+        compute_Sobol_m=uqsim.args.compute_Sobol_m,
+        save_gpce_surrogate=save_gpce_surrogate,
+    ))})
 uqsim.statistics.update({"ishigami"       : (lambda: IshigamiStatistics.IshigamiStatistics(
     configurationObject=uqsim.configuration_object,
     workingDir=uqsim.args.outputResultDir,  # .args.workingDir,

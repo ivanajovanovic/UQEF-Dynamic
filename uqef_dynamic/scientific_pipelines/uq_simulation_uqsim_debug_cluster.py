@@ -13,8 +13,6 @@ import time
 import numpy as np
 # np.random.seed(10)
 
-import uqef
-
 # additionally added for the debugging of the nodes
 import pandas as pd
 import pathlib
@@ -26,8 +24,15 @@ pd.options.mode.chained_assignment = None
 
 from uqef_dynamic.utils import utility
 
-from uqef_dynamic.models.larsim import LarsimModelUQ
-from uqef_dynamic.models.larsim import LarsimStatistics
+# Optional LARSIM imports
+try:
+    from uqef_dynamic.models.larsim import LarsimModelUQ
+    from uqef_dynamic.models.larsim import LarsimStatistics
+    LARSIM_AVAILABLE = True
+except ImportError:
+    LARSIM_AVAILABLE = False
+    LarsimModelUQ = None
+    LarsimStatistics = None
 
 from uqef_dynamic.models.linearDampedOscillator import LinearDampedOscillatorModel
 from uqef_dynamic.models.linearDampedOscillator import LinearDampedOscillatorStatistics
@@ -55,10 +60,6 @@ except ImportError:
     pybammStatistics = None
 
 #####################################
-# change args locally for testing and debugging
-#####################################
-
-#####################################
 # Configuration Management System
 #####################################
 
@@ -75,7 +76,9 @@ extended_parser = ExtendedUQSimArgumentParser(uqsim)
 
 local_debugging = True
 if local_debugging:
-
+    #####################################
+    # change args locally for testing and debugging
+    #####################################
     # Use the new configuration system
     try:
         # Example configurations - choose one:
@@ -211,118 +214,8 @@ else:
 
     uqsim.setup_configuration_object()
 
-# if local_debugging:
-#     # Use the new configuration system
-#     try:
-#         # Example configurations - choose one:
-#     except Exception as e:
-#         print(f"Configuration error: {e}")
-#         raise
-
-#     uqsim.args.model = "hbvsask"  # "larsim" "hbvsask" "battery" "simple_oscillator" "ishigami"
-#     if uqsim.args.model == "battery" and not PYBAMM_AVAILABLE:
-#         raise ImportError("pybamm is not installed. Please install pybamm to run the battery model.")
-
-#     uqsim.args.uncertain = "all"
-#     uqsim.args.chunksize = 1
-
-#     uqsim.args.uq_method = "mc"  # "sc" | "saltelli" | "mc" | "ensemble"
-    
-#     uqsim.args.mc_numevaluations = 100000 # #10000
-#     uqsim.args.sampling_rule = "latin_hypercube"  # "random" | "sobol" | "latin_hypercube" | "halton"  | "hammersley"
-    
-#     uqsim.args.sc_q_order = 5  # 7 8 8 #10 3
-#     uqsim.args.sc_p_order = 2  # 3, 3, 4 5, 6, 8
-#     uqsim.args.sc_quadrature_rule = "g"  # "p" "genz_keister_24" "leja" "clenshaw_curtis"
-
-#     uqsim.args.read_nodes_from_file = False
-#     l = 5  # 10
-#     dim = 10
-#     path_to_file = pathlib.Path("/dss/dsshome1/lxc0C/ga45met2/Repositories/sparse_grid_nodes_weights")
-#     uqsim.args.parameters_file = path_to_file / f"KPU_d{dim}_l{l}.asc" # f"KPU_d7_l{l}.asc"
-#     uqsim.args.parameters_setup_file = None
-
-#     uqsim.args.regression = False
-#     uqsim.args.regression_model_type = "OLS"  # None | "OLS" | "LARS"
-
-#     uqsim.args.sc_poly_rule = "three_terms_recurrence"  # "gram_schmidt" | "three_terms_recurrence" | "cholesky"
-#     uqsim.args.sc_poly_normed = True  # True
-#     uqsim.args.sc_sparse_quadrature = False  # False
-#     uqsim.args.cross_truncation = 0.7
-
-#     # paths, if necessary change them
-#     uqsim.args.inputModelDir =  os.path.abspath(os.path.join('/dss/dsshome1/lxc0C/ga45met2', 'Repositories', 'UQEF-Dynamic'))
-#     uqsim.args.sourceDir = os.path.abspath(os.path.join('/dss/dsshome1/lxc0C/ga45met2', 'Repositories', 'UQEF-Dynamic'))
-
-#     # Larsim
-#     # uqsim.args.inputModelDir = os.path.abspath(os.path.join('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2','Larsim-data'))
-#     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_ensemble_2013_all_tgb'))
-#     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_lai_may_cc_q_6_p_4_stat_trial'))
-#     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "Larsim_runs", 'larsim_run_sc_kpu_l_6_d_5_p_3_2013'))
-#     # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/configurations_Larsim/configurations_larsim_boundery_values.json'
-#     # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/configurations_Larsim/configurations_larsim_4_may.json'
-#     # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/configurations_Larsim/configurations_larsim_high_flow.json'
-
-#     # HBV-SASK
-#     uqsim.args.inputModelDir = pathlib.Path("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/HBV-SASK-data")
-#     uqsim.args.sourceDir = pathlib.Path("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/HBV-SASK-data")
-#     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs", 'mc_with_sobol_computation_delta_q')) #sliding_window or continuous
-#     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs", 'beta_2007_sc_sliding_window_rmse')) #sliding_window or continuous
-#     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs", 'ensemble_q6_p3_6d_2006_banff')) #sliding_window or continuous
-#     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "hbvsask_runs", 'mc_10d_short_banff'))
-#     uqsim.args.outputResultDir = os.path.abspath(os.path.join("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/hbvsask_runs", 'mc_11d_corrupt_forcing_data_100000_autoregressive_07_qcms_oldman_2006_2007'))
-#     # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/configurations/configuration_hbv_10D_MC.json'
-#     # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/configurations/configuration_hbv_10D_MC_banff.json'
-#     # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/configurations/configuration_hbv_12D_MC.json'
-#     # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/configurations/configuration_hbv_10D_MC_banff.json'
-#     # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/configuration_hbv_7D.json'
-#     uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/configuration_hbv_10D.json'
-#     uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/configuration_hbv_10D_single_qoi.json'
-#     uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/configuration_hbv_10D_short.json'
-#     uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/configuration_hbv_10D_single_qoi_autoregressive.json'
-
-#     # Simple Oscillator
-#     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/gpfs/scratch/pr63so/ga45met2", "simple_oscillator_model", 'sc_kl10_l7_p3_generalized'))  # mc_10000 mc_10000_terminal_voltage
-#     # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/configuration_simple_oscillator.json'
-
-#     # Ishigami
-#     #uqsim.args.outputResultDir = os.path.abspath(os.path.join("/work/ga45met", "ishigami_runs", "simulations_sep_2024", 'sc_full_p5_q10_ct07'))
-#     #uqsim.args.config_file = '/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic/data/configurations/configuration_ishigami.json'
-
-#     # Battery
-#     # # uqsim.args.inputModelDir = pathlib.Path('/dss/dsshome1/lxc0C/ga45met2/.conda/envs/py3.11_mpi/lib/python3.11/site-packages/pybamm/input/drive_cycles')
-#     # uqsim.args.inputModelDir = pathlib.Path('/dss/dsshome1/lxc0C/ga45met2/.conda/envs/my_uq_env/lib/python3.11/site-packages/pybamm/input/drive_cycles')
-#     # #uqsim.args.inputModelDir = pathlib.Path('/dss/dsshome1/lxc0C/ga45met2/.conda/envs/uq_env/lib/python3.7/site-packages/pybamm/input/drive_cycles')
-#     # #  /dss/dsshome1/lxc0C/ga45met2/.conda/envs/uq_env/lib/python3.7/site-packages/pybamm/input/drive_cycles
-#     # uqsim.args.outputResultDir = os.path.abspath(os.path.join("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/battery_runs", 'mc_kl10_p2_ct07_24d_1000_random'))  #'mc_kl10_p5_ct07_24d_10000_random'
-#     # uqsim.args.config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/uqef_dynamic/models/pybamm/configuration_battery_24_shot_names.json' #configuration_battery.json' configuration_battery_24_shot_names.json
-
-#     uqsim.args.outputModelDir = uqsim.args.outputResultDir
-
-#     uqsim.args.sampleFromStandardDist = True
-
-#     uqsim.args.mpi = True
-#     uqsim.args.mpi_method = "MpiPoolSolver"  # "LinearSolver"
-#     uqsim.args.num_cores = 1
-
-#     uqsim.args.disable_statistics = False
-#     uqsim.args.disable_calc_statistics = False
-#     uqsim.args.parallel_statistics = True
-#     uqsim.args.instantly_save_results_for_each_time_step = False
-
-#     uqsim.args.compute_Sobol_m = True
-#     uqsim.args.compute_Sobol_t = True
-
-#     uqsim.args.uqsim_store_to_file = False
-#     uqsim.args.save_all_simulations = False  # True for sc
-#     uqsim.args.store_qoi_data_in_stat_dict = False  # if set to True, the qoi_values entry is stored in the stat_dict 
-#     uqsim.args.store_gpce_surrogate_in_stat_dict = False
-#     uqsim.args.collect_and_save_state_data = False # False 
-
-#     uqsim.setup_configuration_object()
-
 start_time = time.time()
-
+#####################################
 # Configuration-driven variables (previously hardcoded)
 # These values are now taken from the configuration system
 # If you need to override these values, use ConfigurationFactory.apply_configuration_overrides()
@@ -368,40 +261,6 @@ condition_results_based_on_metric_sign = getattr(config, 'condition_results_base
 utility.DEFAULT_DICT_STAT_TO_COMPUTE = dict_stat_to_compute
 utility.DEFAULT_DICT_WHAT_TO_PLOT = dict_what_to_plot
 
-# utility.DEFAULT_DICT_WHAT_TO_PLOT = {
-#     "E_minus_std": False, "E_plus_std": False, "E_minus_2std": True, "E_plus_2std":True, 
-#     "P10": True, "P90": True,
-#     "StdDev": True, "Skew": False, "Kurt": False, "Sobol_m": True, "Sobol_m2": False, "Sobol_t": True,
-#     "generalized_sobol_total_index": True, "generalized_sobol_main_index": True,
-# }
-# utility.DEFAULT_DICT_STAT_TO_COMPUTE = {
-#     "Var": True, "StdDev": True, "P10": True, "P90": True,
-#     "E_minus_std": False, "E_plus_std": False,
-#     "Skew": False, "Kurt": False, "Sobol_m": True, "Sobol_m2": False, "Sobol_t": True
-# }
-# dict_stat_to_compute = utility.DEFAULT_DICT_STAT_TO_COMPUTE
-# compute_sobol_indices_with_samples = True  # This is only relevant in the mc-saltelli's approach
-# # TODO Think about when regression is True, what do you prefer gPCE-based indices or MC?
-# if uqsim.args.uq_method == "mc" and uqsim.args.compute_Sobol_m:
-#     compute_sobol_indices_with_samples = True
-
-# save_gpce_surrogate = True  # if True a gpce surrogate for each QoI for each time step is saved in a separate file
-# compute_other_stat_besides_pce_surrogate = True  # This is relevant only when uq_method == "sc" 
-
-# compute_kl_expansion_of_qoi = False
-# kl_expansion_order = 10
-# compute_timewise_gpce_next_to_kl_expansion = False
-
-# compute_generalized_sobol_indices = True
-# compute_generalized_sobol_indices_over_time = True
-
-# compute_covariance_matrix_in_time = False
-
-# allow_conditioning_results_based_on_metric = False
-
-# condition_results_based_on_metric = 'NSE'
-# condition_results_based_on_metric_value = 0.2
-# condition_results_based_on_metric_sign = "greater_or_equal"
 #####################################
 # additional path settings:
 #####################################
@@ -433,13 +292,14 @@ if uqsim.is_master() and not uqsim.is_restored():
 # register model
 #####################################
 
-uqsim.models.update({"larsim"         : (lambda: LarsimModelUQ.LarsimModelUQ(
-    configurationObject=uqsim.configuration_object,
-    inputModelDir=uqsim.args.inputModelDir,
-    workingDir=uqsim.args.workingDir,
-    sourceDir=uqsim.args.sourceDir,
-    disable_statistics=uqsim.args.disable_statistics,
-    uq_method=uqsim.args.uq_method))})
+if LARSIM_AVAILABLE:
+    uqsim.models.update({"larsim"         : (lambda: LarsimModelUQ.LarsimModelUQ(
+        configurationObject=uqsim.configuration_object,
+        inputModelDir=uqsim.args.inputModelDir,
+        workingDir=uqsim.args.workingDir,
+        sourceDir=uqsim.args.sourceDir,
+        disable_statistics=uqsim.args.disable_statistics,
+        uq_method=uqsim.args.uq_method))})
 uqsim.models.update({"oscillator"     : (lambda: LinearDampedOscillatorModel.LinearDampedOscillatorModel(
     configurationObject=uqsim.configuration_object,
     workingDir=uqsim.args.workingDir,
@@ -473,20 +333,21 @@ if PYBAMM_AVAILABLE:
 # register statistics
 #####################################
 
-uqsim.statistics.update({"larsim"         : (lambda: LarsimStatistics.LarsimStatistics(
-    configurationObject=uqsim.configuration_object,
-    workingDir=uqsim.args.workingDir,
-    sampleFromStandardDist=uqsim.args.sampleFromStandardDist,
-    store_qoi_data_in_stat_dict=uqsim.args.store_qoi_data_in_stat_dict,
-    store_gpce_surrogate=uqsim.args.store_gpce_surrogate_in_stat_dict,
-    parallel_statistics=uqsim.args.parallel_statistics,
-    mpi_chunksize=uqsim.args.mpi_chunksize,
-    unordered=False,
-    uq_method=uqsim.args.uq_method,
-    compute_Sobol_t=uqsim.args.compute_Sobol_t,
-    compute_Sobol_m=uqsim.args.compute_Sobol_m,
-    save_gpce_surrogate=save_gpce_surrogate,
-))})
+if LARSIM_AVAILABLE:
+    uqsim.statistics.update({"larsim"         : (lambda: LarsimStatistics.LarsimStatistics(
+        configurationObject=uqsim.configuration_object,
+        workingDir=uqsim.args.workingDir,
+        sampleFromStandardDist=uqsim.args.sampleFromStandardDist,
+        store_qoi_data_in_stat_dict=uqsim.args.store_qoi_data_in_stat_dict,
+        store_gpce_surrogate=uqsim.args.store_gpce_surrogate_in_stat_dict,
+        parallel_statistics=uqsim.args.parallel_statistics,
+        mpi_chunksize=uqsim.args.mpi_chunksize,
+        unordered=False,
+        uq_method=uqsim.args.uq_method,
+        compute_Sobol_t=uqsim.args.compute_Sobol_t,
+        compute_Sobol_m=uqsim.args.compute_Sobol_m,
+        save_gpce_surrogate=save_gpce_surrogate,
+    ))})
 uqsim.statistics.update({"ishigami"       : (lambda: IshigamiStatistics.IshigamiStatistics(
     configurationObject=uqsim.configuration_object,
     workingDir=uqsim.args.outputResultDir,  # .args.workingDir,

@@ -24,10 +24,10 @@ cd ../UQEF/
 git checkout parallel_statistics
 $(which pip) install -e --no-deps .
 ## For working with the Larsim model
-cd ../Larsim_Utility_Set/
-git checkout master
-git pull
-$(which pip) install -e .
+# cd ../Larsim_Utility_Set/
+# git checkout master
+# git pull
+# $(which pip) install -e .
 ## For working with the sparseSpACE toolbox
 cd ../sparseSpACE/
 $(which pip) install -e .

@@ -26,12 +26,22 @@ pip install uqef_dynamic
 
 ### Installation with Optional Dependencies
 
-#### Battery Models Support
+#### Battery Model Support
 
 To include support for battery models (requires PyBaMM):
 
 ```bash
 pip install uqef_dynamic[battery]
+```
+
+#### LARSIM Model Support
+To include support for the LARSIM hydrological model (requires Larsim_Utility_Set library):
+
+```bash
+cd Larsim_Utility_Set/
+git checkout master
+git pull
+$(which pip) install -e .
 ```
 
 #### All Optional Dependencies
@@ -106,6 +116,7 @@ conda activate uqef_env
 $(which pip) install --no-deps chaospy
 
 # Install UQEF (assuming the repository is cloned)
+# Note - this will change soon, since UQEF is now available on PyPi
 cd UQEF/
 git checkout parallel_statistics
 $(which pip) install -e .
@@ -307,7 +318,8 @@ The framework includes several models:
    --model hbvsask --config_file data/configurations/configuration_hbv_5D.json
    ```
 
-2. **LARSIM**: Large Area Runoff Simulation Model
+2. **LARSIM**: Large Area Runoff Simulation Model; Note: You have to have access and install the Larsim_Utility_Set tool
+
    ```bash
    --model larsim --config_file data/configurations/configuration_larsim.json
    ```
