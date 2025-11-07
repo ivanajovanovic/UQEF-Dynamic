@@ -535,13 +535,13 @@ def generate_df_with_nodes_and_weights_from_file(file_path, params_list=None):
 
 def plot_2d_matrix_static_from_list(simulationNodes_list, title="Plot nodes"):
     if not isinstance(simulationNodes_list, pd.DataFrame):
-        dfsimulationNodes = get_df_from_simulationNodes_list(simulationNodes_list, nodes_or_paramters)
+        dfsimulationNodes = get_df_from_simulationNodes_list(simulationNodes_list)
     else:
         dfsimulationNodes = simulationNodes_list
 
-    sns.set(style="ticks", color_codes=True)
+    sns.set_theme(style="ticks", color_codes=True)
     pairplot = sns.pairplot(dfsimulationNodes, vars=list(dfsimulationNodes.columns), corner=True)
-    return pairplot.fig
+    return pairplot.figure
     # plt.title(title, loc='left')
 
 
@@ -576,7 +576,7 @@ def plot_2d_matrix_static(simulationNodes, nodes_or_paramters="nodes"):
     else:
         dfsimulationNodes = simulationNodes
 
-    sns.set(style="ticks", color_codes=True)
+    sns.set_theme(style="ticks", color_codes=True)
     g = sns.pairplot(dfsimulationNodes, vars=list(dfsimulationNodes.columns), corner=True)
     plt.title(f"Plot: {nodes_or_paramters}", loc='left')
     plt.show()
@@ -1808,7 +1808,7 @@ def _get_parameter_value(single_param, parameters=None, uncertain_param_counter=
         if parameters is not None:
             return parameters[uncertain_param_counter]
         elif single_param is not None and "name" in single_param:
-            return _get_default_value_from_default_par_info_dict(single_param['name'], default_par_info)
+            return _get_default_value_from_default_par_info_dict(single_param['name'], default_par_info_dict)
         else:
             raise ValueError("parameters is None and single_param is None!")
     elif single_param is not None and "value" in single_param:
@@ -2326,46 +2326,83 @@ def plot_subplot_params_hist_from_df_conditioned(df_index_parameter_gof, name_of
         )
     return fig
 
-# Problematic function until plotly is updated
-# def plot_scatter_matrix_params_vs_gof(
-#     df_index_parameter_gof, columns_with_parameters=None, name_of_gof_column="NSE", hover_name="Index_run"):
-#     if columns_with_parameters is None:
-#         columns_with_parameters = _get_parameter_columns_df_index_parameter_gof(df_index_parameter_gof)
-#     # fig = px.scatter_matrix(df_index_parameter_gof, dimensions=columns_with_parameters, color=name_of_gof_column)
-#     #     # hover_name=hover_name
-#     # fig.update_traces(diagonal_visible=False)
-#     df = df_index_parameter_gof
-#     columns = columns_with_parameters
 
-#     num_columns = len(columns)
-#     # Create a subplot grid for scatter matrix
-#     fig = make_subplots(rows=num_columns, cols=num_columns,
-#                         shared_xaxes=True, shared_yaxes=True,
-#                         horizontal_spacing=0.02, vertical_spacing=0.02)
+def plot_scatter_matrix_params_vs_gof(
+    df_index_parameter_gof, columns_with_parameters=None, name_of_gof_column="NSE", hover_name="Index_run",
+    height=800, width=800, title=None, color_continuous_scale='Viridis', diagonal_visible=False, big_dataset=False):
+    """
+    Plots a scatter matrix of parameters colored by a goodness-of-fit (GoF) metric.
+    :param df_index_parameter_gof: DataFrame containing parameter values and GoF metrics.
+    :param columns_with_parameters: List of parameter column names to include in the scatter matrix. If None, all parameter columns are used.
+    :param name_of_gof_column: Name of the column in df_index_parameter_gof to use for coloring the points.
+    :param hover_name: Name of the column to use for hover information.
+    :param height: Height of the plot.
+    :param width: Width of the plot.
+    :param title: Title of the plot. If None, a default title is generated.
+    :param color_continuous_scale: Color scale to use for coloring the points.
+    :param diagonal_visible: Boolean indicating whether to show histograms on the diagonal.
+    :param big_dataset: Boolean indicating whether the dataset is large, which affects marker size and opacity.
+    :return: A Plotly figure object representing the scatter matrix.
+    """
+    if columns_with_parameters is None:
+        columns_with_parameters = _get_parameter_columns_df_index_parameter_gof(df_index_parameter_gof)
+    if title is None:
+        title = f'Pairwise parameter scatter with {name_of_gof_column} coloring'
+    if name_of_gof_column not in df_index_parameter_gof.columns:
+        raise ValueError(f"{name_of_gof_column} not found in dataframe columns!")
+    fig = px.scatter_matrix(
+        df_index_parameter_gof,
+        dimensions=columns_with_parameters,  # columns to compare
+        color=name_of_gof_column,                         # color points by this column
+        color_continuous_scale=color_continuous_scale,           # nice color scale
+        title=title
+    )
 
-#     for i, x_col in enumerate(columns):
-#         for j, y_col in enumerate(columns):
-#             if i == j:
-#                 # Diagonal cells: Histogram for the column
-#                 fig.add_trace(go.Histogram(x=df[x_col], marker=dict(color='lightblue')),
-#                             row=i+1, col=j+1)
-#             else:
-#                 # Off-diagonal cells: Scatter plot for column pairs
-#                 fig.add_trace(go.Scatter(x=df[x_col], y=df[y_col], mode='markers',
-#                                         marker=dict(size=5, color=df[name_of_gof_column], 
-#                                         coloraxis="coloraxis")),
-#                             row=i+1, col=j+1)
+    fig.update_traces(diagonal_visible=diagonal_visible)  # optional: hide histograms on the diagonal
+    if big_dataset:
+        fig.update_traces(marker=dict(size=3, opacity=0.5))
+    fig.update_layout(height=height, width=width, showlegend=False)
+    return fig
 
-#             # Update axis labels only on the outer edges
-#             if j == 0:
-#                 fig.update_yaxes(title_text=y_col, row=i+1, col=j+1)
-#             if i == num_columns - 1:
-#                 fig.update_xaxes(title_text=x_col, row=i+1, col=j+1)
 
-#     # Update layout
-#     fig.update_layout(height=600, width=600, title_text="Custom Scatter Matrix",
-#                     showlegend=False)
-#     return fig
+def plot_scatter_matrix_params_vs_gof_lower_triangular(
+    df_index_parameter_gof, columns_with_parameters=None, name_of_gof_column="NSE", hover_name="Index_run",
+    height=800, width=800, title=None, color_continuous_scale='Viridis', 
+    diagonal_visible=False, showupperhalf=False, marker_size=5, opacity=1.0
+    ):
+    """
+    Plots a scatter matrix of parameters colored by a goodness-of-fit (GoF) metric
+    Similar to plot_scatter_matrix_params_vs_gof but using go.Splom to have more control
+    """
+
+    if columns_with_parameters is None:
+        columns_with_parameters = _get_parameter_columns_df_index_parameter_gof(df_index_parameter_gof)
+    if title is None:
+        title = f'Pairwise parameter scatter with {name_of_gof_column} coloring'
+    if name_of_gof_column not in df_index_parameter_gof.columns:
+        raise ValueError(f"{name_of_gof_column} not found in dataframe columns!")
+    
+    n = len(columns_with_parameters)
+
+    fig = go.Figure(
+        data=go.Splom(
+            dimensions=[dict(label=p, values=df_index_parameter_gof[p]) for p in columns_with_parameters],
+            text=None,
+            marker=dict(
+                size=marker_size,
+                opacity=opacity,
+                color=df_index_parameter_gof[name_of_gof_column],
+                colorscale=color_continuous_scale,
+                showscale=True,
+                colorbar=dict(title=name_of_gof_column)
+            ),
+            showupperhalf=showupperhalf,       # <-- hide upper triangle
+            diagonal_visible=diagonal_visible     # <-- hide diagonal
+        )
+    )
+    fig.update_layout(height=height, width=width, title=title, showlegend=False)
+
+    return fig
 
 ###################################################################################################################
 # Plotting UQ & SA Output
@@ -2423,6 +2460,9 @@ def plot_surface_2d_params_vs_gof(df_index_parameter_gof, param1, param2, num_of
 
 
 def plot_parallel_params_vs_gof(df_index_parameter_gof, name_of_gof_column="NSE", list_of_params=None):
+    """
+    Plots a parallel coordinates plot of parameters colored by a goodness-of-fit (GoF) metric.
+    """
     if list_of_params is None:
         list_of_params = _get_parameter_columns_df_index_parameter_gof(df_index_parameter_gof)
     dimensions_columns = list_of_params + [name_of_gof_column,]
@@ -2446,9 +2486,13 @@ def plot_parallel_params_vs_gof(df_index_parameter_gof, name_of_gof_column="NSE"
 
 
 def plot_scatter_matrix_params_vs_gof_seaborn(df_index_parameter_gof, columns_with_parameters=None, name_of_gof_column="NSE"):
+    """
+    Plots a scatter matrix of parameters colored by a goodness-of-fit (GoF) metric using seaborn.
+    Similar to plot_scatter_matrix_params_vs_gof but using seaborn pairplot
+    """
     if columns_with_parameters is None:
         columns_with_parameters = _get_parameter_columns_df_index_parameter_gof(df_index_parameter_gof)
-    sns.set(style="ticks", color_codes=True)
+    sns.set_theme(style="ticks", color_codes=True)
     g = sns.pairplot(
         df_index_parameter_gof, vars=columns_with_parameters, 
         corner=True, hue=name_of_gof_column
@@ -2535,11 +2579,11 @@ def plot_all_model_runs(df_simulation_result: pd.DataFrame, single_qoi_column: s
 
 
 # TODO Add more of this kind of utility functions for plotting
-def _add_10_90_percentiles(fig, df_temp, name=f'10th-90th Percentile', row=1, col=1, showlegend=True):
+def _add_10_90_percentiles(fig, df_temp, name=f'10th-90th Percentile', row=1, col=1, showlegend=True, transparency=0.4):
     if "P10" in df_temp.columns:
         fig.add_trace(go.Scatter(x=df_temp[TIME_COLUMN_NAME], y=df_temp["P10"],
                                  name=f'10th Percentile',
-                                 line_color='rgba(128,128,128, 0.4)', mode='lines',
+                                 line_color=f'rgba(128,128,128, {transparency})', mode='lines',
                                  showlegend=False,
                                 ),
                       row=row, col=col)
@@ -2547,48 +2591,49 @@ def _add_10_90_percentiles(fig, df_temp, name=f'10th-90th Percentile', row=1, co
         fig.add_trace(go.Scatter(x=df_temp[TIME_COLUMN_NAME], y=df_temp["P90"],
                                  name=name,
                                  mode='lines',
-                                 line=dict(color='rgba(128,128,128, 0.4)'), fill='tonexty',
-                                 fillcolor='rgba(128,128,128, 0.4)',
+                                 line=dict(color=f'rgba(128,128,128, {transparency})'), fill='tonexty',
+                                 fillcolor=f'rgba(128,128,128, {transparency})',
                                  showlegend=showlegend,
                                 ),
                       row=row, col=col)
     return fig
 
 
-def _add_e_2std(fig, df_temp, name=f'E+-2std', row=1, col=1, showlegend=True):
+
+def _add_e_2std(fig, df_temp, name=f'E+-2std', row=1, col=1, showlegend=True, transparency=0.4):
     if "E_minus_2std" in df_temp.columns:
-        fig.add_trace(go.Scatter(x=df_temp[utility.TIME_COLUMN_NAME], y=df_temp["E_minus_2std"],
-                                 name=f'10th Percentile',
-                                 line_color='rgba(128,128,128, 0.4)', mode='lines',
+        fig.add_trace(go.Scatter(x=df_temp[TIME_COLUMN_NAME], y=df_temp["E_minus_2std"],
+                                 name=f'E-2std',
+                                 line_color=f'rgba(128,128,128, {transparency})', mode='lines',
                                  showlegend=False,
                                 ),
                       row=row, col=col)
     if "E_plus_2std" in df_temp.columns:
-        fig.add_trace(go.Scatter(x=df_temp[utility.TIME_COLUMN_NAME], y=df_temp["E_plus_2std"],
+        fig.add_trace(go.Scatter(x=df_temp[TIME_COLUMN_NAME], y=df_temp["E_plus_2std"],
                                  name=name,
                                  mode='lines',
-                                 line=dict(color='rgba(128,128,128, 0.4)'), fill='tonexty',
-                                 fillcolor='rgba(128,128,128, 0.4)',
+                                 line=dict(color=f'rgba(128,128,128, {transparency})'), fill='tonexty',
+                                 fillcolor=f'rgba(128,128,128, {transparency})',
                                  showlegend=showlegend,
                                 ),
                       row=row, col=col)
     return fig
 
 
-def _add_e_std(fig, df_temp, name=f'E+-std', row=1, col=1, showlegend=True):
+def _add_e_std(fig, df_temp, name=f'E+-std', row=1, col=1, showlegend=True, transparency=0.4):
     if "E_minus_std" in df_temp.columns:
-        fig.add_trace(go.Scatter(x=df_temp[utility.TIME_COLUMN_NAME], y=df_temp["E_minus_std"],
-                                 name=f'10th Percentile',
-                                 line_color='rgba(128,128,128, 0.4)', mode='lines',
+        fig.add_trace(go.Scatter(x=df_temp[TIME_COLUMN_NAME], y=df_temp["E_minus_std"],
+                                 name=f'E-std',
+                                 line_color=f'rgba(128,128,128, {transparency})', mode='lines',
                                  showlegend=False,
                                 ),
                       row=row, col=col)
     if "E_plus_std" in df_temp.columns:
-        fig.add_trace(go.Scatter(x=df_temp[utility.TIME_COLUMN_NAME], y=df_temp["E_plus_std"],
+        fig.add_trace(go.Scatter(x=df_temp[TIME_COLUMN_NAME], y=df_temp["E_plus_std"],
                                  name=name,
                                  mode='lines',
-                                 line=dict(color='rgba(128,128,128, 0.4)'), fill='tonexty',
-                                 fillcolor='rgba(128,128,128, 0.4)',
+                                 line=dict(color=f'rgba(128,128,128, {transparency})'), fill='tonexty',
+                                 fillcolor=f'rgba(128,128,128, {transparency})',
                                  showlegend=showlegend,
                                 ),
                       row=row, col=col)
@@ -2636,8 +2681,39 @@ def _update_fig_with_si_data_for_single_df(
 
 
 def _update_fig_layout_and_save(fig, directory_for_saving_plots, fileName, \
-                                timesteps_min, timesteps_max, plotting_generalized_indices=False, height=1400, width=1100):
+                                timesteps_min, timesteps_max, title=None, plotting_generalized_indices=False, height=1400, width=1100,
+                                white_template=False, save_fig=True, 
+                                dtick="M2", tickformat='%b %y', 
+                                legend_orientation='h', legend_yanchor="bottom", legend_xanchor="right", legend_y=1.02, legend_x=0.99, showlegend=True,
+                                top_margin=10, bottom_margin=10, left_margin=20, right_margin=20
+                                ):
  
+    """
+    Update the layout of the figure and save it if required.
+
+    Args:
+        fig (plotly.graph_objs._figure.Figure): The figure to update.
+        directory_for_saving_plots (str): Directory to save the figure.
+        fileName (str): Name of the file to save the figure.
+        timesteps_min (str): Minimum time step for x-axis range.
+        timesteps_max (str): Maximum time step for x-axis range.
+        plotting_generalized_indices (bool): Flag indicating if generalized indices are being plotted.
+        height (int): Height of the figure.
+        width (int): Width of the figure.
+        white_template (bool): Flag to use white template.
+        save_fig (bool): Flag to save the figure.
+        dtick (str): Tick interval for x-axis. Default is "M2" (2 months).
+        tickformat (str): Format for x-axis ticks. Default is '%b %y' (e.g., "Jan 21").
+        legend_orientation (str): Orientation of the legend.
+        legend_yanchor (str): Y-anchor position of the legend. Default is "bottom", other option is "top".
+        legend_xanchor (str): X-anchor position of the legend. Default is "right", other option is "left".
+        legend_y (float): Y position of the legend.
+        legend_x (float): X position of the legend.
+        showlegend (bool): Flag to show legend.
+    Returns:
+        plotly.graph_objs._figure.Figure: The updated figure.
+
+    """
     fig.update_layout(
         xaxis=dict(
             rangemode='normal',
@@ -2649,45 +2725,66 @@ def _update_fig_layout_and_save(fig, directory_for_saving_plots, fileName, \
         #     autorange=True       # Auto-range is enabled
         # )
     )
+
+    fig.update_xaxes(
+        tickformat=tickformat,            # Format dates as "Month Day" (e.g., "Jan 01")
+        dtick=dtick                     # Set tick interval to 1 day for denser ticks
+    )
+
+    # Legend positioning
+    fig.update_layout(
+        legend=dict(
+            orientation=legend_orientation, yanchor=legend_yanchor, y=legend_y, xanchor=legend_xanchor, x=legend_x, 
+            # bordercolor='gray', borderwidth=1
+            ),
+        showlegend=showlegend,
+    )
     if plotting_generalized_indices:
         fig.update_layout(
-            legend=dict(orientation="h", yanchor="bottom", y=-0.04, xanchor="right", x=0.99),
-            showlegend=True,
-            # template="plotly_white",
+            legend=dict(orientation=legend_orientation, yanchor="bottom", y=-0.04, xanchor="right", x=0.99),
+            showlegend=showlegend,
         )
-    else:
-        fig.update_layout(
-                # legend=dict(yanchor="bottom", y=0.01, xanchor="right", x=0.99),
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=0.8),
-                showlegend=True,
-                # template="plotly_white",
-            )
-    # fig.update_layout(xaxis=dict(type="date"))
-    fig.update_xaxes(
-        tickformat='%b %y',            # Format dates as "Month Day" (e.g., "Jan 01")
-        dtick="M2"                     # Set tick interval to 1 day for denser ticks
-    )
+    
+    # for current_row in range(0, n_rows):
+    #     if current_row%2==0:
+    #         fig.update_xaxes(visible=False, row=current_row+1, col=1)
+        
+    # for current_row in range(0, n_rows-1):
+    #     fig.update_xaxes(visible=False, row=current_row+1, col=1)
 
     fig.update_layout(height=height, width=width)
-    fig.update_layout(title=None)
+    fig.update_layout(title=title)
     fig.update_layout(
         margin=dict(
-            t=20,  # Top margin
-            b=10,  # Bottom margin
-            l=20,  # Left margin
-            r=20   # Right margin
+            t=top_margin,
+            b=bottom_margin,
+            l=left_margin,
+            r=right_margin
         )
     )
 
+    if white_template:
+        fig.update_layout(
+            template='simple_white', #'plotly_white'
+            #plot_bgcolor='white',  
+        )
+        fig.update_xaxes(showgrid=True, gridcolor='lightgray', gridwidth=1)
+        fig.update_yaxes(showgrid=True, gridcolor='lightgray', gridwidth=1)
+
+    if save_fig:
+        fun_save_fig(fig, fileName, directory_for_saving_plots, height=height, width=width)
+
+    return fig
+
+
+def fun_save_fig(fig, fileName, directory_for_saving_plots, height=1400, width=1100):
     # if not str(directory_for_saving_plots).endswith("/"):
     #     directory_for_saving_plots = str(directory_for_saving_plots) + "/"
     fileName_without_ext = pathlib.Path(fileName).stem
     plot_filename = str(directory_for_saving_plots) + "/" + f"{fileName_without_ext}.html"
     pyo.plot(fig, filename=plot_filename, auto_open=False)
     plot_filename = pathlib.Path(directory_for_saving_plots) / f"{fileName_without_ext}.pdf"
-    fig.write_image(str(plot_filename), format="pdf", width=1100,)
-    return fig
-
+    fig.write_image(str(plot_filename), format="pdf", height=height, width=width)
 # ===================================================================================================================
 # Functions for extracting parameter name from columns of pd.DataFrame storing info on Sobol or Generalized Sobol indices
 # The functions are useful when plotting
@@ -2695,11 +2792,12 @@ def _update_fig_layout_and_save(fig, directory_for_saving_plots, fileName, \
 
 import re
 
+# TODO Make this more general to extract paramname from other prefixes as well
 pattern = re.compile(
     r"^generalized_sobol_total_index_(?P<paramname>[^_]+)(?:_(?P<timestamp>[^_]+))?$"
 )
 
-
+# TODO Make this more general to extract paramname from other prefixes as well
 def extract_paramname(whole_string, prefix="generalized_sobol_total_index"):
     # Regular expression pattern to match both cases
     pattern = r"generalized_sobol_total_index_(.*?)(?:_\d+)?$"
@@ -2710,6 +2808,7 @@ def extract_paramname(whole_string, prefix="generalized_sobol_total_index"):
     if match:
         return match.group(1)  # Extract the paramname
     return None  # Return None if no match is found
+    
     
 def extract_param_name_from_column_generlized_index(column_name):
     match = pattern.match(column_name)
@@ -2725,11 +2824,13 @@ def extract_param_name_from_column_generlized_index(column_name):
 def identify_column_generlized_index_form(column_name):
     match = pattern.fullmatch(column_name)
     if not match:
-        return "invalid", None
+        # return "invalid", None
+        return None, None
     paramname = match.group("paramname")
     look_back_window_size = match.group("timestamp")
     if look_back_window_size is None:
-        return "whole", paramname  # generalized_sobol_total_index_{paramname}
+        # return "whole", paramname  # generalized_sobol_total_index_{paramname}
+        return None, paramname
     else:
         return look_back_window_size, paramname  # generalized_sobol_total_index_{paramname}_{timestamp}
 
@@ -4540,7 +4641,8 @@ def plot_2d_matrix_of_nodes_over_orders(rule, dist, orders, sparse=False, growth
 
         df_nodes_weights = pd.DataFrame(dict_for_plotting)
 
-        sns.set(style="ticks", color_codes=True)
+        sns.set_theme(style="ticks", color_codes=True)
+
         g = sns.pairplot(df_nodes_weights, vars=list(dict_for_plotting.keys()), corner=True)
         if growth:
             title = f"{rule} points chaospy; order = {order}; sparse={str(sparse)}; #nodes={abscissas.shape[0]}; growth=True"
