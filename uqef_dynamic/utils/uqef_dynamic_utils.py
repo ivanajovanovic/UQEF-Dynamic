@@ -9,19 +9,20 @@ and time_dependent_model and time_dependent_statistics modules!
 @author: Ivana Jovanovic Buha
 """
 from collections import defaultdict
+from dataclasses import dataclass 
 import dill
 import pickle
 import os
 import numpy as np
 from numpy.polynomial.polynomial import Polynomial
-import math
-import pathlib
+import math 
+from pathlib import Path
 import pandas as pd
 from pandas.api.types import is_datetime64_any_dtype
 import scipy
 import seaborn as sns
 import time
-from typing import List, Optional, Dict, Any, Union, Tuple
+from typing import TypedDict, NamedTuple, Optional, Dict, Any, List, Union, Tuple
 
 # importing modules/libs for plotting
 from plotly.subplots import make_subplots
@@ -44,6 +45,63 @@ from uqef_dynamic.utils import sens_indices_sampling_based_utils
 # ============================================================================================
 # Whole pipeline for reading the output saved by UQEF-Dynamic simulation and producing dict of interes
 # ============================================================================================
+class OutputFilePaths(NamedTuple):
+    args_file: Path
+    configuration_object_file: Path
+    nodes_file: Path
+    time_info_file: Path
+    df_index_parameter_file: Path
+    df_index_parameter_gof_file: Path
+    df_simulations_file: Path
+    df_state_file: Path
+    simulation_parameters_file: Path
+
+
+@dataclass
+class UQEFDynamicResults:
+    """Container for UQEF-Dynamic simulation results."""
+    workingDir: Path
+    args_files: Union[Dict[str, Path], OutputFilePaths] #Dict[str, Path]
+    uqsim_args_dict: Dict[str, Any]
+    model: str
+    inputModelDir: Path
+    configurationObject: Dict[str, Any]
+    simulation_settings_dict: Dict[str, Any]
+    simulationNodes: Any  # Your custom SimulationNodes type
+    dim: int
+    time_info: Optional[str] = None
+    df_index_parameter: Optional[pd.DataFrame] = None
+    params_list: List[str] = None
+    df_index_parameter_gof: Optional[pd.DataFrame] = None
+    gof_list: Optional[List[str]] = None
+    df_simulation_result: Optional[pd.DataFrame] = None
+    df_state: Optional[pd.DataFrame] = None
+    
+    # You can add methods for common operations
+    def has_simulation_results(self) -> bool:
+        return self.df_simulation_result is not None
+    
+    def get_parameter_count(self) -> int:
+        return len(self.params_list) if self.params_list else 0
+
+
+@dataclass
+class SimulationData:
+    """Core simulation data subset."""
+    simulationNodes: Any
+    dim: int
+    df_simulation_result: Optional[pd.DataFrame]
+    df_index_parameter: Optional[pd.DataFrame]
+
+
+@dataclass  
+class ConfigData:
+    """Configuration data subset."""
+    uqsim_args_dict: Dict[str, Any]
+    configurationObject: Dict[str, Any]
+    simulation_settings_dict: Dict[str, Any]
+# ============================================================================================
+
 def read_output_files_uqef_dynamic(workingDir, printing=False, **kwargs):
     """
     This function reads the output files created by the UQEF-Dynamic pipeline.
@@ -89,17 +147,16 @@ def read_output_files_uqef_dynamic(workingDir, printing=False, **kwargs):
         raise Exception(f"Directory {workingDir} does not exist!")
 
     results_dict = {}
-    
-    args_files = utility.get_dict_with_output_file_paths_based_on_workingDir(
-        workingDir,
-    )
-    for key, value in args_files.items():
-        globals()[key] = value
+
+    args_files_dict = utility.get_dict_with_output_file_paths_based_on_workingDir(workingDir)
+    files = OutputFilePaths(**args_files_dict)  # Unpack dict to named tuple
+    # for key, value in args_files.items():
+    #     globals()[key] = value
 
     # Load the UQSim args dictionary
-    if not args_file.is_file():
-        raise Error(f"File {args_file} is missing!")
-    uqsim_args_dict = utility.load_uqsim_args_dict(args_file)
+    if not files.args_file.is_file():
+        raise FileNotFoundError(f"File {files.args_file} is missing!")
+    uqsim_args_dict = utility.load_uqsim_args_dict(files.args_file)
     if printing:
         print("INFO: uqsim_args_dict: ", uqsim_args_dict)
     model = uqsim_args_dict["model"]
@@ -107,23 +164,23 @@ def read_output_files_uqef_dynamic(workingDir, printing=False, **kwargs):
     # Maybe to do something like this...
     # if inputModelDir is not None:
     #     if inputModelDir != uqsim_args_dict["inputModelDir"]:
-    #         uqsim_args_dict["inputModelDir"] = pathlib.Path(inputModelDir)
+    #         uqsim_args_dict["inputModelDir"] = Path(inputModelDir)
     # else:
     #     inputModelDir = uqsim_args_dict["inputModelDir"]
-    # inputModelDir = pathlib.Path(inputModelDir)
+    # inputModelDir = Path(inputModelDir)
     inputModelDir = uqsim_args_dict["inputModelDir"]
 
     # Load the configuration object
-    if not configuration_object_file.is_file():
-        raise Error(f"File {configuration_object_file} is missing!")
-    configurationObject = utility.load_configuration_object(configuration_object_file)
+    if not files.configuration_object_file.is_file():
+        raise FileNotFoundError(f"File {files.configuration_object_file} is missing!")
+    configurationObject = utility.load_configuration_object(files.configuration_object_file)
     if printing:
         print("configurationObject: ", configurationObject)
     simulation_settings_dict = utility.read_simulation_settings_from_configuration_object(configurationObject)
 
     # Timing information
-    if time_info_file.is_file():
-        with open(time_info_file, 'r') as f:
+    if files.time_info_file.is_file():
+        with open(files.time_info_file, 'r') as f:
             time_info = f.read() #readlines()?
         if printing:
             print("INFO: time_info: ", time_info)
@@ -131,14 +188,14 @@ def read_output_files_uqef_dynamic(workingDir, printing=False, **kwargs):
         time_info = None
 
     # Reading Nodes and Parameters
-    if not nodes_file.is_file():
-        print(f"INFO: simulationNodes file {nodes_file} is missing!!!")
+    if not files.nodes_file.is_file():
+        print(f"INFO: simulationNodes file {files.nodes_file} is missing!!!")
         simulationNodes = None
         distStandard  = None
         dist = None
         dim = None
     else:
-        with open(nodes_file, 'rb') as f:
+        with open(files.nodes_file, 'rb') as f:
             simulationNodes = pickle.load(f)
         if printing:
             print("INFO: simulationNodes: ", simulationNodes)
@@ -148,7 +205,7 @@ def read_output_files_uqef_dynamic(workingDir, printing=False, **kwargs):
         dist = simulationNodes.joinedDists
 
     results_dict["workingDir"]=workingDir
-    results_dict["args_files"]=args_files
+    results_dict["args_files"]=args_files_dict # or files
     results_dict["uqsim_args_dict"]=uqsim_args_dict
     results_dict["model"]=model
     results_dict["inputModelDir"]=inputModelDir
@@ -158,8 +215,8 @@ def read_output_files_uqef_dynamic(workingDir, printing=False, **kwargs):
     results_dict["simulationNodes"]=simulationNodes
     results_dict["dim"]=dim
 
-    if df_index_parameter_file.is_file():
-        df_index_parameter = pd.read_pickle(df_index_parameter_file, compression="gzip")
+    if files.df_index_parameter_file.is_file():
+        df_index_parameter = pd.read_pickle(files.df_index_parameter_file, compression="gzip")
         params_list = utility._get_parameter_columns_df_index_parameter_gof(
             df_index_parameter)
         if printing:
@@ -174,8 +231,8 @@ def read_output_files_uqef_dynamic(workingDir, printing=False, **kwargs):
     results_dict["df_index_parameter"]=df_index_parameter
     results_dict["params_list"]=params_list
 
-    if df_index_parameter_gof_file.is_file():
-        df_index_parameter_gof = pd.read_pickle(df_index_parameter_gof_file, compression="gzip")
+    if files.df_index_parameter_gof_file.is_file():
+        df_index_parameter_gof = pd.read_pickle(files.df_index_parameter_gof_file, compression="gzip")
         gof_list = utility._get_gof_columns_df_index_parameter_gof(
             df_index_parameter_gof)
         if printing:
@@ -194,16 +251,16 @@ def read_output_files_uqef_dynamic(workingDir, printing=False, **kwargs):
     read_saved_simulations = kwargs.get('read_saved_simulations', False)
     read_saved_states = kwargs.get('read_saved_states', False)
 
-    if read_saved_simulations and df_simulations_file.is_file():
-        df_simulation_result = pd.read_pickle(df_simulations_file, compression="gzip")
+    if read_saved_simulations and files.df_simulations_file.is_file():
+        df_simulation_result = pd.read_pickle(files.df_simulations_file, compression="gzip")
         if printing:
             print(f"INFO: df_simulation_result - {df_simulation_result}")
     else:
         df_simulation_result = None
     results_dict["df_simulation_result"]=df_simulation_result
 
-    if read_saved_states and df_state_file.is_file():
-        df_state = pd.read_pickle(df_state_file, compression="gzip")
+    if read_saved_states and files.df_state_file.is_file():
+        df_state = pd.read_pickle(files.df_state_file, compression="gzip")
         if printing:
             print(f"INFO: df_state - {df_state}")
     else:
@@ -241,7 +298,7 @@ def read_output_files_uqef_dynamic(workingDir, printing=False, **kwargs):
     if printing:
         print(f"INFO: model-{model}; dim - {dim};")
 
-    simulation_parameters_file = args_files["simulation_parameters_file"]
+    simulation_parameters_file = files.simulation_parameters_file
     if df_simulation_result is not None:
         results_dict["number_full_model_evaluations"] = len(df_simulation_result)
     elif simulation_parameters_file.is_file():
@@ -266,7 +323,7 @@ def read_output_files_uqef_dynamic(workingDir, printing=False, **kwargs):
     return results_dict
 
 
-def read_all_saved_uqef_dynamic_results_and_produce_dict_of_interest(workingDir, **kwargs):
+def read_all_saved_uqef_dynamic_results_and_produce_dict_of_interest(workingDir, **kwargs) -> Dict[str, Any]:
     """
     This function builds on top of the read_output_files_uqef_dynamic function.
     It returns similar dictionary as read_all_saved_uqef_dynamic_results_and_produce_dict_of_interest_single_qoi_single_timestamp
@@ -285,17 +342,30 @@ def read_all_saved_uqef_dynamic_results_and_produce_dict_of_interest(workingDir,
         - plus extra entries from update_dict_with_results_of_interest_based_on_uqsim_args_dict
 
     """
-    dict_with_results_of_interest = defaultdict()
     results_dict = read_output_files_uqef_dynamic(workingDir, **kwargs)
-    for key, value in results_dict.items():
-        globals()[key] = value
 
-    dim = simulationNodes.distNodes.shape[0]
+    sim_data = SimulationData(
+        simulationNodes=results_dict['simulationNodes'],
+        dim=results_dict['dim'],
+        df_simulation_result=results_dict.get('df_simulation_result'),
+        df_index_parameter=results_dict.get('df_index_parameter')
+    )
+
+    config = ConfigData(
+        uqsim_args_dict=results_dict['uqsim_args_dict'],
+        configurationObject=results_dict['configurationObject'],
+        simulation_settings_dict=results_dict['simulation_settings_dict']
+    )
+
+    dim = sim_data.simulationNodes.distNodes.shape[0]
+
+    dict_with_results_of_interest = defaultdict()
 
     # Update dict with results of interest based on uqsim_args_dict - add variant, q_order, mc_numevaluations
-    update_dict_with_results_of_interest_based_on_uqsim_args_dict(dict_with_results_of_interest, uqsim_args_dict)
+    update_dict_with_results_of_interest_based_on_uqsim_args_dict(dict_with_results_of_interest, config.uqsim_args_dict)
 
     # Timing information
+    time_info = results_dict.get('time_info')
     if time_info is not None:
         for line in time_info:
             if line.startswith("time_model_simulations"):
@@ -305,23 +375,23 @@ def read_all_saved_uqef_dynamic_results_and_produce_dict_of_interest(workingDir,
 
     # whatch-out this might be tricky when not all params are regarded as uncertain!
     param_labeles = utility.get_list_of_uncertain_parameters_from_configuration_dict(
-        configurationObject, raise_error=True, uq_method=uqsim_args_dict["uq_method"])
+        config.configurationObject, raise_error=True, uq_method=config.uqsim_args_dict["uq_method"])
     #print(f"Debugging - params_list: {params_list}; simulationNodes.nodeNames: {simulationNodes.nodeNames}; param_labeles: {param_labeles}")    
-    dict_with_results_of_interest["parameterNames"] = params_list  #not simulationNodes.nodeNames, instead better simulationNodes.orderdDistsNames
+    dict_with_results_of_interest["parameterNames"] = results_dict["params_list"]  #not simulationNodes.nodeNames, instead better simulationNodes.orderdDistsNames
     dict_with_results_of_interest["stochasticParameterNames"] = param_labeles
 
-    simulation_parameters_file = args_files["simulation_parameters_file"]
-    if df_simulation_result is not None:
-        dict_with_results_of_interest["number_full_model_evaluations"] = len(df_simulation_result)
+    simulation_parameters_file = results_dict["args_files"]["simulation_parameters_file"]
+    if sim_data.df_simulation_result is not None:
+        dict_with_results_of_interest["number_full_model_evaluations"] = len(sim_data.df_simulation_result)
     elif simulation_parameters_file.is_file():
         simulation_parameters = np.load(simulation_parameters_file,  allow_pickle=True)
         #print(f"Debugging - simulation_parameters.shape: {simulation_parameters.shape}")
         dict_with_results_of_interest["number_full_model_evaluations"] = simulation_parameters.shape[0]
     else:
-        if uqsim_args_dict["uq_method"]!="saltelli":
-            dict_with_results_of_interest["number_full_model_evaluations"] = simulationNodes.nodes.shape[1]
+        if config.uqsim_args_dict["uq_method"]!="saltelli":
+            dict_with_results_of_interest["number_full_model_evaluations"] = sim_data.simulationNodes.nodes.shape[1]
         else:
-            dict_with_results_of_interest["number_full_model_evaluations"] = (uqsim_args_dict["mc_numevaluations"]) * (2 + dim)
+            dict_with_results_of_interest["number_full_model_evaluations"] = (config.uqsim_args_dict["mc_numevaluations"]) * (2 + dim)
 
     if dict_with_results_of_interest["variant"] not in ["m1", "m2"]:
         dict_with_results_of_interest["full_number_quadrature_points"] = \
@@ -365,25 +435,24 @@ timestamp, qoi_column_name=None, time_column_name=utility.TIME_COLUMN_NAME, plot
     dict_with_results_of_interest = defaultdict()
     dict_with_results_of_interest["outputModelDir"] = workingDir
 
-    args_files = utility.get_dict_with_output_file_paths_based_on_workingDir(workingDir)
-    for key, value in args_files.items():
-        globals()[key] = value
-
+    args_files_dict = utility.get_dict_with_output_file_paths_based_on_workingDir(workingDir)
+    files = OutputFilePaths(**args_files_dict)
+    
     # Reading UQEF-Dynamic Output files
 
     # Load the UQSim args dictionary
-    uqsim_args_dict = utility.load_uqsim_args_dict(args_file)
+    uqsim_args_dict = utility.load_uqsim_args_dict(files.args_file)
 
     # Update dict with results of interest based on uqsim_args_dict - add variant, q_order, mc_numevaluations
     update_dict_with_results_of_interest_based_on_uqsim_args_dict(dict_with_results_of_interest, uqsim_args_dict)
 
     # Load the configuration object
-    configurationObject = utility.load_configuration_object(configuration_object_file)
+    configurationObject = utility.load_configuration_object(files.configuration_object_file)
     simulation_settings_dict = utility.read_simulation_settings_from_configuration_object(configurationObject)
 
     # Timing information
-    if time_info_file.is_file():
-        with open(time_info_file) as f:
+    if files.time_info_file.is_file():
+        with open(files.time_info_file) as f:
             lines = f.readlines()
             for line in lines:
                 #print(line)
@@ -394,12 +463,12 @@ timestamp, qoi_column_name=None, time_column_name=utility.TIME_COLUMN_NAME, plot
 
     ########################################################
     # Reading Simulation Nodes / Parameters
-    with open(nodes_file, 'rb') as f:
+    with open(files.nodes_file, 'rb') as f:
         simulationNodes = pickle.load(f)
     dim = simulationNodes.distNodes.shape[0] #len(param_labeles)  # this should represent a stochastic dimensionality
 
-    if df_index_parameter_file.is_file():
-        df_index_parameter = pd.read_pickle(df_index_parameter_file, compression="gzip")
+    if files.df_index_parameter_file.is_file():
+        df_index_parameter = pd.read_pickle(files.df_index_parameter_file, compression="gzip")
     else:
         df_index_parameter = None
     if df_index_parameter is not None:
@@ -410,8 +479,8 @@ timestamp, qoi_column_name=None, time_column_name=utility.TIME_COLUMN_NAME, plot
         for single_param in configurationObject["parameters"]:
             params_list.append(single_param["name"])
 
-    if df_index_parameter_gof_file.is_file():
-        df_index_parameter_gof = pd.read_pickle(df_index_parameter_gof_file, compression="gzip")
+    if files.df_index_parameter_gof_file.is_file():
+        df_index_parameter_gof = pd.read_pickle(files.df_index_parameter_gof_file, compression="gzip")
         gof_list = utility._get_gof_columns_df_index_parameter_gof(
             df_index_parameter_gof)
 
@@ -431,8 +500,8 @@ timestamp, qoi_column_name=None, time_column_name=utility.TIME_COLUMN_NAME, plot
         # dict_with_results_of_interest["number_full_model_evaluations"] = (simulationNodes.nodes.shape[1]/2) * (2 + dim)
     
     # Reading parameters which were saved to run/stimulate the model
-    if simulation_parameters_file.is_file():
-        simulation_parameters = np.load(simulation_parameters_file,  allow_pickle=True)
+    if files.simulation_parameters_file.is_file():
+        simulation_parameters = np.load(files.simulation_parameters_file,  allow_pickle=True)
         #print(f"Debugging - simulation_parameters.shape: {simulation_parameters.shape}")
         dict_with_results_of_interest["number_full_model_evaluations"] = simulation_parameters.shape[0]
 
@@ -460,18 +529,17 @@ timestamp, qoi_column_name=None, time_column_name=utility.TIME_COLUMN_NAME, plot
     read_saved_simulations = kwargs.get('read_saved_simulations', False)
     read_saved_states = kwargs.get('read_saved_states', False)
 
-    if read_saved_simulations and df_simulations_file.is_file():
+    if read_saved_simulations and files.df_simulations_file.is_file():
         # Reading Saved Simulations - Note: This migh be a huge file,
         # especially for MC/Saltelli kind of simulations
-        df_simulation_result = pd.read_pickle(df_simulations_file, compression="gzip")
+        df_simulation_result = pd.read_pickle(files.df_simulations_file, compression="gzip")
         dict_with_results_of_interest["number_full_model_evaluations"] = len(df_simulation_result)
     else:
         df_simulation_result = None
 
-    if read_saved_states and df_state_file.is_file():
-        df_state = pd.read_pickle(df_state_file, compression="gzip")
-        if printing:
-            print(f"INFO: df_state - {df_state}")
+    if read_saved_states and files.df_state_file.is_file():
+        df_state = pd.read_pickle(files.df_state_file, compression="gzip")
+        # print(f"INFO: df_state - {df_state}")
 
     ########################################################
     # Specific part for a single QoI and timestep, this should be refactored to be more general
@@ -507,7 +575,7 @@ timestamp, qoi_column_name=None, time_column_name=utility.TIME_COLUMN_NAME, plot
     statistics_dictionary  = statistics_dictionary[qoi_column_name]
     # extract only stat dict for a particula timestamp
     if pd.Timestamp(timestamp) in statistics_dictionary:
-        statistics_dictionary = statistics_dictionary[pd.Timestamp(timestimestamptemp)]
+        statistics_dictionary = statistics_dictionary[pd.Timestamp(timestamp)]
     elif timestamp in statistics_dictionary:
         statistics_dictionary = statistics_dictionary[timestamp]
     else:
@@ -735,7 +803,7 @@ def update_dict_with_method_variant_based_on_uqsim_args_dict(dict_with_results_o
         if (not uqsim_args_dict["sc_sparse_quadrature"] and not uqsim_args_dict["read_nodes_from_file"]) and uqsim_args_dict["cross_truncation"]==1.0:
             variant = "m4"
         elif (uqsim_args_dict["sc_sparse_quadrature"] or uqsim_args_dict["read_nodes_from_file"]) and uqsim_args_dict["cross_truncation"]==1.0:
-            parameters_file = pathlib.Path(uqsim_args_dict["parameters_file"]).name
+            parameters_file = Path(uqsim_args_dict["parameters_file"]).name
             if uqsim_args_dict["sc_quadrature_rule"] == "KPU" or parameters_file.startswith('KPU'):
                 variant = "m5-kpu"
             elif uqsim_args_dict["sc_quadrature_rule"] == "GQU" or parameters_file.startswith('GQU'):
@@ -747,7 +815,7 @@ def update_dict_with_method_variant_based_on_uqsim_args_dict(dict_with_results_o
             # variant = f"m6-{ct}"
             variant = f"m6"
         elif (uqsim_args_dict["sc_sparse_quadrature"] or uqsim_args_dict["read_nodes_from_file"]) and uqsim_args_dict["cross_truncation"]<1.0:
-            parameters_file = pathlib.Path(uqsim_args_dict["parameters_file"]).name
+            parameters_file = Path(uqsim_args_dict["parameters_file"]).name
             if uqsim_args_dict["sc_quadrature_rule"] == "KPU" or parameters_file.startswith('KPU'):
                 variant = "m7-kpu"
             elif uqsim_args_dict["sc_quadrature_rule"] == "GQU" or parameters_file.startswith('GQU'):
@@ -809,7 +877,7 @@ def update_dict_with_results_of_interest_based_on_uqsim_args_dict(dict_with_resu
         if (not uqsim_args_dict["sc_sparse_quadrature"] and not uqsim_args_dict["read_nodes_from_file"]) and uqsim_args_dict["cross_truncation"]==1.0:
             variant = "m4"
         elif (uqsim_args_dict["sc_sparse_quadrature"] or uqsim_args_dict["read_nodes_from_file"]) and uqsim_args_dict["cross_truncation"]==1.0:
-            parameters_file = pathlib.Path(uqsim_args_dict["parameters_file"]).name
+            parameters_file = Path(uqsim_args_dict["parameters_file"]).name
             if uqsim_args_dict["sc_quadrature_rule"] == "KPU" or parameters_file.startswith('KPU'):
                 variant = "m5-kpu"
             elif uqsim_args_dict["sc_quadrature_rule"] == "GQU" or parameters_file.startswith('GQU'):
@@ -823,7 +891,7 @@ def update_dict_with_results_of_interest_based_on_uqsim_args_dict(dict_with_resu
             variant = f"m6"
         elif (uqsim_args_dict["sc_sparse_quadrature"] or uqsim_args_dict["read_nodes_from_file"]) and uqsim_args_dict["cross_truncation"]<1.0:
             # dict_with_results_of_interest["cross_truncation"] = uqsim_args_dict["cross_truncation"]
-            parameters_file = pathlib.Path(uqsim_args_dict["parameters_file"]).name
+            parameters_file = Path(uqsim_args_dict["parameters_file"]).name
             if uqsim_args_dict["sc_quadrature_rule"] == "KPU" or parameters_file.startswith('KPU'):
                 variant = "m7-kpu"
             elif uqsim_args_dict["sc_quadrature_rule"] == "GQU" or parameters_file.startswith('GQU'):
@@ -3149,7 +3217,8 @@ def plot_si_and_normalized_measured_time_signal_single_qoi(
 
 
 def plotting_function_single_qoi(
-    df, single_qoi, subplot_titles=None, dict_what_to_plot=None, directory="./", fileName="simulation_big_plot"
+    df, single_qoi, subplot_titles=None, dict_what_to_plot=None, directory="./", fileName="simulation_big_plot",
+    width=1000, height=1000, title=None, save_fig=True, **kwargs
     ):
     """
         Important assumption - df is alredy filtered such that it only containes data for a spesific qoi (i.e., single_qoi)
@@ -3160,27 +3229,27 @@ def plotting_function_single_qoi(
 
     if dict_what_to_plot is None:
         dict_what_to_plot = {
-            "E_minus_std": True, "E_plus_std": True, 
-            "E_minus_2std": True, "E_plus_2std": True,
-            "P10": True, "P90": True,
-            "StdDev": True, "Skew": False, "Kurt": False,
+            utility.E_MINUS_STD_ENTRY: True, utility.E_PLUS_STD_ENTRY: True, 
+            utility.E_MINUS_2STD_ENTRY: True, utility.E_PLUS_2STD_ENTRY: True,
+            utility.P10_ENTRY: True, utility.P90_ENTRY: True,
+            utility.STD_DEV_ENTRY: True, utility.SKEW_ENTRY: False, utility.KURT_ENTRY: False,
         }
 
-    if dict_what_to_plot.get("StdDev", False) and 'StdDev' in df.columns:
+    if dict_what_to_plot.get(utility.STD_DEV_ENTRY, False) and utility.STD_DEV_ENTRY in df.columns:
         n_rows += 1
-    if dict_what_to_plot.get("Skew", False) and 'Skew' in df.columns:
+    if dict_what_to_plot.get(utility.SKEW_ENTRY, False) and utility.SKEW_ENTRY in df.columns:
         n_rows += 1
-    if dict_what_to_plot.get("Kurt", False) and 'Kurt' in df.columns:
+    if dict_what_to_plot.get(utility.KURT_ENTRY, False) and utility.KURT_ENTRY in df.columns:
         n_rows += 1
 
     if subplot_titles is None:
         subplot_titles = ("Model Output",)
-        if dict_what_to_plot.get("StdDev", False) and 'StdDev' in df.columns:
+        if dict_what_to_plot.get(utility.STD_DEV_ENTRY, False) and utility.STD_DEV_ENTRY in df.columns:
             subplot_titles = subplot_titles + ("Standard Deviation",)
-        if dict_what_to_plot.get("Skew", False) and 'Skew' in df.columns:
-            subplot_titles = subplot_titles + ("Skew",)
-        if dict_what_to_plot.get("Kurt", False) and 'Kurt' in df.columns:
-            subplot_titles = subplot_titles + ("Kurt",)
+        if dict_what_to_plot.get(utility.SKEW_ENTRY, False) and utility.SKEW_ENTRY in df.columns:
+            subplot_titles = subplot_titles + (utility.SKEW_ENTRY,)
+        if dict_what_to_plot.get(utility.KURT_ENTRY, False) and utility.KURT_ENTRY in df.columns:
+            subplot_titles = subplot_titles + (utility.KURT_ENTRY,)
 
     fig = make_subplots(
         rows=n_rows, cols=1,
@@ -3188,143 +3257,78 @@ def plotting_function_single_qoi(
         shared_xaxes=True,
         horizontal_spacing=0.01, vertical_spacing=0.04
     )
+    
     fig.add_trace(
         go.Scatter(
-            x=df['TimeStamp'], y=df['E'],
-            text=df['E'],
+            x=df[utility.TIME_COLUMN_NAME], y=df[utility.MEAN_ENTRY],
+            text=df[utility.MEAN_ENTRY],
             name=f"Mean predicted {single_qoi}", mode='lines'
         ),
         row=starting_row_for_predicted_data, col=1
     )
 
-    if dict_what_to_plot.get("E_minus_std", False) and 'E_minus_std' in df.columns:
-        fig.add_trace(
-            go.Scatter(
-                x=df['TimeStamp'], y=df['E_minus_std'],
-                name=f'E_minus_std',
-                text=df['E_minus_std'], mode='lines', showlegend=False, line_color='rgba(200, 200, 200, 0.4)', #line_color="grey",
-            ),
-            row=starting_row_for_predicted_data, col=1
-        )
-    if dict_what_to_plot.get("E_plus_std", False) and 'E_plus_std' in df.columns:
-        fig.add_trace(
-            go.Scatter(
-                x=df['TimeStamp'], y=df['E_plus_std'],
-                name=f'E+-std',
-                text=df['E_plus_std'],
-                mode='lines', fill='tonexty', showlegend=True, line_color='rgba(200, 200, 200, 0.4)', #line_color="grey",
-            ),
-            row=starting_row_for_predicted_data, col=1
-        )
+    if dict_what_to_plot.get(utility.E_MINUS_STD_ENTRY, False) and dict_what_to_plot.get(utility.E_PLUS_STD_ENTRY, False):
+        utility._add_e_std(
+            fig, df, row=starting_row_for_predicted_data, col=1, 
+            showlegend=True, transparency=0.4
+            )
 
-    if dict_what_to_plot.get("E_minus_2std", False) and 'E_minus_2std' in df.columns:
-        fig.add_trace(
-            go.Scatter(
-                x=df['TimeStamp'], y=df['E_minus_2std'],
-                name=f'E_minus_2std',
-                text=df['E_minus_2std'], mode='lines', showlegend=False, line_color='rgba(200, 200, 200, 0.4)', #line_color="grey",
-            ),
-            row=starting_row_for_predicted_data, col=1
-        )
-    if dict_what_to_plot.get("E_plus_2std", False) and 'E_plus_2std' in df.columns:
-        fig.add_trace(
-            go.Scatter(
-                x=df['TimeStamp'], y=df['E_plus_2std'],
-                name=f'E+-2std',
-                text=df['E_plus_2std'],
-                mode='lines', fill='tonexty', showlegend=True, line_color='rgba(200, 200, 200, 0.4)', #line_color="grey",
-            ),
-            row=starting_row_for_predicted_data, col=1
-        )
+    if dict_what_to_plot.get(utility.E_MINUS_2STD_ENTRY, False) and dict_what_to_plot.get(utility.E_PLUS_2STD_ENTRY, False):
+        utility._add_e_2std(
+            fig, df, row=starting_row_for_predicted_data, col=1, 
+            showlegend=True, transparency=0.4
+            )
 
-    if dict_what_to_plot.get("P10", False) and 'P10' in df.columns:
-        fig.add_trace(go.Scatter(x=df['TimeStamp'], y=df["P10"],
-                                 name=f'P10',
-                                 line_color='rgba(255, 165, 0, 0.3)', mode='lines', showlegend=False),
-                      row=starting_row_for_predicted_data, col=1)
-    if dict_what_to_plot.get("P90", False) and 'P90' in df.columns:
-        fig.add_trace(go.Scatter(x=df['TimeStamp'], y=df["P90"],
-                                 name=f'P10-P90',
-                                 line_color='rgba(255, 165, 0, 0.3)', mode='lines', fill='tonexty', showlegend=True),
-                      row=starting_row_for_predicted_data, col=1)
+    if dict_what_to_plot.get(utility.P10_ENTRY, False) and dict_what_to_plot.get(utility.P90_ENTRY, False):
+        # rgba(255, 165, 0, 0.3), or 
+        utility._add_10_90_percentiles(
+            fig, df, row=starting_row_for_predicted_data, col=1, 
+            showlegend=True, transparency=0.3
+            )
 
     starting_row_for_predicted_data += 1
 
-    if dict_what_to_plot.get("StdDev", False) and 'StdDev' in df.columns:
-        fig.add_trace(go.Scatter(x=df['TimeStamp'], y=df["StdDev"],
+    if dict_what_to_plot.get(utility.STD_DEV_ENTRY, False) and utility.STD_DEV_ENTRY in df.columns:
+        fig.add_trace(go.Scatter(x=df[utility.TIME_COLUMN_NAME], y=df[utility.STD_DEV_ENTRY],
                                  name=f'std. dev of {single_qoi}', line_color='darkviolet', mode='lines'),
                       row=starting_row_for_predicted_data, col=1)
         starting_row_for_predicted_data += 1
 
-    if dict_what_to_plot.get("Skew", False) and 'Skew' in df.columns:
+    if dict_what_to_plot.get(utility.SKEW_ENTRY, False) and utility.SKEW_ENTRY in df.columns:
         fig.add_trace(
             go.Scatter(
-                x=df['TimeStamp'], y=df['Skew'],
-                text=df['Skew'], name=f"Skewness of {single_qoi}", mode='markers'
+                x=df[utility.TIME_COLUMN_NAME], y=df[utility.SKEW_ENTRY],
+                text=df[utility.SKEW_ENTRY], name=f"Skewness of {single_qoi}", mode='markers'
             ),
             row=starting_row_for_predicted_data, col=1
         )
         starting_row_for_predicted_data += 1
 
-    if dict_what_to_plot.get("Kurt", False) and 'Kurt' in df.columns:
+    if dict_what_to_plot.get(utility.KURT_ENTRY, False) and utility.KURT_ENTRY in df.columns:
         fig.add_trace(
             go.Scatter(
-                x=df['TimeStamp'], y=df['Kurt'],
-                text=df['Kurt'], name=f"Kurtosis of {single_qoi}", mode='markers'
+                x=df[utility.TIME_COLUMN_NAME], y=df[utility.KURT_ENTRY],
+                text=df[utility.KURT_ENTRY], name=f"Kurtosis of {single_qoi}", mode='markers'
             ),
             row=starting_row_for_predicted_data, col=1
         )
         starting_row_for_predicted_data += 1
 
-    fig.update_layout(height=600, width=800,
-                      title_text=f"Detailed plot of most important time-series - QoI {single_qoi}")
-    timesteps_min = min(df['TimeStamp'])
-    timesteps_max = max(df['TimeStamp'])
-    fig.update_layout(
-        xaxis=dict(
-            rangemode='normal',
-            range=[timesteps_min, timesteps_max],
-            type="date"
-        ),
-        yaxis=dict(
-            rangemode='normal',  # Ensures the range is not padded for markers
-            autorange=True       # Auto-range is enabled
+    timesteps_min = min(df[utility.TIME_COLUMN_NAME])
+    timesteps_max = max(df[utility.TIME_COLUMN_NAME])
+
+    fig = utility._update_fig_layout_and_save(
+        fig=fig, directory_for_saving_plots=directory, fileName=fileName, 
+        timesteps_min=timesteps_min, timesteps_max=timesteps_max, 
+        title=title, save_fig=save_fig, width=width, height=height, **kwargs
         )
-    )
-    fig.update_layout(
-        # legend=dict(yanchor="bottom", y=0.01, xanchor="right", x=0.99),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1.0),
-        showlegend=True,
-        # template="plotly_white",
-    )
-    # fig.update_layout(xaxis=dict(type="date"))
-    # fig.update_xaxes(
-    #     tickformat='%b %y',            # Format dates as "Month Day" (e.g., "Jan 01")
-    #     dtick="M1"                     # Set tick interval to 1 day for denser ticks
-    # )
-    fig.update_layout(title=None)
-    fig.update_layout(
-        margin=dict(
-            t=10,  # Top margin
-            b=10,  # Bottom margin
-            l=20,  # Left margin
-            r=20   # Right margin
-        )
-    )
-    if not str(directory).endswith("/"):
-        directory = str(directory) + "/"
-    plot_filename = pathlib.Path(directory)  / f"{fileName}.pdf"
-    fig.write_image(str(plot_filename), format="pdf", width=1100,)
-    fileName = str(directory) + f"{fileName}.html"
-    pyo.plot(fig, filename=fileName, auto_open=False)
- 
     return fig
 
 
 def plotting_function_single_qoi_from_df(
     df, single_qoi, model=None, subplot_titles=None, dict_what_to_plot=None, directory="./", fileName="simulation_big_plot"
 ):
-    if model=='':
+    if model=='hbvsask':
         return plotting_function_single_qoi_hbv(\
             df, single_qoi, qoi="Q", subplot_titles=subplot_titles, dict_what_to_plot=dict_what_to_plot, directory=directory, fileName=fileName)
     else:
@@ -3735,11 +3739,12 @@ def plotting_function_single_qoi_hbv(
         )
         starting_row_for_predicted_data += 1
 
+    timesteps_min = min(df[utility.TIME_COLUMN_NAME])
+    timesteps_max = max(df[utility.TIME_COLUMN_NAME])
+
     fig.update_yaxes(autorange="reversed", row=1, col=1)
     fig.update_layout(height=600, width=800,
                       title_text=f"Detailed plot of most important time-series - QoI {single_qoi}")
-    timesteps_min = min(df['TimeStamp'])
-    timesteps_max = max(df['TimeStamp'])
     fig.update_layout(
         xaxis=dict(
             rangemode='normal',
@@ -3765,8 +3770,8 @@ def plotting_function_single_qoi_hbv(
 
     if not str(directory).endswith("/"):
         directory = str(directory) + "/"
-    fileName_without_ext = pathlib.Path(fileName).stem
-    plot_filename = pathlib.Path(directory)  / f"{fileName_without_ext}.pdf"
+    fileName_without_ext = Path(fileName).stem
+    plot_filename = Path(directory)  / f"{fileName_without_ext}.pdf"
     fig.write_image(str(plot_filename), format="pdf", width=1100,)
     plot_filename = str(directory) + f"{fileName_without_ext}.html"
     pyo.plot(fig, filename=plot_filename, auto_open=False)
