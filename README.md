@@ -52,7 +52,7 @@ To install with all optional dependencies:
 pip install uqef_dynamic[all]
 ```
 
-### Development Installation
+### Development Installation - install from source
 
 For development or if you want to modify the code:
 
@@ -77,13 +77,13 @@ pip install -e .[all]
 - **Python Version**: Compatible with Python 3.11
 - **Dependencies**: Core dependencies will be automatically installed with any of the above methods
 
-## Requirements/Dependencies
+## Requirements/Dependencies and Environment Setup
 
 ### Core Dependencies
 
 - **Python**: Compatible with Python 3.11 (recommended)
 - **UQEF**: Uncertainty Quantification Execution Framework (core library)
-- **Chaospy**: Python toolbox for performing uncertainty quantification
+- **Chaospy**: Python toolbox for probabilistic modelling and forward uncertainty propagation (i.e., via the MC sampling methods or Polynomial chaos expansion-based methods)
 - **NumPy/SciPy/Pandas**: For numerical computations and data handling
 - **MPI Libraries**: For parallel computing (mpi4py)
 - **Visualization**: Matplotlib, Plotly, Seaborn for visualization and plotting
@@ -94,6 +94,8 @@ The project includes several requirements files:
 
 - `requirements.txt`: Basic dependencies list
 - `requirements_py311_version.txt`: Dependencies with fixed versions for Python 3.11
+
+All dependencies will be automatically installed when using `pip install`.
 
 ### Other Dependencies
 
@@ -154,7 +156,7 @@ The UQEF-Dynamic framework provides the following key capabilities:
    - Karhunen-Loève (KL) expansion for time-dependent processes
 
 3. **Sensitivity Analysis**:
-   - Sobol indices (main, total, and second-order)
+   - Sobol indices (main, total, and second-order) computed via different methods
    - Generalized Sobol indices for time-dependent processes
    - Active subspaces
    - Gradient analysis
@@ -175,16 +177,133 @@ The UQEF-Dynamic framework provides the following key capabilities:
    - MPI-based parallelization
    - Thread-based parallelization or hybrid parallelization of some pipeline
 
-## Usage
+## Usage - How to Run the Code/Simulation
 
-The framework is typically used through the scientific pipelines, with the main entry point being `uq_simulation_uqsim.py`. The workflow generally involves:
+The UQEF-Dynamic framework is primarily used through the scientific pipelines, with the main entry point being `uqef_dynamic/scientific_pipelines/uq_simulation_uqsim.py`. The `uqef_dynamic/scientific_pipelines/` subdirectory contains workflows for other different types of scientific simulations. The workflow generally involves:
 
 1. Defining a configuration file
 2. Selecting a model and UQ method
 3. Running the simulation
 4. Post-processing and analyzing the results
 
-### Configuration Management System
+
+### Basic Usage - Command-Line Usage
+
+Run the pseudo-spectral approach simulation:
+```bash
+python uqef_dynamic/scientific_pipelines/uq_simulation_uqsim.py \
+    --config_file data/configurations/configuration_hbv_5D.json \
+    --model "hbvsask" \
+    --inputModelDir /path/to/model/data \
+    --outputResultDir /path/to/output/directory \
+    --sourceDir /path/to/source/code \
+    --uq_method "sc" \
+    --sc_q_order 7 \
+    --sc_p_order 3
+```
+
+Run the stochastic collocation simulation with MPI:
+```bash
+mpiexec -n 8 python uqef_dynamic/scientific_pipelines/uq_simulation_uqsim.py \
+    --config_file data/configurations/configuration_hbv_5D.json \
+    --model "hbvsask" \
+    --inputModelDir /path/to/model/data \
+    --outputResultDir /path/to/output/directory \
+    --sourceDir /path/to/source/code \
+    --uq_method "sc" \
+    --regression \
+    --sc_q_order 7 \
+    --sc_p_order 3 \
+    --mpi
+```
+
+## Input Arguments
+
+The framework supports numerous command-line arguments to control the simulation. Most of these arguments are inherited by the UQEF tool. Here are the most important ones:
+
+#### General Arguments
+- `--config_file`: Path to the configuration file; in case this argument is provided, it can override some of the other command-line arguments
+
+#### Model settings
+- `--model`: Name of the model (e.g., 'hbvsask', 'larsim', 'ishigami')
+- `--model_variant`: Variant of the chosen model
+
+#### UQ method and uncertain parameter settings
+- `--uncertain`: Uncertain setting: can be evaluated to choose different probability distributions and their parameter values
+- `--uq_method`: Define the UQ method: `sc`, `mc`, `saltelli`, or `ensemble`
+
+#### Monte Carlo (`--uq_method mc`)
+- `--mc_numevaluations`: Number of Monte Carlo samples
+- `--sampling_rule`: Sampling strategy (`random`, `sobol`, `latin_hypercube`, `halton`, `hammersley`)
+- `--regression`: Enable regression-based surrogate modeling (i.e., PCE-based); if this argument is enabled, the MC samples will be used to build a PCE surrogate model and other PCE-based input arguments will be used (see below)
+
+#### Stochastic Collocation; Actually this is consider to be PCE-based simulation which can both run Stochastic Collocation or Pseudo-Spectral Projection simulation depending on the regression argument (`--uq_method sc`)
+- `--sc_q_order`: Quadrature order (collocation points per dimension)
+- `--sc_p_order`: Polynomial order (PCE terms)
+- `--regression`: Enable stochastic collocation method
+- `--sc_quadrature_rule`: Quadrature rule (default: 'G' for Gaussian); In case regression is enabled, this argument is not used
+- `--sc_sparse_quadrature`: Enable sparse grid quadrature; In case regression is enabled, this argument is not used
+- `--sc_poly_rule`: Polynomial rule for Stochastic Collocation
+- `--sc_poly_normed`: Use normed polynomials
+- `--sc_sparse_level`: Sparse grid level (if sparse grid quadrature is enabled)
+- `--cross_truncation`: Cross-truncation parameter for polynomial basis
+
+#### Saltelli (`--uq_method saltelli`)
+- `--mc_numevaluations`: Number of base samples
+- Take a look at other MC-related arguments for sampling rule, regression, etc.
+
+#### Ensemble (`--uq_method ensemble`)
+- `--read_nodes_from_file`: Read parameter values from file
+- `--parameters_file`: File containing parameter sets
+
+#### Statistics Arguments and Post-processing Options
+- `--compute_Sobol_t`: Compute total Sobol indices
+- `--compute_Sobol_m`: Compute main effect indices
+- `--compute_Sobol_m2`: Compute second-order indices
+- `--disable_statistics`:  Disable all statistical calculations including plots (useful when restoring a saved uqsim object from file)
+- `--disable_recalc_statistics`: Disable the recalculation of statistics (useful when restoring a saved uqsim object from file)
+- `--disable_calc_statistics`: Disable calculation of statistics; still saves all simulation data (i.e., in one big DataFrame)
+- `--instantly_save_results_for_each_time_step`: Save results for each time step instantly
+- `--compute_generalized_sobol_indices`: Compute generalized Sobol indices for time-dependent processes
+- `--compute_kl_expansion_of_qoi`: Compute KL expansion of the Quantity of
+   Interest (QoI)
+- `--kl_expansion_order`: Order of the KL expansion
+
+#### Controlling saved data, mainly from statistics computation
+- `--save_all_simulations`: Save complete simulation data
+- `--store_qoi_data_in_stat_dict`: Store quantity of interest data
+- `--store_gpce_surrogate_in_stat_dict`: Store PCE surrogate model
+- `--instantly_save_results_for_each_time_step`: Save results incrementally (has to be done in custom models)
+
+#### Model and result directories
+- `--inputModelDir`: Folder for the input files of the model
+- `--outputModelDir`: Folder for the output files of the model
+- `--outputResultDir`: Folder for the statistics results (plots, tables (csv), ...)
+- `--sourceDir`: Source directory
+
+#### Parallelization Arguments
+- `--parallel`: Enable shared-memory parallelization with threading
+- `--num_cores`: Number of cores per node to use (default: all available)
+- `--mpi`: Enable MPI parallelization
+- `--mpi_method`: Choose MPI solver (`MpiPoolSolver` or `MpiSolver`)
+- `--mpi_combined_parallel`: Enable hybrid MPI + multiprocessing (data distribution to the nodes via MPI and parallelisation with a node via threading)
+- `--chunksize`: Number of runs that are chunked into a group
+- `--mpi_chunksize`: Number of runs that are sent as a package via MPI
+- `--parallel_statistics`: Enable parallel statistics computation
+
+#### Runtime Analysis and Optimization (from UQEF)
+- `--analyse_runtime`: Enable runtime analysis
+- `--opt_runtime`: Enable runtime optimization with load balancing
+- `--opt_runtime_gpce_Dir`: Define the folder for the runtime data
+- `--opt_algorithm`: Scheduling algorithm (FCFS, LPT, SPT, or MULTIFIT)
+- `--opt_strategy`: Optimization strategy (FIXED_ALTERNATE, FIXED_LINEAR, or DYNAMIC)
+
+#### UQsim State Management: Save/Restore (from UQEF)
+- `--uqsim_store_to_file`: Save UQsim state for later restoration
+- `--uqsim_restore_from_file`: Restore UQsim from saved state
+- `--uqsim_file`: Filename for state storage (default: uqsim.saved)
+
+## Configuration Management System
 
 UQEF-Dynamic includes a comprehensive configuration management system that provides a structured approach to managing simulation parameters. The system supports:
 
@@ -226,13 +345,13 @@ All advanced features can now be accessed through command-line arguments in bash
 
 ```bash
 python uqef_dynamic/scientific_pipelines/uq_simulation_uqsim.py \
-    --model hbvsask \
-    --uq_method sc \
+    --model "hbvsask" \
+    --uq_method "sc" \
     --sc_p_order 3 \
     --sc_q_order 7 \
     --config_file data/configurations/configuration_hbv_10D.json \
     --compute_kl_expansion_of_qoi \
-    --kl_expansion_order 15 \
+    --kl_expansion_order 10 \
     --compute_generalized_sobol_indices \
     --compute_covariance_matrix_in_time \
     --allow_conditioning_results_based_on_metric \
@@ -243,26 +362,7 @@ python uqef_dynamic/scientific_pipelines/uq_simulation_uqsim.py \
 For detailed information about the configuration system, see `uqef_dynamic/config/README.md`.
 For extended command-line arguments, see `docs/extended_arguments.md`.
 
-
-## How to Run the Code/Simulation
-
-The UQEF-Dynamic framework is primarily used through the scientific pipelines, with the main entry point being `uqef_dynamic/scientific_pipelines/uq_simulation_uqsim.py`. The `uqef_dynamic/scientific_pipelines/` subdirectory contains workflows for other different types of scientific simulations.
-
-### Basic Usage
-
-```bash
-python uqef_dynamic/scientific_pipelines/uq_simulation_uqsim.py \
-    --config_file data/configurations/configuration_hbv_5D.json \
-    --model hbvsask \
-    --inputModelDir /path/to/model/data \
-    --outputResultDir /path/to/output/directory \
-    --sourceDir /path/to/source/code \
-    --uq_method sc \
-    --sc_q_order 7 \
-    --sc_p_order 3
-```
-
-### Configuration Files
+## Configuration Files
 
 The framework uses JSON configuration files to define:
 - Model parameters and their distributions
@@ -279,6 +379,8 @@ Example configuration files can be found in the `data/configurations/` directory
 
 #### Explanation of the relevant `simulation_settings` in the configuration file
 
+TODO Extend this part with more settings
+
 - `simulation_settings:mode` can be set to either `"continuous"` or `"sliding_window"`.
 
 If you want to run the simulation in **autoregressive** mode—where the Quantity of Interest (QoI) is defined as the difference between the current model output and a scaled version of the previous (observed) model output—you must set the following options in the configuration file:
@@ -286,30 +388,27 @@ If you want to run the simulation in **autoregressive** mode—where the Quantit
 - `simulation_settings:autoregressive_model_first_order = True`
 - `simulation_settings:scale_factor_autoregressive_model_first_order = <value between 0 and 1>`, e.g., `0.7` or `0.9`
 
-> **Note:**  
-> If `Q_cms` is defined as a Goodness-of-Fit function, or if the mode is set to `"sliding_window"`, then `autoregressive_model_first_order` will automatically be set to `False`.
 
-
-### UQ Methods
+## UQ Methods
 
 The framework supports several UQ methods:
 
 1. **Monte Carlo (MC)** - (Quasi-) Random sampling:
    ```bash
-   --uq_method mc --mc_numevaluations 10000 --sampling_rule latin_hypercube
+   --uq_method "mc" --mc_numevaluations 10000 --sampling_rule "latin_hypercube"
    ```
 
 2. **Pseudo-spectral Projection (PSP) and Stochastic Collocation (SC)** - Polynomial chaos expansion:
    ```bash
-   --uq_method sc --sc_q_order 7 --sc_p_order 3 --sc_quadrature_rule G
+   --uq_method "sc" --sc_q_order 7 --sc_p_order 3 --sc_quadrature_rule "G"
    ```
 
 3. **Saltelli Method** - Sampling approach for computing the Sobol indices calculation:
    ```bash
-   --uq_method saltelli --mc_numevaluations 10000 --sampling_rule latin_hypercube
+   --uq_method "saltelli" --mc_numevaluations 10000 --sampling_rule latin_hypercube
    ```
 
-### Available Models
+## Available Models
 
 The framework includes several models:
 
@@ -341,15 +440,17 @@ The framework includes several models:
 
 The `models/` directory contains implementations of various models that can be used with the framework. The `time_dependent_baseclass/` provides a common interface for all time-dependent models, ensuring consistent handling of time series data.
 
+## Custom Model and Statistics
+You can create custom models by inheriting from the `TimeDependentModelBase` class in `uqef_dynamic.models.time_dependent_baseclass`. Similarly, you can implement custom statistics by inheriting from the `TimeDependentStatisticsBase` class in `uqef_dynamic.statistics.time_dependent_statistics_baseclass`. 
 
-### Parallel Computing
+## Parallel Computing
 
 The framework supports parallel computing using MPI:
 
 ```bash
 mpiexec -n <num_processes> python uqef_dynamic/scientific_pipelines/uq_simulation_uqsim.py \
     --mpi \
-    --mpi_method MpiPoolSolver \
+    --mpi_method "MpiPoolSolver" \
     --num_cores <threads_per_process> \
     --parallel_statistics \
     [other options]
@@ -382,13 +483,13 @@ mpiexec -n $SLURM_NTASKS python /path/to/UQEF-Dynamic/uqef_dynamic/scientific_pi
     --inputModelDir /path/to/model/data \
     --sourceDir /path/to/source \
     --config_file /path/to/config.json \
-    --model hbvsask \
+    --model "hbvsask" \
     --uncertain all \
-    --uq_method sc \
+    --uq_method "sc" \
     --sc_q_order 7 \
     --sc_p_order 3 \
     --mpi \
-    --mpi_method MpiPoolSolver \
+    --mpi_method "MpiPoolSolver" \
     --parallel_statistics \
     --compute_Sobol_t \
     --compute_Sobol_m
@@ -400,24 +501,6 @@ To adapt these scripts for other HPC environments:
 2. Update the module load commands for your specific HPC environment
 3. Adjust the paths to match your installation
 4. Set the appropriate number of nodes and tasks per node
-
-### Path Configuration
-
-When running on HPC systems, you need to configure several paths:
-
-- `inputModelDir`: Path to the model input data
-- `outputResultDir`: Path where results will be stored
-- `sourceDir`: Path to the source code
-- `workingDir`: Working directory for model runs (created automatically)
-
-## Pre-run Setup
-
-Before each run, perform the following steps:
-
-1. Ensure your conda environment is properly set up
-2. Check that all required dependencies are installed
-3. Verify that the configuration file is correctly set up
-4. Create the output directory if it doesn't exist
 
 ## Paths Definitions
 
@@ -458,53 +541,39 @@ Additional files for specific models and simulation set-ups:
 - `df_measured.pkl`: Measured data (if available)
 
 
+## Author
 
-## Input Arguments
+**Ivana Jovanovic Buha**
+Technical University of Munich (TUM)
+Email: ivana.jovanovic@tum.de
 
-The framework supports numerous command-line arguments to control the simulation. Most of these arguments are inherited by the UQEF tool. Here are the most important ones:
+## Repository
 
-### Basic Arguments
+GitHub: [https://github.com/ivanajovanovic/UQEF-Dynamic.git](https://github.com/ivanajovanovic/UQEF-Dynamic.git)
 
-- `--config_file`: Path to the configuration file
-- `--model`: The model to use (e.g., hbvsask, larsim, ishigami)
-- `--inputModelDir`: Directory of the input model
-- `--outputResultDir`: Directory to store the output results
-- `--sourceDir`: Source directory
+## Citation
 
-### UQ Method Arguments
+If you use UQEF-Dynamic in your research, please cite:
 
-- `--uq_method`: UQ method to use (mc, sc, saltelli)
-- `--mc_numevaluations`: Number of evaluations for Monte Carlo method
-- `--sc_q_order`: Number of collocation points in each direction for Stochastic Collocation
-- `--sc_p_order`: Number of terms in Polynomial Chaos Expansion
-- `--sc_quadrature_rule`: Quadrature rule for Stochastic Collocation (G, clenshaw_curtis, etc.)
-- `--sc_poly_rule`: Polynomial rule for Stochastic Collocation
-- `--sampling_rule`: Sampling rule (random, sobol, latin_hypercube, etc.)
-
-### Parallelization Arguments
-
-- `--mpi`: Enable MPI
-- `--mpi_method`: MPI method to use (MpiPoolSolver, LinearSolver)
-- `--num_cores`: Number of cores to use for parallel execution
-- `--parallel_statistics`: Enable parallel statistics computation
-- `--chunksize`: Chunk size for parallel processing
-- `--mpi_chunksize`: Chunk size for MPI
-
-### Statistics Arguments
-
-- `--compute_Sobol_t`: Enable computation of Sobol total indices
-- `--compute_Sobol_m`: Enable computation of Sobol main indices
-- `--compute_Sobol_m2`: Enable computation of Sobol second-order indices
-- `--disable_statistics`: Disable statistics computation
-- `--instantly_save_results_for_each_time_step`: Save results for each time step instantly
-
-For a complete list of arguments and their explanations, refer to the `docs` subfolder or run:
-
-```bash
-python uqef_dynamic/scientific_pipelines/uq_simulation_uqsim.py --help
+```bibtex
+@software{uqef_dynamic,
+  author = {Jovanovic Buha, Ivana},
+  title = {UQEF-Dynamic},
+  version = {1.0},
+  url = {https://github.com/ivanajovanovic/UQEF-Dynamic.git},
+  institution = {Technical University of Munich}
+}
 ```
 
-## Authors
+## Acknowledgments
 
-- Ivana Jovanovic Buha
-- Florian Kuenzner
+UQEF-Dynamic builds upon several excellent open-source projects:
+- **UQEF**: As a based framework for efficient FUQ and in-parallel model execution
+- **chaospy**: For probabilistic modeling, MC-based sampling and polynomial chaos expansion functionalities
+- **mpi4py**: For MPI parallelization support
+- **NumPy/SciPy**: For numerical computing foundations
+
+## Version History
+
+- **v1.0** (Current): Production-stable release with comprehensive UQ methods and parallel computing support
+

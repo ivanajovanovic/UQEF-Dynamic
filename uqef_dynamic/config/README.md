@@ -78,13 +78,13 @@ All advanced features can now be accessed directly through command-line argument
 
 ```bash
 python uqef_dynamic/scientific_pipelines/uq_simulation_uqsim.py \
-    --model hbvsask \
-    --uq_method sc \
+    --model "hbvsask" \
+    --uq_method "sc" \
     --sc_p_order 3 \
     --sc_q_order 7 \
     --config_file data/configurations/configuration_hbv_10D.json \
     --compute_kl_expansion_of_qoi \
-    --kl_expansion_order 15 \
+    --kl_expansion_order 10 \
     --compute_generalized_sobol_indices \
     --compute_covariance_matrix_in_time \
     --allow_conditioning_results_based_on_metric \

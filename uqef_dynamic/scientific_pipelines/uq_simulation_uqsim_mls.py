@@ -148,7 +148,7 @@ if local_debugging:
             inputModelDir="/work/ga45met/Hydro_Models/HBV-SASK-data",
             # sourceDir="",
             config_file='/work/ga45met/mnt/linux_cluster_2/UQEF-Dynamic/data/configurations/configuration_hbv_10D_single_qoi.json', #configuration_hbv_11D_2004_2005_long.json',
-            outputResultDir=os.path.abspath(os.path.join("/work/ga45met/Hydro_Models/HBV-SASK-data/analysis_model_runs", 'mc_2d_ensemble_whole_timespan_parallel_runtime_stat_banff')), #mc_10d_10000_random_nse02_autoregressive_09_qcms_oldman_2006_2007
+            outputResultDir=os.path.abspath(os.path.join("/work/ga45met/Hydro_Models/HBV-SASK-data/analysis_model_runs", 'mc_2d_ensemble_whole_timespan_parallel_runtime_stat_banff_new_uqef')), #mc_10d_10000_random_nse02_autoregressive_09_qcms_oldman_2006_2007
             analyse_runtime=True,
             opt_strategy= "DYNAMIC", # DYNAMIC
             opt_algorithm="FCFS", #LPT Default
