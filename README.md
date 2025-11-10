@@ -5,6 +5,35 @@ Software tool for efficient forward uncertainty quantification and global sensit
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/)
 
+## Table of Contents
+- [Overview](#overview)
+- [Installation](#installation)
+  - [Basic Installation](#basic-installation)
+  - [Installation with Optional Dependencies](#installation-with-optional-dependencies)
+  - [Development Installation - install from source](#development-installation---install-from-source)
+- [Dependencies and Environment Setup](#dependencies-and-environment-setup)
+   - [Core Dependencies](#core-dependencies)
+   - [Dependency Files](#dependency-files)
+   - [Other Dependencies](#other-dependencies)
+   - [Setting Up the Environment](#setting-up-the-environment)
+- [Framework Capabilities](#framework-capabilities)
+- [Usage - How to Run the Code/Simulation](#usage---how-to-run-the-codesimulation)
+   - [Basic Usage - Command-Line Usage](#basic-usage---command-line-usage)
+- [Input Arguments](#input-arguments)
+- [Configuration Management System](#configuration-management-system)
+- [Configuration Files](#configuration-files)
+- [Available Models](#available-models)
+- [Custom Model and Statistics](#custom-model-and-statistics)
+- [Parallel Computing](#parallel-computing)
+- [Running the Simulation on HPC](#running-the-simulation-on-hpc)
+- [Paths Definitions](#paths-definitions)
+- [Output Files](#output-files)
+- [Author](#author)
+- [Repository](#repository)
+- [Citation](#citation)
+- [Acknowledgments](#acknowledgments)
+- [Version History](#version-history)
+
 ## Overview
 
 UQEF-Dynamic is a comprehensive framework for Uncertainty Quantification (UQ) and Global Sensitivity Analysis (SA) for dynamic models, with a particular focus on hydrological models and other time-dependent systems. The framework extends the capabilities of the UQEF (Uncertainty Quantification Execution Framework) to handle time-dependent processes.
@@ -77,7 +106,7 @@ pip install -e .[all]
 - **Python Version**: Compatible with Python 3.11
 - **Dependencies**: Core dependencies will be automatically installed with any of the above methods
 
-## Requirements/Dependencies and Environment Setup
+## Dependencies and Environment Setup
 
 ### Core Dependencies
 
@@ -389,28 +418,9 @@ If you want to run the simulation in **autoregressive** mode—where the Quantit
 - `simulation_settings:scale_factor_autoregressive_model_first_order = <value between 0 and 1>`, e.g., `0.7` or `0.9`
 
 
-## UQ Methods
-
-The framework supports several UQ methods:
-
-1. **Monte Carlo (MC)** - (Quasi-) Random sampling:
-   ```bash
-   --uq_method "mc" --mc_numevaluations 10000 --sampling_rule "latin_hypercube"
-   ```
-
-2. **Pseudo-spectral Projection (PSP) and Stochastic Collocation (SC)** - Polynomial chaos expansion:
-   ```bash
-   --uq_method "sc" --sc_q_order 7 --sc_p_order 3 --sc_quadrature_rule "G"
-   ```
-
-3. **Saltelli Method** - Sampling approach for computing the Sobol indices calculation:
-   ```bash
-   --uq_method "saltelli" --mc_numevaluations 10000 --sampling_rule latin_hypercube
-   ```
-
 ## Available Models
 
-The framework includes several models:
+For now, the framework includes several models:
 
 1. **HBV/HBV-SASK**: Hydrological model
    ```bash
@@ -440,8 +450,10 @@ The framework includes several models:
 
 The `models/` directory contains implementations of various models that can be used with the framework. The `time_dependent_baseclass/` provides a common interface for all time-dependent models, ensuring consistent handling of time series data.
 
+
 ## Custom Model and Statistics
 You can create custom models by inheriting from the `TimeDependentModelBase` class in `uqef_dynamic.models.time_dependent_baseclass`. Similarly, you can implement custom statistics by inheriting from the `TimeDependentStatisticsBase` class in `uqef_dynamic.statistics.time_dependent_statistics_baseclass`. 
+
 
 ## Parallel Computing
 
