@@ -49,12 +49,23 @@ class OutputFilePaths(NamedTuple):
     args_file: Path
     configuration_object_file: Path
     nodes_file: Path
+    simulation_parameters_file: Path
+    parameters_file: Path
     time_info_file: Path
     df_index_parameter_file: Path
     df_index_parameter_gof_file: Path
     df_simulations_file: Path
     df_state_file: Path
-    simulation_parameters_file: Path
+    f_kl_surrogate_file: Path
+    statistics_dictionary_file: Path
+    df_time_varying_grad_analysis_file: Path
+    df_time_aggregated_grad_analysis_file: Path
+    dict_approx_matrix_c_file: Path
+    dict_matrix_c_eigen_decomposition_file: Path
+    dict_active_scores_file: Path
+    df_uqsim_simulation_parameters_file: Path
+    df_uqsim_simulation_nodes_file: Path
+    df_uqsim_simulation_weights_file: Path
 
 
 @dataclass

@@ -1,22 +1,32 @@
 
 import dill
+import numpy as np
 import pickle
 import pathlib
 import pandas as pd
 
-from uqef_dynamic.models.larsim import LarsimModelUQ
 from uqef_dynamic.models.linearDampedOscillator import LinearDampedOscillatorModel
 from uqef_dynamic.models.ishigami import IshigamiModel
 from uqef_dynamic.models.productFunction import ProductFunctionModel
 from uqef_dynamic.models.hbv_sask import HBVSASKModelUQ
 from uqef_dynamic.models.simpleOscilator.simple_oscillator_model import simpleOscillatorUQ
 
-from uqef_dynamic.models.larsim import LarsimStatistics
 from uqef_dynamic.models.linearDampedOscillator import LinearDampedOscillatorStatistics
 from uqef_dynamic.models.ishigami import IshigamiStatistics
 from uqef_dynamic.models.productFunction import ProductFunctionStatistics
 from uqef_dynamic.models.hbv_sask import HBVSASKStatistics
 from uqef_dynamic.models.simpleOscilator.simple_oscillator_statistics import simpleOscillatorStatistics
+
+
+# Optional LARSIM imports
+try:
+    from uqef_dynamic.models.larsim import LarsimModelUQ
+    from uqef_dynamic.models.larsim import LarsimStatistics
+    LARSIM_AVAILABLE = True
+except ImportError:
+    LARSIM_AVAILABLE = False
+    LarsimModelUQ = None
+    LarsimStatistics = None
 
 # Optional pybamm imports
 try:
@@ -46,7 +56,7 @@ def create_model_object(configuration_object, uqsim_args_dict, workingDir, model
             model = uqsim_args_dict['model']
         else:
             raise ValueError("Model, for which the statistics object shoudl be re-created, is not provided!")
-    if model.lower() == "larsim":
+    if model.lower() == "larsim" and LARSIM_AVAILABLE:
         modelObject = LarsimModelUQ.LarsimModelUQ(
             configurationObject=configuration_object,
             inputModelDir=uqsim_args_dict["inputModelDir"],
@@ -94,7 +104,7 @@ def create_statistics_object(configuration_object, uqsim_args_dict, workingDir, 
         else:
             raise ValueError("Model, for which the statistics object shoudl be re-created, is not provided!")
     # TODO make this function more general or move it somewhere else
-    if model == "larsim":
+    if model == "larsim" and LARSIM_AVAILABLE:
         statisticsObject = LarsimStatistics.LarsimStatistics(configuration_object, workingDir=workingDir,
                                                                    parallel_statistics=uqsim_args_dict[
                                                                        "parallel_statistics"],
@@ -317,16 +327,19 @@ def get_df_statistics_and_df_si_from_saved_files(workingDir, inputModelDir=None,
     add_forcing_data = kwargs.get('add_forcing_data', False)
     transform_measured_data_as_original_model = kwargs.get('transform_measured_data_as_original_model', False)
 
-    args_files = utility.get_dict_with_output_file_paths_based_on_workingDir(workingDir)
-    for key, value in args_files.items():
-        globals()[key] = value
+    args_files_dict = utility.get_dict_with_output_file_paths_based_on_workingDir(workingDir)
+    files = uqef_dynamic_utils.OutputFilePaths(**args_files_dict)  # Unpack dict to named tuple
 
+    if not files.args_file.is_file():
+        raise FileNotFoundError(f"File {files.args_file} is missing!")
     # Load the UQSim args dictionary
-    uqsim_args_dict = utility.load_uqsim_args_dict(args_file)
+    uqsim_args_dict = utility.load_uqsim_args_dict(files.args_file)
     model = uqsim_args_dict["model"]
 
     # Load the configuration object
-    configurationObject = utility.load_configuration_object(configuration_object_file)
+    if not files.configuration_object_file.is_file():
+        raise FileNotFoundError(f"File {files.configuration_object_file} is missing!")
+    configurationObject = utility.load_configuration_object(files.configuration_object_file)
     simulation_settings_dict = utility.read_simulation_settings_from_configuration_object(configurationObject)
 
     if inputModelDir is not None:
@@ -340,38 +353,42 @@ def get_df_statistics_and_df_si_from_saved_files(workingDir, inputModelDir=None,
     if instantly_save_results_for_each_time_step is not None:
         uqsim_args_dict["instantly_save_results_for_each_time_step"] = instantly_save_results_for_each_time_step
     
-    with open(nodes_file, 'rb') as f:
-        simulationNodes = pickle.load(f)
+    if not files.nodes_file.is_file():
+        print(f"INFO: simulationNodes file {files.nodes_file} is missing!!!")
+        simulationNodes = None
+    else:
+        with open(files.nodes_file, 'rb') as f:
+            simulationNodes = pickle.load(f)
         
-    if df_index_parameter_file.is_file():
-        df_index_parameter = pd.read_pickle(df_index_parameter_file, compression="gzip")
+    if files.df_index_parameter_file.is_file():
+        df_index_parameter = pd.read_pickle(files.df_index_parameter_file, compression="gzip")
         params_list = utility._get_parameter_columns_df_index_parameter_gof(
             df_index_parameter)
     else:
         df_index_parameter = None
-        print(f"Be careful - {df_index_parameter_file} does not exist; df_index_parameter is None!")
+        print(f"Be careful - {files.df_index_parameter_file} does not exist; df_index_parameter is None!")
         params_list = []
         for single_param in configurationObject["parameters"]:
             params_list.append(single_param["name"])
 
-    if df_index_parameter_gof_file.is_file():
-        df_index_parameter_gof = pd.read_pickle(df_index_parameter_gof_file, compression="gzip")
+    if files.df_index_parameter_gof_file.is_file():
+        df_index_parameter_gof = pd.read_pickle(files.df_index_parameter_gof_file, compression="gzip")
         gof_list = utility._get_gof_columns_df_index_parameter_gof(
             df_index_parameter_gof)
     else:
-        print(f"Be careful - {df_index_parameter_gof_file} does not exist; df_index_parameter_gof is None; gof_list is not populated!")
+        print(f"Be careful - {files.df_index_parameter_gof_file} does not exist; df_index_parameter_gof is None; gof_list is not populated!")
         df_index_parameter_gof = None
         gof_list = None
 
     # df_nodes = utility.get_df_from_simulationNodes(simulationNodes, nodes_or_paramters="nodes", params_list=params_list)
     # df_nodes_params = utility.get_df_from_simulationNodes(simulationNodes, nodes_or_paramters="parameters",  params_list=params_list)
 
-    if read_saved_simulations and df_simulations_file.is_file():
-        df_simulation_result = pd.read_pickle(df_simulations_file, compression="gzip")
+    if read_saved_simulations and files.df_simulations_file.is_file():
+        df_simulation_result = pd.read_pickle(files.df_simulations_file, compression="gzip")
     else:
         df_simulation_result = None
-    if read_saved_states and df_state_file.is_file():
-        df_state = pd.read_pickle(df_state_file, compression="gzip")
+    if read_saved_states and files.df_state_file.is_file():
+        df_state = pd.read_pickle(files.df_state_file, compression="gzip")
     else:
         df_state = None
 
@@ -518,16 +535,22 @@ def get_dict_with_dfs_from_statistics_and_other_relevant_data(
     instantly_save_results_for_each_time_step = kwargs.get('instantly_save_results_for_each_time_step', None)
 
     # get output paths based on workingDir
-    args_files = utility.get_dict_with_output_file_paths_based_on_workingDir(workingDir)
-    for key, value in args_files.items():
-        globals()[key] = value
+    # args_files = utility.get_dict_with_output_file_paths_based_on_workingDir(workingDir)
+    # for key, value in args_files.items():
+    #     globals()[key] = value
+    args_files_dict = utility.get_dict_with_output_file_paths_based_on_workingDir(workingDir)
+    files = uqef_dynamic_utils.OutputFilePaths(**args_files_dict)  # Unpack dict to named tuple
 
+    if not files.args_file.is_file():
+        raise FileNotFoundError(f"File {files.args_file} is missing!")
     # Load the UQSim args dictionary
-    uqsim_args_dict = utility.load_uqsim_args_dict(args_file)
+    uqsim_args_dict = utility.load_uqsim_args_dict(files.args_file)
     model = uqsim_args_dict["model"]
 
     # Load the configuration object
-    configurationObject = utility.load_configuration_object(configuration_object_file)
+    if not files.configuration_object_file.is_file():
+        raise FileNotFoundError(f"File {files.configuration_object_file} is missing!")
+    configurationObject = utility.load_configuration_object(files.configuration_object_file)
     simulation_settings_dict = utility.read_simulation_settings_from_configuration_object(configurationObject)
 
     if inputModelDir is not None:
@@ -538,19 +561,30 @@ def get_dict_with_dfs_from_statistics_and_other_relevant_data(
     inputModelDir = pathlib.Path(inputModelDir)
 
     # Timing information
-    with open(time_info_file, 'r') as f:
-        time_info = f.read() #readlines()?
+    if files.time_info_file.is_file():
+        with open(files.time_info_file, 'r') as f:
+            time_info = f.read() #readlines()?
+    else:
+        time_info = None
 
     # just in certain situations it is necessary to update/overwrite instantly_save_results_for_each_time_step
     if instantly_save_results_for_each_time_step is not None:
         uqsim_args_dict["instantly_save_results_for_each_time_step"] = instantly_save_results_for_each_time_step
     
-    with open(nodes_file, 'rb') as f:
-        simulationNodes = pickle.load(f)
-    dim = simulationNodes.distNodes.shape[0]
+    # Reading Nodes and Parameters
+    if not files.nodes_file.is_file():
+        print(f"INFO: simulationNodes file {files.nodes_file} is missing!!!")
+        simulationNodes = None
+        distStandard  = None
+        dist = None
+        dim = None
+    else:
+        with open(files.nodes_file, 'rb') as f:
+            simulationNodes = pickle.load(f)
+        dim = simulationNodes.distNodes.shape[0]
 
     results_dict["workingDir"]=workingDir
-    results_dict["args_files"]=args_files
+    results_dict["args_files"]=args_files_dict
     results_dict["uqsim_args_dict"]=uqsim_args_dict
     results_dict["inputModelDir"]=inputModelDir
     results_dict["model"]=model
@@ -559,35 +593,35 @@ def get_dict_with_dfs_from_statistics_and_other_relevant_data(
     results_dict["time_info"]=time_info
     results_dict["simulationNodes"]=simulationNodes
 
-    if df_index_parameter_file.is_file():
-        df_index_parameter = pd.read_pickle(df_index_parameter_file, compression="gzip")
+    if files.df_index_parameter_file.is_file():
+        df_index_parameter = pd.read_pickle(files.df_index_parameter_file, compression="gzip")
         params_list = utility._get_parameter_columns_df_index_parameter_gof(
             df_index_parameter)
     else:
         df_index_parameter = None
-        print(f"Be careful - {df_index_parameter_file} does not exist; df_index_parameter is None!")
+        print(f"Be careful - {files.df_index_parameter_file} does not exist; df_index_parameter is None!")
         params_list = []
         for single_param in configurationObject["parameters"]:
             params_list.append(single_param["name"])
 
-    if df_index_parameter_gof_file.is_file():
-        df_index_parameter_gof = pd.read_pickle(df_index_parameter_gof_file, compression="gzip")
+    if files.df_index_parameter_gof_file.is_file():
+        df_index_parameter_gof = pd.read_pickle(files.df_index_parameter_gof_file, compression="gzip")
         gof_list = utility._get_gof_columns_df_index_parameter_gof(
             df_index_parameter_gof)
     else:
-        print(f"Be careful - {df_index_parameter_gof_file} does not exist; df_index_parameter_gof is None; gof_list is not populated!")
+        print(f"Be careful - {files.df_index_parameter_gof_file} does not exist; df_index_parameter_gof is None; gof_list is not populated!")
         df_index_parameter_gof = None
         gof_list = None
 
     # df_nodes = utility.get_df_from_simulationNodes(simulationNodes, nodes_or_paramters="nodes", params_list=params_list)
     # df_nodes_params = utility.get_df_from_simulationNodes(simulationNodes, nodes_or_paramters="parameters",  params_list=params_list)
 
-    if read_saved_simulations and df_simulations_file.is_file():
-        df_simulation_result = pd.read_pickle(df_simulations_file, compression="gzip")
+    if read_saved_simulations and files.df_simulations_file.is_file():
+        df_simulation_result = pd.read_pickle(files.df_simulations_file, compression="gzip")
     else:
         df_simulation_result = None
-    if read_saved_states and df_state_file.is_file():
-        df_state = pd.read_pickle(df_state_file, compression="gzip")
+    if read_saved_states and files.df_state_file.is_file():
+        df_state = pd.read_pickle(files.df_state_file, compression="gzip")
     else:
         df_state = None
 
@@ -644,7 +678,7 @@ def get_dict_with_dfs_from_statistics_and_other_relevant_data(
     # results_dict["parameterNames"] = params_list  #not simulationNodes.nodeNames, instead better simulationNodes.orderdDistsNames
     results_dict["stochasticParameterNames"] = param_labeles
 
-    simulation_parameters_file = args_files["simulation_parameters_file"]
+    simulation_parameters_file = files.simulation_parameters_file
     if df_simulation_result is not None:
         results_dict["number_full_model_evaluations"] = len(df_simulation_result)
     elif simulation_parameters_file.is_file():
