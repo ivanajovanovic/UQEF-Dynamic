@@ -149,11 +149,11 @@ if local_debugging:
             condition_results_based_on_metric_sign = "greater_or_equal",
             inputModelDir="/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/HBV-SASK-data",
             config_file='/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/data/configurations/configuration_hbv_10D_single_qoi.json', #configuration_hbv_11D_2004_2005_long.json',
-            outputResultDir=os.path.abspath(os.path.join("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/hbvsask_runs", 'mc_10d_ensemble_whole_timespan_non_parallel_stat_oldman')), #mc_10d_10000_random_nse02_autoregressive_09_qcms_oldman_2006_2007
-            analyse_runtime=False,
+            outputResultDir=os.path.abspath(os.path.join("/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/hbvsask_runs", 'mc_2d_ensemble_whole_timespan_parallel_banff_new_uqef')), #mc_10d_10000_random_nse02_autoregressive_09_qcms_oldman_2006_2007
+            analyse_runtime=True,
             mpi_method="MpiPoolSolver",
             opt_strategy= "DYNAMIC", # DYNAMIC
-            opt_algorithm="LPT", #LPT FCFS LPT Default
+            opt_algorithm="FCFS", #LPT FCFS LPT Default
             # run_type="custom_run",
             # custom_name='mc_10d_5000_sobol_autoregressive_09_qcms_oldman_2006_2007',
             dict_stat_to_compute={

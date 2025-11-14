@@ -32,3 +32,7 @@ $(which pip) install -e --no-deps .
 cd ../sparseSpACE/
 $(which pip) install -e .
 #$(which pip) install umbridge
+# Upgrading
+# conda update --all
+# pip list --outdated | grep -Ff <(cut -d= -f1 requirements.txt)
+# pip install -U -r requirements.txt --upgrade

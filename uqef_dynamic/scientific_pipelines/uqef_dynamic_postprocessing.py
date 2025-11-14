@@ -2052,6 +2052,16 @@ workingDir = [
 ]
 directory_for_saving_plots = pathlib.Path('/work/ga45met/paper_uqef_dynamic_sim/hbv_sask/oldman_2004_2007/mc_gpce_10d_p4_ct07_500000_random_nse02_2004_2007_oldman/')
 
+workingDir = [
+    basis_workingDir / 'hbv_uq_cm4.0318',
+    basis_workingDir / 'hbv_uq_cm4.0319',
+    basis_workingDir / 'hbv_uq_cm4.0320',
+    basis_workingDir / 'hbv_uq_cm4.0324',
+    basis_workingDir / 'hbv_uq_cm4.0325',
+    basis_workingDir / 'hbv_uq_cm4.0326',
+]
+directory_for_saving_plots = pathlib.Path('/work/ga45met/paper_uqef_dynamic_sim/hbv_sask/banff_2004_2010/mc_gpce_11d_p4_ct07_20000_lhc_lars_2004_2010_banff/')
+
 
 # # Linux Cluster
 # basis_workingDir = pathlib.Path('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/hbvsask_runs/kl_analysis')

@@ -285,24 +285,35 @@ The framework supports numerous command-line arguments to control the simulation
 - `--read_nodes_from_file`: Read parameter values from file
 - `--parameters_file`: File containing parameter sets
 
+#### Conditional Analysis Options
+- `--allow_conditioning_results_based_on_metric`: Enable conditioning of results based on the specified performance metric and value
+- `--condition_results_based_on_metric`: Condition results based on a specific performance metric (e.g., 'NSE', 'KGE')
+- `--condition_results_based_on_metric_value`: Value of the performance metric for conditioning (e.g., `0.7` for NSE > 0.7)      
+- `--condition_results_based_on_metric_sign`: Sign for conditioning (`greater`, `less`, `equal`,  `greater_or_equal`, `less_or_equal`)
+
 #### Statistics Arguments and Post-processing Options
 - `--compute_Sobol_t`: Compute total Sobol indices
 - `--compute_Sobol_m`: Compute main effect indices
 - `--compute_Sobol_m2`: Compute second-order indices
+- `--compute_sobol_indices_with_samples`: Compute Sobol indices using samples rank-based approach; only relevant for MC-based UQ methods
 - `--disable_statistics`:  Disable all statistical calculations including plots (useful when restoring a saved uqsim object from file)
 - `--disable_recalc_statistics`: Disable the recalculation of statistics (useful when restoring a saved uqsim object from file)
 - `--disable_calc_statistics`: Disable calculation of statistics; still saves all simulation data (i.e., in one big DataFrame)
-- `--instantly_save_results_for_each_time_step`: Save results for each time step instantly
+- `--parallel_statistics`: Enable parallel statistics computation over different time steps (i.e., elements of the vector-valued QoI)
+- `--instantly_save_results_for_each_time_step`: Save results for each time step instantly; relevant when working with large data that cannot fit into memory
 - `--compute_generalized_sobol_indices`: Compute generalized Sobol indices for time-dependent processes
+- `--compute_generalized_sobol_indices_over_time`: Compute generalized Sobol indices over time for time-dependent processes; for now, this is only available for PCE-based UQ methods (not KL expansion-based methods)
 - `--compute_kl_expansion_of_qoi`: Compute KL expansion of the Quantity of
    Interest (QoI)
 - `--kl_expansion_order`: Order of the KL expansion
+- `--compute_timewise_gpce_next_to_kl_expansion`: Compute time-wise gPCE surrogate models next to the KL expansion-based surrogate
 
 #### Controlling saved data, mainly from statistics computation
 - `--save_all_simulations`: Save complete simulation data
 - `--store_qoi_data_in_stat_dict`: Store quantity of interest data
 - `--store_gpce_surrogate_in_stat_dict`: Store PCE surrogate model
 - `--instantly_save_results_for_each_time_step`: Save results incrementally (has to be done in custom models)
+- `--save_gpce_surrogate`: Save gPCE surrogate models for each time step (if time-wise gPCE surrogates are computed)
 
 #### Model and result directories
 - `--inputModelDir`: Folder for the input files of the model
@@ -587,5 +598,5 @@ UQEF-Dynamic builds upon several excellent open-source projects:
 
 ## Version History
 
-- **v1.0** (Current): Production-stable release with comprehensive UQ methods and parallel computing support
+- **v0.1** (Current): Production-stable release with comprehensive UQ methods and parallel computing support
 
