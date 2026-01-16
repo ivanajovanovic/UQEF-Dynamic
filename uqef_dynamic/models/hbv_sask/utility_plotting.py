@@ -57,7 +57,7 @@ def uq_plotting(
         elif single_qoi =='AET':
             subplot_titles = subplot_titles + (f"FUQ: QoI - Actual Evapotranspiration ({single_qoi})",)
         else:
-            raise Error()
+            raise Exception(f"Unknown qoi {single_qoi} for plotting")
         n_rows+=1
 
     print(f"{n_rows}; {subplot_titles}")
@@ -430,6 +430,7 @@ def main(list_workindDir, inputModelDir,
 
 if __name__ == '__main__':
     # MC 150 000 2004--2007 LHS NSE>0.2
+    basis_workingDir = pathlib.Path('/work/ga45met/paper_uqef_dynamic_sim/hbvsask_runs_lxc_autumn_24')
     workingDir_I = basis_workingDir / 'hbv_uq_mpp3.0054'
     workingDir_II = basis_workingDir / 'hbv_uq_mpp3.0055'
     workingDir_III = basis_workingDir / 'hbv_uq_mpp3.0056'
@@ -444,4 +445,4 @@ if __name__ == '__main__':
     directory_for_saving_plots =  pathlib.Path(directory_for_saving_plots)
 
     list_workindDir = [workingDir_I, workingDir_II, workingDir_III]
-    main(list_workindDir=list_workindDir, inputModelDir)
+    main(list_workindDir=list_workindDir, inputModelDir=inputModelDir)

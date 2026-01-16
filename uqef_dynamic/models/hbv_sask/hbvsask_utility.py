@@ -47,6 +47,16 @@ HBV_PARAMS_LIST = ['TT', 'C0', 'ETF', 'LP', 'FC',
 
 TIME_COLUMN_NAME="TimeStamp"
 
+COLORS = [
+    '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', 
+    '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf',
+    '#637939', '#393b79', '#8c6d31', '#843c39', '#7b4173',
+    '#3182bd', '#6baed6', '#9ecae1', '#c6dbef', '#e6550d',
+    '#fd8d3c', '#fdae6b', '#fdd0a2', '#31a354', '#74c476',
+    '#a1d99b', '#c7e9c0', '#756bb1', '#9e9ac8', '#bcbddc'
+]
+PARAMETERS = ["TT", "C0", "ETF", "FC", "beta", "FRAC", "K2", "LP", "K1", "alpha", "PM"]
+COLORS_DICT = {PARAMETERS[idx]:COLORS[idx] for idx in range(len(PARAMETERS))}
 
 def _plot_time_series(df, column_to_plot):
     fig = go.Figure()
@@ -124,8 +134,10 @@ def _plot_output_data_and_precipitation(input_data_df, simulated_data_df=None, i
             tickfont={"color": "#d62728"},
             tickmode="auto",
             ticks="inside",
-            title="Q [cm/s]",
-            titlefont={"color": "#d62728"},
+            title=dict(
+                text="Q [cm/s]",
+                font={"color": "#d62728"}
+            ),
         )
     )
     if precipitation_columns in input_data_df.columns:
@@ -140,8 +152,10 @@ def _plot_output_data_and_precipitation(input_data_df, simulated_data_df=None, i
                 nticks=3,
                 tickmode="auto",
                 ticks="inside",
-                titlefont={"color": '#1f77b4'},
-                title="N [mm/day]",
+                title=dict(
+                    text="N [mm/day]",
+                    font={"color": '#1f77b4'},
+                ),
                 type="linear",
             ),
         )
@@ -220,8 +234,10 @@ def plot_streamflow_and_precipitation(input_data_df, simulated_data_df=None, inp
             tickfont={"color": "#d62728"},
             tickmode="auto",
             ticks="inside",
-            title="Q [cm/s]",
-            titlefont={"color": "#d62728"},
+            title=dict(
+                text="Q [cm/s]",
+                font={"color": "#d62728"},
+            ),
         ),
         yaxis2=dict(
             anchor="x",
@@ -233,8 +249,10 @@ def plot_streamflow_and_precipitation(input_data_df, simulated_data_df=None, inp
             nticks=3,
             tickmode="auto",
             ticks="inside",
-            titlefont={"color": '#1f77b4'},
-            title="N [mm/day]",
+            title=dict(
+                text="N [mm/day]",
+                font={"color": '#1f77b4'},
+            ),
             type="linear",
         )
     )
@@ -293,8 +311,16 @@ def extend_hbv_plot_with_observed_and_forcing_data_and_update_layout(
     fig.update_xaxes(title_text="Date", autorange=True, range=[hbv_model.start_date_predictions, hbv_model.end_date], type="date")
 
     # Update y-axis
-    fig.update_yaxes(title_text="Q [cm/s]", side="left", domain=[0, 0.7], mirror=True, tickfont={"color": "#d62728"},
-                    tickmode="auto", ticks="inside", titlefont={"color": "#d62728"}, range=[0, 100])
+    fig.update_yaxes(
+        # title_text="Q [cm/s]", 
+        side="left", domain=[0, 0.7], mirror=True, tickfont={"color": "#d62728"},
+        tickmode="auto", ticks="inside", 
+        title=dict(
+            text="Q [cm/s]",
+            font={"color": "#d62728"}
+        ), 
+        range=[0, 100]
+        )
 
     fig.update_layout(
         # legend=dict(yanchor="bottom", y=0.01, xanchor="right", x=0.99),
@@ -307,18 +333,20 @@ def extend_hbv_plot_with_observed_and_forcing_data_and_update_layout(
     if plot_forcing_data:
         fig.update_layout(
             yaxis2=dict(
-            anchor="x",
-            domain=[0.7, 1],
-            mirror=True,
-            range=[N_max, 0],
-            side="right",
-            tickfont={"color": '#1f77b4'},
-            nticks=3,
-            tickmode="auto",
-            ticks="inside",
-            titlefont={"color": '#1f77b4'},
-            title="N [mm/day]",
-            type="linear",
+                anchor="x",
+                domain=[0.7, 1],
+                mirror=True,
+                range=[N_max, 0],
+                side="right",
+                tickfont={"color": '#1f77b4'},
+                nticks=3,
+                tickmode="auto",
+                ticks="inside",
+                title=dict(
+                    text="N [mm/day]",
+                    font={"color": '#1f77b4'},
+                ), 
+                type="linear",
             )
         )
     return fig
@@ -357,8 +385,16 @@ def extend_hbv_plot_with_forcing_and_update_layout(
     fig.update_xaxes(title_text="Date", autorange=True, range=[hbv_model.start_date_predictions, hbv_model.end_date], type="date")
 
     # Update y-axis
-    fig.update_yaxes(title_text="Q [cm/s]", side="left", domain=[0, 0.7], mirror=True, tickfont={"color": "#d62728"},
-                    tickmode="auto", ticks="inside", titlefont={"color": "#d62728"}, range=[0, 100])
+    fig.update_yaxes(
+        # title_text="Q [cm/s]", 
+        side="left", domain=[0, 0.7], mirror=True, tickfont={"color": "#d62728"},
+        tickmode="auto", ticks="inside", 
+        title=dict(
+            text="Q [cm/s]",
+            font={"color": "#d62728"}, 
+        ),
+        range=[0, 100]
+        )
 
     fig.update_layout(
         # legend=dict(yanchor="bottom", y=0.01, xanchor="right", x=0.99),
@@ -380,8 +416,10 @@ def extend_hbv_plot_with_forcing_and_update_layout(
             nticks=3,
             tickmode="auto",
             ticks="inside",
-            titlefont={"color": '#1f77b4'},
-            title="N [mm/day]",
+            title=dict(
+                text="N [mm/day]",
+                font={"color": '#1f77b4'},
+            ), 
             type="linear",
             )
         )

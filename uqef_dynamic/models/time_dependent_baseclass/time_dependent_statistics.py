@@ -32,7 +32,6 @@ from uqef_dynamic.utils import sens_indices_sampling_based_utils
 
 # TODO two cases - time_column_name is or is not an index column in returned data!?
 # TODO Samples class - write in some log file runs which have returned None, in case of model break!
-# TODO Samples class - eventually, add a subroutine that will check some metric in gof_df and conditioned on that potentially disregard the run
 # TODO Samples class - Add 'qoi' column to self.df_simulation_result
 # TODO Samples class - Move computation of dict_of_approx_matrix_c and dict_of_matrix_c_eigen_decomposition from Sample class to Statistics class!?
 # TODO Samples class - Eventually, add options to set other dataframes as well

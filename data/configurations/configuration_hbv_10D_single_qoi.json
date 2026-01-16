@@ -1,19 +1,21 @@
 {
   "time_settings":
   {
-    "start_day": 2,
+    "start_day": 1,
     "start_month": 10,
-    "start_year": 2003,
+    "start_year": 2001,
     "start_hour": 0,
     "start_minute": 0,
 
     "end_day": 1,
     "end_month": 10,
-    "end_year": 2007,
+    "end_year": 2010,
     "end_hour": 0,
     "end_minute": 0,
 
-    "run_full_timespan":"True",
+    "run_full_timespan":"False",
+    "spin_up_length":1096,
+    "simulation_length": 2191,
     "resolution": "daily",
     
     "cut_runs": "False",
@@ -67,10 +69,8 @@
     "upper": 10.0,
     "default": 0.5,
     "values_list":[0.0, 0.5, 10.0]
-  }
-],
-"unused_parameters": [
-  {
+  },
+    {
     "name": "ETF",
     "distribution": "Uniform",
     "lower": 0.0,
@@ -134,6 +134,16 @@
     "default": 2.0,
     "values_list":[1.0, 2.0, 3.0]
   },
+  {
+    "name": "PM",
+    "distribution": "Uniform",
+    "lower": 0.5,
+    "upper": 2.0,
+    "default": 1.0,
+    "values_list":[0.5, 1.0, 2.0]
+  }
+],
+"unused_parameters": [
   {
     "name": "M",
     "distribution": "Uniform",
