@@ -17,6 +17,7 @@ pip
 plotly
 psutil
 pyproj
+python-kaleido
 scikit-learn
 scipy
 seaborn
