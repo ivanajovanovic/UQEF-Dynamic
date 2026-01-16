@@ -2800,7 +2800,8 @@ pattern = re.compile(
 # TODO Make this more general to extract paramname from other prefixes as well
 def extract_paramname(whole_string, prefix="generalized_sobol_total_index"):
     # Regular expression pattern to match both cases
-    pattern = r"generalized_sobol_total_index_(.*?)(?:_\d+)?$"
+    # pattern = r"generalized_sobol_total_index_(.*?)(?:_\d+)?$"
+    pattern = rf"{prefix}_(.*?)(?:_\d+)?$"
     # pattern = rf"{re.escape(prefix)}_(.*?)(?:_\d+)?$"
     
     match = re.search(pattern, whole_string)
@@ -2835,39 +2836,58 @@ def identify_column_generlized_index_form(column_name):
         return look_back_window_size, paramname  # generalized_sobol_total_index_{paramname}_{timestamp}
 
 
-def _add_sensitvity_indices_as_time_signals(
-    fig, df_temp, color_dict, substring="generalized_sobol_total_index_", row=1, col=1, showlegend=False):
-    for single_column in df_temp.columns:
-        if single_column!=TIME_COLUMN_NAME and single_column!=QOI_ENTRY and single_column!=MEASURED_ENTRY:
-            current_parameter_name = single_column.split(substring, 1)[1]  # TODO Maybe this does not hold always!
-            fig.add_trace(
-                go.Scatter(
-                    x=df_temp[TIME_COLUMN_NAME], y=df_temp[single_column],
-                    name=current_parameter_name, mode='lines',
-                    line=dict(color=color_dict[current_parameter_name]),
-                    showlegend=showlegend
-                ),
-                row=row, col=col
-            )
+def _add_sensitivity_indices_as_time_signals(
+    fig, df, color_dict, 
+    substring="generalized_sobol_total_index_", plot_generalized=True, look_back_window_size=None, row=1, col=1, showlegend=False):
+    for single_column in df.columns:
+        if single_column!=TIME_COLUMN_NAME and single_column.lower()!=QOI_ENTRY and single_column.lower()!=MEASURED_ENTRY and single_column.startswith(substring):
+            plot_this_column = False
+            if plot_generalized:
+                current_look_back_window_size, current_parameter_name = identify_column_generlized_index_form(single_column)
+                if look_back_window_size is not None:
+                    if current_look_back_window_size is not None and int(current_look_back_window_size) == look_back_window_size:
+                        plot_this_column = True
+                else:
+                    plot_this_column = True
+            else:
+                current_parameter_name = single_column.split(substring, 1)[1]  # TODO Maybe this does not hold always!
+                plot_this_column = True
+            
+            if plot_this_column:
+                fig.add_trace(
+                    go.Scatter(
+                        x=df[TIME_COLUMN_NAME], y=df[single_column],
+                        name=current_parameter_name, mode='lines',
+                        line=dict(color=color_dict[current_parameter_name]),
+                        showlegend=showlegend
+                    ),
+                    row=row, col=col
+                )
     return fig
-    
 
-def _add_sensitvity_indices_as_heatmap(fig, df_temp, substring="generalized_sobol_total_index_", row=1, col=1, showscale=False):
-    # df_temp = df_statistics_and_measured_generalized.loc[
-    #     df_statistics_and_measured_generalized[QOI_ENTRY] == single_qoi] 
+
+def _add_sensitivity_indices_as_heatmap(fig, df, substring="generalized_sobol_total_index_", 
+                                look_back_window_size=None, row=1, col=1, showscale=False, colorscale='Plasma'):
+    """
+    colorscale options - 'Plasma', 'Inferno', 'Viridis'
+    """
     si_columns_to_plot = []
-    for single_column in df_temp.columns:
-        if single_column!=TIME_COLUMN_NAME and single_column!=QOI_ENTRY and single_column!=MEASURED_ENTRY:
-            if single_column.startswith(substring):
+    for single_column in df.columns:
+        if single_column!=TIME_COLUMN_NAME and single_column.lower()!=QOI_ENTRY and single_column.lower()!=MEASURED_ENTRY and single_column.startswith(substring):
+            if look_back_window_size is not None:
+                current_look_back_window_size, current_parameter_name = identify_column_generlized_index_form(single_column)
+                if current_look_back_window_size is not None and int(current_look_back_window_size) == look_back_window_size:
+                    si_columns_to_plot.append(single_column)
+            else:
                 si_columns_to_plot.append(single_column)
     #si_columns_to_label = si_columns_to_label.reverse()
-    df_generalized = df_temp[si_columns_to_plot].T
+    df_generalized = df[si_columns_to_plot].T
     # si_columns_to_label = [single_column.split('_')[-1] for single_column in si_columns_to_plot]
     si_columns_to_label = [extract_paramname(single_column, prefix=substring) for single_column in si_columns_to_plot]
     # print(f"DEBUGGING si_columns_to_label-{si_columns_to_label}")        
     trace=go.Heatmap(
         z=df_generalized[::-1],
-        x=df_temp[TIME_COLUMN_NAME],
+        x=df[TIME_COLUMN_NAME],
         y=si_columns_to_label[::-1],
         showscale=showscale,
         colorbar=dict(
@@ -2876,11 +2896,11 @@ def _add_sensitvity_indices_as_heatmap(fig, df_temp, substring="generalized_sobo
             len=0.35,     # Length of the colorbar as a fraction of the plot height
             thickness=20, # Thickness of the colorbar
             title='S.I. Scale' # Title of the colorbar
-        )
-        # colorscale='Viridis'
+        ),
+        colorscale=colorscale,
      )
-    fig.add_trace(trace,row=row, col=col)
-    return fig
+    fig.add_trace(trace, row=row, col=col)
+    return fig  
 
 # ===================================================================================================================
 # Functions for saving the GPCE surrogate model
