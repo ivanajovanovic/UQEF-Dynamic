@@ -156,6 +156,12 @@ git checkout integrate_parallel_statistics
 $(which pip) install -e .
 cd ../
 
+# Install UQEF-Dynamic
+cd UQEF-Dynamic/
+git checkout master
+git pull
+$(which pip) install -e .
+
 # For Larsim model (if needed)
 cd Larsim_Utility_Set/
 git checkout master
