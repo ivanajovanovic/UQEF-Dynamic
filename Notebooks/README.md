@@ -18,3 +18,7 @@ Otherwise, please clear outputs directly in your local file, either from Jupyter
 jupyter nbconvert --ClearOutputPreprocessor.enabled=True --inplace your_notebook.ipynb
 ```
 After this, commit and push as usual.
+
+- Notebook `HBV_data_analysis.ipynb` contains code snippets for reading data for two basins for the HBV-SASK model, for simple processing and plotting of the data
+- Notebook `HBV_model_runs.ipynb` contains code snippets for simply running the model and examing/plotting the output
+
