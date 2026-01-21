@@ -148,8 +148,11 @@ $(which pip) install --no-deps chaospy
 
 # Install UQEF (assuming the repository is cloned)
 # Note - this will change soon, since UQEF is now available on PyPi
+# Install from pypi
+# python -m pip install uqef
+# Install from source
 cd UQEF/
-git checkout parallel_statistics
+git checkout integrate_parallel_statistics
 $(which pip) install -e .
 cd ../
 
