@@ -1,7 +1,8 @@
-.png
+*.png
 *.html
-.pdf
-
+*.pdf
+**/.DS_Store
+*.pptx
 # Don't track content of these folders
 model_runs/
 **/model_runs/
@@ -30,7 +31,7 @@ __pycache__/
 
 *.cmd
 *.out
-*.pkl
+#*.pkl
 *.pickle
 
 # Packages #
