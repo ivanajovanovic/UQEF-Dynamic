@@ -1,0 +1,13 @@
+Factor#  LB     UB    Name  - title Line - this line should remain here
+1        -4      4    TT    % Air temperature threshold in °C for melting/freezing and separating rain and snow
+2         0     10    C0    % Base melt factor, in mm/°C per day
+3         0      1    ETF   % Temperature anomaly correction in 1/°C of potential evapotranspiration
+4         0      1    LP    % Limit for PET as a multiplier to FC, i.e., soil moisture below which evaporation becomes supply limited
+5        50    500    FC    % Field capacity of soil, in mm. The maximum amount of water that the soil can retain
+6         1      3    beta  % Shape parameter (exponent) for soil release equation (unitless)
+7       0.1    0.9    FRAC  % Fraction of soil release entering fast reservoir ((unitless)
+8      0.05      1    K1    % Fast reservoir coefficient, which determines what proportion of the storage is released per day (unitless)
+9         1      3    alpha % Shape parameter (exponent) for fast reservoir equation (unitless)
+10        0   0.05    K2    % Slow reservoir coefficient which determines what proportion of the storage is released per day (unitless)
+11        1      3    UBAS  % Base of unit hydrograph for watershed routing in day; default is 1 for small watersheds
+12      0.5      2    PM    % Precipitation multiplier to account for uncertainty (bias) in precipitation (unitless); default is 1. 
