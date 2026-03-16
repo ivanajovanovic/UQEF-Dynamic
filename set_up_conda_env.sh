@@ -1,7 +1,9 @@
 #!/bin/bash
 conda config --get channel_priority
 conda config --show channels
-conda config --set channel_priority flexible
+conda config --add channels conda-forge
+  conda config --set channel_priority strict
+# conda config --set channel_priority flexible
 conda create -n uqef_env python=3.11
 conda install -n uqef_env --file requirements.txt --update-deps
 # conda install -n uqef_env --file requirements_py13_version.txt --update-deps
@@ -26,13 +28,12 @@ pip install uqef
 # git clone https://github.com/flo2k/UQEF.git
 cd ../UQEF/
 git checkout integrate_parallel_statistics
-$(which pip) install -e --no-deps .
+$(which pip) install --no-deps -e .
 # Install UQEF-Dynamic
 cd UQEF-Dynamic/
 git checkout master
 git pull
 $(which pip) install -e .
-uqef_dynamic
 ## For working with the Larsim model
 # cd ../Larsim_Utility_Set/
 # git checkout master
