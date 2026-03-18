@@ -129,6 +129,95 @@ Contains the parameters for the simulation. Each parameter has a name, distribut
 
 Contains the parameters that are not used in the simulation. Each unused parameter has a name, distribution, lower and upper bounds, and a default value.
 
+## Quick Reference: MC + PCE Surrogate + KL Expansion
+
+The table below summarises all CLI flags needed to run a simulation using Monte Carlo random samples, build a PCE surrogate via regression, and compute a KL expansion — including generalized Sobol indices.
+
+### MC Sampling
+
+| Flag | Purpose | Example value |
+|---|---|---|
+| `--uq_method` | Select Monte Carlo | `mc` |
+| `--mc_numevaluations` | Number of samples | `10000` |
+| `--sampling_rule` | Sampling strategy | `random`, `latin_hypercube`, `sobol` |
+| `--sampleFromStandardDist` | Sample from standard distributions before transforming | _(flag)_ |
+
+### PCE Surrogate (via MC regression)
+
+| Flag | Purpose | Example value |
+|---|---|---|
+| `--regression` | Enable PCE regression fitting on MC samples | _(flag)_ |
+| `--regression_model_type` | Regression algorithm | `LARS`, `OLS` |
+| `--sc_p_order` | Polynomial order | `2`, `3`, `5` |
+| `--sc_q_order` | Collocation points per dimension | `5`, `6` |
+| `--sc_poly_rule` | Polynomial basis construction rule | `three_terms_recurrence` |
+| `--sc_poly_normed` | Normalize polynomials | _(flag)_ |
+| `--cross_truncation` | Truncation factor for multivariate PCE | `0.7`, `1.0` |
+| `--save_gpce_surrogate` | Save per-timestep gPCE surrogate files | _(flag)_ |
+| `--store_gpce_surrogate_in_stat_dict` | Store surrogate in statistics dict | _(flag)_ |
+| `--compute_other_stat_besides_pce_surrogate` | Compute stats (mean, variance, percentiles) alongside PCE | _(flag)_ |
+
+### KL Expansion
+
+| Flag | Purpose | Example value |
+|---|---|---|
+| `--compute_kl_expansion_of_qoi` | **Enable KL expansion of the QoI** | _(flag)_ |
+| `--kl_expansion_order` | Number of KL modes | `10`, `15` |
+| `--compute_timewise_gpce_next_to_kl_expansion` | Also build time-wise gPCE surrogate alongside KL | _(flag)_ |
+
+### Sobol Sensitivity Indices
+
+| Flag | Purpose | Notes |
+|---|---|---|
+| `--compute_Sobol_m` | First-order (main) Sobol indices | Standard, works with all UQ methods |
+| `--compute_Sobol_t` | Total Sobol indices | Standard, works with all UQ methods |
+| `--compute_generalized_sobol_indices` | Generalized Sobol indices | Requires gPCE; when KL is active, derived from KL coefficients at final timestep |
+| `--compute_generalized_sobol_indices_over_time` | Time series of generalized Sobol indices | Requires gPCE; **mutually exclusive with KL expansion** (if-elif logic) |
+
+> **Note on KL + Generalized Sobol compatibility:** `--compute_kl_expansion_of_qoi` and `--compute_generalized_sobol_indices_over_time` are **mutually exclusive** — if both are set, the KL branch takes precedence and the over-time Sobol branch is skipped. However, combining `--compute_kl_expansion_of_qoi` with `--compute_generalized_sobol_indices` (without `_over_time`) **is** supported: generalized Sobol indices are then derived from the KL coefficients at the final timestep.
+
+### Additional useful flags
+
+| Flag | Purpose |
+|---|---|
+| `--parallel_statistics` | Compute statistics in parallel over timesteps |
+| `--save_all_simulations` | Save all forward simulation outputs to `df_all_simulations.pkl` |
+| `--compute_covariance_matrix_in_time` | Compute covariance matrix over time |
+
+### Example: MC + PCE (order 5, cross-truncation 0.7) + KL (order 10) + Generalized Sobol (final step)
+
+```bash
+mpiexec -n $SLURM_NTASKS python uqef_dynamic/scientific_pipelines/uq_simulation_uqsim.py \
+    --outputResultDir /path/to/results \
+    --inputModelDir /path/to/model/data \
+    --sourceDir /path/to/source \
+    --config_file data/configurations/configuration_hbv_10D.json \
+    --model "hbvsask" \
+    --uncertain "all" \
+    --uq_method "mc" \
+    --mc_numevaluations 10000 \
+    --sampling_rule "random" \
+    --regression \
+    --regression_model_type "LARS" \
+    --sc_p_order 5 \
+    --sc_q_order 6 \
+    --sc_poly_rule "three_terms_recurrence" \
+    --sc_poly_normed \
+    --cross_truncation 0.7 \
+    --compute_kl_expansion_of_qoi \
+    --kl_expansion_order 10 \
+    --compute_generalized_sobol_indices \
+    --compute_Sobol_m \
+    --compute_Sobol_t \
+    --save_gpce_surrogate \
+    --store_gpce_surrogate_in_stat_dict \
+    --compute_other_stat_besides_pce_surrogate \
+    --parallel_statistics \
+    --sampleFromStandardDist \
+    --mpi \
+    --mpi_method "MpiPoolSolver"
+```
+
 ## The (possible) output
 - `uqsim_args.pkl`
 - `configurationObject`
