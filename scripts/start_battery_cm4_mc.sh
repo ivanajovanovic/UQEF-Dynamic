@@ -126,34 +126,30 @@ echo "---- start Battery sim: \`date\`"
                             --sc_p_order $p_order \
                             --mc_numevaluations $mc_numevaluations \
                             --sampling_rule "$sampling_rule" \
-                            --sc_poly_rule "$sc_poly_rule" \
-                            --sc_quadrature_rule "$sc_quadrature_rule" \
-                            --parameters_file "$parameters_file" \
-                            --cross_truncation 1.0 \
                             $opt
 
 echo "---- end Battery sim: \`date\`"
 
-" > $baseSourcePath/batter_uq_mc_24d_10000_random_pce2_ct10.cmd
+" > $baseSourcePath/battery_uq_mc_24d_70000_lhc.cmd
 
     #execute batch file
-    sbatch $baseSourcePath/batter_uq_mc_24d_10000_random_pce2_ct10.cmd
+    sbatch $baseSourcePath/battery_uq_mc_24d_70000_lhc.cmd
 
 }
 
 model="battery"
-opt_add="--regression --parallel_statistics --save_all_simulations --sampleFromStandardDist --compute_Sobol_m --compute_Sobol_t --sc_poly_normed --store_gpce_surrogate_in_stat_dict" #  --read_nodes_from_file --instantly_save_results_for_each_time_step
+opt_add="--parallel_statistics --save_all_simulations --sampleFromStandardDist --compute_Sobol_m --compute_Sobol_t --compute_sobol_indices_with_samples"
 nodes=4
-tasks_per_node=112  #22  112 
+tasks_per_node=112  #22  112
 low_time="2:30:00"
 mid_time="24:00:00"
 max_time="24:00:00"
 uq_method="mc"
 q_order=6
 p_order=2
-mc_numevaluations=10000
+mc_numevaluations=70000
 uc="all"
-sampling_rule="random"  #"latin_hypercube"
+sampling_rule="latin_hypercube"
 sc_poly_rule="three_terms_recurrence"
 sc_quadrature_rule="p" # "clenshaw_curtis" "genz_keister_24" "p"
 mpi_method="MpiPoolSolver"

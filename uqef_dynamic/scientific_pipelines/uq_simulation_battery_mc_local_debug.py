@@ -38,11 +38,16 @@ except ImportError:
 # ─────────────────────────────────────────────
 
 BASE_SOURCE_PATH = pathlib.Path(__file__).resolve().parents[2]  # UQEF-Dynamic root
-
-CONDA_ENV        = "my_uq_env"
+# PYTHON_VERSION = f"python{sys.version_info.major}.{sys.version_info.minor}"
+# PYTHON_VERSION = "python3.11"
+# CONDA_ENV        = "my_uq_env"
+# INPUT_MODEL_DIR  = pathlib.Path(
+#     f"/dss/dsshome1/lxc0C/ga45met2/.conda/envs/{CONDA_ENV}/lib/{PYTHON_VERSION}/site-packages/pybamm/input/drive_cycles"
+# )
+PYTHON_VERSION = "python3.7"
+CONDA_ENV        = "uq_env"
 INPUT_MODEL_DIR  = pathlib.Path(
-    f"/dss/dsshome1/lxc0C/ga45met2/.conda/envs/{CONDA_ENV}"
-    "/lib/python3.11/site-packages/pybamm/input/drive_cycles"
+    f"/dss/dsshome1/lxc0C/ga45met2/.conda/envs/{CONDA_ENV}/lib/{PYTHON_VERSION}/site-packages/pybamm/input/drive_cycles"
 )
 CONFIG_FILE      = BASE_SOURCE_PATH / "uqef_dynamic/models/pybamm/configuration_battery_24_shot_names.json"
 OUTPUT_RESULT_DIR = BASE_SOURCE_PATH / "debug_output" / "battery_mc_local_debug"
@@ -78,7 +83,7 @@ extended_parser = ExtendedUQSimArgumentParser(uqsim)
 config = ConfigurationFactory.create_configuration(
     model_type="battery",
     uq_method="mc",
-    mc_numevaluations=10000,
+    mc_numevaluations=112,
     sampling_rule="random",
     mpi=True,
     mpi_method="MpiPoolSolver",
@@ -132,23 +137,46 @@ condition_results_based_on_metric_sign   = "greater_or_equal"
 # Create output directory
 # ─────────────────────────────────────────────
 
-os.makedirs(str(OUTPUT_RESULT_DIR), exist_ok=True)
+# os.makedirs(str(OUTPUT_RESULT_DIR), exist_ok=True)
 
-working_dir = str(OUTPUT_RESULT_DIR)
+# working_dir = str(OUTPUT_RESULT_DIR)
+# try:
+#     working_dir = os.path.abspath(os.path.join(
+#         uqsim.args.outputResultDir,
+#         uqsim.configuration_object["model_paths"]["workingDir"]
+#     ))
+# except KeyError:
+#     working_dir = str(OUTPUT_RESULT_DIR)
+
+# try:
+#     uqsim.configuration_object["model_paths"]["workingDir"] = working_dir
+# except KeyError:
+#     uqsim.configuration_object["model_paths"] = {"workingDir": working_dir}
+
+# os.makedirs(working_dir, exist_ok=True)
+
+if uqsim.is_master() and not uqsim.is_restored():
+    if not os.path.isdir(uqsim.args.outputResultDir):
+        subprocess.run(["mkdir", "-p", uqsim.args.outputResultDir])
+    print("outputResultDir: {}".format(uqsim.args.outputResultDir))
+
+# Set the working folder where all the model runs related output and files will be written
 try:
-    working_dir = os.path.abspath(os.path.join(
-        uqsim.args.outputResultDir,
-        uqsim.configuration_object["model_paths"]["workingDir"]
-    ))
+    uqsim.args.workingDir = os.path.abspath(os.path.join(uqsim.args.outputResultDir,
+                                                         uqsim.configuration_object["model_paths"]["workingDir"]))
 except KeyError:
-    working_dir = str(OUTPUT_RESULT_DIR)
+    # uqsim.args.workingDir = os.path.abspath(os.path.join(uqsim.args.outputResultDir, "model_runs"))
+    uqsim.args.workingDir = str(uqsim.args.outputResultDir)
 
 try:
-    uqsim.configuration_object["model_paths"]["workingDir"] = working_dir
+    uqsim.configuration_object["model_paths"]["workingDir"] = uqsim.args.workingDir
 except KeyError:
-    uqsim.configuration_object["model_paths"] = {"workingDir": working_dir}
+    uqsim.configuration_object["model_paths"] = {}
+    uqsim.configuration_object["model_paths"]["workingDir"] = uqsim.args.workingDir
 
-os.makedirs(working_dir, exist_ok=True)
+if uqsim.is_master() and not uqsim.is_restored():
+    if not os.path.isdir(uqsim.configuration_object["model_paths"]["workingDir"]):
+        subprocess.run(["mkdir", uqsim.configuration_object["model_paths"]["workingDir"]])
 
 # ─────────────────────────────────────────────
 # Register model and statistics
@@ -157,7 +185,7 @@ os.makedirs(working_dir, exist_ok=True)
 uqsim.models.update({"battery": (lambda: pybammmodel.pybammModelUQ(
     configurationObject=uqsim.configuration_object,
     inputModelDir=uqsim.args.inputModelDir,
-    workingDir=working_dir,
+    workingDir=uqsim.args.workingDir,
 ))})
 
 uqsim.statistics.update({"battery": (lambda: pybammStatistics.pybammStatistics(
@@ -255,6 +283,6 @@ if uqsim.is_master():
         fp.write(f'time_computing_statistics: {end_time_stats - start_time_stats}\n')
         fp.write(f'total_time: {total_time}\n')
 
-print(f"\nResults written to: {OUTPUT_RESULT_DIR}")
+print(f"\nResults written to: {uqsim.args.outputResultDir}")
 
 uqsim.tear_down()

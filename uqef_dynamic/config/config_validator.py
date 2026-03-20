@@ -364,11 +364,13 @@ class ConfigurationValidator:
                 if not path_obj.exists():
                     self.warnings.append(f"{path_name} does not exist: {path_value}")
         
-        # Check output directory parent exists
+        # Ensure output directory exists (create it, including parents, if needed)
         if config.outputResultDir is not None:
             output_path = pathlib.Path(config.outputResultDir)
-            if not output_path.parent.exists():
-                self.errors.append(f"Parent directory of outputResultDir does not exist: {output_path.parent}")
+            try:
+                output_path.mkdir(parents=True, exist_ok=True)
+            except OSError as e:
+                self.errors.append(f"Could not create outputResultDir {output_path}: {e}")
     
     def _validate_parameter_consistency(self, config: UQConfiguration):
         """Validate parameter consistency."""

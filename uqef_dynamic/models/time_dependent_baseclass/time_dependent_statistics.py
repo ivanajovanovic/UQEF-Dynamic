@@ -119,6 +119,7 @@ class Samples(object):
         list_of_gradient_matrix_dict = []
         list_of_single_state_df = []
         self.list_index_run_with_None = []
+        list_model_eval_times = []
         for index_run, value in enumerate(rawSamples, ):
             df_result = None
             parameters_dict = None
@@ -142,6 +143,8 @@ class Samples(object):
                     gradient_matrix_dict = value["grad_matrix"]
                 if "state_df" in value:
                     state_df = value["state_df"]
+                if "model_eval_time" in value and value["model_eval_time"] is not None:
+                    list_model_eval_times.append(value["model_eval_time"])
             else:
                 df_result = value
 
@@ -200,6 +203,13 @@ class Samples(object):
             self.df_state_results = pd.concat(list_of_single_state_df, ignore_index=True, sort=False, axis=0)
         else:
             self.df_state_results = None
+
+        if list_model_eval_times:
+            self.mean_model_eval_time = float(np.mean(list_model_eval_times))
+            self.total_model_eval_time = float(np.sum(list_model_eval_times))
+        else:
+            self.mean_model_eval_time = None
+            self.total_model_eval_time = None
         
     def _process_df_simulation_result(self, df_result, extract_only_qoi_columns=False):
         # Note: logic in Statistics is opposite the one in a Model, e.g., it is assumed that time_column is not an index in DFs
@@ -564,6 +574,8 @@ class TimeDependentStatistics(ABC, Statistics):
         self.df_time_aggregated_grad_analysis = None
         self.solverTimes = None
         self.work_package_indexes = None
+        self.mean_model_eval_time = None
+        self.total_model_eval_time = None
 
         self.polynomial_expansion = None
         self.polynomial_norms = None
@@ -871,6 +883,10 @@ class TimeDependentStatistics(ABC, Statistics):
                 self.timesteps_min, resolution=self.resolution)
             self.timesteps_max = self.samples.get_timesteps_max()
             self.number_of_unique_index_runs = self.number_unique_model_runs = self.samples.get_number_of_runs()
+
+            # Collect mean/total pure model evaluation time aggregated across all samples
+            self.mean_model_eval_time = self.samples.mean_model_eval_time
+            self.total_model_eval_time = self.samples.total_model_eval_time
 
         if self.timesteps is not None:
             self._set_pdTimesteps_based_on_timesteps_and_resolution()

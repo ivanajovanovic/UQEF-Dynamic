@@ -1208,6 +1208,10 @@ def main(mpi, rank, workingDir=None, inputModelDir=None, directory_for_saving_pl
             if is_master(mpi, rank):
                 end_time_parallel_computing = time.time()
                 dict_with_time_info["time_parallel_pce_surrogate_reevaluations"] = end_time_parallel_computing - start_time_reevaluating_reevaluate_surrogate #start_time_parallel_computing
+                if number_of_samples is not None and number_of_samples > 0:
+                    dict_with_time_info["mean_surrogate_eval_time_per_sample"] = (
+                        dict_with_time_info["time_parallel_pce_surrogate_reevaluations"] / number_of_samples
+                    )
 
     if analyse_pce_surrogate:        
         all_results_surrogate_info = None
@@ -1386,6 +1390,10 @@ def main(mpi, rank, workingDir=None, inputModelDir=None, directory_for_saving_pl
                 #         print(f"surrogate_evaluated_dict_over_qois[{single_qoi}][keys[0]] = {surrogate_evaluated_dict_over_qois[single_qoi][keys_list[0]]}")
                 end_time_parallel_computing = time.time()
                 dict_with_time_info["time_kl_surrogate_reevaluations"] = end_time_parallel_computing - start_time_reevaluating_reevaluate_surrogate #start_time_parallel_computing
+                if number_of_samples is not None and number_of_samples > 0:
+                    dict_with_time_info["mean_surrogate_eval_time_per_sample"] = (
+                        dict_with_time_info["time_kl_surrogate_reevaluations"] / number_of_samples
+                    )
             
             else:
                 raise Exception(f"Sorry, the surrogate type {surrogate_type} is not implemented; it can be either 'pce' or 'kl+pce'!")
@@ -2131,30 +2139,30 @@ add_forcing_data = True
 single_timestamp_single_file = False
 
 # battery model
-# # config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/uqef_dynamic/models/pybamm/configuration_battery_24_shot_names.json'
-# # workingDir = pathlib.Path('/work/ga45met/uqef_dynamic_runs/battery_results/cm4_runs/mc_kl10_p4_ct07_24d_10000_random')
-# # workingDir = pathlib.Path('/work/ga45met/uqef_dynamic_runs/battery_results/cm4_runs/mc_kl10_p4_ct07_24d_100000_random')
-# # # workingDir = pathlib.Path('/work/ga45met/uqef_dynamic_runs/battery_results/cm4_runs/mc_kl10_p5_ct07_24d_10000_random')
-# # workingDir = pathlib.Path('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/battery_runs/mc_kl10_p3_ct07_24d_10000_random')
-# # workingDir = pathlib.Path('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/battery_runs/mc_kl10_p4_ct07_24d_100000_random')
+# config_file = '/dss/dsshome1/lxc0C/ga45met2/Repositories/UQEF-Dynamic/uqef_dynamic/models/pybamm/configuration_battery_24_shot_names.json'
+# workingDir = pathlib.Path('/work/ga45met/uqef_dynamic_runs/battery_results/cm4_runs/mc_kl10_p4_ct07_24d_10000_random')
+# workingDir = pathlib.Path('/work/ga45met/uqef_dynamic_runs/battery_results/cm4_runs/mc_kl10_p4_ct07_24d_100000_random')
+# # workingDir = pathlib.Path('/work/ga45met/uqef_dynamic_runs/battery_results/cm4_runs/mc_kl10_p5_ct07_24d_10000_random')
+# workingDir = pathlib.Path('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/battery_runs/mc_kl10_p3_ct07_24d_10000_random')
+# workingDir = pathlib.Path('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/battery_runs/mc_kl10_p4_ct07_24d_100000_random')
 # workingDir = pathlib.Path('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/battery_runs/mc_kl10_p2_ct07_24d_10000_random')
-# workingDir = pathlib.Path('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/battery_runs/battery_uq_cm4.0101')
-# inputModelDir = pathlib.Path('/dss/dsshome1/lxc0C/ga45met2/.conda/envs/my_uq_env/lib/python3.11/site-packages/pybamm/input/drive_cycles')
-# directory_for_saving_plots = workingDir / 'surrogate_analysis'
-# set_lower_predictions_to_zero = False
-# set_mean_prediction_to_zero = False
-# dict_set_lower_predictions_to_zero = False
-# add_measured_data=False
-# add_forcing_data=False
-# single_timestamp_single_file = False
+workingDir = pathlib.Path('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/battery_runs/battery_uq_cm4.0101')
+inputModelDir = pathlib.Path('/dss/dsshome1/lxc0C/ga45met2/.conda/envs/my_uq_env/lib/python3.11/site-packages/pybamm/input/drive_cycles')
+directory_for_saving_plots = workingDir / 'surrogate_analysis_v2'
+set_lower_predictions_to_zero = False
+set_mean_prediction_to_zero = False
+dict_set_lower_predictions_to_zero = False
+add_measured_data=False
+add_forcing_data=False
+single_timestamp_single_file = False
 
 ##################
 
 set_up_statistics_from_scratch = False
 
 recompute_statistics = False
-reevaluate_original_model = False 
-reevaluate_surrogate = False
+reevaluate_original_model = True #False 
+reevaluate_surrogate = True #False
 recompute_generalized_sobol_indices = True
 analyse_pce_surrogate = False  # for now, only possible with standard PCE model
 
@@ -2164,7 +2172,7 @@ recompute_sobol_indices = False
 
 read_saved_simulations = False
 
-surrogate_type ='pce'  # 'pce' | 'kl+pce'
+surrogate_type ='kl+pce' #'pce'  # 'pce' | 'kl+pce'
 
 compute_other_stat_besides_pce_surrogate = True
 compute_Sobol_t = True
@@ -2176,13 +2184,13 @@ dict_stat_to_compute = {
         "Skew": False, "Kurt": False, "Sobol_m": compute_Sobol_m, "Sobol_m2": compute_Sobol_m2, "Sobol_t": compute_Sobol_t
         }
 
-compute_generalized_sobol_indices_from_kl_expansion = False
-compute_generalized_sobol_indices_over_time = True
+compute_generalized_sobol_indices_from_kl_expansion = True #False
+compute_generalized_sobol_indices_over_time = False #True
 look_back_window_size = [30, 60, 90, 365] #30 #'whole'  # 30  #365 
 
 printing = True #True
 plotting = True #True
-replot_statistics_from_statistics_object = False
+replot_statistics_from_statistics_object = True #False
 dict_what_to_plot = {
         "E_minus_2std": False, "E_plus_2std": False,
         "E_minus_std": False, "E_plus_std": False, 

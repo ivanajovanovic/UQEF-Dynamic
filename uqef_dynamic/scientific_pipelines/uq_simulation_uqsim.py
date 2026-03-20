@@ -210,6 +210,7 @@ utility.DEFAULT_DICT_WHAT_TO_PLOT = dict_what_to_plot
 if uqsim.is_master() and not uqsim.is_restored():
     if not os.path.isdir(uqsim.args.outputResultDir):
         subprocess.run(["mkdir", "-p", uqsim.args.outputResultDir])
+        # os.makedirs(str(uqsim.args.outputResultDir), exist_ok=True)
     print("outputResultDir: {}".format(uqsim.args.outputResultDir))
 
 # Set the working folder where all the model runs related output and files will be written
@@ -229,9 +230,10 @@ except KeyError:
 if uqsim.is_master() and not uqsim.is_restored():
     if not os.path.isdir(uqsim.configuration_object["model_paths"]["workingDir"]):
         subprocess.run(["mkdir", uqsim.configuration_object["model_paths"]["workingDir"]])
+        # os.makedirs(uqsim.configuration_object["model_paths"]["workingDir"], exist_ok=True)
 
 #####################################
-# register model
+# Register models
 #####################################
 
 if LARSIM_AVAILABLE:
@@ -272,7 +274,7 @@ if PYBAMM_AVAILABLE:
     ))})
 
 #####################################
-# register statistics
+# Register statistics
 #####################################
 
 if LARSIM_AVAILABLE:
@@ -489,17 +491,18 @@ if uqsim.is_master():
     with open(fileName, 'wb') as f:
         dill.dump(uqsim.configuration_object, f)
 
-#####################################
-# statistics
-#####################################
+# ─────────────────────────────────────────────
+# Statistics
+# ─────────────────────────────────────────────
 
-start_time_computing_statistics = time.time()
+print("---- computing statistics ----")
+start_time_stats = time.time()
 uqsim.prepare_statistics()
 uqsim.calc_statistics()
 # if uqsim.is_master():
 #     uqsim.statistic.compute_covariance_matrix_in_time()
-end_time_computing_statistics = time.time()
-time_computing_statistics = end_time_computing_statistics - start_time_computing_statistics
+end_time_stats = time.time()
+print(f"---- statistics done in {end_time_stats - start_time_stats:.1f}s ----\n")
 
 uqsim.save_statistics()
 
@@ -515,9 +518,10 @@ if uqsim.is_master():
         fp.write(f'number_full_model_runs: {number_full_model_evaluations}\n')
         fp.write(f'time_model_simulations: {time_model_simulations}\n')
         # fp.write(f'time_producing_gpce: {time_producing_gpce}\n')
-        fp.write(f'time_computing_statistics: {time_computing_statistics}\n')
+        fp.write(f'time_computing_statistics: {end_time_stats - start_time_stats}\n')
         fp.write(f'total_time: {total_time}')
 
+print(f"\nResults written to: {uqsim.args.outputResultDir}")
 #####################################
 # tear down
 #####################################

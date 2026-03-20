@@ -1,5 +1,9 @@
 #!/bin/bash
-
+# Relevant commands:
+# squeue -u ga45met2
+# srun --jobid=JOB_ID --pty bash
+# echo $SLURM_JOB_ID
+# echo $SLURM_NODELIST
 salloc --clusters=inter --partition=cm4_inter -N 1 -n 112 -c 1 -t 02:00:00
 # salloc -M inter -p cm4_inter -N 1 -n 112 -c 1 -t 06:00:00
 #module unload python
