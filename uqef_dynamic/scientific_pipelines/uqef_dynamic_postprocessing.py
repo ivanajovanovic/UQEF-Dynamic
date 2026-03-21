@@ -1169,6 +1169,10 @@ def main(mpi, rank, workingDir=None, inputModelDir=None, directory_for_saving_pl
         if is_master(mpi, rank):
             end_time_reevaluating_original_model = time.time()
             dict_with_time_info["time_parallel_original_model_reevaluations"] = end_time_reevaluating_original_model - start_time_reevaluating_original_model
+            if number_of_samples is not None and number_of_samples > 0:
+                dict_with_time_info["mean_original_model_eval_time_per_sample"] = (
+                    dict_with_time_info["time_parallel_original_model_reevaluations"] / number_of_samples
+                )
         
         # if reevaluate_surrogate:
         #     nodes = comm.bcast(nodes, root=0)
@@ -2147,8 +2151,11 @@ single_timestamp_single_file = False
 # workingDir = pathlib.Path('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/battery_runs/mc_kl10_p4_ct07_24d_100000_random')
 # workingDir = pathlib.Path('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/battery_runs/mc_kl10_p2_ct07_24d_10000_random')
 workingDir = pathlib.Path('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/battery_runs/battery_uq_cm4.0101')
+BASE_SOURCE_PATH = pathlib.Path(__file__).resolve().parents[2]
+config_file = BASE_SOURCE_PATH / "uqef_dynamic/models/pybamm/configuration_battery_24_shot_names.json"
+workingDir = BASE_SOURCE_PATH / "debug_output" / "battery_mc_10000_kl_trunc_local_debug" # "battery_mc_10000_kl_trunc_local_debug"
 inputModelDir = pathlib.Path('/dss/dsshome1/lxc0C/ga45met2/.conda/envs/my_uq_env/lib/python3.11/site-packages/pybamm/input/drive_cycles')
-directory_for_saving_plots = workingDir / 'surrogate_analysis_v2'
+directory_for_saving_plots = workingDir / 'surrogate_analysis'
 set_lower_predictions_to_zero = False
 set_mean_prediction_to_zero = False
 dict_set_lower_predictions_to_zero = False

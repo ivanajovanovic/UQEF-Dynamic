@@ -75,6 +75,8 @@ Key pipelines include:
 - **KL_and_PCE_time_dependent_processes_pipeline.py**: Pipeline for Karhunen-Loève expansion and Polynomial Chaos Expansion for time-dependent processes
 - **comparing_model_and_surrogate_*.py**: Pipelines for comparing original models with surrogate models
 - **uqef_dynamic_postprocessing.py**: Post-processing pipeline for trained surrogate models — see detailed description below
+- **plot_sobol_indices.py**: Standalone CLI script to read saved simulation results and plot Sobol sensitivity indices — see detailed description below
+- **extract_timing_info.py**: Standalone CLI script to read all timing information from a simulation output directory — see detailed description below
 
 ---
 
@@ -178,6 +180,144 @@ main(
 - For **KL+PCE surrogates** (`surrogate_type='kl+pce'`), set `analyse_pce_surrogate=False` (it is only implemented for standard PCE).
 - `inputModelDir` must point to the conda environment that contains the model's input data files (e.g. PyBaMM drive cycle files). Make sure it matches the Python version of the environment you are running in.
 - All timing metrics are collected in `dict_with_time_info` and written to `dict_with_time_info.txt`, including `mean_surrogate_eval_time_per_sample` and `total_runtime`.
+
+---
+
+## `plot_sobol_indices.py` — Sobol Sensitivity Index Plotter
+
+### Purpose
+
+Standalone CLI script that reads the saved statistics dictionary from a UQEF-Dynamic simulation output directory and produces publication-ready plots of Sobol sensitivity indices. No re-simulation or postprocessing run is required — it works directly from the `statistics_dictionary_qoi.pkl` written by the training pipeline.
+
+Two plot types are produced per QoI:
+- **Time-wise Sobol indices** — first-order (`Sobol_m`) and/or total-order (`Sobol_t`) indices as line plots over the simulation time axis
+- **Generalized Sobol indices** — time-aggregated scalar indices shown as a grouped bar chart (total-order vs first-order)
+
+### Usage
+
+```bash
+python uqef_dynamic/scientific_pipelines/plot_sobol_indices.py <workingDir> [options]
+```
+
+### Arguments
+
+| Argument | Default | Description |
+|---|---|---|
+| `workingDir` | *(required)* | Path to the simulation output directory |
+| `--qoi` | all found | Restrict plotting to specific QoI name(s) |
+| `--top N` | all | Show only the top-N most influential parameters (by generalized index) |
+| `--clip-negative` | off | Set negative Sobol values to zero before plotting |
+| `--no-timewise` | off | Skip time-wise line plots |
+| `--no-generalized` | off | Skip generalized Sobol bar charts |
+| `--save-dir DIR` | same as `workingDir/figures/` | Directory to save output PNG files |
+| `--verbose` | off | Print per-parameter tables to stdout |
+
+### Output
+
+Figures are written to `<workingDir>/figures/` (or `--save-dir`):
+
+| File | Description |
+|---|---|
+| `sobol_timewise_<qoi>.png` | Line plot of first-order (and total-order if available) Sobol indices over time |
+| `sobol_generalized_<qoi>.png` | Bar chart of generalized total-order and first-order Sobol indices |
+
+A summary table of parameter rankings is also printed to stdout.
+
+### Example
+
+```bash
+# Basic run — saves figures to debug_output/.../figures/
+python uqef_dynamic/scientific_pipelines/plot_sobol_indices.py \
+    debug_output/battery_mc_10000_kl_trunc_local_debug
+
+# Show only top 10 parameters, clip negatives, verbose output
+python uqef_dynamic/scientific_pipelines/plot_sobol_indices.py \
+    debug_output/battery_mc_10000_kl_trunc_local_debug \
+    --top 10 --clip-negative --verbose
+
+# Custom save directory
+python uqef_dynamic/scientific_pipelines/plot_sobol_indices.py \
+    debug_output/battery_mc_10000_kl_trunc_local_debug \
+    --save-dir /path/to/figures/
+```
+
+---
+
+## `extract_timing_info.py` — Timing Information Extractor
+
+### Purpose
+
+Standalone CLI script that reads all timing data saved by a UQEF-Dynamic simulation run (and optionally its postprocessing run) and prints a structured report. The report is simultaneously saved to a `.txt` file.
+
+Three layers of timing data are extracted:
+
+| Layer | File | Written by |
+|---|---|---|
+| 1 | `time_info.txt` | Every pipeline script (`uq_simulation_uqsim.py`, etc.) |
+| 2 | `uqsim_args.pkl` | Every pipeline script (run configuration context) |
+| 3 | `dict_with_time_info.txt` | `uqef_dynamic_postprocessing.py` |
+
+### Timing keys extracted
+
+**Layer 1 — `time_info.txt`:**
+
+| Key | Description |
+|---|---|
+| `number_full_model_runs` | Total number of samples evaluated |
+| `time_model_simulations` | Wall time for `uqsim.simulate()` (MPI propagation) |
+| `time_computing_statistics` | Wall time for statistics computation |
+| `total_time` | End-to-end wall time of the pipeline script |
+| `mean_model_eval_time` | Mean pure model call time per sample (inner timer) |
+| `total_model_eval_time` | Sum of all pure model call times |
+
+**Layer 3 — `dict_with_time_info.txt`:**
+
+| Key | Description |
+|---|---|
+| `time_reading_all_saved_data` | Time to load pickled results from disk |
+| `time_paralle_statistics_recomputation` | Time to recompute statistics |
+| `time_parallel_original_model_reevaluations` | Wall time for original model re-evaluations |
+| `mean_original_model_eval_time_per_sample` | Mean original model time per sample |
+| `time_parallel_pce_surrogate_reevaluations` | Wall time for PCE surrogate re-evaluations |
+| `time_kl_surrogate_reevaluations` | Wall time for KL+PCE surrogate re-evaluations |
+| `mean_surrogate_eval_time_per_sample` | Mean surrogate evaluation time per sample |
+| `time_generalized_si_recomputation` | Time for generalised Sobol index recomputation |
+| `total_runtime` | Total postprocessing wall time |
+
+A **derived metric** is also computed: `mean outer time / sample = time_model_simulations / N`, which includes MPI communication and I/O overhead on top of the pure model evaluation.
+
+### Usage
+
+```bash
+python uqef_dynamic/scientific_pipelines/extract_timing_info.py <workingDir> [options]
+```
+
+### Arguments
+
+| Argument | Default | Description |
+|---|---|---|
+| `workingDir` | *(required)* | Path to the simulation output directory |
+| `--verbose` / `-v` | off | Also print keys that were not recorded in this run |
+| `--output` / `-o` | `<workingDir>/timing_report.txt` | Path for the saved report file |
+
+### Output
+
+The full printed report is saved to `<workingDir>/timing_report.txt` by default (or to `--output`).
+
+### Example
+
+```bash
+# Default: report saved to <workingDir>/timing_report.txt
+python uqef_dynamic/scientific_pipelines/extract_timing_info.py \
+    debug_output/battery_mc_10000_kl_trunc_local_debug
+
+# Verbose mode + custom output file
+python uqef_dynamic/scientific_pipelines/extract_timing_info.py \
+    debug_output/battery_mc_10000_kl_trunc_local_debug \
+    --verbose --output my_timing_report.txt
+```
+
+---
 
 ### Utilities
 

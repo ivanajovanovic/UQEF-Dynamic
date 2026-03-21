@@ -519,7 +519,10 @@ if uqsim.is_master():
         fp.write(f'time_model_simulations: {time_model_simulations}\n')
         # fp.write(f'time_producing_gpce: {time_producing_gpce}\n')
         fp.write(f'time_computing_statistics: {end_time_stats - start_time_stats}\n')
-        fp.write(f'total_time: {total_time}')
+        fp.write(f'total_time: {total_time}\n')
+        if hasattr(uqsim.statistic, 'mean_model_eval_time') and uqsim.statistic.mean_model_eval_time is not None:
+            fp.write(f'mean_model_eval_time: {uqsim.statistic.mean_model_eval_time}\n')
+            fp.write(f'total_model_eval_time: {uqsim.statistic.total_model_eval_time}\n')
 
 print(f"\nResults written to: {uqsim.args.outputResultDir}")
 #####################################

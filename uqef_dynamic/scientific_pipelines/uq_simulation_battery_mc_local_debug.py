@@ -55,7 +55,7 @@ INPUT_MODEL_DIR  = pathlib.Path(
 #     f"/opt/homebrew/Caskroom/miniconda/base/envs/{CONDA_ENV}/lib/{PYTHON_VERSION}/site-packages/pybamm/input/drive_cycles"
 # )
 CONFIG_FILE      = BASE_SOURCE_PATH / "uqef_dynamic/models/pybamm/configuration_battery_24_shot_names.json"
-OUTPUT_RESULT_DIR = BASE_SOURCE_PATH / "debug_output" / "battery_mc_70000_kl_local_debug"
+OUTPUT_RESULT_DIR = BASE_SOURCE_PATH / "debug_output" / "battery_mc_10000_kl_p2_non_parallel_local_debug"
 
 # ─────────────────────────────────────────────
 # Statistics to compute
@@ -88,13 +88,13 @@ extended_parser = ExtendedUQSimArgumentParser(uqsim)
 config = ConfigurationFactory.create_configuration(
     model_type="battery",
     uq_method="mc",
-    mc_numevaluations=70000,
+    mc_numevaluations=10000,
     sampling_rule="random",
     mpi=True, #False,
     mpi_method="MpiPoolSolver",
     parallel=False,
     sampleFromStandardDist=True,
-    parallel_statistics=True, #False,
+    parallel_statistics=False, #False,
     compute_Sobol_m=True,
     compute_Sobol_t=True,
     save_all_simulations=True,
@@ -105,6 +105,7 @@ config = ConfigurationFactory.create_configuration(
     sc_p_order=2,
     regression_model_type="LARS",
     compute_kl_expansion_of_qoi=True,
+    kl_expansion_order=10,
     cross_truncation=1.0,
     regression=True,
     sc_poly_normed=True,
@@ -295,6 +296,9 @@ if uqsim.is_master():
         fp.write(f'time_model_simulations: {end_time_sim - start_time_sim}\n')
         fp.write(f'time_computing_statistics: {end_time_stats - start_time_stats}\n')
         fp.write(f'total_time: {total_time}\n')
+        if hasattr(uqsim.statistic, 'mean_model_eval_time') and uqsim.statistic.mean_model_eval_time is not None:
+            fp.write(f'mean_model_eval_time: {uqsim.statistic.mean_model_eval_time}\n')
+            fp.write(f'total_model_eval_time: {uqsim.statistic.total_model_eval_time}\n')
 
 print(f"\nResults written to: {uqsim.args.outputResultDir}")
 
