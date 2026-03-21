@@ -39,18 +39,23 @@ except ImportError:
 
 BASE_SOURCE_PATH = pathlib.Path(__file__).resolve().parents[2]  # UQEF-Dynamic root
 # PYTHON_VERSION = f"python{sys.version_info.major}.{sys.version_info.minor}"
-# PYTHON_VERSION = "python3.11"
-# CONDA_ENV        = "my_uq_env"
-# INPUT_MODEL_DIR  = pathlib.Path(
-#     f"/dss/dsshome1/lxc0C/ga45met2/.conda/envs/{CONDA_ENV}/lib/{PYTHON_VERSION}/site-packages/pybamm/input/drive_cycles"
-# )
-PYTHON_VERSION = "python3.7"
-CONDA_ENV        = "uq_env"
+PYTHON_VERSION = "python3.11"
+CONDA_ENV        = "my_uq_env"
 INPUT_MODEL_DIR  = pathlib.Path(
     f"/dss/dsshome1/lxc0C/ga45met2/.conda/envs/{CONDA_ENV}/lib/{PYTHON_VERSION}/site-packages/pybamm/input/drive_cycles"
 )
+# PYTHON_VERSION = "python3.7"
+# CONDA_ENV        = "uq_env"
+# INPUT_MODEL_DIR  = pathlib.Path(
+#     f"/dss/dsshome1/lxc0C/ga45met2/.conda/envs/{CONDA_ENV}/lib/{PYTHON_VERSION}/site-packages/pybamm/input/drive_cycles"
+# )
+# PYTHON_VERSION = "python3.12"
+# CONDA_ENV        = "uqef_env_py313"
+# INPUT_MODEL_DIR  = pathlib.Path(
+#     f"/opt/homebrew/Caskroom/miniconda/base/envs/{CONDA_ENV}/lib/{PYTHON_VERSION}/site-packages/pybamm/input/drive_cycles"
+# )
 CONFIG_FILE      = BASE_SOURCE_PATH / "uqef_dynamic/models/pybamm/configuration_battery_24_shot_names.json"
-OUTPUT_RESULT_DIR = BASE_SOURCE_PATH / "debug_output" / "battery_mc_local_debug"
+OUTPUT_RESULT_DIR = BASE_SOURCE_PATH / "debug_output" / "battery_mc_70000_kl_local_debug"
 
 # ─────────────────────────────────────────────
 # Statistics to compute
@@ -83,13 +88,13 @@ extended_parser = ExtendedUQSimArgumentParser(uqsim)
 config = ConfigurationFactory.create_configuration(
     model_type="battery",
     uq_method="mc",
-    mc_numevaluations=112,
+    mc_numevaluations=70000,
     sampling_rule="random",
-    mpi=True,
+    mpi=True, #False,
     mpi_method="MpiPoolSolver",
     parallel=False,
     sampleFromStandardDist=True,
-    parallel_statistics=True,
+    parallel_statistics=True, #False,
     compute_Sobol_m=True,
     compute_Sobol_t=True,
     save_all_simulations=True,
@@ -97,6 +102,16 @@ config = ConfigurationFactory.create_configuration(
     inputModelDir=str(INPUT_MODEL_DIR),
     outputResultDir=str(OUTPUT_RESULT_DIR),
     sourceDir=str(BASE_SOURCE_PATH),
+    sc_p_order=2,
+    regression_model_type="LARS",
+    compute_kl_expansion_of_qoi=True,
+    cross_truncation=1.0,
+    regression=True,
+    sc_poly_normed=True,
+    store_gpce_surrogate_in_stat_dict=True,
+    save_gpce_surrogate=True,
+    compute_other_stat_besides_pce_surrogate=True,
+    compute_generalized_sobol_indices=True,
 )
 
 config.apply_to_uqsim(uqsim)
@@ -116,19 +131,17 @@ start_time = time.time()
 utility.DEFAULT_DICT_STAT_TO_COMPUTE = dict_stat_to_compute
 utility.DEFAULT_DICT_WHAT_TO_PLOT    = dict_what_to_plot
 
-# Advanced analysis — all off for basic debug run
-# For pure MC (no regression), Sobol indices must be computed from samples — auto-set by
-# ConfigurationFactory when uq_method="mc" and compute_Sobol_m=True, so read it from config.
+# Advanced analysis
 compute_sobol_indices_with_samples        = getattr(config, 'compute_sobol_indices_with_samples', True)
-save_gpce_surrogate                       = False
-compute_other_stat_besides_pce_surrogate  = False
-compute_kl_expansion_of_qoi              = False
-kl_expansion_order                       = 10
-compute_timewise_gpce_next_to_kl_expansion = False
-compute_generalized_sobol_indices         = False
-compute_generalized_sobol_indices_over_time = False
-compute_covariance_matrix_in_time        = False
-allow_conditioning_results_based_on_metric = False
+save_gpce_surrogate                       = getattr(config, 'save_gpce_surrogate', False)
+compute_other_stat_besides_pce_surrogate  = getattr(config, 'compute_other_stat_besides_pce_surrogate', False)
+compute_kl_expansion_of_qoi              = getattr(config, 'compute_kl_expansion_of_qoi', False)
+kl_expansion_order                       = getattr(config, 'kl_expansion_order', 10)
+compute_timewise_gpce_next_to_kl_expansion = getattr(config, 'compute_timewise_gpce_next_to_kl_expansion', False)
+compute_generalized_sobol_indices         = getattr(config, 'compute_generalized_sobol_indices', False)
+compute_generalized_sobol_indices_over_time = getattr(config, 'compute_generalized_sobol_indices_over_time', False)
+compute_covariance_matrix_in_time        = getattr(config, 'compute_covariance_matrix_in_time', False)
+allow_conditioning_results_based_on_metric = getattr(config, 'allow_conditioning_results_based_on_metric', False)
 condition_results_based_on_metric        = "NSE"
 condition_results_based_on_metric_value  = 0.2
 condition_results_based_on_metric_sign   = "greater_or_equal"
