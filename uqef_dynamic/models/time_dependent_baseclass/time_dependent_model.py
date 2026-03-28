@@ -492,12 +492,17 @@ class TimeDependentModel(ABC, Model):
             else:
                 curr_working_dir = None
 
+            model_eval_time = None
             try:
                 if evaluate_surrogate and surrogate_model is not None:
                     parameter = np.array(parameter).reshape(-1, 1)
+                    _eval_start = time.time()
                     model_output = surrogate_model(parameter.T)[0]
+                    model_eval_time = time.time() - _eval_start
                 else:
+                    _eval_start = time.time()
                     model_output = self._model_run(parameters_dict=parameters_dict)
+                    model_eval_time = time.time() - _eval_start
             except:
                 result_df = None
                 index_run_and_parameters_dict = {**id_dict, **parameters_dict, utility.SUCCESSFUL_RUN: False}
@@ -512,10 +517,10 @@ class TimeDependentModel(ABC, Model):
                     result_df[self.index_column_name] = unique_run_index
                 if self.time_column_name not in result_df.columns:
                     result_df[self.time_column_name] = self.timesteps()
-                
+
                 if plotting and curr_working_dir is not None:
                     self._plotting(result_df, unique_run_index, curr_working_dir)
-            
+
             end = time.time()
             runtime = end - start
 
@@ -525,6 +530,7 @@ class TimeDependentModel(ABC, Model):
 
             result_dict = {
                 "run_time": runtime,
+                "model_eval_time": model_eval_time,
                 "result_time_series":result_df,
                 "parameters_dict": index_run_and_parameters_dict
             }

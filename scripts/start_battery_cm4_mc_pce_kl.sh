@@ -19,6 +19,8 @@ start_uq_sim(){
     local sc_poly_rule="${16}"
     local sc_quadrature_rule="${17}"
     local parameters_file="${18}"
+    local regression_model_type="${19}"
+    local kl_expansion_order="${20}"
 
     #get counter
     counter=$((`cat counter` +1))
@@ -37,7 +39,7 @@ start_uq_sim(){
     echo "$counter:cm4: $@"
     echo "$counter:cm4: $@" >> started_jobs.txt
 
-   conda_env=my_uq_env
+    conda_env=my_uq_env
 
     # define paths
     basePath=$HOME/Repositories #'pwd'
@@ -126,19 +128,26 @@ echo "---- start Battery sim: \`date\`"
                             --sc_p_order $p_order \
                             --mc_numevaluations $mc_numevaluations \
                             --sampling_rule "$sampling_rule" \
+                            --sc_poly_rule "$sc_poly_rule" \
+                            --sc_quadrature_rule "$sc_quadrature_rule" \
+                            --parameters_file "$parameters_file" \
+                            --cross_truncation 0.7 \
+                            --regression_model_type "$regression_model_type" \
+                            --compute_kl_expansion_of_qoi \
+                            --kl_expansion_order $kl_expansion_order \
                             $opt
 
 echo "---- end Battery sim: \`date\`"
 
-" > $baseSourcePath/battery_uq_mc_24d_70000_lhc.cmd
+" > $baseSourcePath/battery_uq_mc_24d_10000_random_pce5_ct07_kl10.cmd
 
     #execute batch file
-    sbatch $baseSourcePath/battery_uq_mc_24d_70000_lhc.cmd
+    sbatch $baseSourcePath/battery_uq_mc_24d_10000_random_pce5_ct07_kl10.cmd
 
 }
 
 model="battery"
-opt_add="--parallel_statistics --save_all_simulations --sampleFromStandardDist --compute_Sobol_m --compute_Sobol_t --compute_sobol_indices_with_samples"
+opt_add="--regression --parallel_statistics --save_all_simulations --sampleFromStandardDist --compute_Sobol_m --compute_Sobol_t --sc_poly_normed --store_gpce_surrogate_in_stat_dict --save_gpce_surrogate --compute_other_stat_besides_pce_surrogate --compute_generalized_sobol_indices"
 nodes=4
 tasks_per_node=112  #22  112
 low_time="2:30:00"
@@ -146,13 +155,15 @@ mid_time="24:00:00"
 max_time="24:00:00"
 uq_method="mc"
 q_order=6
-p_order=2
+p_order=5
 mc_numevaluations=70000
 uc="all"
-sampling_rule="latin_hypercube"
+sampling_rule="random"
 sc_poly_rule="three_terms_recurrence"
 sc_quadrature_rule="p" # "clenshaw_curtis" "genz_keister_24" "p"
 mpi_method="MpiPoolSolver"
 parameters_file="/dss/dsshome1/lxc0C/ga45met2/Repositories/sparse_grid_nodes_weights/KPU_d24_l4.asc"
+regression_model_type="LARS"
+kl_expansion_order=10
 
-start_uq_sim "DWP" "DYNAMIC" "FCFS" "$uq_method" $q_order $p_order $mc_numevaluations "$model" "$opt_add" "$mpi_method" "$nodes" "$tasks_per_node" "$max_time" "$uc" "$sampling_rule" "$sc_poly_rule" "$sc_quadrature_rule" "$parameters_file"
+start_uq_sim "DWP" "DYNAMIC" "FCFS" "$uq_method" $q_order $p_order $mc_numevaluations "$model" "$opt_add" "$mpi_method" "$nodes" "$tasks_per_node" "$max_time" "$uc" "$sampling_rule" "$sc_poly_rule" "$sc_quadrature_rule" "$parameters_file" "$regression_model_type" "$kl_expansion_order"
