@@ -28,7 +28,7 @@ pip install uqef
 # git clone https://github.com/flo2k/UQEF.git
 cd ../UQEF/
 git checkout integrate_parallel_statistics
-$(which pip) install --no-deps -e .
+$(which pip) install -e . --no-deps
 # Install UQEF-Dynamic
 cd UQEF-Dynamic/
 git checkout master
