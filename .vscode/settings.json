@@ -1,0 +1,5 @@
+{
+    "python.defaultInterpreterPath": "/opt/homebrew/Caskroom/miniconda/base/envs/uqef_env_py313/bin/python",
+    "python-envs.defaultEnvManager": "ms-python.python:conda",
+    "python-envs.defaultPackageManager": "ms-python.python:conda"
+}
