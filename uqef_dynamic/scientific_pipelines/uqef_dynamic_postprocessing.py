@@ -599,6 +599,12 @@ def main(mpi, rank, workingDir=None, inputModelDir=None, directory_for_saving_pl
 
         replot_statistics_from_statistics_object = kwargs.get('replot_statistics_from_statistics_object', False)
         dict_what_to_plot = kwargs.get('dict_what_to_plot', utility.DEFAULT_DICT_WHAT_TO_PLOT)
+        # When True, skip re-evaluation and instead read df_surrogate_reevaluated.pkl,
+        # df_model_reevaluated.pkl, and df_index_parameter_reevaluated.pkl from
+        # saved_results_dir (defaults to directory_for_saving_plots) to regenerate
+        # the surrogate_model_runs_ plot without running the model or surrogate again.
+        replot_surrogate_model_runs_from_saved = kwargs.get('replot_surrogate_model_runs_from_saved', False)
+        saved_results_dir = kwargs.get('saved_results_dir', None)  # falls back to directory_for_saving_plots
             
         inputModelDir_function_input_argument = inputModelDir  # This is because it will be overwritten by the inputModelDir from read_output_files_uqef_dynamic
         workingDir_function_input_argument = workingDir  # This is because it will be overwritten by the workingDir from read_output_files_uqef_dynamic, or maybe not
@@ -1653,15 +1659,55 @@ def main(mpi, rank, workingDir=None, inputModelDir=None, directory_for_saving_pl
                     filename_pdf = pathlib.Path(filename).with_suffix(".pdf")
                     fig.write_image(str(filename_pdf), format="pdf", width=1000,)
 
-            # TODO Add measured and forcing data if available? 
+            # TODO Add measured and forcing data if available?
             # TODO Add option to plot model re-runs...
             # TODO Make this more general - it does not have to apply only when reevaluate_surrogate...
+
+            # ── Load saved re-evaluation results instead of re-running ──────────
+            # Ensure these are always defined even when neither reevaluate_* flag has set them.
+            if not reevaluate_surrogate:
+                df_surrogate_reevaluated = None
+            if not reevaluate_original_model:
+                df_model_reevaluated = None
+                df_index_parameter_reevaluated = None
+
+            if replot_surrogate_model_runs_from_saved and not reevaluate_surrogate:
+                _load_dir = pathlib.Path(saved_results_dir) if saved_results_dir is not None \
+                            else directory_for_saving_plots
+                print(f"replot_surrogate_model_runs_from_saved=True: reading saved pkl files from {_load_dir}")
+
+                _surr_pkl = _load_dir / "df_surrogate_reevaluated.pkl"
+                if _surr_pkl.exists():
+                    df_surrogate_reevaluated = pd.read_pickle(str(_surr_pkl), compression="gzip")
+                    print(f"  Loaded df_surrogate_reevaluated from {_surr_pkl}")
+                else:
+                    print(f"  WARNING: {_surr_pkl} not found — surrogate panel will be skipped")
+
+                _model_pkl = _load_dir / "df_model_reevaluated.pkl"
+                if _model_pkl.exists():
+                    df_model_reevaluated = pd.read_pickle(str(_model_pkl), compression="gzip")
+                    reevaluate_original_model = True  # enable model panel in the plot
+                    print(f"  Loaded df_model_reevaluated from {_model_pkl}")
+                else:
+                    df_model_reevaluated = None
+
+                _idx_pkl = _load_dir / "df_index_parameter_reevaluated.pkl"
+                if _idx_pkl.exists():
+                    df_index_parameter_reevaluated = pd.read_pickle(str(_idx_pkl), compression="gzip")
+                    print(f"  Loaded df_index_parameter_reevaluated from {_idx_pkl}")
+
             # Plotting Model and Surrogate Model Runs + Some Statistics
-            if reevaluate_surrogate:
+            if reevaluate_surrogate or replot_surrogate_model_runs_from_saved:
                 if df_surrogate_reevaluated is None:
-                    raise NotImplementedError("df_surrogate_reevaluated is None; it should be a DataFrame!")
-                    # TODO Try to read from - os.path.abspath(os.path.join(str(directory_for_saving_plots), "df_surrogate_reevaluated.pkl"))
-                for single_qoi in list_qois:
+                    if reevaluate_surrogate:
+                        # Surrogate was supposed to run but produced nothing — hard error
+                        raise NotImplementedError("df_surrogate_reevaluated is None; it should be a DataFrame!")
+                    else:
+                        # replot_surrogate_model_runs_from_saved=True but pkl was not found — skip plot
+                        print("WARNING: df_surrogate_reevaluated is None and no pkl was loaded "
+                              "— skipping surrogate_model_runs plot")
+                _do_plot_surrogate_runs = df_surrogate_reevaluated is not None
+                for single_qoi in list_qois if _do_plot_surrogate_runs else []:
                     df_surrogate_reevaluated_single_qoi = df_surrogate_reevaluated.loc[df_surrogate_reevaluated[utility.QOI_ENTRY]==single_qoi]
                     number_unique_surrogate_model_runs = df_surrogate_reevaluated_single_qoi[utility.INDEX_COLUMN_NAME].nunique()
                     grouped = df_surrogate_reevaluated_single_qoi.groupby(utility.INDEX_COLUMN_NAME)
@@ -1687,13 +1733,13 @@ def main(mpi, rank, workingDir=None, inputModelDir=None, directory_for_saving_pl
                     #     subplot_titles.append(f"Model Runs {single_qoi} (from original UQ simulations)")
                     if reevaluate_original_model and df_model_reevaluated is not None: 
                         n_rows += 1
-                        subplot_titles.append(f"Orignal Model Runs")
+                        subplot_titles.append(f"Original Model Runs")
                     subplot_titles.append(f"Surrogate Model Runs")
                     # if n_rows > 1:
                     fig = make_subplots(
                             rows=n_rows, cols=1,
                             subplot_titles=subplot_titles,
-                            shared_xaxes=False, #False
+                            shared_xaxes=True,  # was False; linking axes enables synchronised zoom in HTML
                             vertical_spacing=0.09,
                             # x_title="t / s",
                             # y_title="U / V"
@@ -1738,13 +1784,29 @@ def main(mpi, rank, workingDir=None, inputModelDir=None, directory_for_saving_pl
                             df_surrogate_reevaluated_single_qoi_subset = df_surrogate_reevaluated_single_qoi.loc[groups[key].values]
                             fig.add_trace(
                                 go.Scatter(
-                                    x=df_surrogate_reevaluated_single_qoi_subset[utility.TIME_COLUMN_NAME], 
+                                    x=df_surrogate_reevaluated_single_qoi_subset[utility.TIME_COLUMN_NAME],
                                     y=df_surrogate_reevaluated_single_qoi_subset[utility.QOI_COLUMN_NAME],
                                     line_color='LightSkyBlue', mode="lines", opacity=0.3, showlegend=False,
                                 ), row=n_rows, col=1
                             )
                         else:
                             break
+                    # Overlay P10-P90 band on surrogate panel (drawn on top of individual traces)
+                    # Overlay P10-P90 band on surrogate panel — commented out for now
+                    # if df_statistics_and_measured is not None:
+                    #     _df_stat = df_statistics_and_measured.loc[df_statistics_and_measured[utility.QOI_ENTRY] == single_qoi]
+                    #     if utility.P10_ENTRY in _df_stat.columns and utility.P90_ENTRY in _df_stat.columns:
+                    #         fig.add_trace(go.Scatter(
+                    #             x=_df_stat[utility.TIME_COLUMN_NAME], y=_df_stat[utility.P10_ENTRY],
+                    #             mode='lines', line=dict(color='rgba(128,128,128,0.3)'),
+                    #             showlegend=False,
+                    #         ), row=n_rows, col=1)
+                    #         fig.add_trace(go.Scatter(
+                    #             x=_df_stat[utility.TIME_COLUMN_NAME], y=_df_stat[utility.P90_ENTRY],
+                    #             name='P10–P90 band', mode='lines', fill='tonexty',
+                    #             line=dict(color='rgba(128,128,128,0.3)'), fillcolor='rgba(128,128,128,0.25)',
+                    #             showlegend=True,
+                    #         ), row=n_rows, col=1)
 
                     if reevaluate_original_model and df_model_reevaluated is not None:
                         df_model_reevaluated_subset = df_model_reevaluated[[single_qoi, utility.TIME_COLUMN_NAME, utility.INDEX_COLUMN_NAME]]
@@ -1758,13 +1820,28 @@ def main(mpi, rank, workingDir=None, inputModelDir=None, directory_for_saving_pl
                                 df_model_reevaluated_subset_single_run = df_model_reevaluated_subset.loc[groups[key].values]
                                 fig.add_trace(
                                     go.Scatter(
-                                        x=df_model_reevaluated_subset_single_run[utility.TIME_COLUMN_NAME], 
+                                        x=df_model_reevaluated_subset_single_run[utility.TIME_COLUMN_NAME],
                                         y=df_model_reevaluated_subset_single_run[single_qoi],
                                         line_color='LightSkyBlue', mode="lines", opacity=0.3, showlegend=False,
                                     ), row=n_rows-1, col=1
                                 )
                             else:
                                 break
+                        # Overlay P10-P90 band on original model panel — commented out for now
+                        # if df_statistics_and_measured is not None:
+                        #     _df_stat = df_statistics_and_measured.loc[df_statistics_and_measured[utility.QOI_ENTRY] == single_qoi]
+                        #     if utility.P10_ENTRY in _df_stat.columns and utility.P90_ENTRY in _df_stat.columns:
+                        #         fig.add_trace(go.Scatter(
+                        #             x=_df_stat[utility.TIME_COLUMN_NAME], y=_df_stat[utility.P10_ENTRY],
+                        #             mode='lines', line=dict(color='rgba(128,128,128,0.3)'),
+                        #             showlegend=False,
+                        #         ), row=n_rows-1, col=1)
+                        #         fig.add_trace(go.Scatter(
+                        #             x=_df_stat[utility.TIME_COLUMN_NAME], y=_df_stat[utility.P90_ENTRY],
+                        #             name='P10–P90 band', mode='lines', fill='tonexty',
+                        #             line=dict(color='rgba(128,128,128,0.3)'), fillcolor='rgba(128,128,128,0.25)',
+                        #             showlegend=False,  # already shown in surrogate panel
+                        #         ), row=n_rows-1, col=1)
 
                     # if df_simulation_result is not None:
                     #     df_simulation_result_subset = df_simulation_result[[utility.TIME_COLUMN_NAME, utility.INDEX_COLUMN_NAME, single_qoi]]
@@ -1798,7 +1875,7 @@ def main(mpi, rank, workingDir=None, inputModelDir=None, directory_for_saving_pl
                                 go.Scatter(
                                     x=df_statistics_and_measured_subset[utility.TIME_COLUMN_NAME], 
                                     y=df_statistics_and_measured_subset[utility.MEAN_ENTRY],
-                                    name=f'E[{single_qoi}]',
+                                    name=f'Mean (E[{single_qoi}])',
                                     line_color='Green', mode="lines", showlegend=showlegend_mean,
                                 ), row=index_row, col=1
                             )
@@ -1830,7 +1907,7 @@ def main(mpi, rank, workingDir=None, inputModelDir=None, directory_for_saving_pl
                             fig.add_trace(
                                 go.Scatter(
                                     x=df_statistics_and_measured_subset[utility.TIME_COLUMN_NAME],
-                                    y=df_statistics_and_measured_subset[utility.E_MINUS_STD_ENTRY],
+                                    y=df_statistics_and_measured_subset[utility.E_PLUS_STD_ENTRY],  # was E_MINUS_STD_ENTRY (bug fix)
                                     name='mean +- std. dev', mode='lines', fill='tonexty', showlegend=True, line_color='rgba(200, 200, 200, 0.4)',), row=starting_row, col=1
                                 )
                         if dict_what_to_plot.get("E_minus_2std", False) and "E_minus_2std" in df_statistics_and_measured_subset:
@@ -1847,21 +1924,68 @@ def main(mpi, rank, workingDir=None, inputModelDir=None, directory_for_saving_pl
                                     y=df_statistics_and_measured_subset[utility.E_PLUS_2STD_ENTRY],
                                     name='mean +- 2*std. dev', mode='lines', fill='tonexty', showlegend=True, line_color='rgba(200, 200, 200, 0.4)',), row=starting_row, col=1
                                 )
+                        # P10–P90 band: light blue
                         if dict_what_to_plot.get("P10", False) and "P10" in df_statistics_and_measured_subset:
                             fig.add_trace(
                                 go.Scatter(
                                     x=df_statistics_and_measured_subset[utility.TIME_COLUMN_NAME],
                                     y=df_statistics_and_measured_subset[utility.P10_ENTRY],
-                                    name='10th percentile', line_color='rgba(128,128,128, 0.3)', showlegend=False), row=starting_row, col=1
+                                    name='P10', mode='lines',
+                                    # line=dict(color='rgba(31,119,180,0.3)', dash='dot'),
+                                    line=dict(color='rgba(128,128,128, 0.3)', dash='dot'),
+                                    showlegend=False), row=starting_row, col=1
                                 )
                         if dict_what_to_plot.get("P90", False) and "P90" in df_statistics_and_measured_subset:
                             fig.add_trace(
                                 go.Scatter(
                                     x=df_statistics_and_measured_subset[utility.TIME_COLUMN_NAME],
                                     y=df_statistics_and_measured_subset[utility.P90_ENTRY],
-                                    name='10th percentile-90th percentile', mode='lines', fill='tonexty', showlegend=True, line=dict(color='rgba(128,128,128, 0.3)'), fillcolor='rgba(128,128,128, 0.3)',), row=starting_row, col=1
+                                    name='10th-90th Percentile (80% interval)', mode='lines', fill='tonexty',
+                                    # line=dict(color='rgba(31,119,180,0.3)', dash='dot'),
+                                    line=dict(color='rgba(128,128,128, 0.3)', dash='dot'),
+                                    # fillcolor='rgba(31,119,180,0.12)',
+                                    fillcolor='rgba(128,128,128, 0.22)',
+                                    showlegend=True), row=starting_row, col=1
                                 )
-                            
+                        # #3 – ±1σ band: light orange — visually distinct from the blue P10-P90 band
+                        _e_std_cols = (utility.E_MINUS_STD_ENTRY in df_statistics_and_measured_subset.columns and
+                                       utility.E_PLUS_STD_ENTRY  in df_statistics_and_measured_subset.columns)
+                        if _e_std_cols:
+                            fig.add_trace(go.Scatter(
+                                x=df_statistics_and_measured_subset[utility.TIME_COLUMN_NAME],
+                                y=df_statistics_and_measured_subset[utility.E_MINUS_STD_ENTRY],
+                                mode='lines', line=dict(color='rgba(255,127,14,0.4)', dash='dash'),
+                                showlegend=False,
+                            ), row=starting_row, col=1)
+                            fig.add_trace(go.Scatter(
+                                x=df_statistics_and_measured_subset[utility.TIME_COLUMN_NAME],
+                                y=df_statistics_and_measured_subset[utility.E_PLUS_STD_ENTRY],
+                                name='mean ± σ', mode='lines', fill='tonexty',
+                                line=dict(color='rgba(255,127,14,0.4)', dash='dash'),
+                                fillcolor='rgba(255,127,14,0.10)',
+                                showlegend=True,
+                            ), row=starting_row, col=1)
+                    fig.update_layout(
+                        template="plotly_white",  # clean white background (was default blue)
+                        legend=dict(
+                            x=0.01,       # Close to left edge
+                            y=0.72,       # Somewhere in bottom portion of top subplot
+                            xanchor='left',
+                            yanchor='bottom',
+                            bgcolor='rgba(255,255,255,0.8)',
+                            bordercolor='gray',
+                            borderwidth=1
+                        ),
+                        showlegend=True,
+                        width=600,
+                        title=None,
+                        margin=dict(
+                            t=20,  # Top margin
+                            b=10,  # Bottom margin
+                            l=20,  # Left margin
+                            r=20   # Right margin
+                        )
+                    )
                     # Temporary for HBV
                     if model == "hbvsask":
                         # fig.update_layout(xaxis=dict(type="date"))
@@ -1876,30 +2000,16 @@ def main(mpi, rank, workingDir=None, inputModelDir=None, directory_for_saving_pl
                     #     # template="plotly_white",
                     # )
                     # fig.update_layout(title_text="Model and Surrogate Model Runs")
-                    fig.update_layout(
-                        legend=dict(
-                            x=0.01,       # Close to left edge
-                            y=0.72,       # Somewhere in bottom portion of top subplot
-                            xanchor='left',
-                            yanchor='bottom',
-                            bgcolor='rgba(255,255,255,0.6)',
-                            bordercolor='gray',
-                            borderwidth=1
-                        ),
-                        showlegend=True,
-                        xaxis3=dict(title="t / s"),
-                        yaxis=dict(range=[3.55, 4.1], title="U / V"),
-                        yaxis2=dict(range=[3.55, 4.1], title="U / V"),
-                        yaxis3=dict(range=[3.55, 4.1], title="U / V"),
-                        width=600,
-                        title=None,
-                        margin=dict(
-                            t=20,  # Top margin
-                            b=10,  # Bottom margin
-                            l=20,  # Left margin
-                            r=20   # Right margin
-                        )
-                    )
+                    if model == "battery":
+                        _battery_y_range = [3.55, 4.1]
+                        _battery_yaxis_cfg = dict(range=_battery_y_range, title="Voltage [V]")
+                        # Apply uniform y-range and label to every subplot row,
+                        # and put the x-axis title only on the bottom panel (shared_xaxes=True).
+                        _yaxis_updates = {f"yaxis{'' if i == 1 else i}": _battery_yaxis_cfg
+                                          for i in range(1, n_rows + 1)}
+                        _xaxis_updates = {f"xaxis{'' if i == 1 else i}": dict(title="Time [s]" if i == n_rows else "")
+                                          for i in range(1, n_rows + 1)}
+                        fig.update_layout(**_yaxis_updates, **_xaxis_updates)
                     # fileName_without_ext = pathlib.Path(fileName).stem
                     plot_filename = directory_for_saving_plots / f"surrogate_model_runs_{single_qoi}.html"
                     pyo.plot(fig, filename=str(plot_filename), auto_open=False)
@@ -2150,12 +2260,13 @@ single_timestamp_single_file = False
 # workingDir = pathlib.Path('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/battery_runs/mc_kl10_p3_ct07_24d_10000_random')
 # workingDir = pathlib.Path('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/battery_runs/mc_kl10_p4_ct07_24d_100000_random')
 # workingDir = pathlib.Path('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/battery_runs/mc_kl10_p2_ct07_24d_10000_random')
-workingDir = pathlib.Path('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/battery_runs/battery_uq_cm4.0101')
 BASE_SOURCE_PATH = pathlib.Path(__file__).resolve().parents[2]
-config_file = BASE_SOURCE_PATH / "uqef_dynamic/models/pybamm/configuration_battery_24_shot_names.json"
-workingDir = BASE_SOURCE_PATH / "debug_output" / "battery_mc_10000_kl_trunc_local_debug" # "battery_mc_10000_kl_trunc_local_debug"
 inputModelDir = pathlib.Path('/dss/dsshome1/lxc0C/ga45met2/.conda/envs/my_uq_env/lib/python3.11/site-packages/pybamm/input/drive_cycles')
-directory_for_saving_plots = workingDir / 'surrogate_analysis'
+config_file = BASE_SOURCE_PATH / "uqef_dynamic/models/pybamm/configuration_battery_24_shot_names.json"
+workingDir = BASE_SOURCE_PATH / "debug_output" / "battery_mc_10000_kl_trunc_local_debug" # "battery_mc_70000_kl_local_debug"
+workingDir = pathlib.Path('/dss/dssfs02/lwp-dss-0001/pr63so/pr63so-dss-0000/ga45met2/battery_runs/battery_uq_cm4.0101')
+# directory_for_saving_plots = workingDir / 'surrogate_analysis' # 'surrogate_analysis_v2'
+directory_for_saving_plots = workingDir
 set_lower_predictions_to_zero = False
 set_mean_prediction_to_zero = False
 dict_set_lower_predictions_to_zero = False
@@ -2168,9 +2279,9 @@ single_timestamp_single_file = False
 set_up_statistics_from_scratch = False
 
 recompute_statistics = False
-reevaluate_original_model = True #False 
-reevaluate_surrogate = True #False
-recompute_generalized_sobol_indices = True
+reevaluate_original_model = False #True #False 
+reevaluate_surrogate = False #True #False
+recompute_generalized_sobol_indices = False #True
 analyse_pce_surrogate = False  # for now, only possible with standard PCE model
 
 # TODO These variables do not seem to be relevant at the moment...
@@ -2198,6 +2309,11 @@ look_back_window_size = [30, 60, 90, 365] #30 #'whole'  # 30  #365
 printing = True #True
 plotting = True #True
 replot_statistics_from_statistics_object = True #False
+# Set to True to regenerate surrogate_model_runs_ plot from already-saved pkl files
+# (df_surrogate_reevaluated.pkl, df_model_reevaluated.pkl, df_index_parameter_reevaluated.pkl)
+# without re-running the model or surrogate. saved_results_dir defaults to directory_for_saving_plots.
+replot_surrogate_model_runs_from_saved = True #False
+saved_results_dir = directory_for_saving_plots #workingDir / 'surrogate_analysis_v2' #directory_for_saving_plots  # e.g. workingDir / 'surrogate_analysis'
 dict_what_to_plot = {
         "E_minus_2std": False, "E_plus_2std": False,
         "E_minus_std": False, "E_plus_std": False, 
@@ -2241,4 +2357,6 @@ main(
     dict_set_lower_predictions_to_zero=dict_set_lower_predictions_to_zero,
     set_lower_predictions_to_zero=set_lower_predictions_to_zero,
     set_mean_prediction_to_zero=set_mean_prediction_to_zero,
+    replot_surrogate_model_runs_from_saved=replot_surrogate_model_runs_from_saved,
+    saved_results_dir=saved_results_dir,
 )

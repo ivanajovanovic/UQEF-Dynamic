@@ -90,11 +90,11 @@ config = ConfigurationFactory.create_configuration(
     uq_method="mc",
     mc_numevaluations=10000,
     sampling_rule="random",
-    mpi=True, #False,
+    mpi=True, #True,
     mpi_method="MpiPoolSolver",
     parallel=False,
     sampleFromStandardDist=True,
-    parallel_statistics=False, #False,
+    parallel_statistics=False, #True,
     compute_Sobol_m=True,
     compute_Sobol_t=True,
     save_all_simulations=True,
@@ -104,15 +104,16 @@ config = ConfigurationFactory.create_configuration(
     sourceDir=str(BASE_SOURCE_PATH),
     sc_p_order=2,
     regression_model_type="LARS",
-    compute_kl_expansion_of_qoi=True,
+    compute_kl_expansion_of_qoi=True, # True
     kl_expansion_order=10,
     cross_truncation=1.0,
-    regression=True,
+    regression=True, #True
     sc_poly_normed=True,
     store_gpce_surrogate_in_stat_dict=True,
     save_gpce_surrogate=True,
     compute_other_stat_besides_pce_surrogate=True,
     compute_generalized_sobol_indices=True,
+    compute_sobol_indices_with_samples=True,
 )
 
 config.apply_to_uqsim(uqsim)
@@ -133,7 +134,7 @@ utility.DEFAULT_DICT_STAT_TO_COMPUTE = dict_stat_to_compute
 utility.DEFAULT_DICT_WHAT_TO_PLOT    = dict_what_to_plot
 
 # Advanced analysis
-compute_sobol_indices_with_samples        = getattr(config, 'compute_sobol_indices_with_samples', True)
+compute_sobol_indices_with_samples        = getattr(config, 'compute_sobol_indices_with_samples', False)
 save_gpce_surrogate                       = getattr(config, 'save_gpce_surrogate', False)
 compute_other_stat_besides_pce_surrogate  = getattr(config, 'compute_other_stat_besides_pce_surrogate', False)
 compute_kl_expansion_of_qoi              = getattr(config, 'compute_kl_expansion_of_qoi', False)
