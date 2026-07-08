@@ -478,6 +478,7 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
     data_structure_over_dates = []
 
     # Outer loop that goes over all date from the configuration json
+    pool = multiprocessing.Pool(processes=num_processes)
     for index_date_of_interest in range(len(list_of_dates_of_interest)):
         date_of_interest = list_of_dates_of_interest[index_date_of_interest]
         # print(f"date_of_interest - {date_of_interest}")
@@ -490,12 +491,11 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
 
         # This part of the code is for parallel computing of independent particles, i.e., model runs
         def process_particles_concurrently(particles_to_process):
-            with (multiprocessing.Pool(processes=num_processes) as pool):
-                for index_run, y_t_model, y_t_observed, x_t_plus_1, parameter_value_dict in \
-                        pool.starmap(run_model_single_time_stamp_single_particle, \
-                                     [(hbvsaskModelObject, date_of_interest, particle[0], particle[1], particle[2]) \
-                                      for particle in particles_to_process]):
-                    yield index_run, y_t_model, y_t_observed, x_t_plus_1, parameter_value_dict
+            for index_run, y_t_model, y_t_observed, x_t_plus_1, parameter_value_dict in \
+                    pool.starmap(run_model_single_time_stamp_single_particle, \
+                                 [(hbvsaskModelObject, date_of_interest, particle[0], particle[1], particle[2]) \
+                                  for particle in particles_to_process]):
+                yield index_run, y_t_model, y_t_observed, x_t_plus_1, parameter_value_dict
 
         row = {}
         likelihood_over_rows = []
@@ -596,6 +596,9 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
         final_predicted_streamflow[date_of_interest] = average_predicted_streamflow
         final_observed_streamflow[date_of_interest] = y_t_observed
         dates.append(date_of_interest)
+
+    pool.close()
+    pool.join()
 
     mse_total = mse / len(dates)
     print(f"Final predicted streamflow: {final_predicted_streamflow}")
