@@ -97,13 +97,52 @@ def calculate_likelihood(y_t_observed, y_t_model, error_variance):
         return 0
 
 
+def calculate_likelihood_ar(y_t_observed, y_t_model, epsilon_hat, sigma_eta=None,
+                            phi_ar=None, beta_obs=0.2 / 3):
+    """Gaussian likelihood with AR(1)-predicted structural error.
+
+    Supports two modes for the innovation std σ_η:
+
+    1. Fixed (homoscedastic): pass sigma_eta as a scalar constant.
+
+    2. Heteroscedastic (Pianosi 2016): pass phi_ar and omit sigma_eta.
+       σ_η(t) = beta_obs · √(1−φ²) · y_obs(t)
+       Derivation: raw error σ_ε = beta_obs·y_obs (20% relative error treated
+       as 3σ bound → beta_obs = 0.2/3); AR(1) shrinks variance by (1−φ²),
+       so σ_η = σ_ε · √(1−φ²).  This makes the likelihood sharper at low
+       flows and appropriately wider at high flows.
+
+    Args:
+        y_t_observed: scalar observed discharge (or None).
+        y_t_model:    scalar model discharge for this particle (or None).
+        epsilon_hat:  AR(1) prediction of structural error, φ·ε(t−1).
+        sigma_eta:    fixed innovation std [same units as Q]. If None,
+                      heteroscedastic mode is used (requires phi_ar).
+        phi_ar:       AR(1) coefficient, used only in heteroscedastic mode.
+        beta_obs:     proportionality constant for σ_ε = beta_obs·y_obs.
+                      Default 0.2/3 (20% error as 3σ bound).
+    """
+    if y_t_observed is None or y_t_model is None:
+        return 0.0
+    if sigma_eta is None:
+        if phi_ar is None:
+            raise ValueError("Provide either sigma_eta or phi_ar.")
+        sigma_eta = beta_obs * np.sqrt(1.0 - phi_ar ** 2) * abs(y_t_observed)
+        sigma_eta = max(sigma_eta, 1e-6)  # floor against zero flow
+    y_hat = y_t_model + epsilon_hat
+    exponent = -0.5 * ((y_t_observed - y_hat) ** 2) / sigma_eta ** 2
+    return np.exp(exponent) / np.sqrt(2 * np.pi * sigma_eta ** 2)
+
+
 def systematic_resample(weights):
     """
     Mapping samples i to the new samples j all with the same weights 1/N_p
     """
     N_p = len(weights)
-    positions = (np.arange(N_p) + np.random.random()) / N_p  # (?)
+    # positions[j] = (j + U) / N,  U ~ Uniform(0,1),  j = 0,...,N-1 gives N evenly-spaced pointers with a single shared random offset
+    positions = (np.arange(N_p) + np.random.random()) / N_p  # initialize positions from uniform distribution
     cumulative_sum = np.cumsum(weights)  # CDF of particles
+    cumulative_sum[-1] = 1.0          # force exact 1.0 to avoid float drift
     indices = np.zeros(N_p, dtype=int)
     i, j = 0, 0
     # while i < N_p:
@@ -113,8 +152,8 @@ def systematic_resample(weights):
     #     else:
     #         j += 1
     while j < N_p:
-        if cumulative_sum[i] > positions[j]:
-            indices[j] = i
+        if cumulative_sum[i] > positions[j]:  # particle i's CDF bin covers pointer j
+            indices[j] = i # → select particle i
             # indices[i] = j
             j += 1
         else:
@@ -122,11 +161,16 @@ def systematic_resample(weights):
     return indices
 
 
-def perturb_parameters(parameters, perturbation_factor=0.15):
+def perturb_parameters(parameters, param_stds=None, perturbation_factor=0.15):
     perturbed_parameters = {}
     for key, value in parameters.items():
         # Use the absolute value to ensure a non-negative scale
-        perturbation = np.random.normal(0, perturbation_factor * abs(value))  # Todo - change this to take into the account the current std of the parameter
+        # this is proportional to the magnitude of the parameter, so that larger parameters are perturbed more; not to the ensemble spread
+        if param_stds is not None and key in param_stds:
+            perturbation = np.random.normal(0, perturbation_factor * param_stds[key])
+        else:
+            perturbation = np.random.normal(0, perturbation_factor * abs(value))
+        # perturbation = np.random.normal(0, perturbation_factor * abs(value))  # Todo - change this to take into the account the current std of the parameter
         perturbed_parameters[key] = value + perturbation
     return perturbed_parameters
 
@@ -313,7 +357,12 @@ def transform_samples_with_transport_map(parameter_samples_matrix):
     return Z_gen
 
 
-def main_routine(num_processes, number_of_particles, working_dir_name="trial_single_run_hbvsaskmodel_7d_filtering"):
+def main_routine(num_processes, number_of_particles,
+                 working_dir_name="trial_single_run_hbvsaskmodel_7d_filtering",
+                 phi_ar=0.894,    # AR(1) coefficient — fit from error_signal_analysis.py
+                 sigma_eta=None,  # fixed innovation std [m³/s]; None → heteroscedastic mode
+                 beta_obs=0.2/3   # used only when sigma_eta=None: σ_ε = beta_obs·y_obs (0.2/3 ≈ 20% as 3σ bound)
+                 ):
     # =========================================================
     # Model Related Setup
     # =========================================================
@@ -324,6 +373,15 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
     inputModelDir = hbv_model_data_path
     basin = "Oldman_Basin"  # 'Banff_Basin'
     workingDir = hbv_model_data_path / basin / "model_runs" / working_dir_name
+    
+    # BASE_SOURCE_PATH = pathlib.Path.cwd().parents[1] # uqef_dynamic 
+    BASE_SOURCE_PATH = pathlib.Path(__file__).resolve().parents[2]
+    hbv_model_data_path = BASE_SOURCE_PATH / "data" / "HBV-SASK-data"
+    inputModelDir = hbv_model_data_path
+    configuration_file = BASE_SOURCE_PATH / "data" / "configurations" / "configuration_hbv_6D.json"
+    basin = "Oldman_Basin"  # 'Banff_Basin'
+    workingDir = hbv_model_data_path / "particle_filtering_model_runs" / working_dir_name
+    
     directory_for_saving_plots = workingDir
     if not str(directory_for_saving_plots).endswith("/"):
         directory_for_saving_plots = str(directory_for_saving_plots) + "/"
@@ -371,7 +429,7 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
     # print(f"simulation_range is of length {len(hbvsaskModelObject.simulation_range)} hours")
 
     # Plot forcing data and observed streamflow
-    hbvsaskModelObject._plot_input_data(read_measured_streamflow=True)
+    hbvsaskModelObject.plot_input_data(read_measured_streamflow=True)
 
     list_of_dates_of_interest = list(pd.date_range(
         start=hbvsaskModelObject.start_date_predictions, end=hbvsaskModelObject.end_date, freq="1D"))
@@ -461,6 +519,9 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
 
     uniform_particle_weights = np.ones(number_of_particles) / number_of_particles
 
+    # ε_i(0) = 0:  no structural error known at the start
+    epsilon_particles = np.zeros(number_of_particles)
+
     # Initialize the error variance with a default value
     final_predicted_streamflow = defaultdict(list, {key:[] for key in list_of_dates_of_interest})
     final_observed_streamflow = defaultdict(list, {key:[] for key in list_of_dates_of_interest})
@@ -489,6 +550,14 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
         y_t_models_for_date = []
         updated_weights = [] #np.zeros(len(list_parameter_value_particles))
 
+        # AR(1) prediction of structural error for each particle at this timestep.
+        # Must be rebuilt each iteration using the resampled epsilon_particles from t-1.
+        epsilon_hat_by_index = {
+            idx: phi_ar * epsilon_particles[pos]
+            for pos, idx in enumerate(list_unique_index_model_run_list)
+        }
+        new_epsilon_by_index = {}   # reset each timestep; filled below
+
         # This part of the code is for parallel computing of independent particles, i.e., model runs
         def process_particles_concurrently(particles_to_process):
             for index_run, y_t_model, y_t_observed, x_t_plus_1, parameter_value_dict in \
@@ -510,22 +579,42 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
             new_list_unique_index_model_run_list.append(index_run)
             new_list_state_values_particles.append(x_t_plus_1)
             new_list_parameter_value_particles.append(parameter_value_dict)
-            
-            if y_t_observed is not None:
-                error_variance = 0.2 * y_t_observed
-            else: 
-                error_variance = 5.0
 
             # Compute the likelikhood function for each particle and probabilities p(y_(t)|x_(t), theta_(t))
-            likelihood = calculate_likelihood(y_t_observed, y_t_model, error_variance)
+            # if y_t_observed is not None:
+            #     error_variance = 0.2 * y_t_observed
+            # else: 
+            #     error_variance = 5.0
+            # likelihood = calculate_likelihood(y_t_observed, y_t_model, error_variance)
+            
+            # AR(1)-augmented likelihood — two modes controlled by sigma_eta:
+            #   sigma_eta=None  → heteroscedastic: σ_η(t) = beta_obs·√(1−φ²)·y_obs
+            #   sigma_eta=float → homoscedastic:   σ_η fixed (e.g. 14.2 m³/s)
+            epsilon_hat_i = epsilon_hat_by_index[index_run]
+            likelihood = calculate_likelihood_ar(y_t_observed, y_t_model,
+                                                epsilon_hat_i,
+                                                sigma_eta=sigma_eta,
+                                                phi_ar=phi_ar,
+                                                beta_obs=beta_obs)
+            # Record the posterior error state: what the residual actually was this step
+            new_epsilon_by_index[index_run] = (
+                (y_t_observed - y_t_model) if y_t_observed is not None else 0.0
+            )
+            
             updated_weights.append(likelihood)
 
             likelihood_over_rows.append(likelihood)
 
-        y_t_models_for_date = np.asfarray(y_t_models_for_date)
+        y_t_models_for_date = np.asarray(y_t_models_for_date)
         current_model_output_max = np.max(y_t_models_for_date) if np.max(y_t_models_for_date) > current_model_output_max else current_model_output_max
         y_t_model_per_date_dict[date_of_interest] = y_t_models_for_date
-        updated_weights = np.asfarray(updated_weights)
+        updated_weights = np.asarray(updated_weights)
+
+        # Rebuild epsilon list in the same order as new_list_unique_index_model_run_list
+        # (which mirrors new_list_parameter_value_particles / new_list_state_values_particles)
+        new_epsilon_particles = [
+            new_epsilon_by_index[idx]
+            for idx in new_list_unique_index_model_run_list]
 
         row[utility.TIME_COLUMN_NAME] = date_of_interest  # date_of_interest_over_rows
         row['y_t_model'] = y_t_models_for_date  # y_t_model_over_rows
@@ -546,7 +635,7 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
         else:
             normalized_weights = updated_weights / total_weight
         # Now normalized_weights contains the normalized likelihoods 
-        normalized_weights = np.asfarray(normalized_weights)
+        normalized_weights = np.asarray(normalized_weights)
         
         # Overwrite the lists storing the particles (i.e., state, parameter values and unique particle indices) for the next time-stamp
         list_unique_index_model_run_list = new_list_unique_index_model_run_list
@@ -565,14 +654,23 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
         list_state_values_particles = [new_list_state_values_particles[i] for i in resample_indices]
         uniform_particle_weights = [uniform_particle_weights[i] for i in resample_indices]  # TODO this is probably unnecessary
 
+        epsilon_particles = np.array([new_epsilon_particles[i] for i in resample_indices])  # ← add
+
         # Perturb the parameters of resampled particles
         perturbation_factor = 0.15  # TODO Think about this
+        # Compute per-parameter std across resampled ensemble (paper's S(θ))
+        param_stds = {}
+        for param_name in param_names:
+            vals = [p[param_name] for p in list_parameter_value_particles]
+            param_stds[param_name] = np.std(vals) if np.std(vals) > 1e-8 else 1e-8
         list_of_tuple_with_parameter_values = []
         list_of_lists_with_parameter_values = []
         dict_of_distriubtions_over_parameters_for_a_date = defaultdict(list, {key:[] for key in param_names})
         for i in range(len(list_parameter_value_particles)):
-            list_parameter_value_particles[i] = perturb_parameters(list_parameter_value_particles[i],
-                                                                   perturbation_factor)
+            list_parameter_value_particles[i] = perturb_parameters(
+                list_parameter_value_particles[i],
+                param_stds,
+                perturbation_factor)
             list_of_tuple_with_parameter_values.append(tuple(list_parameter_value_particles[i].values()))
             list_of_lists_with_parameter_values.append(list(list_parameter_value_particles[i].values()))
 
@@ -582,7 +680,7 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
 
         # Save one big matrix of particle values, might be used later one for transformation of the samples
         parameter_samples_matrix = list(zip(*list_of_lists_with_parameter_values))  # this should be a matrix of size number_of_particles x number_of_parameters
-        parameter_samples_matrix = np.asfarray(parameter_samples_matrix).T
+        parameter_samples_matrix = np.asarray(parameter_samples_matrix).T
 
         row['weights'] = normalized_weights
         row['resample_indices'] = resample_indices
@@ -647,7 +745,7 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
     for idx in range(len(param_names)):
         parameter_name = param_names[idx]
         # Visualize data from the last dict_of_distriubtions_over_parameters_for_a_date 
-        dict_of_distriubtions_over_parameters_for_a_date[parameter_name] = np.asfarray(dict_of_distriubtions_over_parameters_for_a_date[parameter_name])
+        dict_of_distriubtions_over_parameters_for_a_date[parameter_name] = np.asarray(dict_of_distriubtions_over_parameters_for_a_date[parameter_name])
         min_value = dict_of_distriubtions_over_parameters_for_a_date[parameter_name].min() - abs(dict_of_distriubtions_over_parameters_for_a_date[parameter_name].min())*0.001
         max_value= dict_of_distriubtions_over_parameters_for_a_date[parameter_name].max() + abs(dict_of_distriubtions_over_parameters_for_a_date[parameter_name].max())*0.001
         t = np.linspace(min_value, max_value, 1000)
@@ -761,7 +859,7 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
     fig.update_xaxes(title_text="Date", autorange=True, range=[hbvsaskModelObject.start_date_predictions, hbvsaskModelObject.end_date], type="date")
 
     fig.update_yaxes(title_text="Q [cm/s]", side="left", domain=[0, 0.7], mirror=True, tickfont={"color": "#d62728"},
-                     tickmode="auto", ticks="inside", titlefont={"color": "#d62728"}, range=[0, 100])
+                     tickmode="auto", ticks="inside", title=dict(font={"color": "#d62728"}), range=[0, 100])
 
     fig.update_layout(
         # legend=dict(yanchor="bottom", y=0.01, xanchor="right", x=0.99),
@@ -783,8 +881,7 @@ def main_routine(num_processes, number_of_particles, working_dir_name="trial_sin
             nticks=3,
             tickmode="auto",
             ticks="inside",
-            titlefont={"color": '#1f77b4'},
-            title="N [mm/h]",
+            title=dict(text="N [mm/h]", font={"color": '#1f77b4'}),
             type="linear",
             )
         )
@@ -802,10 +899,15 @@ if __name__ == "__main__":
     num_processes = multiprocessing.cpu_count()
     print(f"Number of parallel processes = {num_processes}")
 
-    number_of_particles = ne = 2000  # 50, 100, 500
+    number_of_particles = ne = 50  # 50, 100, 500 2000
 
     for i in range(1):
         # working_dir_name=f"trial_single_run_hbvsaskmodel_7d_filtering/run_{i}"
-        working_dir_name=f"trial_single_run_hbvsaskmodel_7d_filtering_III"
-        main_routine(num_processes, number_of_particles, working_dir_name)
-
+        working_dir_name=f"trial_single_run_hbvsaskmodel_6d_filtering"
+        main_routine(
+            num_processes=num_processes, 
+            number_of_particles=number_of_particles, 
+            sigma_eta=14.2,  # fixed innovation std [m³/s]; None → heteroscedastic mode
+            phi_ar=0.894,    # AR(1) coefficient — fit from error_signal_analysis.py
+            beta_obs=0.2/3,  # used only when sigma_eta=None: σ_ε = beta_obs·y_obs (0.2/3 ≈ 20% as 3σ bound)
+            working_dir_name=working_dir_name)
