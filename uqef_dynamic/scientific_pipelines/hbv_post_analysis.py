@@ -770,7 +770,7 @@ def plot_error_acf_pacf(error_ts, save_dir):
     save_dir : pathlib.Path
     """
     fig, axes = plt.subplots(1, 2, figsize=(14, 5))
-    plot_acf( error_ts, lags=60, ax=axes[0], alpha=0.05, title="ACF of Mean Error")
+    plot_acf(error_ts, lags=60, ax=axes[0], alpha=0.05, title="ACF of Mean Error")
     plot_pacf(error_ts, lags=60, ax=axes[1], alpha=0.05, title="PACF of Mean Error",
               method="ywm")
     for ax in axes:

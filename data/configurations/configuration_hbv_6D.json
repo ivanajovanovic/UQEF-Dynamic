@@ -1,28 +1,28 @@
 {
     "time_settings":
     {
-      "start_day": 30,
-      "start_month": 4,
+      "start_day": 1,
+      "start_month": 10,
       "start_year": 2004,
       "start_hour": 0,
       "start_minute": 0,
 
-      "end_day": 30,
-      "end_month": 6,
+      "end_day": 1,
+      "end_month": 10,
       "end_year": 2007,
       "end_hour": 0,
       "end_minute": 0,
 
       "run_full_timespan":"False",
-      "spin_up_length":1095,
-      "simulation_length": 61,
+      "spin_up_length":365,
+      "simulation_length": 730,
       "resolution": "daily",
 
       "cut_runs": "False",
       "timestep": 5
     },
   "model_settings": {
-    "basin": "Oldman_Basin",
+    "basin": "Banff_Basin",
     "plotting": "False",
     "writing_results_to_a_file": "False",
     "corrupt_forcing_data": "False"
@@ -65,7 +65,7 @@
       "distribution": "Uniform",
       "lower": 0.0,
       "upper": 10.0,
-      "default": 2.0
+      "default": 0.5
     },
     {
       "name": "ETF",
@@ -84,7 +84,7 @@
     {
       "name": "FRAC",
       "distribution": "Uniform",
-      "lower": 0.01,
+      "lower": 0.1,
       "upper": 0.9,
       "default": 0.3
     },
@@ -94,6 +94,13 @@
       "lower": 0.0,
       "upper": 0.05,
       "default": 0.025
+    },
+    {
+      "name": "PM",
+      "distribution": "Uniform",
+      "lower": 0.5,
+      "upper": 2.0,
+      "default": 1.0
     }
   ],
   "states": [
@@ -127,6 +134,13 @@
     }
   ],
   "unused_parameters": [
+    {
+      "name": "PM",
+      "distribution": "Uniform",
+      "lower": 0.5,
+      "upper": 2.0,
+      "default": 1.0
+    },
     {
       "name": "beta",
       "distribution": "Uniform",
@@ -181,13 +195,6 @@
       "distribution": "None",
       "lower": 1.0,
       "upper": 3.0,
-      "default": 1.0
-    },
-    {
-      "name": "PM",
-      "distribution": "None",
-      "lower": 0.5,
-      "upper": 2.0,
       "default": 1.0
     }
   ]

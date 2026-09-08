@@ -6,6 +6,10 @@
 # Don't track content of these folders
 model_runs/
 **/model_runs/
+# gitignore matches whole path segments, so the two rules above do NOT cover
+# these (differently named) simulation output folders - list them explicitly
+**/particle_filtering_model_runs/
+**/paper_uqef_dynamic_sim/
 saves/
 __pycache__/
 .idea/
