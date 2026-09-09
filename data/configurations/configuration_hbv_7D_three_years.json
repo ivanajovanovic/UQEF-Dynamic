@@ -3,19 +3,19 @@
     {
       "start_day": 1,
       "start_month": 10,
-      "start_year": 2003,
+      "start_year": 2001,
       "start_hour": 0,
       "start_minute": 0,
 
       "end_day": 1,
-      "end_month": 11,
+      "end_month": 10,
       "end_year": 2007,
       "end_hour": 0,
       "end_minute": 0,
 
       "run_full_timespan":"False",
-      "spin_up_length":1095,
-      "simulation_length": 395,
+      "spin_up_length":1096,
+      "simulation_length": 1095,
       "resolution": "daily",
 
       "cut_runs": "False",
@@ -31,20 +31,21 @@
     "hbv_model_path": "Hydro_Models/HBV-SASK-data"
   },
   "simulation_settings": {
-    "qoi":"Q_cms",
-    "qoi_column":"Q_cms",
+    "qoi":["Q_cms","AET"],
+    "qoi_column":["Q_cms","AET"],
+    "transform_model_output":["None", "None"],
+    "read_measured_data":["True","False"],
+    "qoi_column_measured":["streamflow","None"],
     "autoregressive_model_first_order":"False",
-    "transform_model_output":"None",
-    "read_measured_data": "True",
-    "qoi_column_measured":"streamflow",
-    "objective_function_qoi":"RMSE",
+    "scale_factor_autoregressive_model_first_order":0.9,
+    "objective_function_qoi":["RMSE", "LogNSE", "KGE"],
     "calculate_GoF":"True",
     "objective_function":["MAE", "MSE", "RMSE", "NRMSE", "NSE", "LogNSE", "KGE"],
     "mode":"continuous",
-    "interval": 5,
-    "min_periods": 5,
+    "interval": 31,
+    "min_periods": 31,
     "method": "avrg",
-    "center": "left",
+    "center": "center",
     "compute_gradients":"False",
     "eps_gradients": 0.01,
     "gradient_method":"Forward Difference",
@@ -61,6 +62,13 @@
       "default": 0.0
     },
     {
+      "name": "C0",
+      "distribution": "Uniform",
+      "lower": 0.0,
+      "upper": 10.0,
+      "default": 0.5
+    },
+    {
       "name": "ETF",
       "distribution": "Uniform",
       "lower": 0.0,
@@ -75,13 +83,6 @@
       "default": 250
     },
     {
-      "name": "beta",
-      "distribution": "Uniform",
-      "lower": 1.0,
-      "upper": 4.0,
-      "default": 2.0
-    },
-    {
       "name": "FRAC",
       "distribution": "Uniform",
       "lower": 0.01,
@@ -94,9 +95,23 @@
       "lower": 0.0,
       "upper": 0.1,
       "default": 0.025
+    },
+    {
+      "name": "PM",
+      "distribution": "Uniform",
+      "lower": 0.5,
+      "upper": 2.0,
+      "default": 1.0
     }
   ],
   "unused_parameters": [
+    {
+      "name": "beta",
+      "distribution": "Uniform",
+      "lower": 1.0,
+      "upper": 4.0,
+      "default": 2.0
+    },
     {
       "name": "C0",
       "distribution": "Uniform",

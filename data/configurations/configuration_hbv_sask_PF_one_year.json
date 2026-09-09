@@ -15,14 +15,14 @@
 
       "run_full_timespan":"False",
       "spin_up_length":0,
-      "simulation_length": 1095,
+      "simulation_length": 365,
       "resolution": "daily",
 
       "cut_runs": "False",
       "timestep": 5
     },
   "model_settings": {
-    "basin": "Oldman_Basin",
+    "basin": "Banff_Basin",
     "plotting": "False",
     "writing_results_to_a_file": "False",
     "corrupt_forcing_data": "False"

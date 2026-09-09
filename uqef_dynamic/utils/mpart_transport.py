@@ -80,6 +80,55 @@ def _as_pipeline(Z):
     return np.ascontiguousarray(np.asarray(Z, dtype=np.float64).T)
 
 
+def _fit_preprocess(X, log_transform="auto", standardize=True):
+    """Decide per-parameter log/shift/standardisation from training samples.
+
+    Hydrological parameters are bounded and span very
+    different magnitudes (FC ~ [50,500] vs K2 ~ [0,0.05]). Mapping raw values
+    onto a standard Gaussian is far harder than mapping log-scaled, centred
+    ones, so the map needs a much higher polynomial order to compensate.
+
+    log_transform: "auto" applies log1p(x - shift) only to columns that are
+    non-negative; columns that straddle zero (e.g. TT in [-4, 4]) are left
+    alone, since a log is undefined there.
+
+    Returns a dict describing the transform, consumed by _apply_pre/_undo_pre.
+    """
+    X = np.asarray(X, dtype=np.float64)
+    n_dim = X.shape[1]
+    use_log = np.zeros(n_dim, dtype=bool)
+    shift = np.zeros(n_dim)
+    if log_transform in ("auto", True):
+        for j in range(n_dim):
+            col = X[:, j]
+            if log_transform is True or col.min() >= 0.0:
+                use_log[j] = True
+                # shift strictly below the minimum so log1p stays finite
+                shift[j] = col.min() - 1e-9
+    Y = _apply_pre(X, {"use_log": use_log, "shift": shift,
+                       "mean": np.zeros(n_dim), "std": np.ones(n_dim)})
+    mean = Y.mean(axis=0) if standardize else np.zeros(n_dim)
+    std = Y.std(axis=0) if standardize else np.ones(n_dim)
+    std = np.where(std > 1e-12, std, 1.0)
+    return {"use_log": use_log, "shift": shift, "mean": mean, "std": std}
+
+
+def _apply_pre(X, pre):
+    Y = np.array(X, dtype=np.float64, copy=True)
+    if pre["use_log"].any():
+        j = pre["use_log"]
+        Y[:, j] = np.log1p(np.maximum(Y[:, j] - pre["shift"][j], 0.0))
+    return (Y - pre["mean"]) / pre["std"]
+
+
+def _undo_pre(Y, pre):
+    X = np.asarray(Y, dtype=np.float64) * pre["std"] + pre["mean"]
+    if pre["use_log"].any():
+        j = pre["use_log"]
+        X[:, j] = np.expm1(X[:, j]) + pre["shift"][j]
+    return X
+
+
 class TransportMapResult:
     """A fitted triangular map plus the metadata needed to reuse it.
 
@@ -88,16 +137,19 @@ class TransportMapResult:
         n_dim:        dimension of the parameter space.
         max_order:    total polynomial order used.
         coeffs:       optimized coefficient vector (copy).
+        pre:          preprocessing spec (log/shift/standardisation), applied
+                      on forward and undone on inverse.
         param_names:  optional list of parameter names, for bookkeeping.
         optimizer:    the scipy OptimizeResult from fitting.
     """
 
-    def __init__(self, tri_map, n_dim, max_order, coeffs,
+    def __init__(self, tri_map, n_dim, max_order, coeffs, pre=None,
                  param_names=None, optimizer=None):
         self.tri_map = tri_map
         self.n_dim = n_dim
         self.max_order = max_order
         self.coeffs = np.asarray(coeffs, dtype=np.float64).copy()
+        self.pre = pre
         self.param_names = list(param_names) if param_names is not None else None
         self.optimizer = optimizer
 
@@ -129,7 +181,8 @@ class TransportMapResult:
 
 
 def fit_transport_map(parameter_samples, max_order=2, param_names=None,
-                      map_options=None, gtol=1e-3, maxiter=500, verbose=False):
+                      map_options=None, gtol=1e-3, maxiter=500, verbose=False,
+                      log_transform="auto", standardize=True):
     """Fit a triangular transport map pushing samples toward a standard Gaussian.
 
     Maximises the map-induced log-likelihood
@@ -181,11 +234,16 @@ def fit_transport_map(parameter_samples, max_order=2, param_names=None,
             "a transport map cannot be fitted. This usually means particle "
             "degeneracy collapsed the posterior.")
 
-    X_mp = _as_mpart(X)
+    # Log/shift/standardise first — see _fit_preprocess. Without this the map
+    # needs a much higher order to absorb the scale differences between e.g.
+    # FC ~ [50,500] and K2 ~ [0,0.05].
+    pre = _fit_preprocess(X, log_transform=log_transform, standardize=standardize)
+    X_mp = _as_mpart(_apply_pre(X, pre))
     rho = multivariate_normal(np.zeros(n_dim), np.eye(n_dim))
 
     if map_options is None:
         map_options = mt.MapOptions()
+        map_options.basisType = mt.BasisTypes.ProbabilistHermite
     tri_map = mt.CreateTriangular(n_dim, n_dim, max_order, map_options)
 
     def objective(coeffs):
@@ -207,7 +265,7 @@ def fit_transport_map(parameter_samples, max_order=2, param_names=None,
                    options={"gtol": gtol, "maxiter": maxiter, "disp": verbose})
     tri_map.SetCoeffs(res.x)
 
-    result = TransportMapResult(tri_map, n_dim, max_order, res.x,
+    result = TransportMapResult(tri_map, n_dim, max_order, res.x, pre=pre,
                                 param_names=param_names, optimizer=res)
     if verbose:
         d = result.diagnostics(X)
@@ -230,7 +288,10 @@ def forward(fitted, parameter_samples):
         suitable as PCE inputs with a probabilist-Hermite basis.
     """
     _require_mpart()
-    X_mp = _as_mpart(parameter_samples)
+    X = np.asarray(parameter_samples, dtype=np.float64)
+    if fitted.pre is not None:
+        X = _apply_pre(X, fitted.pre)
+    X_mp = _as_mpart(X)
     if X_mp.shape[0] != fitted.n_dim:
         raise ValueError(
             f"Sample dimension {X_mp.shape[0]} does not match map dimension {fitted.n_dim}.")
@@ -257,4 +318,7 @@ def inverse(fitted, reference_samples):
             f"Sample dimension {Z_mp.shape[0]} does not match map dimension {fitted.n_dim}.")
     # MParT's triangular Inverse takes (prefix, rhs); for a square map the
     # prefix is the point itself and is ignored beyond providing the shape.
-    return _as_pipeline(fitted.tri_map.Inverse(Z_mp, Z_mp))
+    X = _as_pipeline(fitted.tri_map.Inverse(Z_mp, Z_mp))
+    if fitted.pre is not None:
+        X = _undo_pre(X, fitted.pre)
+    return X

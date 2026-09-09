@@ -21,8 +21,10 @@ import multiprocessing
 import chaospy as cp
 
 from uqef_dynamic.utils import utility
-from uqef_dynamic.utils import transport_map        # bundled triangular-map toolbox (legacy backend)
 from uqef_dynamic.utils import mpart_transport      # MParT backend (optional dependency)
+from uqef_dynamic.utils import gaussian_anamorphosis  # rank-based marginal transform
+from uqef_dynamic.utils import transport_timeseries   # per-timestep driver + dispatcher
+from uqef_dynamic.utils.transport_timeseries import gaussianize_parameter_samples
 from uqef_dynamic.models.hbv_sask import hbvsask_utility as hbv
 from uqef_dynamic.models.hbv_sask import HBVSASKModel as hbvmodel
 
@@ -32,10 +34,124 @@ PLOT_FORCING_DATA = True
 # Set of utility functions 
 
 
+def parameter_output_correlation(theta, qoi):
+    """Median |corr(parameter, Q)| across particles, per parameter.
+
+    At each timestep the correlation is taken ACROSS PARTICLES (not across time):
+    particle i carries theta_i and produced Q_i, so this measures whether varying
+    a parameter actually moves the output. If it is ~0 the likelihood has nothing
+    to select on and the filter cannot learn that parameter, however sharp the
+    likelihood is made.
+
+    Args:
+        theta: (n_dates, n_particles, n_params)
+        qoi:   (n_dates, n_particles)
+
+    Returns:
+        (n_params,) array of median |r| over timesteps. Dates where the ensemble
+        has collapsed (zero variance) are skipped rather than counted as zero.
+    """
+    th = np.asarray(theta, dtype=np.float64)
+    q = np.asarray(qoi, dtype=np.float64)
+    th = th - th.mean(axis=1, keepdims=True)
+    q = q - q.mean(axis=1, keepdims=True)
+    num = np.einsum('tnp,tn->tp', th, q)
+    den = np.sqrt((th ** 2).sum(axis=1) * (q ** 2).sum(axis=1)[:, None])
+    with np.errstate(divide='ignore', invalid='ignore'):
+        r = np.where(den > 0, num / den, np.nan)
+    return np.nanmedian(np.abs(r), axis=0)
+
+
 def _savefig(fig, out_dir, name):
     fig.tight_layout()
     fig.savefig(os.path.join(out_dir, name), dpi=150)
     plt.close(fig)
+
+
+def plot_sensitivity_vs_identifiability(samples_npz, sobol_s1, out_dir=None,
+                                        skip_fraction=0.1, width_threshold=0.5,
+                                        s1_threshold=None, filename="sensitivity_vs_identifiability.png"):
+    """Scatter forward-GSA sensitivity against posterior identifiability.
+
+    Two orthogonal quantities that are easy to conflate:
+
+      x  Sobol S1 from a FORWARD (prior-based) GSA — does the parameter move the
+         output across its plausible range? Passed in; not computed here.
+      y  posterior width / prior width — did the filter learn anything about it?
+         1.0 means the posterior is as wide as the prior (learned nothing).
+
+    A parameter can be strongly influential yet unidentifiable: a precipitation
+    multiplier moves streamflow a lot, but is confounded with everything else
+    that scales flow, so its posterior stays wide. That is the top-right
+    quadrant, and it is a result rather than a failure.
+
+    NOTE this deliberately avoids posterior-conditional sensitivity indices.
+    Those are computed over the posterior, so a converged parameter shows a low
+    index purely because its range has shrunk — confounding sensitivity with
+    identifiability, the two things this plot separates.
+
+    Args:
+        samples_npz:     posterior_parameter_samples.npz, or its directory.
+        sobol_s1:        dict {param_name: S1} from the forward GSA. Parameters
+                         missing from it are skipped.
+        out_dir:         output directory; defaults to the npz's directory.
+        skip_fraction:   drop this leading fraction of dates as filter warm-up,
+                         when the posterior is still collapsing from the prior.
+        width_threshold: horizontal quadrant line (relative width).
+        s1_threshold:    vertical quadrant line; defaults to the median S1.
+
+    Returns:
+        dict {param_name: (s1, relative_width)}.
+    """
+    if os.path.isdir(str(samples_npz)):
+        samples_npz = os.path.join(str(samples_npz), "posterior_parameter_samples.npz")
+    d = np.load(samples_npz, allow_pickle=True)
+    th = np.asarray(d["theta"], dtype=np.float64)
+    names = [str(x) for x in d["param_names"]]
+    lo, hi = np.asarray(d["param_lower"], float), np.asarray(d["param_upper"], float)
+
+    start = int(skip_fraction * th.shape[0])
+    span = np.where(hi - lo > 0, hi - lo, 1.0)
+    rel_w = np.median(
+        (np.percentile(th[start:], 90, axis=1) - np.percentile(th[start:], 10, axis=1)) / span,
+        axis=0)
+
+    pts = {n: (float(sobol_s1[n]), float(rel_w[j]))
+           for j, n in enumerate(names) if n in sobol_s1}
+    missing = [n for n in names if n not in sobol_s1]
+    if missing:
+        print(f"plot_sensitivity_vs_identifiability: no S1 given for {missing}; skipped.")
+    if not pts:
+        raise ValueError("sobol_s1 matched none of the parameter names in the npz.")
+
+    xs = np.array([v[0] for v in pts.values()])
+    ys = np.array([v[1] for v in pts.values()])
+    xt = float(np.median(xs)) if s1_threshold is None else float(s1_threshold)
+
+    fig, ax = plt.subplots(figsize=(7.5, 6.5))
+    ax.axhline(width_threshold, color='grey', lw=0.8, ls='--')
+    ax.axvline(xt, color='grey', lw=0.8, ls='--')
+    ax.scatter(xs, ys, s=90, color='steelblue', zorder=3, edgecolor='white')
+    for n, (x, y) in pts.items():
+        ax.annotate(n, (x, y), xytext=(6, 5), textcoords='offset points', fontsize=10)
+
+    # Corner captions in axes coordinates, inset so they cannot collide with points.
+    for xa, ya, ha, va, txt in [
+            (0.985, 0.985, 'right', 'top',    'sensitive,\nNOT identifiable'),
+            (0.985, 0.015, 'right', 'bottom', 'sensitive,\nidentifiable'),
+            (0.015, 0.985, 'left',  'top',    'insensitive,\nunconstrained'),
+            (0.015, 0.015, 'left',  'bottom', 'insensitive,\nyet narrowed')]:
+        ax.text(xa, ya, txt, transform=ax.transAxes, ha=ha, va=va,
+                fontsize=8, color='grey', alpha=0.75,
+                bbox=dict(boxstyle='round,pad=0.25', fc='white', ec='none', alpha=0.65))
+    ax.margins(0.12)
+
+    ax.set_xlabel('Forward-GSA Sobol $S_1$  (sensitivity, prior-based)')
+    ax.set_ylabel('posterior width / prior width  (1 = nothing learned)')
+    ax.set_title('Sensitivity vs identifiability')
+    ax.grid(alpha=0.3)
+    _savefig(fig, out_dir or os.path.dirname(os.path.abspath(samples_npz)), filename)
+    return pts
 
 
 def plot_pooled_chains(results, out_dir, observed=None, pooled_theta=None):
@@ -58,6 +174,24 @@ def plot_pooled_chains(results, out_dir, observed=None, pooled_theta=None):
         ax.plot(x, observed, color='orange', lw=1.6, label='observed')
     ax.set_xlabel('Date'); ax.set_ylabel('Q [m³/s]')
     ax.set_title(f'Pooled {results["n_chains"]} chains × {results["n_particles_per_chain"]} particles')
+
+    # Clip the y-axis and shade the warm-up, matching the single-chain streamflow
+    # plot. The first few timesteps carry the prior's spread, which is orders of
+    # magnitude wider than anything afterwards and otherwise flattens the whole
+    # series. Scale to the observations when available, else to the pooled mean.
+    spinup_steps = 30
+    if observed is not None and np.any(np.isfinite(observed)):
+        y_max = float(np.nanmax(observed))
+    else:
+        y_max = float(np.nanmax(results["pooled_mean"]))
+    if np.isfinite(y_max) and y_max > 0:
+        ax.set_ylim(0, y_max * 1.4)
+    if len(x) > spinup_steps:
+        ax.axvspan(x[0], x[spinup_steps - 1], color='grey', alpha=0.12, lw=0, zorder=0)
+        ax.annotate('Warm-up', xy=(x[spinup_steps // 2], ax.get_ylim()[1]),
+                    xytext=(0, -10), textcoords='offset points',
+                    ha='center', va='top', fontsize=8, color='grey')
+
     ax.legend(fontsize=8); ax.grid(alpha=0.3)
     _savefig(fig, out_dir, "pooled_streamflow.png")
 
@@ -69,9 +203,12 @@ def plot_pooled_chains(results, out_dir, observed=None, pooled_theta=None):
     a1.plot(x, B, color='tomato', lw=1, label='between-chain variance')
     a1.plot(x, W, color='steelblue', lw=1, label='within-chain variance')
     a1.set_yscale('log'); a1.set_ylabel('variance')
-    a1.set_title(f'Chain agreement — median B/W = {results["between_over_within_median"]:.4f}  (≪1 = converged)')
+    _floor = 1.0 / results["n_particles_per_chain"]
+    a1.set_title(f'Chain agreement — median B/W = {results["between_over_within_median"]:.5f}, '
+                 f'Monte Carlo floor 1/N = {_floor:.5f}')
     a2.plot(x, ratio, color='purple', lw=1, label='B / W')
-    a2.axhline(1.0, color='red', ls='--', lw=0.9, label='B = W')
+    a2.axhline(_floor, color='red', ls='--', lw=0.9,
+               label=f'MC floor 1/N = {_floor:.1e}  (chains identical up to sampling error)')
     a2.set_yscale('log'); a2.set_ylabel('B / W'); a2.set_xlabel('Date')
     for a in (a1, a2):
         a.legend(fontsize=8); a.grid(alpha=0.3)
@@ -157,11 +294,19 @@ def pool_chain_results(chain_dirs, observed=None, output_dir=None,
     pooled_pcts = {int(p): np.percentile(pooled_q, p, axis=1) for p in percentiles}
     chain_means = np.stack([q.mean(axis=1) for q in qois], axis=0)  # (n_chains, n_dates)
 
-    # Between- vs within-chain spread. This is the diagnostic that answers
-    # "did the initial sample still matter?". B is the variance of the chain
-    # means about the pooled mean; W is the average within-chain variance. If
-    # B << W the chains agree and pooling has converged; if B is comparable to W
-    # the chains disagree and more chains (or more particles) are needed.
+    # Between- vs within-chain spread — the diagnostic for "did the initial
+    # sample still matter?". B is the variance of the chain means; W is the
+    # average within-chain variance.
+    #
+    # The reference is 1/n_particles, NOT 1. Chains drawing independently from
+    # the SAME posterior still have means that scatter by Monte Carlo error, with
+    # variance W/N, so E[B/W] = 1/N even when they agree perfectly. Comparing
+    # B/W against 1 is far too lenient: a ratio of 0.03 looks tiny next to 1 but
+    # is ~60x the floor at N=2000, i.e. the chains genuinely disagree.
+    #   B/W ~ 1/N        -> indistinguishable from sampling error
+    #   B/W >> 1/N       -> the initial ensemble still leaves an imprint
+    # A complementary, threshold-free reading is B/(W+B): the fraction of the
+    # pooled variance contributed by chain-to-chain disagreement.
     B = chain_means.var(axis=0, ddof=1) if n_chains > 1 else np.zeros_like(pooled_mean)
     W = np.mean([q.var(axis=1, ddof=1) for q in qois], axis=0)
     with np.errstate(divide="ignore", invalid="ignore"):
@@ -213,9 +358,13 @@ def pool_chain_results(chain_dirs, observed=None, output_dir=None,
 
     print(f"Pooled {n_chains} chains x {results['n_particles_per_chain']} particles "
           f"= {results['n_particles_pooled']} over {results['n_dates']} timesteps")
-    print(f"  between/within chain variance (median): "
-          f"{results['between_over_within_median']:.4f}"
-          f"   (<<1 means the chains agree and pooling has converged)")
+    _bw = results["between_over_within_median"]
+    _floor = 1.0 / results["n_particles_per_chain"]
+    print(f"  between/within chain variance (median): {_bw:.5f}")
+    print(f"    Monte Carlo floor 1/N = {_floor:.5f}  ->  observed is {_bw/_floor:.0f}x the floor")
+    _verdict = ("chains differ BEYOND sampling error" if _bw > 3 * _floor
+                else "consistent with sampling error")
+    print(f"    {_verdict}; {_bw/(1+_bw):.1%} of the pooled variance is between-chain")
     if observed is not None:
         print(f"  pooled RMSE={results['rmse_pooled_mean']:.2f}  "
               f"per-chain RMSE={['%.2f' % r for r in results['rmse_per_chain']]}")
@@ -346,7 +495,8 @@ def run_model_single_time_stamp_single_particle(hbvsaskModelObject, date_of_inte
 
     forcing = hbvsaskModelObject.time_series_measured_data_df.loc[[date_of_interest, ], :].copy()
 
-    state_values_dict["WatershedArea_km2"] = 1434.73
+    state_values_dict["WatershedArea_km2"] = float(
+        hbvsaskModelObject.initial_condition_df["WatershedArea_km2"].values[0])
     state_values_dict[hbvsaskModelObject.time_column_name] = date_of_interest
     
     initial_condition_df = pd.DataFrame(state_values_dict, index=[0])
@@ -378,6 +528,7 @@ def run_model_single_time_stamp_single_particle(hbvsaskModelObject, date_of_inte
     # return model_output_dict, state_dict, measured_output_date
     return unique_index_model_run, y_t_model, y_t_observed, x_t_plus_1, parameter_value_dict
 
+####################
 
 def estimate_monthly_bias(df, simulated_column, observed_column,
                           time_column=None, calibration_end=None,
@@ -443,6 +594,7 @@ def estimate_monthly_bias(df, simulated_column, observed_column,
               f"(fewer than {min_days_per_month} valid days); they default to 0.0.")
     return bias
 
+####################
 
 def build_marginal_prior(spec):
     """Build a chaospy marginal prior from one configuration entry.
@@ -528,6 +680,7 @@ def calculate_likelihood_heteroscedastic(y_t_observed, y_t_model, beta_obs=0.2 /
         return 0.0
     if sigma_eps is None:
         sigma_eps = beta_obs * abs(y_t_observed)
+        # sigma_eps = beta_obs * np.sqrt(np.abs(y_t_observed))
     sigma_eps = max(sigma_eps, 1e-6)  # floor against zero flow
     residual = y_t_observed - y_t_model
     exponent = -0.5 * (residual ** 2) / sigma_eps ** 2
@@ -570,6 +723,7 @@ def calculate_likelihood_ar(y_t_observed, y_t_model, epsilon_hat, sigma_eta=None
         if phi_ar is None:
             raise ValueError("Provide either sigma_eta or phi_ar.")
         sigma_eta = beta_obs * np.sqrt(1.0 - phi_ar ** 2) * abs(y_t_observed)
+        # sigma_eta = beta_obs * np.sqrt(1.0 - phi_ar ** 2) * np.sqrt(abs(y_t_observed))
         sigma_eta = max(sigma_eta, 1e-6)  # floor against zero flow
     y_hat = y_t_model + epsilon_hat
     innovation = y_t_observed - y_hat   # η(t) = ε(t) − ε̂(t), should be ≈ N(0, σ_η²)
@@ -641,7 +795,8 @@ def systematic_resample(weights):
 
 
 def perturb_parameters(parameters, param_stds=None, perturbation_factor=0.15,
-                       param_bounds=None, min_jitter_frac=0.002):
+                       param_bounds=None, min_jitter_frac=0.002,
+                       bound_handling="clip"):
     """Jitter resampled parameters, keeping them inside their prior support.
 
     Two safeguards, both essential over long runs:
@@ -672,6 +827,17 @@ def perturb_parameters(parameters, param_stds=None, perturbation_factor=0.15,
         param_bounds:       optional dict {name: (lower, upper)} enforcing support.
         min_jitter_frac:    jitter floor as a fraction of (upper−lower). Only
                             applied for parameters present in param_bounds.
+        bound_handling:     how to return an out-of-bounds draw to the interval.
+                            "clip"    — set it to the bound. Simple, but every
+                                        overshooting particle lands on the SAME
+                                        value, so probability mass piles up into
+                                        an atom at the boundary
+                            "reflect" — bounce it back inside. No atoms at any
+                                        jitter scale, and it preserves more of the
+                                        ensemble spread than clipping does.
+                            Neither is a Bayesian update; both are ad-hoc ways to
+                            respect a truncated prior. Reflection is the more
+                            standard choice and distorts the density less.
     """
     perturbed_parameters = {}
     for key, value in parameters.items():
@@ -692,238 +858,45 @@ def perturb_parameters(parameters, param_stds=None, perturbation_factor=0.15,
         new_value = value + np.random.normal(0, scale)
 
         if bounds is not None:
-            new_value = min(max(new_value, lower), upper)   # keep inside prior support
+            span = upper - lower
+            if span <= 0:
+                new_value = lower
+            elif bound_handling == "reflect":
+                # Modulo 2*span folds arbitrarily large overshoots back inside,
+                # so a single expression handles repeated reflections.
+                t = (new_value - lower) % (2.0 * span)
+                new_value = lower + (t if t <= span else 2.0 * span - t)
+            elif bound_handling == "clip":
+                new_value = min(max(new_value, lower), upper)
+            else:
+                raise ValueError(f"bound_handling must be 'clip' or 'reflect', "
+                                 f"got {bound_handling!r}.")
         perturbed_parameters[key] = new_value
     return perturbed_parameters
 
-
-def define_the_transport_map_parameterization(D, maxorder=5):
-    # =============================================================================
-    # Define the transport map parameterization
-    # =============================================================================
-
-    # Next, we define the map component functions used in the triangular transport 
-    # map. The map definition requires two lists of lists: one for the monotone 
-    # part (basis functions which do depend on the last argument) and one for the
-    # nonmonotone part (basis functions which do not depend on the last argument).
-    # Each entry in those lists is another list that defines the basis functions.
-    # Polynomial basis functions are lists of integers, with a potential keyword
-    # such as 'HF' appended to mark it as a Hermite function. RBFs or related basis
-    # functions are defined as strings such as 'RBF 0' or 'iRBF 7'. 
-    # 
-    # Example: --------------------------------------------------------------------
-    #
-    # monotone = [
-    #   [ [0] ],
-    #   [ [1], [0,0,1,'HF'] ] ]
-    # nonmonotone = [
-    #   [ [] ],
-    #   [ [], [0], [0,0], [0,0,'HF], 'RBF 0'] ]
-    #
-    # Explanation: ----------------------------------------------------------------
-    #
-    # Monotone [list]
-    #   |
-    #   └―― Map component 1 [list] (last argument: entry x_{0})
-    #   |       |
-    #   |       └―― [0] Basis function 1 (linear term for entry 0)
-    #   |
-    #   └―― Map component 2 [list] (last argument: entry x_{1})
-    #           |
-    #           └―― [1] Basis function 1 (linear term for entry 1)
-    #           |
-    #           └―― [0,0,1,'HF'] Basis function 2 (cross-term: quadratic Hermite function for entry 0, linear Hermite function for entry 1)
-    #
-    # Nonmonotone [list]
-    #   |
-    #   └―― Map component 1 [list] (valid arguments: constant)
-    #   |       |
-    #   |       └―― [] Basis function 1 (constant term)
-    #   |
-    #   └―― Map component 2 [list] (Valid arguments: consant, x_{0})
-    #           |
-    #           └―― [] Basis function 1 (constant term)
-    #           |
-    #           └―― [0] Basis function 2 (linear term for entry x_{0})
-    #           |
-    #           └―― [0,0] Basis function 3 (quadratic term for entry x_{0})
-    #           |
-    #           └―― [0,0,'HF'] Basis function 4 (quadratic Hermite function for entry x_{0})
-    #           |
-    #           └―― 'RBF 0' Basis function 5 (radial basis function for entry x_{0})
-
-    # Create empty lists for the map component specifications
-    monotone    = []
-    nonmonotone = []
-
-    # Here, we try  different form of map parameterization. Let's try using maps
-    # with separable monotonicity. These are often much more efficient, but do not
-    # allow for cross-terms or nonmonotone basis functions in the 'monotone' list.
-    for k in range(D):
-        
-        # Level 1: Add an empty list entry for each map component function
-        monotone.append([])
-        nonmonotone.append([]) # An empty list "[]" denotes a constant
-        
-        # Level 2: We initiate the nonmonotone terms with a constant
-        nonmonotone[-1].append([])
-
-        # Nonmonotone part --------------------------------------------------------
-
-        # Go through every polynomial order
-        for order in range(maxorder):
-            
-            # We only have non-constant nonmonotone terms past the first map 
-            # component, and we already added the constant term earlier, so only do
-            # this for the second map component function (k > 0).
-            if k > 0: 
-                
-                # The nonmonotone basis functions can be as nonmonotone as we want.
-                # Hermite functions are generally a good choice.
-                nonmonotone[-1].append([k-1]*(order+1)+['HF'])
-                
-        # Monotone part -----------------------------------------------------------
-        
-        # Let's get more fancy with the monotone part this time. If the order  we 
-        # specified is one, then use a linear term. Otherwise, use a few monotone 
-        # special functions: Left edge terms, integrated radial basis functions, 
-        # and right edge terms
-        
-        # The specified order is one
-        if maxorder == 1:
-            
-            # Then just add a linear term
-            monotone[-1].append([k])
-            
-        # Otherweise, the order is greater than one. Let's use special terms.
-        else:
-            
-            # Add a left edge term. The order matters for these special terms. 
-            # While they are placed according to marginal quantiles, they are 
-            # placed from left to right. We want the left edge term to be left.
-            monotone[-1].append('LET '+str(k))
-                    
-            # Lets only add maxorder-1 iRBFs
-            for order in range(maxorder-1):
-                
-                # Add an integrated radial basis function
-                monotone[-1].append('iRBF '+str(k))
-        
-            # Then add a right edge term 
-            monotone[-1].append('RET '+str(k))
-    return  monotone, nonmonotone
+####################
 
 
-def transform_samples_with_transport_map(parameter_samples_matrix):
-    # =============================================================================
-    # Use transport map to transform current parameter samples to standard Gaussian
-    # =============================================================================
-    # Define the transport map parameterization
-    # Create empty lists for the map component specifications
-    monotone    = []
-    nonmonotone = []
-    # require polynomial basis terms up to order 5
-    maxorder    = 1
-    monotone, nonmonotone = define_the_transport_map_parameterization(D=parameter_samples_matrix.shape[1], maxorder=maxorder)
-    # =============================================================================
-    # Create the transport map object
-    # =============================================================================
-    # With the map parameterization (nonmonotone, monotone) defined and the target
-    # samples (X) obtained, we can start creating the transport map object.
-    # To begin, delete any map object which might already exist.
-    if "tm" in globals():
-        del tm
-
-    # Create the transport map object tm
-    tm     = transport_map.transport_map(
-        monotone                = monotone,                 # Specify the monotone parts of the map component function
-        nonmonotone             = nonmonotone,              # Specify the nonmonotone parts of the map component function
-        X                       = parameter_samples_matrix, # = np.random.uniform(size=(N,D)), # Dummy input A N-by-D matrix of training samples (N = ensemble size, D = variable space dimension)
-        polynomial_type         = "hermite function",       # What types of polynomials did we specify? The option 'Hermite functions' here are re-scaled probabilist's Hermites, to avoid numerical overflow for higher-order terms
-        monotonicity            = "separable monotonicity",   # Are we ensuring monotonicity through 'integrated rectifier' or 'separable monotonicity'?
-        standardize_samples     = True,                     # Standardize the training ensemble X? Should always be True
-        workers                 = 1,                        # Number of workers for the parallel optimization.
-        # quadrature_input        = {                         # Keywords for the Gaussian quadrature used for integration
-        #     'order'         : 25,
-        #     'adaptive'      : False,
-        #     'threshold'     : 1E-9,
-        #     'verbose'       : False,
-        #     'increment'     : 6}
-        # regularization          = "l2",
-        # regularization_lambda   = lmbda,
-        verbose                 = False
-        )
-
-    # Optimize the transport maps. This takes a while, it's an extremeley complicated map.
-    tm.optimize()
-
-    # Store the coefficients in a dictionary
-    dict_coeffs = {
-        'coeffs_mon'    : tm.coeffs_mon,
-        'coeffs_nonmon' : tm.coeffs_nonmon}
-    
-    # Save the dictionary
-    # pickle.dump(dict_coeffs,open('dict_coeffs_order='+str(maxorder)+'.p','wb'))
-    # =============================================================================
-    # Apply the map
-    # =============================================================================  
-    # -----------------------------------------------------------------------------
-    # forward map from the target to the reference
-    # -----------------------------------------------------------------------------
-    # we apply the map forward. This transforms samples from
-    # the target into samples from the reference (a standard Gaussian)
-
-    # We can evaluate the forward map with the following command:
-    Z_gen   = tm.map(parameter_samples_matrix)
-    # =============================================================================
-    return Z_gen
+# Transport-map / parameter-transformation code lives in uqef_dynamic/utils:
+#   mpart_transport.py       MParT triangular maps
+#   gaussian_anamorphosis.py rank-based marginal transform
+#   legacy_transport.py      the bundled transport_map.py toolbox
+#   transport_timeseries.py  per-timestep driver + gaussianize_parameter_samples
 
 
 
-def gaussianize_parameter_samples(parameter_samples_matrix, backend="legacy",
-                                  max_order=2, param_names=None, verbose=True):
-    """Map a posterior parameter ensemble to a standard-Gaussian reference space.
-
-    This is the step that makes a polynomial chaos expansion possible: PCE needs
-    inputs in a standard space (independent standard normals for a Hermite basis),
-    but the particle-filter posterior is correlated, bounded and non-Gaussian.
-
-    Args:
-        parameter_samples_matrix: (n_particles, n_params) posterior ensemble.
-        backend: "mpart"  → MParT triangular map (uqef_dynamic.utils.mpart_transport);
-                 "legacy" → the bundled uqef_dynamic/utils/transport_map.py toolbox;
-                 None     → skip, return None.
-        max_order:   polynomial order of the map (mpart backend).
-        param_names: optional names, used in diagnostics.
-        verbose:     print fit diagnostics.
-
-    Returns:
-        (n_particles, n_params) array in the reference space, or None when the
-        transform is skipped or unavailable. Callers should handle None.
-    """
-    if backend is None:
-        return None
-
-    if backend == "mpart":
-        if not mpart_transport.is_available():
-            print("WARNING: transport_map_backend='mpart' but MParT is not installed "
-                  "(pip install mpart / conda install -c conda-forge mpart). "
-                  "Skipping the Gaussianization.")
-            return None
-        fitted = mpart_transport.fit_transport_map(
-            parameter_samples_matrix, max_order=max_order,
-            param_names=param_names, verbose=verbose)
-        return fitted.forward(parameter_samples_matrix)
-
-    if backend == "legacy":
-        return transform_samples_with_transport_map(parameter_samples_matrix)
-
-    raise ValueError(f"Unknown transport_map_backend '{backend}'. "
-                     "Use 'mpart', 'legacy', or None.")
 
 
-def main_routine(num_processes, number_of_particles,
-                 working_dir_name="trial_single_run_hbvsaskmodel_7d_filtering",
+
+
+####################
+
+def main_routine(
+                num_processes, number_of_particles,
+                inputModelDir,
+                configuration_file,
+                workingDir="trial_single_run_hbvsaskmodel_7d_filtering",
+                directory_for_saving_plots="trial_single_run_hbvsaskmodel_7d_filtering",
                  # ── Likelihood options ──────────────────────────────────────────────────
                  use_ar_likelihood=True,  # True → AR(1)-augmented; False → simple Gaussian
                  phi_ar=0.894,    # AR(1) coefficient
@@ -948,6 +921,13 @@ def main_routine(num_processes, number_of_particles,
                  # ── Parameter perturbation options ──────────────────────────────────────
                  use_ensemble_std_perturbation=False,
                  perturbation_factor=0.15,
+                 # How an out-of-bounds perturbed value is returned to its interval.
+                 # "clip" pins it to the bound, which piles probability mass into an
+                 # atom there (measured: ~16% of PM particles sat exactly on a bound)
+                 # and stops a transport map from Gaussianizing the posterior.
+                 # "reflect" bounces it back inside: no atoms at any jitter scale, and
+                 # it preserves more ensemble spread. Default "clip" = existing behaviour.
+                 bound_handling="clip",
                  # ── Predictive band options ─────────────────────────────────────────────
                  # Include the innovation noise η ~ N(0, σ_η²) when building the plotted
                  # percentile bands. Set False only to inspect the mean spread alone.
@@ -973,12 +953,25 @@ def main_routine(num_processes, number_of_particles,
                  # Store the saved theta array as float32 instead of float64.
                  # Pairs naturally with light_output for multi-chain runs.
                  save_theta_float32=False,
-                 # Backend for the final-timestep Gaussianization plot:
-                 #   "mpart"  → MParT triangular map (uqef_dynamic.utils.mpart_transport)
-                 #   "legacy" → the bundled uqef_dynamic/utils/transport_map.py toolbox
-                 #   None     → skip the transform entirely
+                 # Backend used to map posterior parameter samples to a standard
+                 # Gaussian space (the input a Hermite PCE needs):
+                 #   "mpart"        → joint MParT triangular map; whitens the
+                 #                    cross-correlations a marginal transform leaves
+                 #   "anamorphosis" → rank-based marginal transform (Fan et al. 2016);
+                 #                    much faster and robust to spiky marginals, but
+                 #                    does not whiten
+                 #   "legacy"       → the bundled transport_map.py toolbox
+                 #   None           → skip entirely
                  transport_map_backend="legacy",
                  transport_map_max_order=2,
+                 # When True, fit one map PER TIMESTEP after the filter finishes and
+                 # write standard_parameter_samples.npz (z, theta, qoi per date) —
+                 # the regression pairs for a per-timestep PCE. Done post-hoc from
+                 # the saved samples, so it costs the filter loop nothing and can be
+                 # re-run with a different backend/order without re-filtering.
+                 # Requires save_posterior_parameter_samples=True.
+                 map_all_timesteps=False,
+                 map_all_timesteps_workers=None,   # None → os.cpu_count()
                  ):
     # Snapshot every declared argument of this call, before any local variable is
     # created. Done via introspection rather than a hand-written list so new
@@ -995,23 +988,14 @@ def main_routine(num_processes, number_of_particles,
     # =========================================================
     # Model Related Setup
     # =========================================================
-    # Defining paths
-    # TODO - change these paths accordingly
-    hbv_model_data_path = pathlib.Path("/work/ga45met/Hydro_Models/HBV-SASK-data")
-    configuration_file = pathlib.Path('/work/ga45met/Hydro_Models/HBV-SASK-py-tool/configurations/configuration_hbv_6D.json')
-    inputModelDir = hbv_model_data_path
-    basin = "Oldman_Basin"  # 'Banff_Basin'
-    workingDir = hbv_model_data_path / basin / "model_runs" / working_dir_name
 
-    # BASE_SOURCE_PATH = pathlib.Path.cwd().parents[1] # uqef_dynamic
-    BASE_SOURCE_PATH = pathlib.Path(__file__).resolve().parents[2]
-    hbv_model_data_path = BASE_SOURCE_PATH / "data" / "HBV-SASK-data"
-    inputModelDir = hbv_model_data_path
-    configuration_file = BASE_SOURCE_PATH / "data" / "configurations" / "configuration_hbv_6D.json"
-    basin =  'Banff_Basin' # 'Banff_Basin' "Oldman_Basin"
-    workingDir = hbv_model_data_path / "particle_filtering_model_runs" / "banff_basin" /working_dir_name
-
-    directory_for_saving_plots = workingDir
+    with open(configuration_file) as _f:
+        _cfg_json = json.load(_f)
+    basin = _cfg_json.get("model_settings", {}).get("basin")
+    if not basin:
+        raise ValueError(
+            f"model_settings.basin is missing from {configuration_file}; the pipeline "
+            "no longer hardcodes a basin.")
     if not str(directory_for_saving_plots).endswith("/"):
         directory_for_saving_plots = str(directory_for_saving_plots) + "/"
 
@@ -1434,7 +1418,8 @@ def main_routine(num_processes, number_of_particles,
                 list_parameter_value_particles[i],
                 param_stds,
                 perturbation_factor,
-                param_bounds=param_bounds)
+                param_bounds=param_bounds,
+                bound_handling=bound_handling)
             list_of_tuple_with_parameter_values.append(tuple(list_parameter_value_particles[i].values()))
             list_of_lists_with_parameter_values.append(list(list_parameter_value_particles[i].values()))
 
@@ -1597,9 +1582,19 @@ def main_routine(num_processes, number_of_particles,
     # theta: (n_dates, n_particles, n_params), qoi: (n_dates, n_particles).
     # Particle order matches between the two, so (theta[k], qoi[k]) are the
     # regression pairs for a PCE at dates[k].
+    param_output_corr = None
     if save_posterior_parameter_samples and posterior_params_per_date:
         theta_stack = np.stack(posterior_params_per_date, axis=0)
         qoi_stack = np.stack(posterior_qoi_per_date, axis=0)
+        # Computed once here, from arrays already in memory — no per-timestep cost.
+        # ~0 means the parameter does not move the output, so no likelihood can
+        # select on it and the posterior for it cannot converge.
+        param_output_corr = parameter_output_correlation(theta_stack, qoi_stack)
+        print("median |corr(parameter, Q)| across particles  "
+              "(<0.1 = filter cannot learn this parameter):")
+        for nm, c in zip(param_names, param_output_corr):
+            print(f"    {nm:<8}{c:6.3f}")
+        print(f"    {'overall':<8}{np.nanmedian(param_output_corr):6.3f}")
         # theta dominates this file (n_dates x n_particles x n_params). float32 keeps
         # ~7 significant digits — far more than parameter values carry — and halves it.
         # qoi stays float64: it is 6x smaller and feeds the pooled streamflow statistics.
@@ -1619,11 +1614,34 @@ def main_routine(num_processes, number_of_particles,
         print(f"Saved posterior parameter samples {theta_stack.shape} "
               f"[theta dtype={theta_stack.dtype}] -> {samples_file}")
 
+        # ── Per-timestep Gaussianization (PCE inputs) ───────────────────────────
+        # Runs on the file just written, so it is identical to doing it inside the
+        # loop but costs the filter nothing and is re-runnable with other settings.
+        if map_all_timesteps:
+            if transport_map_backend in transport_timeseries.BATCH_METHODS or \
+                    transport_map_backend in ("mpart", "1d"):
+                try:
+                    transport_timeseries.map_timesteps(
+                        samples_file,
+                        method=transport_map_backend,
+                        max_order=transport_map_max_order,
+                        n_workers=map_all_timesteps_workers,
+                        verbose=True)
+                except Exception as e:
+                    print(f"WARNING: per-timestep mapping failed ({type(e).__name__}: {e}); "
+                          f"the filter results are unaffected and it can be re-run "
+                          f"later with transport_timeseries.map_timesteps().")
+            else:
+                print(f"map_all_timesteps=True ignored: transport_map_backend must be "
+                      f"'mpart' or 'anamorphosis', got {transport_map_backend!r}.")
+    elif map_all_timesteps:
+        print("map_all_timesteps=True ignored: needs save_posterior_parameter_samples=True.")
+
     # ── Gaussianize the final-timestep ensemble (diagnostic plot) ───────────────
     print(f"DEBUGGING - {parameter_samples_matrix.shape}")
     standar_parameter_samples_matrix = gaussianize_parameter_samples(
         parameter_samples_matrix,
-        backend=transport_map_backend,
+        method=transport_map_backend,
         max_order=transport_map_max_order,
         param_names=param_names)
     if standar_parameter_samples_matrix is None:
@@ -1766,6 +1784,12 @@ def main_routine(num_processes, number_of_particles,
         "ess_frac_below_N_over_10": float(np.mean(_ess < number_of_particles / 10)),
         "ess_frac_below_N_over_2": float(np.mean(_ess < number_of_particles / 2)),
         "n_underflow_resets": int(n_underflow_resets),
+        "median_abs_corr_param_qoi": (
+            {nm: float(c) for nm, c in zip(param_names, param_output_corr)}
+            if param_output_corr is not None else None),
+        "median_abs_corr_overall": (
+            float(np.nanmedian(param_output_corr))
+            if param_output_corr is not None else None),
         "frac_underflow_resets": float(n_underflow_resets / len(dates)) if dates else None,
     }
     save_run_configuration(directory_for_saving_plots, run_results,
@@ -2048,69 +2072,120 @@ if __name__ == "__main__":
     # Number of parallel processes
     num_processes = multiprocessing.cpu_count()
     print(f"Number of parallel processes = {num_processes}")
-    number_of_particles = ne = 1000  # 50, 100, 500 2000
+    number_of_particles = ne = 2000  # 50, 100, 500 2000
 
-    for i in range(2,3):
-        # working_dir_name=f"trial_single_run_hbvsaskmodel_7d_filtering/run_{i}"
-        working_dir_name=f"hbvsaskmodel_7d_1000_filtering_ar_likelihood_heteroscedastic_two_years_Uniform/run_{i}"
-        main_routine(
-            num_processes=num_processes, 
-            number_of_particles=number_of_particles, 
-            use_ar_likelihood=True,  # True → AR(1)-augmented likelihood; False → standard Gaussian likelihood
-            sigma_eta=None,  # 14.2,  # fixed innovation std [m³/s]; None → heteroscedastic mode
-            phi_ar=0.894,    # AR(1) coefficient — fit from error_signal_analysis.py
-            beta_obs=0.5/3, #0.2/3,  # used only when sigma_eta=None: σ_ε = beta_obs·y_obs (0.2/3 ≈ 20% as 3σ bound)
-            working_dir_name=working_dir_name,
-            monthly_bias_ar=None, # monthly_bias_ar=None,  # None → no monthly bias correction; otherwise a dict {month: bias} to subtract from y_obs(t) before likelihood evaluation
-            use_student_t=False, # True → Student-t likelihood; False → Gaussian likelihood
-            use_ensemble_std_perturbation=False, # True → perturbation ∝ S(θ) (adapts to current ensemble spread); False → perturbation ∝ |θ_i| (fixed relative jitter)
-            perturbation_factor=0.01,  # relative perturbation factor (0.01 → 1% of |θ_i| or 1% of S(θ) depending on use_ensemble_std_perturbation)
-            band_sigma_from="forecast",  # "forecast" → σ_η(t) ∝ |Q̄(t)|; "observed" → σ_η(t) ∝ |y_obs(t)|
-            include_innovation_in_bands=False, # True → bands include η ~ N(0, σ_η²) noise; False → bands show only the across-particle spread of Q_i + ε̂_i
-            )
+    # BASE_SOURCE_PATH = pathlib.Path.cwd().parents[1] # uqef_dynamic
+    BASE_SOURCE_PATH = pathlib.Path(__file__).resolve().parents[2]
+    hbv_model_data_path = BASE_SOURCE_PATH / "data" / "HBV-SASK-data"
+
+    # ==========================================================================
+    # Single-CHAIN RUN
+    # ==========================================================================
+
+    # for i in range(1,2):
+    #     # working_dir_name=f"trial_single_run_hbvsaskmodel_7d_filtering/run_{i}"
+    #     working_dir_name=f"hbvsaskmodel_7d_2000_filtering_gaussian_likelihood_heteroscedastic_one_year_Uniform/run_{i}"
+    #     inputModelDir = hbv_model_data_path
+    #     configuration_file = BASE_SOURCE_PATH / "data" / "configurations" / "configuration_hbv_sask_PF_one_year.json"
+
+    #     with open(configuration_file) as _f:
+    #         _cfg_json = json.load(_f)
+    #     basin = _cfg_json.get("model_settings", {}).get("basin")
+    #     if not basin:
+    #         raise ValueError(
+    #             f"model_settings.basin is missing from {configuration_file}; the pipeline "
+    #             "no longer hardcodes a basin.")
+    #     # Output folder follows the basin, so runs for different basins cannot collide.
+    #     workingDir = (inputModelDir / "particle_filtering_model_runs"
+    #                 / basin.lower() / working_dir_name)
+    #     directory_for_saving_plots = workingDir
+
+    #     main_routine(
+    #         inputModelDir=inputModelDir,
+    #         configuration_file=configuration_file,
+    #         workingDir=workingDir,
+    #         directory_for_saving_plots=directory_for_saving_plots,
+    #         num_processes=num_processes, 
+    #         number_of_particles=number_of_particles, 
+    #         use_ar_likelihood=False,  # True → AR(1)-augmented likelihood; False → standard Gaussian likelihood
+    #         sigma_eta=None,  # 14.2,  # fixed innovation std [m³/s]; None → heteroscedastic mode
+    #         phi_ar=0.894,    # AR(1) coefficient — fit from error_signal_analysis.py
+    #         beta_obs=0.2, #0.2, 0.5/3, #0.2/3, 1.0/3,  # used only when sigma_eta=None: σ_ε = beta_obs·y_obs (0.2/3 ≈ 20% as 3σ bound)
+    #         monthly_bias_ar=None, # monthly_bias_ar=None,  # None → no monthly bias correction; otherwise a dict {month: bias} to subtract from y_obs(t) before likelihood evaluation
+    #         use_student_t=False, # True → Student-t likelihood; False → Gaussian likelihood
+    #         use_ensemble_std_perturbation=False, # True → perturbation ∝ S(θ) (adapts to current ensemble spread); False → perturbation ∝ |θ_i| (fixed relative jitter)
+    #         perturbation_factor=0.15,  # 0.05, 0.01, 0.002 relative perturbation factor (0.01 → 1% of |θ_i| or 1% of S(θ) depending on use_ensemble_std_perturbation)
+    #         bound_handling="reflect",  # "clip" or "reflect"
+    #         band_sigma_from="forecast",  # "forecast" → σ_η(t) ∝ |Q̄(t)|; "observed" → σ_η(t) ∝ |y_obs(t)|
+    #         include_innovation_in_bands=False, # True → bands include η ~ N(0, σ_η²) noise; False → bands show only the across-particle spread of Q_i + ε̂_i
+    #         light_output=True,  # True → skip HTML plots and large .npz files; False → save everything
+    #         save_theta_float32=True,  # True → save θ in float32 (halves size, still ~7 sig digits); False → save θ in float64
+    #         map_all_timesteps=False, # True → run transport_timeseries.map_timesteps() on the saved posterior samples; False → skip it
+    #         transport_map_backend="mpart",
+    #         transport_map_max_order=2,
+    #         map_all_timesteps_workers=num_processes,
+    #         )
 
     # ==========================================================================
     # MULTI-CHAIN RUN — average out the influence of the initial sample
     # ==========================================================================
+
     # Each chain is an independent estimate of the same posterior, differing only
     # in its random seed (initial parameter/state draws, resampling offsets,
     # parameter perturbation). Pooling several reduces the effect of one unlucky
     # initial ensemble. Keep EVERY other argument identical across chains.
     #
-    # n_chains = 3
-    # base_name = "hbvsaskmodel_7d_1000_filtering_gaussian_likelihood_heteroscedastic_two_years_Uniform_chains"
-    # chain_dirs = []
-    # for i in range(n_chains):
-    #     working_dir_name = f"{base_name}/run_{i}"
-    #     chain_dir = main_routine(          # main_routine returns its workingDir
-    #         num_processes=num_processes,
-    #         number_of_particles=number_of_particles,
-    #         random_seed=1000 + i,          # <- the ONLY thing that differs per chain
-    #         working_dir_name=working_dir_name,
-    #         use_ar_likelihood=False,
-    #         sigma_eta=None,
-    #         phi_ar=0.894,
-    #         beta_obs=0.5/3,
-    #         monthly_bias_ar=None,
-    #         use_student_t=False,
-    #         use_ensemble_std_perturbation=False,
-    #         perturbation_factor=0.15,
-    #         band_sigma_from="forecast",
-    #         include_innovation_in_bands=False,
-    #         save_posterior_parameter_samples=True,   # REQUIRED for pooling
-    #         light_output=True,
-    #         save_theta_float32=True,
-    #     )
-    #     chain_dirs.append(chain_dir)
+    n_chains = 3
+    base_name = f"hbvsaskmodel_7d_{number_of_particles}_filtering_gaussian_likelihood_heteroscedastic_one_year_Uniform_{n_chains}_chains"
+    chain_dirs = []
+    for i in range(n_chains):
+        working_dir_name = f"{base_name}/run_{i}"
+        inputModelDir = hbv_model_data_path
+        configuration_file = BASE_SOURCE_PATH / "data" / "configurations" / "configuration_hbv_sask_PF_one_year.json"
+        with open(configuration_file) as _f:
+            _cfg_json = json.load(_f)
+        basin = _cfg_json.get("model_settings", {}).get("basin")
+        if not basin:
+            raise ValueError(
+                f"model_settings.basin is missing from {configuration_file}; the pipeline "
+                "no longer hardcodes a basin.")
+        # Output folder follows the basin, so runs for different basins cannot collide.
+        workingDir = (inputModelDir / "particle_filtering_model_runs"
+                    / basin.lower() / working_dir_name)
+        directory_for_saving_plots = workingDir
+        chain_dir = main_routine(          # main_routine returns its workingDir
+            inputModelDir=inputModelDir,
+            configuration_file=configuration_file,
+            workingDir=workingDir,
+            directory_for_saving_plots=directory_for_saving_plots,
+            num_processes=num_processes,
+            number_of_particles=number_of_particles,
+            random_seed=1000 + i,          # <- the ONLY thing that differs per chain
+            use_ar_likelihood=False,
+            sigma_eta=None,
+            phi_ar=0.894,
+            beta_obs=0.2,
+            monthly_bias_ar=None,
+            use_student_t=False,
+            use_ensemble_std_perturbation=False,
+            perturbation_factor=0.15,
+            bound_handling="reflect",  # "clip" or "reflect"
+            band_sigma_from="forecast",
+            include_innovation_in_bands=False,
+            save_posterior_parameter_samples=True,   # REQUIRED for pooling
+            light_output=True,
+            save_theta_float32=True,
+        )
+        chain_dirs.append(chain_dir)
     
-    # # Observed series, read back from any chain (identical across chains)
-    # merged = pd.read_pickle(pathlib.Path(chain_dirs[0]) / "averaged_and_simulated.pkl",
-    #                         compression="gzip")
-    # observed = merged["observed_streamflow"].to_numpy()
+    # Observed series, read back from any chain (identical across chains)
+    merged = pd.read_pickle(pathlib.Path(chain_dirs[0]) / "averaged_and_simulated.pkl",
+                            compression="gzip")
+    observed = merged["observed_streamflow"].to_numpy()
     
-    # # Pool the PARTICLES (never average the per-chain quantiles — see the
-    # # docstring of pool_chain_results). Writes pooled_chains.npz and
-    # # pooled_chains_summary.json next to the run_* folders.
-    # pooled = pool_chain_results(chain_dirs, observed=observed)
-    # print("between/within chain variance:",
-    #       pooled["between_over_within_median"])   # <<1 => chains agree
+    # Pool the PARTICLES (never average the per-chain quantiles — see the
+    # docstring of pool_chain_results). Writes pooled_chains.npz and
+    # pooled_chains_summary.json next to the run_* folders.
+    pooled = pool_chain_results(chain_dirs, observed=observed)
+    print("between/within:", pooled["between_over_within_median"],
+          " MC floor 1/N:", 1.0 / pooled["n_particles_per_chain"])

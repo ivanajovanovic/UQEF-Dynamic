@@ -45,8 +45,8 @@ start_uq_sim(){
     modelMasterPath=$WORK/HBV-SASK-data
     resultsPath=$baseResultsPath/hbv_uq_cm4.$counter
 
-    conda_env=uq_env
-    #conda_env="uq_env"
+    #conda_env=uq_env
+    conda_env="my_uq_env"
 
     if [ "$sched_strut" = "SWPT" -o "$sched_strut" = "SWPT_OPT" ] ; then
         cpus=112
@@ -124,7 +124,7 @@ echo "---- start HBV sim: \`date\`"
                             --outputResultDir $resultsPath \
                             --inputModelDir $modelMasterPath \
                             --sourceDir $baseSourcePath \
-                            --config_file $baseSourcePath/data/configurations/configuration_hbv_10D.json \
+                            --config_file $baseSourcePath/data/configurations/configuration_hbv_7D_three_years.json \
                             --model "$model" \
                             --uncertain "$uncertain" \
                             --opt_strategy "$strategy" --opt_algorithm "$algorithm" \
@@ -145,15 +145,15 @@ echo "---- start HBV sim: \`date\`"
 
 echo "---- end HBV sim: \`date\`"
 
-" > $baseSourcePath/hbv_uq_mc_20000_random_p4_ct07_oldman_2006_2007.cmd
+" > $baseSourcePath/hbv_mc_7d_banff_2004_2007.cmd
 
     #execute batch file
-    sbatch $baseSourcePath/hbv_uq_mc_20000_random_p4_ct07_oldman_2006_2007.cmd
+    sbatch $baseSourcePath/hbv_mc_7d_banff_2004_2007.cmd
 
 }
 
 model="hbvsask"
-opt_add="--regression --parallel_statistics --save_all_simulations --sampleFromStandardDist --compute_Sobol_m --compute_Sobol_t --sc_poly_normed --store_gpce_surrogate_in_stat_dict --save_all_simulations" # --read_nodes_from_file --instantly_save_results_for_each_time_step
+opt_add="--parallel_statistics --sampleFromStandardDist --compute_Sobol_m --compute_Sobol_t" #
 nodes=4
 tasks_per_node=112  #22
 low_time="2:30:00"
@@ -162,7 +162,7 @@ max_time="72:00:00"
 uq_method="mc"
 q_order=6
 p_order=4
-mc_numevaluations=20000
+mc_numevaluations=500000
 uc="all"
 sampling_rule="random"
 sc_poly_rule="three_terms_recurrence"
