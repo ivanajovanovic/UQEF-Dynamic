@@ -8,8 +8,13 @@ model_runs/
 **/model_runs/
 # gitignore matches whole path segments, so the two rules above do NOT cover
 # these (differently named) simulation output folders - list them explicitly
-**/particle_filtering_model_runs/
-**/paper_uqef_dynamic_sim/
+# Large regenerable model output. The .nosync suffix keeps iCloud Drive from
+# syncing these (~16 GB); the un-suffixed name is a symlink pointing at it, so
+# every path in the code is unchanged. No trailing slash, so both match.
+**/particle_filtering_model_runs
+**/particle_filtering_model_runs.nosync
+**/paper_uqef_dynamic_sim
+**/paper_uqef_dynamic_sim.nosync
 saves/
 __pycache__/
 .idea/

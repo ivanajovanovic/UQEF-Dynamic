@@ -1,7 +1,9 @@
 import copy
 from collections import defaultdict
+from distutils.util import strtobool
 import json
 import pathlib
+from typing import Optional, Union
 import pandas as pd
 import math
 import matplotlib.pyplot as pl
@@ -12,6 +14,8 @@ from plotly.offline import plot
 import numpy as np
 import sys
 import time
+
+from uqef_dynamic.utils.utility import check_if_configurationObject_is_in_right_format_and_return
 
 #####################################
 
@@ -1325,6 +1329,114 @@ def _get_full_time_span(basin):
         start_date = None
         end_date = None
     return start_date, end_date
+
+
+def derive_common_warmup_configuration(
+    configurationObject: Union[dict, str, pathlib.PosixPath],
+    warmup_years: int = 3,
+    out_path: Optional[Union[str, pathlib.PosixPath]] = None,
+) -> dict:
+    """Derive a config with a multi-year warm-up/spin-up prepended.
+
+    Used by the HBV-SASK model to allow for a warm-up period before the main simulation period.
+
+    Args:
+        configurationObject: dict, or a path to a JSON config file.
+        warmup_years:        years to prepend. Default 3.
+        out_path:            if given, the derived config is also written there.
+
+    Returns:
+        The derived config as a dict.
+    """
+    cfg = check_if_configurationObject_is_in_right_format_and_return(
+        configurationObject, raise_error=True)
+    cfg = copy.deepcopy(cfg)
+    ts = cfg.setdefault("time_settings", {})
+
+    if strtobool(str(ts.get("run_full_timespan", "False"))):
+        raise ValueError(
+            "time_settings.run_full_timespan is True, which bypasses "
+            "start_year/spin_up_length entirely (HBVSASKModel.get_start_end_dates); "
+            "a warm-up cannot be prepended this way while that flag is set.")
+
+    orig_start = pd.Timestamp(year=ts["start_year"], month=ts["start_month"],
+                              day=ts["start_day"])
+    new_start = orig_start - pd.DateOffset(years=warmup_years)
+    spin_up_days = (orig_start - new_start).days
+
+    ts["start_year"], ts["start_month"], ts["start_day"] = (
+        new_start.year, new_start.month, new_start.day)
+    ts["spin_up_length"] = int(spin_up_days)
+
+    simulation_length = ts.get("simulation_length")
+    if simulation_length is not None:
+        new_end = new_start + pd.DateOffset(
+            days=int(spin_up_days) + int(simulation_length))
+        ts["end_year"], ts["end_month"], ts["end_day"] = (
+            new_end.year, new_end.month, new_end.day)
+
+    if out_path is not None:
+        with open(out_path, "w") as f:
+            json.dump(cfg, f, indent=2)
+
+    return cfg
+
+
+def derive_single_date_warmup_configuration(
+    configurationObject: Union[dict, str, pathlib.PosixPath],
+    target_date: Union[str, pd.Timestamp],
+    warmup_years: int = 3,
+    out_path: Optional[Union[str, pathlib.PosixPath]] = None,
+) -> dict:
+    """Derive a config whose spin-up ends EXACTLY at target_date, with a
+    one-day scored window (simulation_length=1) there.
+
+    Unlike derive_common_warmup_configuration (which preserves the original
+    window's length and position, just pushing start_year back), this one
+    discards the original window entirely and builds start_date =
+    target_date - warmup_years so that start_date_predictions == target_date
+    (see HBVSASKModel.set_date_ranges). Used to give each designed sample its
+    own independent, date-specific spin-up when theta itself varies by target
+    date (an evolving-posterior design), rather than one warm-up shared across
+    many target dates under a single theta per sample.
+
+    Args:
+        configurationObject: dict, or a path to a JSON config file.
+        target_date:         the single date the scored window should cover.
+        warmup_years:        years of spin-up before target_date. Default 3.
+        out_path:            if given, the derived config is also written there.
+
+    Returns:
+        The derived config as a dict.
+    """
+    cfg = check_if_configurationObject_is_in_right_format_and_return(
+        configurationObject, raise_error=True)
+    cfg = copy.deepcopy(cfg)
+    ts = cfg.setdefault("time_settings", {})
+
+    if strtobool(str(ts.get("run_full_timespan", "False"))):
+        raise ValueError(
+            "time_settings.run_full_timespan is True, which bypasses "
+            "start_year/spin_up_length entirely (HBVSASKModel.get_start_end_dates); "
+            "a warm-up cannot be built this way while that flag is set.")
+
+    target = pd.Timestamp(target_date)
+    new_start = target - pd.DateOffset(years=warmup_years)
+    spin_up_days = (target - new_start).days
+    new_end = target + pd.DateOffset(days=1)
+
+    ts["start_year"], ts["start_month"], ts["start_day"] = (
+        new_start.year, new_start.month, new_start.day)
+    ts["spin_up_length"] = int(spin_up_days)
+    ts["simulation_length"] = 1
+    ts["end_year"], ts["end_month"], ts["end_day"] = (
+        new_end.year, new_end.month, new_end.day)
+
+    if out_path is not None:
+        with open(out_path, "w") as f:
+            json.dump(cfg, f, indent=2)
+
+    return cfg
 
 
 # TODO Change the function such that less is pre-assumed about the structure of different dfs

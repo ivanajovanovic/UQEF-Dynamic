@@ -3080,14 +3080,16 @@ def generate_parameters_from_nodes(nodes_quad, joint_dist_standard, joint_dist):
     return parameters_quad
 
 
-def generate_polynomial_expansion(joint_dist, order: int, rule: str = 'three_terms_recurrence', poly_normed: bool = True):
+def generate_polynomial_expansion(joint_dist, order: int, rule: str = 'three_terms_recurrence', poly_normed: bool = True, cross_truncation: float = 1.0):
     """
     This function generates the polynomial expansion basis
     rule: str, optional
         Quadrature rule to use. The default is 'three_terms_recurrence'. Other options are: 'three_terms_recurrence', 'gram_schmidt', 'cholesky'
+
+    TODO: add these options graded=True, reverse=True, cross_truncation=self.cross_truncation
     """
     polynomial_expansion, norms = cp.generate_expansion(
-        order, joint_dist, rule=rule, normed=poly_normed, retall=True)
+        order, joint_dist, rule=rule, normed=poly_normed, retall=True, cross_truncation=cross_truncation)
     return polynomial_expansion, norms
 
 

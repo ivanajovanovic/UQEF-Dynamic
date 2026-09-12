@@ -10,14 +10,22 @@ in parallel.
 Output: standard_parameter_samples.npz containing
 
     z            (n_dates, n_particles, n_params)  standard-Gaussian samples
-    theta        (n_dates, n_particles, n_params)  the inputs, for convenience
+    theta        (n_dates, n_particles, n_params)  the ALIGNED inputs (see below)
     qoi          (n_dates, n_particles)            matching model outputs
     ok           (n_dates,)  bool, whether that date's map fit succeeded
     max_abs_mean (n_dates,)  |mean(z)|max          diagnostic, ~0 when good
     max_abs_cov  (n_dates,)  |cov(z) - I|max       diagnostic, ~0 when good
+    pairing      str, "theta_used" or "shifted" — see load_aligned_theta_qoi
 
 (z[k], qoi[k]) are then the regression pairs for a PCE at dates[k], with z
 distributed as a standard Gaussian so a probabilist-Hermite basis applies.
+
+ALIGNMENT — read load_aligned_theta_qoi's docstring before touching this file.
+posterior_parameter_samples.npz's own "theta"/"qoi" fields are NOT a matching
+(parameter, output) pair: "theta"[k] is the resampled+perturbed ensemble that
+becomes the input at date k+1, so it is "theta"[k] that produced "qoi"[k+1],
+not "qoi"[k]. Every function here that consumes that file goes through
+load_aligned_theta_qoi so this is handled in exactly one place.
 """
 
 import os
@@ -30,8 +38,69 @@ from uqef_dynamic.utils import gaussian_anamorphosis
 from uqef_dynamic.utils import legacy_transport
 
 
-__all__ = ["map_timesteps", "load_standard_samples",
+__all__ = ["map_timesteps", "load_standard_samples", "load_aligned_theta_qoi",
            "gaussianize_parameter_samples", "METHODS", "normalize_method"]
+
+
+def load_aligned_theta_qoi(samples_npz, verbose=True):
+    """Load posterior_parameter_samples.npz and return a genuinely aligned
+    (theta, qoi) pair: theta[k] is the parameter ensemble that PRODUCED qoi[k],
+    in the same particle order, for every k.
+
+    Two schemas are handled:
+
+    - NEW schema (file has "theta_used", written by main_routine since the
+      alignment fix): theta_used[k] was captured inside the per-particle
+      model-run loop as the exact ensemble that produced qoi[k]. Used
+      directly — no shift, no dates dropped.
+
+    - OLD schema (no "theta_used", pre-fix runs): "theta"[k] is the
+      RESAMPLED-AND-PERTURBED ensemble that becomes the input at date k+1, so
+      "theta"[k] paired with "qoi"[k+1] is the valid correspondence, not same-
+      index k with k (see particle_filtering_pipeline.py's main_routine for
+      the full derivation). Falls back to theta[:-1] <-> qoi[1:], with dates
+      taken from qoi's own index (dates[1:]) since that is the date the pair
+      actually describes. This drops qoi at the very first date (produced by
+      the initial prior draw, never saved as an array in the old schema) and
+      theta at the very last date (nothing comes after it to pair with) — one
+      date lost at each end, not the whole record.
+
+    Args:
+        samples_npz: path to posterior_parameter_samples.npz, or its directory.
+        verbose:     print a one-line notice when the old-schema fallback fires.
+
+    Returns:
+        dict: theta (n_dates', n_particles, n_params), qoi (n_dates', n_particles),
+        dates (list[str], length n_dates'), param_names, param_lower, param_upper,
+        pairing ("theta_used" or "shifted").
+    """
+    if os.path.isdir(str(samples_npz)):
+        samples_npz = os.path.join(str(samples_npz), "posterior_parameter_samples.npz")
+    d = np.load(samples_npz, allow_pickle=True)
+    dates_raw = [str(x) for x in d["dates"]]
+    names = [str(x) for x in d["param_names"]]
+    lower = np.asarray(d["param_lower"])
+    upper = np.asarray(d["param_upper"])
+    qoi_raw = np.asarray(d["qoi"], dtype=np.float64)
+
+    if "theta_used" in d.files:
+        theta = np.asarray(d["theta_used"])
+        qoi, dates, pairing = qoi_raw, dates_raw, "theta_used"
+    else:
+        theta_raw = np.asarray(d["theta"])
+        theta = theta_raw[:-1]
+        qoi = qoi_raw[1:]
+        dates = dates_raw[1:]
+        pairing = "shifted"
+        if verbose:
+            print(f"WARNING {os.path.basename(str(samples_npz))}: no 'theta_used' "
+                  f"field (written before the theta/qoi alignment fix). Falling "
+                  f"back to the shifted pairing theta[:-1] <-> qoi[1:] "
+                  f"({len(dates_raw)} dates -> {len(dates)} usable pairs). "
+                  f"Re-run the filter to get the direct, unshifted pairing.")
+
+    return {"theta": theta, "qoi": qoi, "dates": dates, "param_names": names,
+            "param_lower": lower, "param_upper": upper, "pairing": pairing}
 
 
 # One vocabulary for every entry point, so a name valid in one place cannot
@@ -130,17 +199,21 @@ def map_timesteps(samples_npz, out_path=None, max_order=2, stride=1,
                                        max_order/gtol/maxiter are ignored.
         gtol,maxiter: optimiser controls passed through to fit_transport_map.
 
+    theta/qoi are read via load_aligned_theta_qoi, so this always fits on a
+    genuinely matching (parameter, output) pair — see that function's docstring
+    for what "aligned" means and the old-schema fallback it falls back to.
+
     Returns:
-        dict with z, dates, param_names, ok, max_abs_mean, max_abs_cov, out_path.
+        dict with z, dates, param_names, ok, max_abs_mean, max_abs_cov, pairing
+        ("theta_used" or "shifted"), out_path.
     """
     method = normalize_method(method, BATCH_METHODS, "map_timesteps")
-    if os.path.isdir(str(samples_npz)):
-        samples_npz = os.path.join(str(samples_npz), "posterior_parameter_samples.npz")
-    d = np.load(samples_npz, allow_pickle=True)
-    theta_all = np.asarray(d["theta"], dtype=np.float64)   # (T, N, P)
-    qoi_all = np.asarray(d["qoi"], dtype=np.float64)
-    dates = [str(x) for x in d["dates"]]
-    names = [str(x) for x in d["param_names"]]
+    aligned = load_aligned_theta_qoi(samples_npz, verbose=verbose)
+    theta_all = np.asarray(aligned["theta"], dtype=np.float64)   # (T, N, P)
+    qoi_all = np.asarray(aligned["qoi"], dtype=np.float64)
+    dates = aligned["dates"]
+    names = aligned["param_names"]
+    pairing = aligned["pairing"]
 
     idx = list(range(0, theta_all.shape[0], stride))
     if n_workers is None:
@@ -193,7 +266,7 @@ def map_timesteps(samples_npz, out_path=None, max_order=2, stride=1,
         dates=np.array([dates[k] for k in idx], dtype=object),
         param_names=np.array(names, dtype=object),
         ok=ok, max_abs_mean=m_mean, max_abs_cov=m_cov,
-        max_order=max_order, stride=stride, method=method)
+        max_order=max_order, stride=stride, method=method, pairing=pairing)
 
     if verbose:
         good = ok.sum()
@@ -206,7 +279,7 @@ def map_timesteps(samples_npz, out_path=None, max_order=2, stride=1,
         print(f"  -> {out_path}")
     return {"z": z_all, "dates": [dates[k] for k in idx], "param_names": names,
             "ok": ok, "max_abs_mean": m_mean, "max_abs_cov": m_cov,
-            "out_path": out_path}
+            "pairing": pairing, "out_path": out_path}
 
 
 def load_standard_samples(path):

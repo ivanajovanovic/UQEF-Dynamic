@@ -3,6 +3,8 @@ import pandas as pd
 import sys
 import os
 import json
+import time
+import shutil
 import inspect
 import subprocess
 from collections import defaultdict
@@ -66,6 +68,39 @@ def _savefig(fig, out_dir, name):
     fig.tight_layout()
     fig.savefig(os.path.join(out_dir, name), dpi=150)
     plt.close(fig)
+
+
+def _load_npz_resilient(path, retries=6, initial_delay=2.0):
+    """np.load with exponential backoff, returning a plain dict.
+
+    On macOS a project under ~/Documents with "Desktop & Documents Folders"
+    sync enabled is served through fileproviderd, not the local disk directly.
+    Right after a multi-chain run writes hundreds of MB of .npz, a read can
+    outrun the sync daemon and fail with TimeoutError [Errno 60] before a
+    single byte arrives. Retrying rides that out.
+
+    Materialising into a dict also closes the underlying zip handle, instead of
+    leaving one open per chain for the caller's whole loop.
+
+    The durable fix is to keep regenerable run output out of the synced tree:
+        xattr -w 'com.apple.fileprovider.ignore#P' 1 <run output dir>
+    """
+    delay = initial_delay
+    for attempt in range(1, retries + 1):
+        try:
+            with np.load(path, allow_pickle=True) as d:
+                return {k: d[k] for k in d.files}
+        except (TimeoutError, OSError) as exc:
+            if attempt == retries:
+                raise OSError(
+                    f"Could not read {path} after {retries} attempts ({exc}). "
+                    "If this path is inside an iCloud-synced folder, exclude the "
+                    "run output directory from sync and rerun the pooling."
+                ) from exc
+            print(f"  [pool] {os.path.basename(path)} unreadable ({exc}); "
+                  f"retry {attempt}/{retries - 1} in {delay:.0f}s")
+            time.sleep(delay)
+            delay *= 2
 
 
 def plot_sensitivity_vs_identifiability(samples_npz, sobol_s1, out_dir=None,
@@ -246,6 +281,29 @@ def pool_chain_results(chain_dirs, observed=None, output_dir=None,
     Reads <chain_dir>/posterior_parameter_samples.npz, written by main_routine
     when save_posterior_parameter_samples=True.
 
+    Besides pooled_chains.npz (diagnostics only - pooled_mean, chain_means,
+    between/within variance, percentiles), this also writes a pooled
+    posterior_parameter_samples.npz (theta, qoi, theta_used, state_used,
+    state_names, dates, param_names, param_lower, param_upper - the same
+    schema a single chain's own file has) so the pooled result is a drop-in
+    `working_dir` for downstream PCE code
+    (offline_parameter_transform_and_pce_learning.py, designed_sample_pce.py)
+    without those needing to know pooling happened. The raw particle arrays
+    live only there, not duplicated into pooled_chains.npz - at 10+ chains
+    that would double a multi-hundred-MB file for no reason, since nothing
+    else reads pooled_theta/pooled_q back off disk (both are passed to
+    plot_pooled_chains in-memory below, not reloaded).
+
+    Requires each chain's posterior_parameter_samples.npz to carry theta_used/
+    state_used (written by main_routine since the theta/qoi alignment fix) -
+    theta/qoi alone are NOT a valid (parameter, output) pair (theta[k] is
+    resampled+jittered for use at k+1; qoi[k] came from the ensemble that
+    entered step k). Re-run older chains to pool them.
+
+    resample_indices is intentionally NOT pooled: it records within-chain
+    resampling survivors and has no clean meaning once chains are concatenated
+    along the particle axis. Read it from each chain's own file if needed.
+
     Args:
         chain_dirs:  iterable of chain output directories.
         observed:    optional (n_dates,) observed series for P-factor/RMSE. When
@@ -265,30 +323,65 @@ def pool_chain_results(chain_dirs, observed=None, output_dir=None,
     if len(chain_dirs) < 2:
         raise ValueError(f"Need at least 2 chains to pool, got {len(chain_dirs)}.")
 
-    qois, thetas, dates_ref, names_ref = [], [], None, None
+    qois, thetas, theta_useds, state_useds = [], [], [], []
+    dates_ref, names_ref, state_names_ref = None, None, None
+    lower_ref, upper_ref = None, None
     for cd in chain_dirs:
         f = os.path.join(cd, "posterior_parameter_samples.npz")
         if not os.path.isfile(f):
             raise FileNotFoundError(
                 f"{f} not found. Run the chain with save_posterior_parameter_samples=True.")
-        d = np.load(f, allow_pickle=True)
+        # d = np.load(f, allow_pickle=True)
+        d = _load_npz_resilient(f)
+        if "theta_used" not in d or "state_used" not in d:
+            raise ValueError(
+                f"{cd}: posterior_parameter_samples.npz has no theta_used/state_used "
+                f"(written by an older main_routine, before the theta/qoi alignment "
+                f"fix). Re-run this chain to pool it.")
         dates = [str(x) for x in d["dates"]]
         names = [str(x) for x in d["param_names"]]
+        state_names = [str(x) for x in d["state_names"]]
+        lower, upper = np.asarray(d["param_lower"]), np.asarray(d["param_upper"])
         if dates_ref is None:
-            dates_ref, names_ref = dates, names
+            dates_ref, names_ref, lower_ref, upper_ref = dates, names, lower, upper
+            state_names_ref = state_names
         else:
             if dates != dates_ref:
                 raise ValueError(f"{cd}: date axis differs from the first chain "
                                  f"({len(dates)} vs {len(dates_ref)} steps).")
             if names != names_ref:
                 raise ValueError(f"{cd}: parameter names differ from the first chain.")
+            if not (np.array_equal(lower, lower_ref) and np.array_equal(upper, upper_ref)):
+                raise ValueError(f"{cd}: param_lower/param_upper differ from the first chain.")
+            if state_names != state_names_ref:
+                raise ValueError(f"{cd}: state_names differ from the first chain.")
         qois.append(np.asarray(d["qoi"], dtype=float))       # (n_dates, n_particles)
-        thetas.append(np.asarray(d["theta"], dtype=float))   # (n_dates, n_particles, n_params)
+        # Keep theta in whatever precision it was saved with. Forcing float64
+        # here would silently undo save_theta_float32=True and double the
+        # pooled footprint, which matters most at the chain counts that need
+        # pooling in the first place.
+        thetas.append(np.asarray(d["theta"]))                # (n_dates, n_particles, n_params)
+        theta_useds.append(np.asarray(d["theta_used"]))       # (n_dates, n_particles, n_params)
+        state_useds.append(np.asarray(d["state_used"]))       # (n_dates, n_particles, n_states)
 
     n_chains = len(qois)
     # Pool along the particle axis: (n_dates, n_chains * n_particles)
     pooled_q = np.concatenate(qois, axis=1)
     pooled_theta = np.concatenate(thetas, axis=1)
+    # theta_used/state_used are concatenated the same way as qoi, so per-particle
+    # alignment (theta_used[k, j] produced qoi[k, j]) survives pooling.
+    pooled_theta_used = np.concatenate(theta_useds, axis=1)
+    pooled_state_used = np.concatenate(state_useds, axis=1)
+
+    # Computed on the correctly-aligned (theta_used, qoi) pair — NOT (theta, qoi),
+    # which are one resampling-and-jitter step apart from each other within each
+    # chain (see main_routine). ~0 means the parameter does not move the output.
+    param_output_corr = parameter_output_correlation(pooled_theta_used, pooled_q)
+    print("median |corr(parameter, Q)| across pooled particles, on the ALIGNED "
+          "(theta_used, qoi) pair (<0.1 = filter cannot learn this parameter):")
+    for nm, c in zip(names_ref, param_output_corr):
+        print(f"    {nm:<8}{c:6.3f}")
+    print(f"    {'overall':<8}{np.nanmedian(param_output_corr):6.3f}")
 
     pooled_mean = pooled_q.mean(axis=1)
     pooled_pcts = {int(p): np.percentile(pooled_q, p, axis=1) for p in percentiles}
@@ -327,6 +420,7 @@ def pool_chain_results(chain_dirs, observed=None, output_dir=None,
         "between_over_within_median": float(np.nanmedian(ratio)),
         "max_chain_mean_spread": float(np.max(chain_means.max(axis=0) -
                                               chain_means.min(axis=0))),
+        "param_output_corr": {nm: float(c) for nm, c in zip(names_ref, param_output_corr)},
     }
 
     if observed is not None:
@@ -344,12 +438,33 @@ def pool_chain_results(chain_dirs, observed=None, output_dir=None,
     os.makedirs(out, exist_ok=True)
     np.savez_compressed(
         os.path.join(out, "pooled_chains.npz"),
-        pooled_q=pooled_q, pooled_theta=pooled_theta,
         pooled_mean=pooled_mean, chain_means=chain_means,
         between_chain_var=B, within_chain_var=W,
         dates=np.array(dates_ref, dtype=object),
         param_names=np.array(names_ref, dtype=object),
         **{f"pct_{p}": v for p, v in pooled_pcts.items()})
+
+    # Pooled posterior in the same schema a single chain's own file has, so a
+    # PCE step downstream can treat `out` as an ordinary working_dir.
+    np.savez_compressed(
+        os.path.join(out, "posterior_parameter_samples.npz"),
+        theta=pooled_theta, qoi=pooled_q,
+        theta_used=pooled_theta_used, state_used=pooled_state_used,
+        state_names=np.array(state_names_ref, dtype=object),
+        dates=np.array(dates_ref, dtype=object),
+        param_names=np.array(names_ref, dtype=object),
+        param_lower=lower_ref, param_upper=upper_ref)
+
+    # observed_streamflow is identical across chains (same forcing/measured
+    # data regardless of seed); copy rather than recompute so
+    # plot_pce_after_particle_filter's observed overlay works unmodified when
+    # pointed at the pooled directory. predicted_streamflow in the copy is
+    # that one chain's own mean, not the pooled mean - not used by that plot,
+    # but worth knowing if read directly.
+    _src_avg = os.path.join(chain_dirs[0], "averaged_and_simulated.pkl")
+    if os.path.isfile(_src_avg):
+        shutil.copy2(_src_avg, os.path.join(out, "averaged_and_simulated.pkl"))
+
     save_run_configuration(
         out, {k: v for k, v in results.items()
               if k not in ("pooled_mean", "pooled_percentiles", "chain_means",
@@ -796,34 +911,63 @@ def systematic_resample(weights):
 
 def perturb_parameters(parameters, param_stds=None, perturbation_factor=0.15,
                        param_bounds=None, min_jitter_frac=0.002,
-                       bound_handling="clip"):
+                       bound_handling="clip", perturbation_scheme="magnitude",
+                       ensemble_mean=None, liu_west_delta=0.98):
     """Jitter resampled parameters, keeping them inside their prior support.
 
-    Two safeguards, both essential over long runs:
+    Two perturbation schemes:
+
+    1. "magnitude" (default). Independent Gaussian jitter around each
+       particle's OWN current value, σ = η·|θ_i|. η (`perturbation_factor`) may
+       be a single float shared across all parameters, or a dict {name: η} for
+       parameter-specific jitter scales — e.g. a smaller η for a slow,
+       memory-dependent parameter (K2) that needs to survive many days between
+       informative events, and a larger one for a fast parameter (TT) that can
+       afford to be reshuffled more often. Scale-dependent in both directions:
+       large θ gets large jitter, which feeds back into still larger θ; small θ
+       gets small jitter, which is why the jitter floor below exists.
+
+    2. "liu_west" (Liu and West, 2001). Each particle is shrunk toward the
+       CURRENT ensemble mean rather than jittered around its own value:
+
+           a = (3·δ − 1) / (2·δ)            h² = 1 − a²
+           m_i = a·θ_i + (1 − a)·ensemble_mean[name]
+           θ_i_new ~ N(m_i, h²·ensemble_var[name])
+
+       By construction Var[θ_new] = a²·Var[θ] + h²·Var[θ] = Var[θ]: the
+       pre-jitter ensemble variance is preserved EXACTLY, so this scheme can
+       neither runaway-collapse (as σ = η·S(θ) does: narrower ensemble →
+       smaller jitter → narrower still) nor inflate over time. δ ∈ (0.95, 0.99)
+       is a discount factor; closer to 1 is gentler shrinkage, closer to 0.95
+       pulls particles toward the mean more aggressively. Needs `param_stds`
+       (the CURRENT ensemble std per parameter) and `ensemble_mean` (same, but
+       the mean) — both computed ONCE PER DATE across the whole ensemble by the
+       caller, not per particle; this function only perturbs one particle.
+
+    Two safeguards, both essential over long runs, and shared by both schemes:
 
     1. BOUNDS. Without clipping, repeated jitter is an unbounded random walk and
        parameters drift far outside the range declared in the configuration
        (observed: C0 reaching ~350 against bounds [0, 10]). `param_bounds` maps
        parameter name -> (lower, upper); values are clipped after perturbing.
 
-    2. JITTER FLOOR. The fallback scale σ = η·|θ| is proportional to the value
-       itself, which makes θ = 0 an ABSORBING state: once a particle reaches zero
-       its jitter is exactly zero and it can never move again. Over a long run the
-       ensemble piles up at zero. The floor min_jitter_frac·(upper−lower) keeps a
-       small range-relative jitter alive so zero stays escapable. The same floor
-       also rescues the σ = η·S(θ) branch when the ensemble spread collapses after
-       resampling.
-
-    Note that σ = η·|θ| is scale-dependent in the other direction too: large θ gets
-    large jitter, which feeds back into still larger θ. Prefer
-    use_ensemble_std_perturbation=True (σ ∝ ensemble spread, per Moradkhani et al.
-    2005) unless you specifically want the magnitude-proportional behaviour.
+    2. JITTER FLOOR. The "magnitude" scale σ = η·|θ| is proportional to the
+       value itself, which makes θ = 0 an ABSORBING state: once a particle
+       reaches zero its jitter is exactly zero and it can never move again.
+       Over a long run the ensemble piles up at zero. The floor
+       min_jitter_frac·(upper−lower) keeps a small range-relative jitter alive
+       so zero stays escapable. The same floor rescues "liu_west" when the
+       ensemble spread has collapsed after resampling (std -> 0 would
+       otherwise freeze every particle at the shrunk mean, permanently).
 
     Args:
         parameters:         dict {name: value} for one particle.
-        param_stds:         optional dict {name: ensemble std}; when given, the
-                            jitter scale is perturbation_factor·std.
-        perturbation_factor: η, the jitter scale factor.
+        param_stds:         dict {name: ensemble std}. Required for
+                            "liu_west"; unused by "magnitude".
+        perturbation_factor: η for "magnitude" — a float, or a dict {name: η}
+                            for parameter-specific jitter scales. Unused by
+                            "liu_west" (its scale is set entirely by δ and the
+                            current ensemble variance, not by η).
         param_bounds:       optional dict {name: (lower, upper)} enforcing support.
         min_jitter_frac:    jitter floor as a fraction of (upper−lower). Only
                             applied for parameters present in param_bounds.
@@ -838,24 +982,44 @@ def perturb_parameters(parameters, param_stds=None, perturbation_factor=0.15,
                             Neither is a Bayesian update; both are ad-hoc ways to
                             respect a truncated prior. Reflection is the more
                             standard choice and distorts the density less.
+        perturbation_scheme: "magnitude" or "liu_west", see above.
+        ensemble_mean:      dict {name: ensemble mean}. Required for "liu_west".
+        liu_west_delta:     δ, the Liu-West discount factor. Only used by
+                            "liu_west".
     """
+    if perturbation_scheme not in ("magnitude", "liu_west"):
+        raise ValueError(f"perturbation_scheme must be 'magnitude' or 'liu_west', "
+                         f"got {perturbation_scheme!r}.")
+    if perturbation_scheme == "liu_west":
+        if param_stds is None or ensemble_mean is None:
+            raise ValueError("perturbation_scheme='liu_west' needs both param_stds "
+                             "and ensemble_mean, computed once per date across the "
+                             "whole ensemble.")
+        a = (3.0 * liu_west_delta - 1.0) / (2.0 * liu_west_delta)
+        h = np.sqrt(max(1.0 - a * a, 0.0))
+
     perturbed_parameters = {}
     for key, value in parameters.items():
-        # Use the absolute value to ensure a non-negative scale
-        if param_stds is not None and key in param_stds:
-            scale = perturbation_factor * param_stds[key]
-        else:
-            # proportional to the magnitude of the parameter, not the ensemble spread
-            scale = perturbation_factor * abs(value)
-
         bounds = param_bounds.get(key) if param_bounds else None
-        if bounds is not None:
-            lower, upper = bounds
-            # Floor the jitter relative to the parameter's own range so that
-            # neither θ→0 nor a collapsed ensemble spread freezes the particle.
-            scale = max(scale, min_jitter_frac * (upper - lower))
 
-        new_value = value + np.random.normal(0, scale)
+        if perturbation_scheme == "liu_west":
+            std = param_stds[key]
+            if bounds is not None:
+                lower, upper = bounds
+                std = max(std, min_jitter_frac * (upper - lower))
+            scale = h * std
+            new_value = a * value + (1.0 - a) * ensemble_mean[key] + np.random.normal(0, scale)
+        else:
+            eta = perturbation_factor[key] if isinstance(perturbation_factor, dict) \
+                else perturbation_factor
+            # proportional to the magnitude of the parameter
+            scale = eta * abs(value)
+            if bounds is not None:
+                lower, upper = bounds
+                # Floor the jitter relative to the parameter's own range so that
+                # θ→0 does not freeze the particle.
+                scale = max(scale, min_jitter_frac * (upper - lower))
+            new_value = value + np.random.normal(0, scale)
 
         if bounds is not None:
             span = upper - lower
@@ -919,8 +1083,25 @@ def main_routine(
                  # None leaves the RNG untouched (non-reproducible).
                  random_seed=None,
                  # ── Parameter perturbation options ──────────────────────────────────────
-                 use_ensemble_std_perturbation=False,
+                 # "magnitude" (default): sigma = eta*|theta_i| per particle, unchanged
+                 # from before. eta = perturbation_factor, a float or {name: eta} dict for
+                 # parameter-specific jitter scales.
+                 # "liu_west": Liu and West (2001) shrinkage - each particle is pulled
+                 # toward the current ensemble mean and perturbed with a scale set by
+                 # liu_west_delta and the current ensemble variance, which preserves that
+                 # variance exactly rather than letting it collapse or inflate. Replaces
+                 # the old use_ensemble_std_perturbation=True (sigma ~ S(theta) around each
+                 # particle's own value), which had no such guarantee and could collapse
+                 # geometrically as the ensemble narrowed. See perturb_parameters' docstring.
+                 perturbation_scheme="magnitude",
                  perturbation_factor=0.15,
+                 liu_west_delta=0.98,
+                 # Jitter floor, as a fraction of (upper-lower), applied to whichever
+                 # scale perturb_parameters computed. Keeps a parameter that has
+                 # reached 0 ("magnitude") or an ensemble whose spread has collapsed
+                 # ("liu_west") from freezing permanently - see perturb_parameters'
+                 # own docstring (JITTER FLOOR) for why this is necessary either way.
+                 min_jitter_frac=0.002,
                  # How an out-of-bounds perturbed value is returned to its interval.
                  # "clip" pins it to the bound, which piles probability mass into an
                  # atom there (measured: ~16% of PM particles sat exactly on a bound)
@@ -952,7 +1133,7 @@ def main_routine(
                  light_output=False,
                  # Store the saved theta array as float32 instead of float64.
                  # Pairs naturally with light_output for multi-chain runs.
-                 save_theta_float32=False,
+                 save_theta_float32=True,
                  # Backend used to map posterior parameter samples to a standard
                  # Gaussian space (the input a Hermite PCE needs):
                  #   "mpart"        → joint MParT triangular map; whitens the
@@ -1151,7 +1332,9 @@ def main_routine(
         axs[idx,].grid()
     plt.setp(axs[0], ylabel='Histogram')
     fileName = os.path.abspath(os.path.join(str(directory_for_saving_plots), "initial_param_distribution.png"))
-    plt.savefig(fileName)
+    # plt.savefig(fileName)
+    fig.savefig(fileName)
+    plt.close(fig)   # a multi-chain driver calls this once per chain
     if not light_output:
         fileName = os.path.abspath(os.path.join(str(directory_for_saving_plots), "initial_param_distribution.html"))
         pyo.plot(fig_plotly, filename=fileName, auto_open=False)
@@ -1196,11 +1379,25 @@ def main_routine(
         defaultdict(list, {key: [] for key in list_of_dates_of_interest}) if use_ar_likelihood else None)
     dates = []
     # Per-timestep posterior parameter ensembles and matching model outputs.
-    # posterior_params_per_date[k] is (n_particles, n_params) for dates[k];
-    # posterior_qoi_per_date[k]    is (n_particles,) of Q for the same particles,
-    # in the SAME particle order — the (theta, Q) pairing a PCE regression needs.
+    # posterior_params_per_date[k] is (n_particles, n_params) for dates[k]: the
+    # RESAMPLED-AND-PERTURBED ensemble that carries forward into date k+1 (saved
+    # as "theta" below, kept for continuity with existing downstream consumers).
+    # posterior_qoi_per_date[k] is (n_particles,) of Q_i(dates[k]) — this is NOT
+    # aligned to posterior_params_per_date[k]. Its correctly-aligned partner is
+    # posterior_theta_used_per_date[k] / posterior_state_used_per_date[k] below.
     posterior_params_per_date = []
     posterior_qoi_per_date = []
+    # theta_i(t) / state_i(t) that PRODUCED y_t_model_for_date[i] this timestep,
+    # i.e. the PRE-resampling ensemble, in the SAME particle order as
+    # posterior_qoi_per_date[k]. This is the correctly-aligned (theta, Q) pair.
+    posterior_theta_used_per_date = []
+    posterior_state_used_per_date = []
+    # resample_indices_per_date[k][j] = the index into theta_used[k]/qoi[k] that
+    # survived resampling into slot j — i.e. which pre-resampling particle each
+    # post-resampling slot is a copy of. Lets the resampled (with-duplicates)
+    # ensemble be reconstructed on demand as theta_used[k][resample_indices[k]],
+    # and directly shows survivor counts (n unique values = surviving particles).
+    resample_indices_per_date = []
     mse = 0
     n_underflow_resets = 0         # timesteps where every likelihood underflowed to 0
     ess_per_date = []              # Effective Sample Size diagnostic
@@ -1321,6 +1518,18 @@ def main_routine(
         y_t_model_for_date = np.asarray(y_t_model_for_date)
         current_model_output_max = np.max(y_t_model_for_date) if np.max(y_t_model_for_date) > current_model_output_max else current_model_output_max
         y_t_model_per_date_dict[date_of_interest] = y_t_model_for_date
+
+        # Capture the theta/state that PRODUCED y_t_model_for_date, in the same
+        # particle order — BEFORE resampling reassigns list_state_values_particles
+        # below. This is the correctly-aligned (theta, Q) pair for PCE work.
+        if save_posterior_parameter_samples:
+            posterior_theta_used_per_date.append(np.asarray(
+                [[p[pn] for pn in param_names] for p in new_list_parameter_value_particles],
+                dtype=np.float64))
+            posterior_state_used_per_date.append(np.asarray(
+                [[s.get(sn, np.nan) for sn in state_names] for s in list_state_values_particles],
+                dtype=np.float64))
+
         updated_weights = np.asarray(updated_weights)
 
         # Rebuild epsilon list in the same order as new_list_unique_index_model_run_list
@@ -1371,17 +1580,14 @@ def main_routine(
         # list_state_values_particles  = copy.deepcopy(new_list_state_values_particles) 
         # list_parameter_value_particles = copy.deepcopy(new_list_parameter_value_particles) 
 
-        # maybe this is not necessarry and just brings to longer execution...
-        list_of_tuple_with_parameter_values = []
-        for i in range(len(list_parameter_value_particles)):
-            list_of_tuple_with_parameter_values.append(tuple(list_parameter_value_particles[i].values()))
-        # row['old_parameter_value'] = list_of_tuple_with_parameter_values
-
         # Resample particles based on updated weights
         resample_indices = systematic_resample(normalized_weights)
         list_parameter_value_particles = [new_list_parameter_value_particles[i] for i in resample_indices]
         list_state_values_particles = [new_list_state_values_particles[i] for i in resample_indices]
         uniform_particle_weights = [uniform_particle_weights[i] for i in resample_indices]  # TODO this is probably unnecessary
+
+        if save_posterior_parameter_samples:
+            resample_indices_per_date.append(np.asarray(resample_indices, dtype=np.int64))
 
         if use_ar_likelihood:
             epsilon_particles = np.array([new_epsilon_particles[i] for i in resample_indices])
@@ -1402,15 +1608,21 @@ def main_routine(
                 state_p90_per_date[sn].append(float(np.percentile(vals, 90)))
 
         # Perturb the parameters of resampled particles
-        if use_ensemble_std_perturbation:
-            # Paper Step 8: jitter ∝ S(θ) — adapts to current ensemble spread
+        if perturbation_scheme == "liu_west":
+            # Ensemble mean/std computed ONCE per date, across the whole
+            # resampled ensemble - perturb_parameters shrinks each particle
+            # toward this mean rather than jittering around its own value.
             param_stds = {
                 pn: max(np.std([p[pn] for p in list_parameter_value_particles]), 1e-8)
                 for pn in param_names
             }
+            ensemble_mean = {
+                pn: float(np.mean([p[pn] for p in list_parameter_value_particles]))
+                for pn in param_names
+            }
         else:
-            param_stds = None  # perturb_parameters falls back to η·|θ_i|
-        list_of_tuple_with_parameter_values = []
+            param_stds = None
+            ensemble_mean = None
         list_of_lists_with_parameter_values = []
         dict_of_distriubtions_over_parameters_for_a_date = defaultdict(list, {key:[] for key in param_names})
         for i in range(len(list_parameter_value_particles)):
@@ -1419,8 +1631,11 @@ def main_routine(
                 param_stds,
                 perturbation_factor,
                 param_bounds=param_bounds,
-                bound_handling=bound_handling)
-            list_of_tuple_with_parameter_values.append(tuple(list_parameter_value_particles[i].values()))
+                bound_handling=bound_handling,
+                min_jitter_frac=min_jitter_frac,
+                perturbation_scheme=perturbation_scheme,
+                ensemble_mean=ensemble_mean,
+                liu_west_delta=liu_west_delta)
             list_of_lists_with_parameter_values.append(list(list_parameter_value_particles[i].values()))
 
             # print(f"DEBUGGING perturbed parameters values in dict {i} - {list_parameter_value_particles[i]}")
@@ -1456,6 +1671,7 @@ def main_routine(
             plt.close(fig_pp)
 
         # Save one big matrix of particle values, might be used later one for transformation of the samples
+        # This matrix contains resampled and perturbed parameter values for this timestep, but they do not corresponf 1-to-1 to y_t_model_for_date
         parameter_samples_matrix = list(zip(*list_of_lists_with_parameter_values))  # this should be a matrix of size number_of_particles x number_of_parameters
         parameter_samples_matrix = np.asarray(parameter_samples_matrix).T
 
@@ -1470,7 +1686,6 @@ def main_routine(
 
         # row['weights'] = normalized_weights
         # row['resample_indices'] = resample_indices
-        # row['new_parameter_value'] = list_of_tuple_with_parameter_values
         # data_structure_over_dates.append(row)
 
         print(f"Date: {date_of_interest.strftime('%Y-%m-%d')}")
@@ -1573,45 +1788,72 @@ def main_routine(
                 ), row=1, col=idx + 1)
     plt.setp(axs[0], ylabel='PDF')
     fileName = os.path.abspath(os.path.join(str(directory_for_saving_plots), "final_param_distribution.png"))
-    plt.savefig(fileName)
+    # plt.savefig(fileName)
+    fig.savefig(fileName)
+    plt.close(fig)   # a multi-chain driver calls this once per chain
     if not light_output:
         fileName = os.path.abspath(os.path.join(str(directory_for_saving_plots), "final_param_distribution.html"))
         pyo.plot(fig_plotly, filename=fileName, auto_open=False)
 
     # ── Persist per-timestep posterior ensembles for later transport-map + PCE ──
-    # theta: (n_dates, n_particles, n_params), qoi: (n_dates, n_particles).
-    # Particle order matches between the two, so (theta[k], qoi[k]) are the
-    # regression pairs for a PCE at dates[k].
+    # theta: (n_dates, n_particles, n_params) — RESAMPLED+PERTURBED ensemble that
+    # carries forward into date k+1 (kept for continuity with existing consumers).
+    # qoi: (n_dates, n_particles) of Q_i(dates[k]).
+    # theta_used/state_used: the PRE-resampling theta/state that actually produced
+    # qoi[k] — these are the correctly-aligned (theta, Q) regression pair a PCE
+    # needs. theta[k] and qoi[k] are NOT aligned to each other: theta[k] is
+    # resampled+jittered for use at k+1, while qoi[k] came from the ensemble that
+    # entered step k (theta[k-1]'s resampled+jittered values) — one particle-index
+    # shuffle removed from qoi[k].
+    # resample_indices[k][j] = index into theta_used[k]/qoi[k] that survived into
+    # post-resampling slot j. The resampled (with-duplicates) ensemble can be
+    # reconstructed on demand as theta_used[k][resample_indices[k]] — this is
+    # cheaper than storing that duplicated array outright, and the indices
+    # themselves show survivor counts directly (n unique = particles that survived).
     param_output_corr = None
     if save_posterior_parameter_samples and posterior_params_per_date:
         theta_stack = np.stack(posterior_params_per_date, axis=0)
         qoi_stack = np.stack(posterior_qoi_per_date, axis=0)
-        # Computed once here, from arrays already in memory — no per-timestep cost.
+        theta_used_stack = np.stack(posterior_theta_used_per_date, axis=0)
+        state_used_stack = np.stack(posterior_state_used_per_date, axis=0)
+        resample_indices_stack = np.stack(resample_indices_per_date, axis=0)
+        # Computed on the correctly-aligned (theta_used, qoi) pair — NOT (theta,
+        # qoi), which are one resampling-and-jitter step apart from each other.
         # ~0 means the parameter does not move the output, so no likelihood can
         # select on it and the posterior for it cannot converge.
-        param_output_corr = parameter_output_correlation(theta_stack, qoi_stack)
-        print("median |corr(parameter, Q)| across particles  "
-              "(<0.1 = filter cannot learn this parameter):")
+        param_output_corr = parameter_output_correlation(theta_used_stack, qoi_stack)
+        print("median |corr(parameter, Q)| across particles, on the ALIGNED "
+              "(theta_used, qoi) pair (<0.1 = filter cannot learn this parameter):")
         for nm, c in zip(param_names, param_output_corr):
             print(f"    {nm:<8}{c:6.3f}")
         print(f"    {'overall':<8}{np.nanmedian(param_output_corr):6.3f}")
-        # theta dominates this file (n_dates x n_particles x n_params). float32 keeps
-        # ~7 significant digits — far more than parameter values carry — and halves it.
-        # qoi stays float64: it is 6x smaller and feeds the pooled streamflow statistics.
+        # theta/theta_used/state_used dominate this file. float32 keeps ~7
+        # significant digits — far more than parameter/state values carry — and
+        # roughly halves their size. qoi stays float64: it is much smaller and
+        # feeds the pooled streamflow statistics. resample_indices is int64 and
+        # tiny (one int per particle per date) — not worth downcasting.
         if save_theta_float32:
             theta_stack = theta_stack.astype(np.float32)
+            theta_used_stack = theta_used_stack.astype(np.float32)
+            state_used_stack = state_used_stack.astype(np.float32)
         samples_file = os.path.abspath(os.path.join(
             str(directory_for_saving_plots), "posterior_parameter_samples.npz"))
         np.savez_compressed(
             samples_file,
             theta=theta_stack,
             qoi=qoi_stack,
+            theta_used=theta_used_stack,
+            state_used=state_used_stack,
+            state_names=np.array(state_names, dtype=object),
+            resample_indices=resample_indices_stack,
             param_names=np.array(param_names, dtype=object),
             dates=np.array([str(d) for d in dates], dtype=object),
             param_lower=np.array([param_bounds[p][0] for p in param_names]),
             param_upper=np.array([param_bounds[p][1] for p in param_names]),
         )
-        print(f"Saved posterior parameter samples {theta_stack.shape} "
+        print(f"Saved posterior parameter samples theta{theta_stack.shape} "
+              f"theta_used{theta_used_stack.shape} state_used{state_used_stack.shape} "
+              f"resample_indices{resample_indices_stack.shape} "
               f"[theta dtype={theta_stack.dtype}] -> {samples_file}")
 
         # ── Per-timestep Gaussianization (PCE inputs) ───────────────────────────
@@ -1638,27 +1880,27 @@ def main_routine(
         print("map_all_timesteps=True ignored: needs save_posterior_parameter_samples=True.")
 
     # ── Gaussianize the final-timestep ensemble (diagnostic plot) ───────────────
-    print(f"DEBUGGING - {parameter_samples_matrix.shape}")
-    standar_parameter_samples_matrix = gaussianize_parameter_samples(
-        parameter_samples_matrix,
-        method=transport_map_backend,
-        max_order=transport_map_max_order,
-        param_names=param_names)
-    if standar_parameter_samples_matrix is None:
-        standar_parameter_samples_matrix = parameter_samples_matrix
-    print(f"DEBUGGING - {standar_parameter_samples_matrix.shape}")
-    # Plotting final distribution of transformed parameter values
-    fig_plotly = make_subplots(rows=1, cols=len(param_names))
-    for idx in range(len(param_names)):
-        parameter_name = param_names[idx]
-        fig_plotly.append_trace(
-                go.Histogram(
-                    x=standar_parameter_samples_matrix[:,idx],
-                    name=parameter_name
-                ), row=1, col=idx + 1)
-    if not light_output:
-        fileName = os.path.abspath(os.path.join(str(directory_for_saving_plots), "final_transformed_param_distribution.html"))
-        pyo.plot(fig_plotly, filename=fileName, auto_open=False)
+    # print(f"DEBUGGING - {parameter_samples_matrix.shape}")
+    # standar_parameter_samples_matrix = gaussianize_parameter_samples(
+    #     parameter_samples_matrix,
+    #     method=transport_map_backend,
+    #     max_order=transport_map_max_order,
+    #     param_names=param_names)
+    # if standar_parameter_samples_matrix is None:
+    #     standar_parameter_samples_matrix = parameter_samples_matrix
+    # print(f"DEBUGGING - {standar_parameter_samples_matrix.shape}")
+    # # Plotting final distribution of transformed parameter values
+    # fig_plotly = make_subplots(rows=1, cols=len(param_names))
+    # for idx in range(len(param_names)):
+    #     parameter_name = param_names[idx]
+    #     fig_plotly.append_trace(
+    #             go.Histogram(
+    #                 x=standar_parameter_samples_matrix[:,idx],
+    #                 name=parameter_name
+    #             ), row=1, col=idx + 1)
+    # if not light_output:
+    #     fileName = os.path.abspath(os.path.join(str(directory_for_saving_plots), "final_transformed_param_distribution.html"))
+    #     pyo.plot(fig_plotly, filename=fileName, auto_open=False)
 
     # ── Percentile band ────────────────────────────────
     particle_matrix = np.array(y_t_model_per_date_matrix)  # (N_particles, N_dates)
@@ -2030,7 +2272,11 @@ def main_routine(
     axs_pe[-1].set_xlabel('Date')
     fig_pe.suptitle('Posterior parameter evolution over time', fontsize=12)
     fig_pe.autofmt_xdate()
-    fig_pe.tight_layout()
+    # tight_layout() alone does not reserve space for suptitle, so it overlaps
+    # the top panel once figsize grows with n_params (here 3*n_params inches
+    # tall). Reserving a fixed INCH amount off the top (not a fixed fraction)
+    # keeps the gap right whether n_params is 1 or 7.
+    fig_pe.tight_layout(rect=[0, 0, 1, 1 - 0.4 / fig_pe.get_figheight()])
     fig_pe.savefig(os.path.join(str(directory_for_saving_plots), "param_evolution.png"), dpi=150)
     plt.close(fig_pe)
 
@@ -2056,9 +2302,17 @@ def main_routine(
         axs_se[-1].set_xlabel('Date')
         fig_se.suptitle('Posterior state evolution over time', fontsize=12)
         fig_se.autofmt_xdate()
-        fig_se.tight_layout()
+        # See the identical fix on fig_pe above: reserve a fixed INCH amount
+        # off the top for the suptitle, not a fixed fraction, so it scales
+        # correctly as figsize grows with n_states.
+        fig_se.tight_layout(rect=[0, 0, 1, 1 - 0.4 / fig_se.get_figheight()])
         fig_se.savefig(os.path.join(str(directory_for_saving_plots), "state_evolution.png"), dpi=150)
         plt.close(fig_se)
+
+    # Nothing here holds a figure the caller still wants, and a multi-chain
+    # driver calls this routine once per chain — so any figure left open would
+    # accumulate across chains rather than being reclaimed between them.
+    plt.close("all")
 
     # Return the directory this run wrote into. The paths block above builds
     # workingDir internally, so callers cannot otherwise know where the output
@@ -2072,120 +2326,132 @@ if __name__ == "__main__":
     # Number of parallel processes
     num_processes = multiprocessing.cpu_count()
     print(f"Number of parallel processes = {num_processes}")
-    number_of_particles = ne = 2000  # 50, 100, 500 2000
+    number_of_particles = ne = 5000  # 50, 100, 500 2000
 
     # BASE_SOURCE_PATH = pathlib.Path.cwd().parents[1] # uqef_dynamic
     BASE_SOURCE_PATH = pathlib.Path(__file__).resolve().parents[2]
     hbv_model_data_path = BASE_SOURCE_PATH / "data" / "HBV-SASK-data"
 
+    multiple_chains = True  # True → run several independent chains and pool the results; False → single chain only
+
     # ==========================================================================
     # Single-CHAIN RUN
     # ==========================================================================
 
-    # for i in range(1,2):
-    #     # working_dir_name=f"trial_single_run_hbvsaskmodel_7d_filtering/run_{i}"
-    #     working_dir_name=f"hbvsaskmodel_7d_2000_filtering_gaussian_likelihood_heteroscedastic_one_year_Uniform/run_{i}"
-    #     inputModelDir = hbv_model_data_path
-    #     configuration_file = BASE_SOURCE_PATH / "data" / "configurations" / "configuration_hbv_sask_PF_one_year.json"
+    if not multiple_chains:
+        for i in range(1,2):
+            # working_dir_name=f"trial_single_run_hbvsaskmodel_7d_filtering/run_{i}"
+            working_dir_name=f"hbvsaskmodel_7d_{number_of_particles}_filtering_gaussian_likelihood_heteroscedastic_one_year_Uniform /run_{i}"
+            inputModelDir = hbv_model_data_path
+            configuration_file = BASE_SOURCE_PATH / "data" / "configurations" / "configuration_hbv_sask_PF_one_year.json"
 
-    #     with open(configuration_file) as _f:
-    #         _cfg_json = json.load(_f)
-    #     basin = _cfg_json.get("model_settings", {}).get("basin")
-    #     if not basin:
-    #         raise ValueError(
-    #             f"model_settings.basin is missing from {configuration_file}; the pipeline "
-    #             "no longer hardcodes a basin.")
-    #     # Output folder follows the basin, so runs for different basins cannot collide.
-    #     workingDir = (inputModelDir / "particle_filtering_model_runs"
-    #                 / basin.lower() / working_dir_name)
-    #     directory_for_saving_plots = workingDir
+            with open(configuration_file) as _f:
+                _cfg_json = json.load(_f)
+            basin = _cfg_json.get("model_settings", {}).get("basin")
+            if not basin:
+                raise ValueError(
+                    f"model_settings.basin is missing from {configuration_file}; the pipeline "
+                    "no longer hardcodes a basin.")
+            # Output folder follows the basin, so runs for different basins cannot collide.
+            workingDir = (inputModelDir / "particle_filtering_model_runs"
+                        / basin.lower() / working_dir_name)
+            directory_for_saving_plots = workingDir
 
-    #     main_routine(
-    #         inputModelDir=inputModelDir,
-    #         configuration_file=configuration_file,
-    #         workingDir=workingDir,
-    #         directory_for_saving_plots=directory_for_saving_plots,
-    #         num_processes=num_processes, 
-    #         number_of_particles=number_of_particles, 
-    #         use_ar_likelihood=False,  # True → AR(1)-augmented likelihood; False → standard Gaussian likelihood
-    #         sigma_eta=None,  # 14.2,  # fixed innovation std [m³/s]; None → heteroscedastic mode
-    #         phi_ar=0.894,    # AR(1) coefficient — fit from error_signal_analysis.py
-    #         beta_obs=0.2, #0.2, 0.5/3, #0.2/3, 1.0/3,  # used only when sigma_eta=None: σ_ε = beta_obs·y_obs (0.2/3 ≈ 20% as 3σ bound)
-    #         monthly_bias_ar=None, # monthly_bias_ar=None,  # None → no monthly bias correction; otherwise a dict {month: bias} to subtract from y_obs(t) before likelihood evaluation
-    #         use_student_t=False, # True → Student-t likelihood; False → Gaussian likelihood
-    #         use_ensemble_std_perturbation=False, # True → perturbation ∝ S(θ) (adapts to current ensemble spread); False → perturbation ∝ |θ_i| (fixed relative jitter)
-    #         perturbation_factor=0.15,  # 0.05, 0.01, 0.002 relative perturbation factor (0.01 → 1% of |θ_i| or 1% of S(θ) depending on use_ensemble_std_perturbation)
-    #         bound_handling="reflect",  # "clip" or "reflect"
-    #         band_sigma_from="forecast",  # "forecast" → σ_η(t) ∝ |Q̄(t)|; "observed" → σ_η(t) ∝ |y_obs(t)|
-    #         include_innovation_in_bands=False, # True → bands include η ~ N(0, σ_η²) noise; False → bands show only the across-particle spread of Q_i + ε̂_i
-    #         light_output=True,  # True → skip HTML plots and large .npz files; False → save everything
-    #         save_theta_float32=True,  # True → save θ in float32 (halves size, still ~7 sig digits); False → save θ in float64
-    #         map_all_timesteps=False, # True → run transport_timeseries.map_timesteps() on the saved posterior samples; False → skip it
-    #         transport_map_backend="mpart",
-    #         transport_map_max_order=2,
-    #         map_all_timesteps_workers=num_processes,
-    #         )
+            main_routine(
+                inputModelDir=inputModelDir,
+                configuration_file=configuration_file,
+                workingDir=workingDir,
+                directory_for_saving_plots=directory_for_saving_plots,
+                num_processes=num_processes, 
+                number_of_particles=number_of_particles, 
+                use_ar_likelihood=False,  # True → AR(1)-augmented likelihood; False → standard Gaussian likelihood
+                sigma_eta=None,  # 14.2,  # fixed innovation std [m³/s]; None → heteroscedastic mode
+                phi_ar=0.894,    # AR(1) coefficient — fit from error_signal_analysis.py
+                beta_obs=0.2, #0.2, 0.5/3, #0.2/3, 1.0/3,  # used only when sigma_eta=None: σ_ε = beta_obs·y_obs (0.2/3 ≈ 20% as 3σ bound)
+                monthly_bias_ar=None, # monthly_bias_ar=None,  # None → no monthly bias correction; otherwise a dict {month: bias} to subtract from y_obs(t) before likelihood evaluation
+                use_student_t=False, # True → Student-t likelihood; False → Gaussian likelihood
+                # random_seed=1000,  # seed for the random number generator (initial parameter/state draws, resampling offsets, parameter perturbation)
+                perturbation_scheme="magnitude",  # "magnitude" (η·|θ_i|, default) or "liu_west" (shrink to ensemble mean, variance-preserving)
+                perturbation_factor=0.15,  # η for "magnitude" — float, or {name: η} for parameter-specific jitter scales. Unused by "liu_west".
+                # perturbation_factor = {
+                #     "TT": 0.15, "C0": 0.15, "ETF": 0.15, "PM": 0.15,
+                #     "FC": 0.106, "FRAC": 0.16, "K2": 0.087,
+                # },
+                liu_west_delta=0.98,  # discount factor for "liu_west"; unused by "magnitude"
+                min_jitter_frac=0.002,  # floor as a fraction of (upper-lower); rescues theta=0 ("magnitude") or a collapsed ensemble ("liu_west")
+                bound_handling="reflect",  # "clip" or "reflect"
+                band_sigma_from="forecast",  # "forecast" → σ_η(t) ∝ |Q̄(t)|; "observed" → σ_η(t) ∝ |y_obs(t)|
+                include_innovation_in_bands=False, # True → bands include η ~ N(0, σ_η²) noise; False → bands show only the across-particle spread of Q_i + ε̂_i
+                light_output=True,  # True → skip HTML plots and large .npz files; False → save everything
+                save_theta_float32=True,  # True → save θ in float32 (halves size, still ~7 sig digits); False → save θ in float64
+                map_all_timesteps=False, # True → run transport_timeseries.map_timesteps() on the saved posterior samples; False → skip it
+                transport_map_backend="mpart",
+                transport_map_max_order=2,
+                map_all_timesteps_workers=num_processes,
+                )
+    else:
+        # ==========================================================================
+        # MULTI-CHAIN RUN — average out the influence of the initial sample
+        # ==========================================================================
 
-    # ==========================================================================
-    # MULTI-CHAIN RUN — average out the influence of the initial sample
-    # ==========================================================================
-
-    # Each chain is an independent estimate of the same posterior, differing only
-    # in its random seed (initial parameter/state draws, resampling offsets,
-    # parameter perturbation). Pooling several reduces the effect of one unlucky
-    # initial ensemble. Keep EVERY other argument identical across chains.
-    #
-    n_chains = 3
-    base_name = f"hbvsaskmodel_7d_{number_of_particles}_filtering_gaussian_likelihood_heteroscedastic_one_year_Uniform_{n_chains}_chains"
-    chain_dirs = []
-    for i in range(n_chains):
-        working_dir_name = f"{base_name}/run_{i}"
-        inputModelDir = hbv_model_data_path
-        configuration_file = BASE_SOURCE_PATH / "data" / "configurations" / "configuration_hbv_sask_PF_one_year.json"
-        with open(configuration_file) as _f:
-            _cfg_json = json.load(_f)
-        basin = _cfg_json.get("model_settings", {}).get("basin")
-        if not basin:
-            raise ValueError(
-                f"model_settings.basin is missing from {configuration_file}; the pipeline "
-                "no longer hardcodes a basin.")
-        # Output folder follows the basin, so runs for different basins cannot collide.
-        workingDir = (inputModelDir / "particle_filtering_model_runs"
-                    / basin.lower() / working_dir_name)
-        directory_for_saving_plots = workingDir
-        chain_dir = main_routine(          # main_routine returns its workingDir
-            inputModelDir=inputModelDir,
-            configuration_file=configuration_file,
-            workingDir=workingDir,
-            directory_for_saving_plots=directory_for_saving_plots,
-            num_processes=num_processes,
-            number_of_particles=number_of_particles,
-            random_seed=1000 + i,          # <- the ONLY thing that differs per chain
-            use_ar_likelihood=False,
-            sigma_eta=None,
-            phi_ar=0.894,
-            beta_obs=0.2,
-            monthly_bias_ar=None,
-            use_student_t=False,
-            use_ensemble_std_perturbation=False,
-            perturbation_factor=0.15,
-            bound_handling="reflect",  # "clip" or "reflect"
-            band_sigma_from="forecast",
-            include_innovation_in_bands=False,
-            save_posterior_parameter_samples=True,   # REQUIRED for pooling
-            light_output=True,
-            save_theta_float32=True,
-        )
-        chain_dirs.append(chain_dir)
-    
-    # Observed series, read back from any chain (identical across chains)
-    merged = pd.read_pickle(pathlib.Path(chain_dirs[0]) / "averaged_and_simulated.pkl",
-                            compression="gzip")
-    observed = merged["observed_streamflow"].to_numpy()
-    
-    # Pool the PARTICLES (never average the per-chain quantiles — see the
-    # docstring of pool_chain_results). Writes pooled_chains.npz and
-    # pooled_chains_summary.json next to the run_* folders.
-    pooled = pool_chain_results(chain_dirs, observed=observed)
-    print("between/within:", pooled["between_over_within_median"],
-          " MC floor 1/N:", 1.0 / pooled["n_particles_per_chain"])
+        # Each chain is an independent estimate of the same posterior, differing only
+        # in its random seed (initial parameter/state draws, resampling offsets,
+        # parameter perturbation). Pooling several reduces the effect of one unlucky
+        # initial ensemble. Keep EVERY other argument identical across chains.
+        #
+        n_chains = 5 #10
+        base_name = f"hbvsaskmodel_7d_{number_of_particles}_filtering_gaussian_likelihood_heteroscedastic_two_years_Uniform_{n_chains}_chains"
+        chain_dirs = []
+        for i in range(n_chains):
+            working_dir_name = f"{base_name}/run_{i}"
+            inputModelDir = hbv_model_data_path
+            configuration_file = BASE_SOURCE_PATH / "data" / "configurations" / "configuration_hbv_sask_PF_two_years.json" #"configuration_hbv_sask_PF_three_years.json"
+            with open(configuration_file) as _f:
+                _cfg_json = json.load(_f)
+            basin = _cfg_json.get("model_settings", {}).get("basin")
+            if not basin:
+                raise ValueError(
+                    f"model_settings.basin is missing from {configuration_file}; the pipeline "
+                    "no longer hardcodes a basin.")
+            # Output folder follows the basin, so runs for different basins cannot collide.
+            workingDir = (inputModelDir / "particle_filtering_model_runs"
+                        / basin.lower() / working_dir_name)
+            directory_for_saving_plots = workingDir
+            chain_dir = main_routine(          # main_routine returns its workingDir
+                inputModelDir=inputModelDir,
+                configuration_file=configuration_file,
+                workingDir=workingDir,
+                directory_for_saving_plots=directory_for_saving_plots,
+                num_processes=num_processes,
+                number_of_particles=number_of_particles,
+                random_seed=1000 + i,          # <- the ONLY thing that differs per chain
+                use_ar_likelihood=False,
+                sigma_eta=None,
+                phi_ar=0.894,
+                beta_obs=0.2,
+                monthly_bias_ar=None,
+                use_student_t=False,
+                perturbation_scheme="magnitude",
+                perturbation_factor=0.15,
+                liu_west_delta=0.98,
+                min_jitter_frac=0.002,
+                bound_handling="reflect",  # "clip" or "reflect"
+                band_sigma_from="forecast",
+                include_innovation_in_bands=False,
+                save_posterior_parameter_samples=True,   # REQUIRED for pooling
+                light_output=True,
+                save_theta_float32=True,
+            )
+            chain_dirs.append(chain_dir)
+        
+        # Observed series, read back from any chain (identical across chains)
+        merged = pd.read_pickle(pathlib.Path(chain_dirs[0]) / "averaged_and_simulated.pkl",
+                                compression="gzip")
+        observed = merged["observed_streamflow"].to_numpy()
+        
+        # Pool the PARTICLES (never average the per-chain quantiles — see the
+        # docstring of pool_chain_results). Writes pooled_chains.npz and
+        # pooled_chains_summary.json next to the run_* folders.
+        pooled = pool_chain_results(chain_dirs, observed=observed)
+        print("between/within:", pooled["between_over_within_median"],
+            " MC floor 1/N:", 1.0 / pooled["n_particles_per_chain"])
