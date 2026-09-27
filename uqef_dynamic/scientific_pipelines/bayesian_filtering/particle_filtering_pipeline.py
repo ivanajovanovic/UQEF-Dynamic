@@ -29,6 +29,8 @@ from uqef_dynamic.utils import transport_timeseries   # per-timestep driver + di
 from uqef_dynamic.utils.transport_timeseries import gaussianize_parameter_samples
 from uqef_dynamic.models.hbv_sask import hbvsask_utility as hbv
 from uqef_dynamic.models.hbv_sask import HBVSASKModel as hbvmodel
+from uqef_dynamic.scientific_pipelines.bayesian_filtering.particle_filtering_and_pce_plotting import (
+    plot_sensitivity_vs_identifiability, plot_streamflow_bands, plot_pooled_chains)
 
 PLOT_FORCING_DATA = True
 
@@ -64,12 +66,6 @@ def parameter_output_correlation(theta, qoi):
     return np.nanmedian(np.abs(r), axis=0)
 
 
-def _savefig(fig, out_dir, name):
-    fig.tight_layout()
-    fig.savefig(os.path.join(out_dir, name), dpi=150)
-    plt.close(fig)
-
-
 def _load_npz_resilient(path, retries=6, initial_delay=2.0):
     """np.load with exponential backoff, returning a plain dict.
 
@@ -103,172 +99,15 @@ def _load_npz_resilient(path, retries=6, initial_delay=2.0):
             delay *= 2
 
 
-def plot_sensitivity_vs_identifiability(samples_npz, sobol_s1, out_dir=None,
-                                        skip_fraction=0.1, width_threshold=0.5,
-                                        s1_threshold=None, filename="sensitivity_vs_identifiability.png"):
-    """Scatter forward-GSA sensitivity against posterior identifiability.
-
-    Two orthogonal quantities that are easy to conflate:
-
-      x  Sobol S1 from a FORWARD (prior-based) GSA — does the parameter move the
-         output across its plausible range? Passed in; not computed here.
-      y  posterior width / prior width — did the filter learn anything about it?
-         1.0 means the posterior is as wide as the prior (learned nothing).
-
-    A parameter can be strongly influential yet unidentifiable: a precipitation
-    multiplier moves streamflow a lot, but is confounded with everything else
-    that scales flow, so its posterior stays wide. That is the top-right
-    quadrant, and it is a result rather than a failure.
-
-    NOTE this deliberately avoids posterior-conditional sensitivity indices.
-    Those are computed over the posterior, so a converged parameter shows a low
-    index purely because its range has shrunk — confounding sensitivity with
-    identifiability, the two things this plot separates.
-
-    Args:
-        samples_npz:     posterior_parameter_samples.npz, or its directory.
-        sobol_s1:        dict {param_name: S1} from the forward GSA. Parameters
-                         missing from it are skipped.
-        out_dir:         output directory; defaults to the npz's directory.
-        skip_fraction:   drop this leading fraction of dates as filter warm-up,
-                         when the posterior is still collapsing from the prior.
-        width_threshold: horizontal quadrant line (relative width).
-        s1_threshold:    vertical quadrant line; defaults to the median S1.
-
-    Returns:
-        dict {param_name: (s1, relative_width)}.
-    """
-    if os.path.isdir(str(samples_npz)):
-        samples_npz = os.path.join(str(samples_npz), "posterior_parameter_samples.npz")
-    d = np.load(samples_npz, allow_pickle=True)
-    th = np.asarray(d["theta"], dtype=np.float64)
-    names = [str(x) for x in d["param_names"]]
-    lo, hi = np.asarray(d["param_lower"], float), np.asarray(d["param_upper"], float)
-
-    start = int(skip_fraction * th.shape[0])
-    span = np.where(hi - lo > 0, hi - lo, 1.0)
-    rel_w = np.median(
-        (np.percentile(th[start:], 90, axis=1) - np.percentile(th[start:], 10, axis=1)) / span,
-        axis=0)
-
-    pts = {n: (float(sobol_s1[n]), float(rel_w[j]))
-           for j, n in enumerate(names) if n in sobol_s1}
-    missing = [n for n in names if n not in sobol_s1]
-    if missing:
-        print(f"plot_sensitivity_vs_identifiability: no S1 given for {missing}; skipped.")
-    if not pts:
-        raise ValueError("sobol_s1 matched none of the parameter names in the npz.")
-
-    xs = np.array([v[0] for v in pts.values()])
-    ys = np.array([v[1] for v in pts.values()])
-    xt = float(np.median(xs)) if s1_threshold is None else float(s1_threshold)
-
-    fig, ax = plt.subplots(figsize=(7.5, 6.5))
-    ax.axhline(width_threshold, color='grey', lw=0.8, ls='--')
-    ax.axvline(xt, color='grey', lw=0.8, ls='--')
-    ax.scatter(xs, ys, s=90, color='steelblue', zorder=3, edgecolor='white')
-    for n, (x, y) in pts.items():
-        ax.annotate(n, (x, y), xytext=(6, 5), textcoords='offset points', fontsize=10)
-
-    # Corner captions in axes coordinates, inset so they cannot collide with points.
-    for xa, ya, ha, va, txt in [
-            (0.985, 0.985, 'right', 'top',    'sensitive,\nNOT identifiable'),
-            (0.985, 0.015, 'right', 'bottom', 'sensitive,\nidentifiable'),
-            (0.015, 0.985, 'left',  'top',    'insensitive,\nunconstrained'),
-            (0.015, 0.015, 'left',  'bottom', 'insensitive,\nyet narrowed')]:
-        ax.text(xa, ya, txt, transform=ax.transAxes, ha=ha, va=va,
-                fontsize=8, color='grey', alpha=0.75,
-                bbox=dict(boxstyle='round,pad=0.25', fc='white', ec='none', alpha=0.65))
-    ax.margins(0.12)
-
-    ax.set_xlabel('Forward-GSA Sobol $S_1$  (sensitivity, prior-based)')
-    ax.set_ylabel('posterior width / prior width  (1 = nothing learned)')
-    ax.set_title('Sensitivity vs identifiability')
-    ax.grid(alpha=0.3)
-    _savefig(fig, out_dir or os.path.dirname(os.path.abspath(samples_npz)), filename)
-    return pts
-
-
-def plot_pooled_chains(results, out_dir, observed=None, pooled_theta=None):
-    """Three diagnostic figures from a pool_chain_results dict."""
-    x = pd.to_datetime(results["dates"], errors="coerce")
-    if pd.isna(x).any():
-        x = np.arange(results["n_dates"])
-    pct, cm = results["pooled_percentiles"], results["chain_means"]
-    lo, hi = min(pct), max(pct)
-
-    # 1 — pooled hydrograph with per-chain means overlaid
-    fig, ax = plt.subplots(figsize=(13, 5))
-    ax.fill_between(x, pct[lo], pct[hi], alpha=0.25, color='steelblue', label=f'{lo}–{hi}% pooled')
-    if 25 in pct and 75 in pct:
-        ax.fill_between(x, pct[25], pct[75], alpha=0.35, color='steelblue', label='25–75% pooled')
-    for i, c in enumerate(cm):
-        ax.plot(x, c, lw=0.7, alpha=0.6, color='grey', label='individual chain means' if i == 0 else None)
-    ax.plot(x, results["pooled_mean"], color='blue', lw=1.6, label='pooled mean')
-    if observed is not None:
-        ax.plot(x, observed, color='orange', lw=1.6, label='observed')
-    ax.set_xlabel('Date'); ax.set_ylabel('Q [m³/s]')
-    ax.set_title(f'Pooled {results["n_chains"]} chains × {results["n_particles_per_chain"]} particles')
-
-    # Clip the y-axis and shade the warm-up, matching the single-chain streamflow
-    # plot. The first few timesteps carry the prior's spread, which is orders of
-    # magnitude wider than anything afterwards and otherwise flattens the whole
-    # series. Scale to the observations when available, else to the pooled mean.
-    spinup_steps = 30
-    if observed is not None and np.any(np.isfinite(observed)):
-        y_max = float(np.nanmax(observed))
-    else:
-        y_max = float(np.nanmax(results["pooled_mean"]))
-    if np.isfinite(y_max) and y_max > 0:
-        ax.set_ylim(0, y_max * 1.4)
-    if len(x) > spinup_steps:
-        ax.axvspan(x[0], x[spinup_steps - 1], color='grey', alpha=0.12, lw=0, zorder=0)
-        ax.annotate('Warm-up', xy=(x[spinup_steps // 2], ax.get_ylim()[1]),
-                    xytext=(0, -10), textcoords='offset points',
-                    ha='center', va='top', fontsize=8, color='grey')
-
-    ax.legend(fontsize=8); ax.grid(alpha=0.3)
-    _savefig(fig, out_dir, "pooled_streamflow.png")
-
-    # 2 — between- vs within-chain variance (has the initial sample stopped mattering?)
-    B, W = results["between_chain_var"], results["within_chain_var"]
-    with np.errstate(divide='ignore', invalid='ignore'):
-        ratio = np.where(W > 0, B / W, np.nan)
-    fig, (a1, a2) = plt.subplots(2, 1, figsize=(13, 6), sharex=True)
-    a1.plot(x, B, color='tomato', lw=1, label='between-chain variance')
-    a1.plot(x, W, color='steelblue', lw=1, label='within-chain variance')
-    a1.set_yscale('log'); a1.set_ylabel('variance')
-    _floor = 1.0 / results["n_particles_per_chain"]
-    a1.set_title(f'Chain agreement — median B/W = {results["between_over_within_median"]:.5f}, '
-                 f'Monte Carlo floor 1/N = {_floor:.5f}')
-    a2.plot(x, ratio, color='purple', lw=1, label='B / W')
-    a2.axhline(_floor, color='red', ls='--', lw=0.9,
-               label=f'MC floor 1/N = {_floor:.1e}  (chains identical up to sampling error)')
-    a2.set_yscale('log'); a2.set_ylabel('B / W'); a2.set_xlabel('Date')
-    for a in (a1, a2):
-        a.legend(fontsize=8); a.grid(alpha=0.3)
-    _savefig(fig, out_dir, "chain_agreement.png")
-
-    # 3 — pooled vs per-chain parameter posteriors at the final timestep
-    if pooled_theta is not None:
-        names, per = results["param_names"], results["n_particles_per_chain"]
-        fig, axs = plt.subplots(1, len(names), figsize=(3.2 * len(names), 3.2))
-        axs = np.atleast_1d(axs)
-        for j, (ax, nm) in enumerate(zip(axs, names)):
-            v = pooled_theta[-1, :, j]
-            ax.hist(v, bins=40, density=True, alpha=0.45, color='steelblue', label='pooled')
-            for c in range(results["n_chains"]):
-                ax.hist(v[c * per:(c + 1) * per], bins=40, density=True,
-                        histtype='step', lw=0.8, alpha=0.7)
-            ax.set_xlabel(nm); ax.grid(alpha=0.3)
-        axs[0].set_ylabel('density'); axs[0].legend(fontsize=8)
-        fig.suptitle('Parameter posteriors, final timestep — filled = pooled, outlines = chains')
-        _savefig(fig, out_dir, "pooled_parameter_posteriors.png")
-
-
 def pool_chain_results(chain_dirs, observed=None, output_dir=None,
-                       percentiles=(5, 25, 50, 75, 95), make_plots=True):
+                       percentiles=(5, 25, 50, 75, 95), make_plots=True,
+                       plot_forcing_data=False, configuration_file=None,
+                       inputModelDir=None, basin=None):
     """Pool several independent particle-filter chains into one ensemble.
+
+    plot_forcing_data, configuration_file, inputModelDir, basin: forwarded to
+    plot_pooled_chains (see its docstring) — add temperature/precipitation
+    "wall" panels to pooled_streamflow.png. Unused when make_plots=False.
 
     Each chain is an independent Monte Carlo estimate of the same posterior,
     differing only in its random seed (initial parameter/state draws, resampling
@@ -485,7 +324,10 @@ def pool_chain_results(chain_dirs, observed=None, output_dir=None,
               f"per-chain RMSE={['%.2f' % r for r in results['rmse_per_chain']]}")
         print(f"  pooled P-factor={results['p_factor_pooled']:.3f}")
     if make_plots:
-        plot_pooled_chains(results, out, observed=observed, pooled_theta=pooled_theta)
+        plot_pooled_chains(results, out, observed=observed, pooled_theta=pooled_theta,
+                          plot_forcing_data=plot_forcing_data,
+                          configuration_file=configuration_file,
+                          inputModelDir=inputModelDir, basin=basin)
         print(f"  wrote pooled_streamflow.png, chain_agreement.png, "
               f"pooled_parameter_posteriors.png -> {out}")
     return results
@@ -753,6 +595,9 @@ def build_marginal_prior(spec):
         f"Use 'Uniform' or 'TruncNormal'.")
 
 
+####################
+
+
 def calculate_likelihood(y_t_observed, y_t_model, error_variance):
     """
     Computing Gaussian like likelihood
@@ -881,6 +726,8 @@ def calculate_likelihood_ar_student_t(y_t_observed, y_t_model, epsilon_hat,
     # student_t.pdf(x, df, loc, scale) evaluates the scaled t-distribution
     return float(student_t.pdf(y_t_observed, df=df, loc=y_hat, scale=sigma_eta))
 
+####################
+
 
 def systematic_resample(weights):
     """
@@ -927,6 +774,15 @@ def perturb_parameters(parameters, param_stds=None, perturbation_factor=0.15,
        large θ gets large jitter, which feeds back into still larger θ; small θ
        gets small jitter, which is why the jitter floor below exists.
 
+       CAVEAT for use_mh_correction=True (mh_correct_parameters): this scheme's
+       proposal density q(θ'|θ) = N(θ, η²θ²) depends on the CURRENT value θ, so
+       q(θ'|θ) ≠ q(θ|θ') exactly — only approximately, to second order in η, for
+       small η. The plain likelihood-ratio Metropolis test used by
+       mh_correct_parameters assumes an (at least approximately) symmetric
+       proposal; this is the same approximation used by Moradkhani et al.
+       (2012) / Wang et al. (2017), not an exact statement. See
+       mh_correct_parameters' docstring for the full validity requirements.
+
     2. "liu_west" (Liu and West, 2001). Each particle is shrunk toward the
        CURRENT ensemble mean rather than jittered around its own value:
 
@@ -947,9 +803,9 @@ def perturb_parameters(parameters, param_stds=None, perturbation_factor=0.15,
     Two safeguards, both essential over long runs, and shared by both schemes:
 
     1. BOUNDS. Without clipping, repeated jitter is an unbounded random walk and
-       parameters drift far outside the range declared in the configuration
-       (observed: C0 reaching ~350 against bounds [0, 10]). `param_bounds` maps
-       parameter name -> (lower, upper); values are clipped after perturbing.
+       parameters drift far outside the range declared in the configuration.
+       `param_bounds` maps parameter name -> (lower, upper); values are clipped
+       after perturbing.
 
     2. JITTER FLOOR. The "magnitude" scale σ = η·|θ| is proportional to the
        value itself, which makes θ = 0 an ABSORBING state: once a particle
@@ -1038,6 +894,219 @@ def perturb_parameters(parameters, param_stds=None, perturbation_factor=0.15,
         perturbed_parameters[key] = new_value
     return perturbed_parameters
 
+
+def mh_correct_parameters(
+    pool, hbvsaskModelObject, date_of_interest,
+    parameter_value_particles, entering_state_particles,
+    baseline_next_state_particles, baseline_y_model, baseline_likelihood,
+    y_t_observed, epsilon_hat, likelihood_fn,
+    param_stds=None, ensemble_mean=None, perturbation_factor=0.15,
+    param_bounds=None, min_jitter_frac=0.002, bound_handling="reflect",
+    perturbation_scheme="magnitude", liu_west_delta=0.98,
+    param_distributions=None,
+):
+    """Metropolis-Hastings move on resampled particles' parameters.
+
+    Follows the PF-MCMC scheme of Moradkhani et al. (2012) / Wang et al.
+    (2017): after SIR resampling, each particle's parameters are perturbed
+    (using the SAME jitter kernel as perturb_parameters) and the perturbation
+    is accepted or rejected via a Metropolis test, instead of being applied
+    unconditionally. This supplies a restoring force toward the filtering
+    posterior that plain jitter-then-always-accept lacks, which is what lets
+    unconditional jitter random-walk a weakly-identifiable parameter's
+    marginal posterior toward its prior bounds over many timesteps.
+
+    IMPORTANT — validity requirements for the acceptance test used here.
+    The acceptance ratio computed below is a PLAIN LIKELIHOOD RATIO,
+    alpha = min(1, L'/L) (step 4). This is a full, correct Metropolis test
+    ONLY when BOTH of the following hold; violating either makes the sampled
+    ensemble target the wrong distribution, silently:
+
+    1. UNIFORM PRIORS. A rigorous test needs the full posterior ratio
+       [L'*pi(theta')] / [L*pi(theta)]; the pi(theta')/pi(theta) factor is
+       simply absent here. That is exactly correct when the prior is flat
+       (Uniform) over the support both theta and theta' occupy, since the
+       factor is then 1 and cancels — but WRONG for any other prior shape
+       (e.g. "TruncNormal", see build_marginal_prior), where it would need to
+       be computed and included. Enforced here: if param_distributions is
+       given, a ValueError is raised for any non-Uniform entry.
+       main_routine also validates this up front (fail fast) before entering
+       the per-date loop, so this check is defense-in-depth for any other
+       caller.
+
+    2. AN (AT LEAST APPROXIMATELY) SYMMETRIC PROPOSAL, q(theta'|theta) ~=
+       q(theta|theta'):
+         - perturbation_scheme="magnitude" satisfies this only APPROXIMATELY:
+           its jitter scale sigma = eta*|theta| depends on the CURRENT value,
+           so q(theta'|theta) != q(theta|theta') exactly. The asymmetry is
+           second-order in eta, which is an accepted approximation for the
+           small eta (~0.15) typically used here and matches the same
+           approximation in Moradkhani et al. (2012) / Wang et al. (2017) —
+           but it is not an exact statement. See perturb_parameters' docstring.
+         - perturbation_scheme="liu_west" is NOT even approximately symmetric
+           (its proposal shrinks each particle toward a FIXED ensemble mean,
+           which breaks theta<->theta' symmetry outright) and is therefore
+           REJECTED below with a ValueError. Using it here would require a
+           full Metropolis-HASTINGS ratio with the q(theta|theta')/
+           q(theta'|theta) correction term, which is not implemented.
+       bound_handling must be "reflect", not "clip": clipping collapses every
+       out-of-bounds draw onto the same boundary value, which is not a
+       symmetric transition either. main_routine enforces this up front too.
+
+    Because this model produces y_t and x_{t+1} from ONE integration call
+    (there is no cheap, theta-only observation operator to re-evaluate in
+    isolation — this is generic to PF-MCMC with a real simulator, not specific
+    to this wrapper), evaluating a proposal's likelihood requires re-running
+    the model from the particle's ENTERING state x_t with the proposed theta'.
+    This is therefore a SECOND full model evaluation pass over the ensemble
+    for this timestep (doubling model calls versus a plain bootstrap PF).
+
+    For each particle i:
+      1. Propose theta'_i = perturb_parameters(theta_i)  [existing jitter kernel]
+      2. Re-run the model from entering_state_particles[i] with theta'_i
+         -> y_model'_i, x_{t+1}'_i
+      3. L'_i = likelihood_fn(y_t_observed, y_model'_i, epsilon_hat[i])
+      4. alpha_i = min(1, L'_i / L_i), where L_i = baseline_likelihood[i] is
+         the ALREADY-KNOWN likelihood theta_i (unperturbed) produced this
+         step. If L_i has itself underflowed to exactly 0 (the particle's
+         CURRENT theta was already producing a numerically-impossible
+         outcome), alpha_i is forced to 1 (any proposal is an improvement
+         over a zero baseline, by the same limiting argument used at the
+         ensemble level for n_underflow_resets) — tracked and returned as
+         n_baseline_underflow so this doesn't happen silently.
+      5. Accept with probability alpha_i. On accept, particle i carries
+         forward (theta'_i, x_{t+1}'_i, y_model'_i, L'_i). On reject, particle
+         i is UNCHANGED: it keeps theta_i and the (x_{t+1}, y_model, L) it
+         already had — the Markov chain stays put, it is NOT re-jittered
+         again this step.
+
+    Args:
+        pool:                        the multiprocessing.Pool already open
+                                    for this date's main propagation pass.
+        hbvsaskModelObject, date_of_interest: passed straight through to
+                                    run_model_single_time_stamp_single_particle.
+        parameter_value_particles:  list[dict], len N — RESAMPLED theta
+                                    (pre-perturbation), one dict per particle.
+        entering_state_particles:  list[dict], len N — x_t that produced
+                                    baseline_y_model, in the SAME order as
+                                    parameter_value_particles (i.e. already
+                                    re-indexed by resample_indices by the
+                                    caller).
+        baseline_next_state_particles: list[dict], len N — the x_{t+1} the
+                                    UNPERTURBED theta_i already produced this
+                                    step (kept on rejection).
+        baseline_y_model:           (N,) array — y_t_model already produced
+                                    by (entering_state, theta) above.
+        baseline_likelihood:        (N,) array — L already computed BEFORE
+                                    resampling, re-indexed by resample_indices
+                                    by the caller (this is L_i in step 4).
+        y_t_observed:               scalar observation for this date, or None.
+        epsilon_hat:                (N,) array of AR(1) predicted structural
+                                    error per particle, or None when the AR
+                                    likelihood is off. Does NOT depend on
+                                    theta', so the same value is used for
+                                    both L_i and L'_i.
+        likelihood_fn:              callable(y_obs, y_model, epsilon_hat_i)
+                                    -> float; must mirror exactly the
+                                    likelihood mode used to compute
+                                    baseline_likelihood (see _likelihood_for
+                                    in main_routine).
+        param_stds, ensemble_mean, perturbation_factor, param_bounds,
+        min_jitter_frac, bound_handling, perturbation_scheme,
+        liu_west_delta:             forwarded to perturb_parameters unchanged
+                                    — see its docstring.
+        param_distributions:        optional dict {name: distribution_string}
+                                    (e.g. from configurationObject["parameters"]).
+                                    When given, raises ValueError if any entry
+                                    is not "Uniform" — see point 1 above.
+
+    Returns:
+        new_parameter_value_particles: list[dict], len N.
+        new_state_particles:           list[dict], len N (x_{t+1} after MH).
+        new_y_model:                   (N,) array.
+        new_likelihood:                (N,) array.
+        accepted:                      (N,) bool array — feed into an
+                                    acceptance-rate diagnostic; healthy MCMC
+                                    typically runs ~20-50%.
+        n_baseline_underflow:          int, count of particles whose baseline
+                                    likelihood L_i had already underflowed to
+                                    0 this step (see step 4) — a high count
+                                    means the likelihood is too sharp, same
+                                    diagnosis as n_underflow_resets but at the
+                                    per-particle rather than whole-ensemble level.
+    """
+    if perturbation_scheme == "liu_west":
+        raise ValueError(
+            "mh_correct_parameters: perturbation_scheme='liu_west' is not valid "
+            "together with this Metropolis test — its shrinkage-toward-"
+            "ensemble-mean proposal is not symmetric (q(theta'|theta) != "
+            "q(theta|theta')), and no Hastings correction for proposal "
+            "asymmetry is implemented here. Use perturbation_scheme='magnitude' "
+            "with use_mh_correction=True, or extend this function with the "
+            "q(theta|theta')/q(theta'|theta) correction term if 'liu_west' "
+            "support is needed.")
+    if param_distributions is not None:
+        _non_uniform = [pn for pn, d in param_distributions.items() if d != "Uniform"]
+        if _non_uniform:
+            raise ValueError(
+                f"mh_correct_parameters: the acceptance ratio implemented here is "
+                f"a pure likelihood ratio with no prior-density term, which is "
+                f"only valid for Uniform priors (see the IMPORTANT section of "
+                f"this function's docstring). Non-Uniform priors found for: "
+                f"{_non_uniform}.")
+
+    N = len(parameter_value_particles)
+
+    proposed_theta = [
+        perturb_parameters(
+            parameter_value_particles[i], param_stds, perturbation_factor,
+            param_bounds=param_bounds, bound_handling=bound_handling,
+            min_jitter_frac=min_jitter_frac, perturbation_scheme=perturbation_scheme,
+            ensemble_mean=ensemble_mean, liu_west_delta=liu_west_delta)
+        for i in range(N)
+    ]
+
+    proposal_results = [None] * N
+    for index_run, y_t_model, _y_obs_unused, x_t_plus_1, theta_used in pool.starmap(
+            run_model_single_time_stamp_single_particle,
+            [(hbvsaskModelObject, date_of_interest, proposed_theta[i],
+              entering_state_particles[i], i) for i in range(N)]):
+        proposal_results[index_run] = (y_t_model, x_t_plus_1, theta_used)
+
+    new_parameter_value_particles = [None] * N
+    new_state_particles = [None] * N
+    new_y_model = np.empty(N)
+    new_likelihood = np.empty(N)
+    accepted = np.zeros(N, dtype=bool)
+    n_baseline_underflow = 0
+
+    u = np.random.random(N)  # batch draw, so this stays reproducible under random_seed
+    for i in range(N):
+        y_model_prop, x_next_prop, theta_prop = proposal_results[i]
+        eps_hat_i = epsilon_hat[i] if epsilon_hat is not None else None
+        L_prop = likelihood_fn(y_t_observed, y_model_prop, eps_hat_i)
+        L_cur = baseline_likelihood[i]
+
+        if L_cur <= 0:
+            n_baseline_underflow += 1
+            alpha = 1.0
+        else:
+            alpha = min(1.0, L_prop / L_cur)
+        if u[i] < alpha:
+            new_parameter_value_particles[i] = theta_prop
+            new_state_particles[i] = x_next_prop
+            new_y_model[i] = y_model_prop
+            new_likelihood[i] = L_prop
+            accepted[i] = True
+        else:
+            new_parameter_value_particles[i] = parameter_value_particles[i]
+            new_state_particles[i] = baseline_next_state_particles[i]
+            new_y_model[i] = baseline_y_model[i]
+            new_likelihood[i] = L_cur
+
+    return (new_parameter_value_particles, new_state_particles,
+            new_y_model, new_likelihood, accepted, n_baseline_underflow)
+
 ####################
 
 
@@ -1104,11 +1173,22 @@ def main_routine(
                  min_jitter_frac=0.002,
                  # How an out-of-bounds perturbed value is returned to its interval.
                  # "clip" pins it to the bound, which piles probability mass into an
-                 # atom there (measured: ~16% of PM particles sat exactly on a bound)
-                 # and stops a transport map from Gaussianizing the posterior.
+                 # atom there and stops a transport map from Gaussianizing the posterior.
                  # "reflect" bounces it back inside: no atoms at any jitter scale, and
                  # it preserves more ensemble spread. Default "clip" = existing behaviour.
                  bound_handling="clip",
+                 # Metropolis-Hastings correction after resample+jitter (Moradkhani
+                 # et al. 2012 / Wang et al. 2017 PF-MCMC). False (default): jitter is
+                 # applied unconditionally, as before. True: each particle's jitter
+                 # proposal is accepted/rejected via a Metropolis test against the
+                 # likelihood it would produce, which supplies a restoring force toward
+                 # the filtering posterior that plain jitter lacks — this is the fix for
+                 # marginal posteriors random-walking toward their prior bounds. Doubles
+                 # model evaluations per timestep (one extra forward pass per particle
+                 # to evaluate each proposal). Strongly recommended together with
+                 # bound_handling="reflect" — see mh_correct_parameters' docstring for why
+                 # "clip" is not valid to pair with the plain likelihood-ratio test used here.
+                 use_mh_correction=False,
                  # ── Predictive band options ─────────────────────────────────────────────
                  # Include the innovation noise η ~ N(0, σ_η²) when building the plotted
                  # percentile bands. Set False only to inspect the mean spread alone.
@@ -1296,6 +1376,41 @@ def main_routine(
         p["name"]: (float(p["lower"]), float(p["upper"]))
         for p in configurationObject["parameters"]
     }
+    # Distribution type per parameter ("Uniform" | "TruncNormal"), used only to
+    # validate use_mh_correction below and forwarded to mh_correct_parameters
+    # as a second line of defense.
+    param_distributions = {
+        p["name"]: p["distribution"] for p in configurationObject["parameters"]
+    }
+
+    # Fail fast on invalid use_mh_correction combinations, before the expensive
+    # per-date loop starts. See mh_correct_parameters' docstring (IMPORTANT
+    # section) for why each of these is required by the plain likelihood-ratio
+    # Metropolis test it implements.
+    if use_mh_correction:
+        _non_uniform = [pn for pn, d in param_distributions.items() if d != "Uniform"]
+        if _non_uniform:
+            raise ValueError(
+                f"use_mh_correction=True requires all parameter priors to be "
+                f"'Uniform': the MH acceptance ratio is a pure likelihood ratio "
+                f"with no prior-density term, which is only valid when the prior "
+                f"is flat over the support. Non-Uniform priors found for: "
+                f"{_non_uniform}. Either switch those to Uniform, or extend "
+                f"mh_correct_parameters to include pi(theta')/pi(theta).")
+        if perturbation_scheme == "liu_west":
+            raise ValueError(
+                "use_mh_correction=True is not valid with perturbation_scheme="
+                "'liu_west': its shrinkage-toward-ensemble-mean proposal is not "
+                "symmetric (q(theta'|theta) != q(theta|theta')), and the plain "
+                "likelihood-ratio Metropolis test has no Hastings correction for "
+                "proposal asymmetry. Use perturbation_scheme='magnitude' instead.")
+        if bound_handling == "clip":
+            raise ValueError(
+                "use_mh_correction=True requires bound_handling='reflect', not "
+                "'clip': clipping collapses every out-of-bounds draw onto the "
+                "same boundary value, which is not a symmetric transition and "
+                "breaks the plain likelihood-ratio Metropolis test's validity. "
+                "Set bound_handling='reflect'.")
 
     # Sampling from the state space
     list_of_single_dist = []
@@ -1405,6 +1520,8 @@ def main_routine(
     epsilon_hat_mean_per_date = [] # mean AR(1) prediction ε̂ = φ·ε(t−1) across particles
     epsilon_mean_per_date = []     # mean posterior ε(t) = y_obs − Q_model across particles
     epsilon_std_per_date = []      # std of posterior ε(t) across particles
+    mh_acceptance_rate_per_date = [] if use_mh_correction else None  # MH move diagnostic
+    mh_baseline_underflow_frac_per_date = [] if use_mh_correction else None  # see mh_correct_parameters
     # Posterior parameter evolution: recorded after resampling, before perturbation
     param_mean_per_date  = {pn: [] for pn in param_names}
     param_p10_per_date   = {pn: [] for pn in param_names}
@@ -1427,6 +1544,24 @@ def main_routine(
     # Particle Filtering
     # =========================================================
 
+    def _likelihood_for(y_obs, y_model, epsilon_hat_i):
+        """Likelihood dispatch mirroring the mode selected by the arguments
+        above (use_ar_likelihood, use_student_t, sigma_eta, phi_ar, beta_obs,
+        student_t_df). Defined once and used BOTH for each particle's forecast
+        likelihood below AND inside mh_correct_parameters for a proposal's
+        likelihood, so the two can never silently drift out of sync with
+        each other."""
+        if use_ar_likelihood:
+            if use_student_t:
+                return calculate_likelihood_ar_student_t(
+                    y_obs, y_model, epsilon_hat_i, sigma_eta=sigma_eta,
+                    phi_ar=phi_ar, beta_obs=beta_obs, df=student_t_df)
+            return calculate_likelihood_ar(
+                y_obs, y_model, epsilon_hat_i, sigma_eta=sigma_eta,
+                phi_ar=phi_ar, beta_obs=beta_obs)
+        return calculate_likelihood_heteroscedastic(
+            y_obs, y_model, beta_obs=beta_obs, sigma_eps=sigma_eta)
+
     # Data structure to store the results
     y_t_model_per_date_dict = defaultdict(list, {key:[] for key in list_of_dates_of_interest})
     data_structure_over_dates = []
@@ -1436,6 +1571,12 @@ def main_routine(
     for index_date_of_interest in range(len(list_of_dates_of_interest)):
         date_of_interest = list_of_dates_of_interest[index_date_of_interest]
         # print(f"date_of_interest - {date_of_interest}")
+
+        # Snapshot x_t (the entering-state ensemble for this date) BEFORE resampling
+        # rebinds list_state_values_particles to x_{t+1} further down. Only used
+        # when use_mh_correction=True, to re-run the model from the same starting
+        # point a resampled particle actually had, when evaluating an MH proposal.
+        entering_state_snapshot = list_state_values_particles
 
         new_list_parameter_value_particles = []
         new_list_state_values_particles = []
@@ -1486,31 +1627,12 @@ def main_routine(
                     (y_t_observed - y_t_model) if y_t_observed is not None else 0.0
                 )
 
-            # Likelihood — mode selected by use_ar_likelihood / use_student_t
-            if use_ar_likelihood:
-                # OPTION C: likelihood centred on Q_i + ε̂_i, which is also what gets
-                # reported (see final_ar_corrected_streamflow). Innovation std is
-                # σ_η = σ_ε·√(1−φ²), valid because the mean has been shifted by ε̂.
-                epsilon_hat_i = epsilon_hat_by_index[index_run]
-                if use_student_t:
-                    # AR(1) + Student-t innovation: heavier tails, fewer weight collapses
-                    likelihood = calculate_likelihood_ar_student_t(
-                        y_t_observed, y_t_model, epsilon_hat_i,
-                        sigma_eta=sigma_eta, phi_ar=phi_ar,
-                        beta_obs=beta_obs, df=student_t_df)
-                else:
-                    # AR(1) + Gaussian innovation (heteroscedastic when sigma_eta=None)
-                    likelihood = calculate_likelihood_ar(
-                        y_t_observed, y_t_model, epsilon_hat_i,
-                        sigma_eta=sigma_eta, phi_ar=phi_ar,
-                        beta_obs=beta_obs)
-            else:
-                # OPTION A: no AR term. Likelihood centred directly on Q_i, which is
-                # what gets reported, using the FULL σ_ε = beta_obs·|y_obs| (not σ_η).
-                likelihood = calculate_likelihood_heteroscedastic(
-                    y_t_observed, y_t_model,
-                    beta_obs=beta_obs, sigma_eps=sigma_eta)
-            
+            # Likelihood — mode selected by use_ar_likelihood / use_student_t.
+            # _likelihood_for (defined above) is the single source of truth for
+            # this branching, shared with the MH proposal step below.
+            epsilon_hat_i = epsilon_hat_by_index[index_run] if use_ar_likelihood else None
+            likelihood = _likelihood_for(y_t_observed, y_t_model, epsilon_hat_i)
+
             updated_weights.append(likelihood)
 
             likelihood_over_rows.append(likelihood)
@@ -1607,7 +1729,9 @@ def main_routine(
                 state_p10_per_date[sn].append(float(np.percentile(vals, 10)))
                 state_p90_per_date[sn].append(float(np.percentile(vals, 90)))
 
-        # Perturb the parameters of resampled particles
+        # Perturb the parameters of resampled particles — either unconditionally
+        # (as before) or via a Metropolis-Hastings accept/reject test against the
+        # likelihood the perturbation would produce (use_mh_correction=True).
         if perturbation_scheme == "liu_west":
             # Ensemble mean/std computed ONCE per date, across the whole
             # resampled ensemble - perturb_parameters shrinks each particle
@@ -1623,27 +1747,74 @@ def main_routine(
         else:
             param_stds = None
             ensemble_mean = None
-        list_of_lists_with_parameter_values = []
-        dict_of_distriubtions_over_parameters_for_a_date = defaultdict(list, {key:[] for key in param_names})
-        for i in range(len(list_parameter_value_particles)):
-            list_parameter_value_particles[i] = perturb_parameters(
-                list_parameter_value_particles[i],
-                param_stds,
-                perturbation_factor,
-                param_bounds=param_bounds,
-                bound_handling=bound_handling,
-                min_jitter_frac=min_jitter_frac,
-                perturbation_scheme=perturbation_scheme,
-                ensemble_mean=ensemble_mean,
-                liu_west_delta=liu_west_delta)
-            list_of_lists_with_parameter_values.append(list(list_parameter_value_particles[i].values()))
 
-            # print(f"DEBUGGING perturbed parameters values in dict {i} - {list_parameter_value_particles[i]}")
-            for parameter_name in param_names:
-                dict_of_distriubtions_over_parameters_for_a_date[parameter_name].append(list_parameter_value_particles[i][parameter_name])
+        if use_mh_correction:
+            # Gather, for each RESAMPLED slot, the quantities its parent particle
+            # already produced this step — all re-indexed by resample_indices so
+            # slot j consistently refers to parent resample_indices[j].
+            baseline_likelihood_resampled = np.array(
+                [likelihood_over_rows[idx] for idx in resample_indices])
+            baseline_y_model_resampled = y_t_model_for_date[resample_indices]
+            entering_state_resampled = [entering_state_snapshot[idx] for idx in resample_indices]
+            epsilon_hat_resampled = (
+                np.array([epsilon_hat_by_index.get(idx, 0.0) for idx in resample_indices])
+                if use_ar_likelihood else None)
 
-            for parameter_name in param_names:
-                dict_of_distriubtions_over_parameters_for_a_date[parameter_name].append(list_parameter_value_particles[i][parameter_name])
+            (list_parameter_value_particles, list_state_values_particles,
+             y_t_model_after_mh, likelihood_after_mh, mh_accepted,
+             mh_n_baseline_underflow) = mh_correct_parameters(
+                pool, hbvsaskModelObject, date_of_interest,
+                parameter_value_particles=list_parameter_value_particles,
+                entering_state_particles=entering_state_resampled,
+                baseline_next_state_particles=list_state_values_particles,
+                baseline_y_model=baseline_y_model_resampled,
+                baseline_likelihood=baseline_likelihood_resampled,
+                y_t_observed=y_t_observed,
+                epsilon_hat=epsilon_hat_resampled,
+                likelihood_fn=_likelihood_for,
+                param_stds=param_stds, ensemble_mean=ensemble_mean,
+                perturbation_factor=perturbation_factor, param_bounds=param_bounds,
+                min_jitter_frac=min_jitter_frac, bound_handling=bound_handling,
+                perturbation_scheme=perturbation_scheme, liu_west_delta=liu_west_delta,
+                param_distributions=param_distributions)
+
+            mh_acceptance_rate_per_date.append(float(np.mean(mh_accepted)))
+            mh_baseline_underflow_frac_per_date.append(
+                float(mh_n_baseline_underflow) / len(list_parameter_value_particles))
+
+            # The accepted particle may have a different y_model than the one
+            # resampling carried forward, which changes the residual ε(t) that
+            # feeds next step's AR(1) prediction ε̂.
+            if use_ar_likelihood and y_t_observed is not None:
+                epsilon_particles = y_t_observed - y_t_model_after_mh
+
+            list_of_lists_with_parameter_values = []
+            dict_of_distriubtions_over_parameters_for_a_date = defaultdict(list, {key: [] for key in param_names})
+            for i in range(len(list_parameter_value_particles)):
+                list_of_lists_with_parameter_values.append(list(list_parameter_value_particles[i].values()))
+                for parameter_name in param_names:
+                    dict_of_distriubtions_over_parameters_for_a_date[parameter_name].append(
+                        list_parameter_value_particles[i][parameter_name])
+        else:
+            list_of_lists_with_parameter_values = []
+            dict_of_distriubtions_over_parameters_for_a_date = defaultdict(list, {key:[] for key in param_names})
+            for i in range(len(list_parameter_value_particles)):
+                list_parameter_value_particles[i] = perturb_parameters(
+                    list_parameter_value_particles[i],
+                    param_stds,
+                    perturbation_factor,
+                    param_bounds=param_bounds,
+                    bound_handling=bound_handling,
+                    min_jitter_frac=min_jitter_frac,
+                    perturbation_scheme=perturbation_scheme,
+                    ensemble_mean=ensemble_mean,
+                    liu_west_delta=liu_west_delta)
+                list_of_lists_with_parameter_values.append(list(list_parameter_value_particles[i].values()))
+
+                # print(f"DEBUGGING perturbed parameters values in dict {i} - {list_parameter_value_particles[i]}")
+                for parameter_name in param_names:
+                    dict_of_distriubtions_over_parameters_for_a_date[parameter_name].append(
+                        list_parameter_value_particles[i][parameter_name])
 
         # ── Snapshot: prior vs. posterior at uniformly-spaced timesteps ──────
         if index_date_of_interest in snapshot_indices:
@@ -2004,6 +2175,22 @@ def main_routine(
               f"IGNORED there (weights reset to uniform, ESS spikes to N). "
               f"The likelihood is too sharp: raise beta_obs (currently {beta_obs:.4f}) "
               f"or set an explicit sigma_eta.")
+    if use_mh_correction:
+        _mh_acc = np.asarray(mh_acceptance_rate_per_date, dtype=float)
+        print(f"MH acceptance rate: median={np.median(_mh_acc):.1%}, mean={np.mean(_mh_acc):.1%} "
+              f"(healthy band ~20-50%; near 0% -> jitter too large relative to the "
+              f"likelihood's sharpness, near 100% -> jitter too small to matter)")
+        _mh_uf = np.asarray(mh_baseline_underflow_frac_per_date, dtype=float)
+        if np.any(_mh_uf > 0):
+            print(f"WARNING: MH baseline-likelihood underflow on a median of "
+                  f"{np.median(_mh_uf):.1%} of particles per timestep (mean "
+                  f"{np.mean(_mh_uf):.1%}) — these particles' CURRENT theta was "
+                  f"already producing a numerically-impossible likelihood, so "
+                  f"their MH proposal was auto-accepted regardless of quality "
+                  f"(see mh_correct_parameters docstring, step 4). A high fraction "
+                  f"here inflates the acceptance rate above without reflecting a "
+                  f"genuinely well-tuned jitter scale; the fix is the same as for "
+                  f"n_underflow_resets: raise beta_obs / sigma_eta or lower phi_ar.")
 
     # ── Persist the headline results next to the configuration ──────────────────
     # run_configuration.json says how the run was set up; this says how it went.
@@ -2033,133 +2220,81 @@ def main_routine(
             float(np.nanmedian(param_output_corr))
             if param_output_corr is not None else None),
         "frac_underflow_resets": float(n_underflow_resets / len(dates)) if dates else None,
+        "use_mh_correction": bool(use_mh_correction),
+        "mh_acceptance_rate_median": (
+            float(np.median(mh_acceptance_rate_per_date)) if use_mh_correction else None),
+        "mh_acceptance_rate_mean": (
+            float(np.mean(mh_acceptance_rate_per_date)) if use_mh_correction else None),
+        "mh_baseline_underflow_frac_median": (
+            float(np.median(mh_baseline_underflow_frac_per_date)) if use_mh_correction else None),
+        "mh_baseline_underflow_frac_mean": (
+            float(np.mean(mh_baseline_underflow_frac_per_date)) if use_mh_correction else None),
     }
     save_run_configuration(directory_for_saving_plots, run_results,
                            filename="run_summary.json")
 
-    fig = go.Figure()
-
-    # Raw particle band: 5–95 % of Q_i alone.
-    # Drawn first (behind the others) because it is the widest.
-    #
-    # This is the only band that is a genuine FORECAST band. It comes purely from
-    # the particle ensemble and never touches y_obs(t). The AR-corrected band does,
-    # twice over: ε̂ carries φ·y_obs(t−1), and — more importantly — the innovation
-    # scale σ_η(t) = β·√(1−φ²)·|y_obs(t)| is proportional to the very observation
-    # being predicted. Its width is therefore informed by the answer, so it should
-    # be read as a hindcast/analysis band, not a predictive one.
-    fig.add_trace(go.Scatter(
-        x=dates + dates[::-1],
-        y=list(raw_pct_95) + list(raw_pct_05[::-1]),
-        fill='toself', fillcolor='rgba(120,120,120,0.18)',
-        line=dict(color='rgba(0,0,0,0)'),
-        name='5–95% band (raw Q, parameter uncertainty)', hoverinfo='skip'))
-
-    # Outer band: 5–95 %
-    fig.add_trace(go.Scatter(
-        x=dates + dates[::-1],
-        y=list(pct_95) + list(pct_05[::-1]),
-        fill='toself', fillcolor='rgba(173,216,230,0.35)',
-        line=dict(color='rgba(0,0,0,0)'),
-        name=f'5–95% band{band_label_suffix}{band_note}', hoverinfo='skip'))
-
-    # Inner band: 25–75 %
-    fig.add_trace(go.Scatter(
-        x=dates + dates[::-1],
-        y=list(pct_75) + list(pct_25[::-1]),
-        fill='toself', fillcolor='rgba(70,130,180,0.35)',
-        line=dict(color='rgba(0,0,0,0)'),
-        name=f'25–75% band{band_label_suffix}', hoverinfo='skip'))
-
-    # Median
-    fig.add_trace(go.Scatter(
-        x=dates, y=pct_50, mode='lines',
-        line=dict(color='steelblue', width=1.5, dash='dash'),
-        name=f'Median prediction{band_label_suffix}'))
-
-    # Forcing data
-    if PLOT_FORCING_DATA:
-        reset_index_at_the_end = False
-        if hbvsaskModelObject.time_series_measured_data_df.index.name != utility.TIME_COLUMN_NAME:
-            hbvsaskModelObject.time_series_measured_data_df.set_index(utility.TIME_COLUMN_NAME, inplace=True)
-            reset_index_at_the_end = True
-        temp = hbvsaskModelObject.time_series_measured_data_df[
-            hbvsaskModelObject.time_series_measured_data_df.index.isin(list_of_dates_of_interest)]
-        N_max = temp['precipitation'].max()
-        fig.add_trace(go.Bar(
-            x=temp.index, y=temp['precipitation'],
-            name='Precipitation', yaxis="y2", marker_color='rgba(31,119,180,0.5)'))
-        if reset_index_at_the_end:
-            hbvsaskModelObject.time_series_measured_data_df.reset_index(inplace=True)
-            hbvsaskModelObject.time_series_measured_data_df.rename(
-                columns={hbvsaskModelObject.time_series_measured_data_df.index.name: utility.TIME_COLUMN_NAME},
-                inplace=True)
-
-    # Observed streamflow
-    fig.add_trace(go.Scatter(
-        x=merged_df.index, y=merged_df['observed_streamflow'],
-        name='Observed', line=dict(color='orange', width=2.5)))
+    # Raw particle band (5-95% of Q_i alone) is drawn first/furthest back
+    # because it is the widest. It is the only genuine FORECAST band: it comes
+    # purely from the particle ensemble and never touches y_obs(t). The
+    # AR-corrected band does, twice over: epsilon-hat carries phi*y_obs(t-1),
+    # and the innovation scale sigma_eta(t) = beta*sqrt(1-phi^2)*|y_obs(t)| is
+    # proportional to the very observation being predicted. Its width is
+    # therefore informed by the answer, so it should be read as a
+    # hindcast/analysis band, not a predictive one.
+    bands = [
+        {"upper": raw_pct_95, "lower": raw_pct_05,
+         "name": "5–95% band (raw Q, parameter uncertainty)",
+         "fillcolor": "rgba(120,120,120,0.18)"},
+        {"upper": pct_95, "lower": pct_05,
+         "name": f"5–95% band{band_label_suffix}{band_note}",
+         "fillcolor": "rgba(173,216,230,0.35)"},
+        {"upper": pct_75, "lower": pct_25,
+         "name": f"25–75% band{band_label_suffix}",
+         "fillcolor": "rgba(70,130,180,0.35)"},
+    ]
+    lines = [{"y": pct_50, "name": f"Median prediction{band_label_suffix}",
+             "color": "steelblue", "width": 1.5, "dash": "dash"}]
 
     # Reported forecast. Both options are computed before the weights are applied, so
     # neither has seen y_obs(t).
     #   OPTION C: mean(Q) + mean(ε̂) — matches the AR-corrected bands above.
     #   OPTION A: mean(Q) — matches the raw bands above.
     if use_ar_likelihood:
-        fig.add_trace(go.Scatter(
-            x=dates, y=[final_ar_corrected_streamflow[d] for d in dates],
-            name='Ensemble mean (AR-corrected)', line=dict(color='blue', width=2)))
-
+        lines.append({"y": [final_ar_corrected_streamflow[d] for d in dates],
+                      "name": "Ensemble mean (AR-corrected)", "color": "blue", "width": 2})
         # Reference: the raw model mean, without the structural-error term
-        fig.add_trace(go.Scatter(
-            x=merged_df.index, y=merged_df['predicted_streamflow'],
-            name='Ensemble mean (raw Q, uncorrected)',
-            line=dict(color='grey', width=1.5, dash='dot'),
-            visible='legendonly'))
+        lines.append({"y": merged_df['predicted_streamflow'],
+                      "name": "Ensemble mean (raw Q, uncorrected)",
+                      "color": "grey", "width": 1.5, "dash": "dot",
+                      "visible": "legendonly"})
     else:
-        fig.add_trace(go.Scatter(
-            x=merged_df.index, y=merged_df['predicted_streamflow'],
-            name='Ensemble mean', line=dict(color='blue', width=2)))
+        lines.append({"y": merged_df['predicted_streamflow'],
+                      "name": "Ensemble mean", "color": "blue", "width": 2})
 
-    # Clip y-axis so wide initial bands don't dominate; viewer can zoom to see full range
-    y_max_obs = np.nanmax(obs_vals) if len(obs_vals) > 0 else 1.0
-    spinup_steps = 30  # timesteps to shade as filter warm-up period
-
-    fig.update_xaxes(title_text="Date", type="date",
-                     range=[hbvsaskModelObject.start_date_predictions, hbvsaskModelObject.end_date])
-    fig.update_yaxes(title_text="Q [m³/s]", side="left", domain=[0, 0.7],
-                     range=[0, y_max_obs * 1.4],
-                     mirror=True, tickfont={"color": "#d62728"},
-                     title=dict(font={"color": "#d62728"}))
-
-    if len(dates) > spinup_steps:
-        fig.add_vrect(
-            x0=dates[0], x1=dates[spinup_steps - 1],
-            fillcolor="grey", opacity=0.12, layer="below", line_width=0,
-            annotation_text="Warm-up", annotation_position="top left",
-            annotation_font_size=11, annotation_font_color="grey")
-
-    fig.update_layout(
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        title=f'Particle Filter — {ne} particles  |  P-factor={p_factor:.2f}  |  RMSE={np.sqrt(mse_total):.2f} m³/s',
-        showlegend=True,
-        template="plotly_white",
-    )
+    forcing_df = None
     if PLOT_FORCING_DATA:
-        fig.update_layout(yaxis2=dict(
-            anchor="x", domain=[0.7, 1], mirror=True,
-            range=[N_max, 0], side="right",
-            tickfont={"color": '#1f77b4'}, nticks=3,
-            title=dict(text="N [mm/h]", font={"color": '#1f77b4'}),
-            type="linear"))
+        reset_index_at_the_end = False
+        if hbvsaskModelObject.time_series_measured_data_df.index.name != utility.TIME_COLUMN_NAME:
+            hbvsaskModelObject.time_series_measured_data_df.set_index(utility.TIME_COLUMN_NAME, inplace=True)
+            reset_index_at_the_end = True
+        forcing_df = hbvsaskModelObject.time_series_measured_data_df[
+            hbvsaskModelObject.time_series_measured_data_df.index.isin(list_of_dates_of_interest)]
+        if reset_index_at_the_end:
+            hbvsaskModelObject.time_series_measured_data_df.reset_index(inplace=True)
+            hbvsaskModelObject.time_series_measured_data_df.rename(
+                columns={hbvsaskModelObject.time_series_measured_data_df.index.name: utility.TIME_COLUMN_NAME},
+                inplace=True)
 
-    fig.show()
-    if not light_output:
-        pyo.plot(fig, filename=directory_for_saving_plots + "particle_filter_streamflow.html", auto_open=False)
-    try:
-        fig.write_image(directory_for_saving_plots + "particle_filter_streamflow.pdf",
-                        width=1400, height=700)
-    except Exception as e:
-        print(f"PDF export skipped (install kaleido): {e}")
+    output_formats = ("pdf",) if light_output else ("pdf", "html")
+    plot_streamflow_bands(
+        dates=dates, bands=bands, lines=lines,
+        observed=merged_df['observed_streamflow'], forcing_df=forcing_df,
+        title=(f'Particle Filter — {ne} particles  |  P-factor={p_factor:.2f}  |  '
+              f'RMSE={np.sqrt(mse_total):.2f} m³/s'),
+        out_dir=str(directory_for_saving_plots), filename="particle_filter_streamflow",
+        output_formats=output_formats, warmup_steps=30,
+        x_range=[hbvsaskModelObject.start_date_predictions, hbvsaskModelObject.end_date],
+        show=True)
 
     # ── Prior vs. posterior parameter comparison (matplotlib) ───────────────
     fig_pp, axs_pp = plt.subplots(1, len(param_names), figsize=(4 * len(param_names), 4),
@@ -2189,19 +2324,24 @@ def main_routine(
     cumulative_rmse = np.sqrt(
         np.nancumsum(abs_errors ** 2) / np.arange(1, len(abs_errors) + 1))
 
-    # The two ε panels only exist in AR mode — a plain PF has no structural error state
-    n_diag_panels = 4 if use_ar_likelihood else 2
+    # The two ε panels only exist in AR mode (no structural error state otherwise);
+    # the MH panel only exists when use_mh_correction=True.
+    n_diag_panels = 2 + (2 if use_ar_likelihood else 0) + (1 if use_mh_correction else 0)
     fig_diag, axes = plt.subplots(n_diag_panels, 1,
                                   figsize=(12, 3 * n_diag_panels), sharex=True)
     axes = np.atleast_1d(axes)
+    _axes_iter = iter(axes)
+    ax_ess = next(_axes_iter)
+    ax_err = next(_axes_iter)
     if use_ar_likelihood:
         eps_mean = np.array(epsilon_mean_per_date)
         eps_std  = np.array(epsilon_std_per_date)
         eps_hat  = np.array(epsilon_hat_mean_per_date)
-        ax_ess, ax_err, ax_eps, ax_eps_spread = axes
+        ax_eps = next(_axes_iter)
+        ax_eps_spread = next(_axes_iter)
     else:
-        ax_ess, ax_err = axes
         ax_eps = ax_eps_spread = None
+    ax_mh = next(_axes_iter) if use_mh_correction else None
 
     # Panel 1 — Effective Sample Size
     ax_ess.plot(dates, ess_per_date, color='steelblue', linewidth=1.2)
@@ -2242,13 +2382,29 @@ def main_routine(
         ax_eps_spread.plot(dates, eps_mean, color='teal', linewidth=1.2)
         ax_eps_spread.axhline(0, color='black', linewidth=0.7, linestyle=':')
         ax_eps_spread.set_ylabel('[m³/s]')
-        ax_eps_spread.set_xlabel('Date')
         ax_eps_spread.set_title('Particle spread in structural error state ε(t)')
         ax_eps_spread.legend(fontsize=8)
         ax_eps_spread.grid(True, alpha=0.3)
-    else:
-        ax_err.set_xlabel('Date')
 
+    # Panel — MH acceptance rate (only when use_mh_correction=True)
+    if use_mh_correction:
+        ax_mh.plot(dates, mh_acceptance_rate_per_date, color='darkorange', linewidth=1.2,
+                   label='Acceptance rate')
+        # Overlaid so a high acceptance rate driven by baseline-likelihood
+        # underflow (auto-accept, see mh_correct_parameters step 4) rather than
+        # a genuinely well-tuned jitter scale is visible on the same panel.
+        ax_mh.plot(dates, mh_baseline_underflow_frac_per_date, color='crimson',
+                   linewidth=1.0, linestyle=':', label='Baseline-underflow frac.')
+        ax_mh.axhline(0.2, color='gray', linestyle='--', linewidth=0.8)
+        ax_mh.axhline(0.5, color='gray', linestyle='--', linewidth=0.8)
+        ax_mh.set_ylim(0, 1)
+        ax_mh.set_ylabel('Fraction')
+        ax_mh.set_title('MH acceptance rate (healthy band ~20–50%, dashed) '
+                        'vs. baseline-underflow fraction')
+        ax_mh.legend(fontsize=8)
+        ax_mh.grid(True, alpha=0.3)
+
+    axes[-1].set_xlabel('Date')
     fig_diag.autofmt_xdate()
     fig_diag.tight_layout()
     fig_diag.savefig(os.path.join(str(directory_for_saving_plots), "diagnostics.png"), dpi=150)
@@ -2329,7 +2485,10 @@ if __name__ == "__main__":
     number_of_particles = ne = 5000  # 50, 100, 500 2000
 
     # BASE_SOURCE_PATH = pathlib.Path.cwd().parents[1] # uqef_dynamic
-    BASE_SOURCE_PATH = pathlib.Path(__file__).resolve().parents[2]
+    # parents[3]: this file now lives one level deeper, in
+    # scientific_pipelines/bayesian_filtering/ - parents[2] (correct before
+    # that move) would resolve to uqef_dynamic/ instead of the repo root.
+    BASE_SOURCE_PATH = pathlib.Path(__file__).resolve().parents[3]
     hbv_model_data_path = BASE_SOURCE_PATH / "data" / "HBV-SASK-data"
 
     multiple_chains = True  # True → run several independent chains and pool the results; False → single chain only
@@ -2388,6 +2547,7 @@ if __name__ == "__main__":
                 transport_map_backend="mpart",
                 transport_map_max_order=2,
                 map_all_timesteps_workers=num_processes,
+                use_mh_correction=True,
                 )
     else:
         # ==========================================================================
@@ -2400,7 +2560,7 @@ if __name__ == "__main__":
         # initial ensemble. Keep EVERY other argument identical across chains.
         #
         n_chains = 5 #10
-        base_name = f"hbvsaskmodel_7d_{number_of_particles}_filtering_gaussian_likelihood_heteroscedastic_two_years_Uniform_{n_chains}_chains"
+        base_name = f"hbvsaskmodel_6d_{number_of_particles}_filtering_gaussian_likelihood_heteroscedastic_two_years_Uniform_{n_chains}_chains_MCMC"
         chain_dirs = []
         for i in range(n_chains):
             working_dir_name = f"{base_name}/run_{i}"
@@ -2441,6 +2601,7 @@ if __name__ == "__main__":
                 save_posterior_parameter_samples=True,   # REQUIRED for pooling
                 light_output=True,
                 save_theta_float32=True,
+                use_mh_correction=True,
             )
             chain_dirs.append(chain_dir)
         

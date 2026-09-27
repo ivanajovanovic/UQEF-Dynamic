@@ -33,16 +33,15 @@ import warnings
 import numpy as np
 import pandas as pd
 import chaospy as cp
-import plotly.graph_objects as go
-import plotly.offline as pyo
-from plotly.subplots import make_subplots
 
 from uqef_dynamic.utils import utility
 from uqef_dynamic.models.hbv_sask import hbvsask_utility as hbv
 from uqef_dynamic.utils import mpart_transport
 from uqef_dynamic.utils import gaussian_anamorphosis
 from uqef_dynamic.models.hbv_sask import HBVSASKModel as hbvmodel
-from uqef_dynamic.scientific_pipelines import offline_parameter_transform_and_pce_learning as opl
+from uqef_dynamic.scientific_pipelines.bayesian_filtering import offline_parameter_transform_and_pce_learning as opl
+from uqef_dynamic.scientific_pipelines.bayesian_filtering.particle_filtering_and_pce_plotting import (
+    plot_pce_after_particle_filter)
 
 warnings.filterwarnings("ignore", category=UserWarning, module="numpoly")
 
@@ -105,7 +104,7 @@ def build_designed_theta(theta_at_date, z_design, method="mpart_joint",
 def make_random_design(n_dim, n_samples=200, rule="random", seed=None):
     """N(0, I) draws, shape (n_samples, n_dim). Distinct Normal instances are
     required: cp.J(*[cp.Normal(0,1)] * n) repeats one object and chaospy reads
-    that as a dependent joint (hit and fixed earlier this session)."""
+    that as a dependent joint."""
     dist = cp.J(*[cp.Normal(0, 1) for _ in range(n_dim)])
     z = dist.sample(n_samples, rule=rule, seed=seed)   # (n_dim, n_samples)
     return np.asarray(z, dtype=np.float64).T
@@ -175,7 +174,11 @@ def run_designed_sample_pce(
     reference_date, target_dates,
     n_samples=200, design="random", method="mpart_joint", max_order=2,
     pce_order=2, cross_truncation=1.0, warmup_years=3, basin=None,
-    out_dir=None, out_name=None, n_workers=None, seed=None, verbose=True,
+    out_dir=None, out_name=None, n_workers=None, seed=None,
+    compute_generalized_sobol=False,
+    generalized_sobol_resolution="daily",
+    generalized_sobol_look_back_window_size="whole",
+    verbose=True,
 ):
     """End-to-end: designed z -> theta (via the transport map fit at
     reference_date) -> one common-warmup HBV-SASK run per sample, covering every
@@ -213,6 +216,12 @@ def run_designed_sample_pce(
         warmup_years:       years of spin-up prepended to the config.
         out_dir:            where PCE outputs are written; default working_dir.
         n_workers:          model-run parallelism; None -> os.cpu_count().
+        compute_generalized_sobol, generalized_sobol_resolution,
+        generalized_sobol_look_back_window_size: forwarded to
+                            run_pce_learning (see compute_generalized_sobol_indices) -
+                            valid here because every target date shares the SAME
+                            (z, theta) design and hence the same expansion, exactly
+                            what that computation requires.
 
     Returns:
         The run_pce_learning(...) result dict - one PCE per target date, as
@@ -255,18 +264,13 @@ def run_designed_sample_pce(
     #
     # 1. Non-finite: the map's inverse is a root-solve (mpart) or an
     #    interpolation clamp (anamorphosis); both can fail for a z far in the
-    #    tail of a parameter with a very tight posterior. Observed ~4% at
-    #    order-1 random designs on this data.
+    #    tail of a parameter with a very tight posterior.
     # 2. Finite but outside [param_lower, param_upper]: the map is a smooth
     #    polynomial fit to a bounded posterior, so nothing stops its inverse
     #    from extrapolating past the physical bounds for a z beyond the
-    #    training support. NOT cosmetic - verified on this data that a single
-    #    such sample (PM=47.5 against a bound of 2.0) produced Q=636 cms
-    #    against a normal range of single digits, and that alone drove
-    #    out-of-sample R2 from +0.88 (bounds-filtered) to -35 (unfiltered) on
-    #    an otherwise identical 250-sample design. Observed ~40% of a plain
-    #    N(0,1) design landing out-of-bounds here, so this is not a rare edge
-    #    case to shrug off - it is the dominant failure mode.
+    #    training support. NOT cosmetic - a single such sample can produce a
+    #    wildly unphysical Q and dominate an out-of-sample R2 computed over
+    #    the unfiltered set, so this is not a rare edge case to shrug off.
     #
     # Regression tolerates an uneven N fine; a Gauss-Hermite design cannot
     # (dropping nodes invalidates the quadrature weights), so that combination
@@ -386,7 +390,11 @@ def run_designed_sample_pce(
         cross_truncation=cross_truncation,
         regression=(design == "random"), weights_quad=weights_quad,
         n_workers=n_workers, out_name=(out_name or f"pce_{stem}.npz"),
-        configuration_file=str(configuration_file), verbose=verbose)
+        configuration_file=str(configuration_file),
+        compute_generalized_sobol=compute_generalized_sobol,
+        generalized_sobol_resolution=generalized_sobol_resolution,
+        generalized_sobol_look_back_window_size=generalized_sobol_look_back_window_size,
+        verbose=verbose)
 
 
 def run_designed_sample_pce_evolving(
@@ -394,7 +402,11 @@ def run_designed_sample_pce_evolving(
     target_dates,
     n_samples=2000, design="random", method="mpart_joint", max_order=2,
     pce_order=2, cross_truncation=1.0, warmup_years=3, basin=None,
-    out_dir=None, out_name=None, n_workers=None, seed=None, verbose=True,
+    out_dir=None, out_name=None, n_workers=None, seed=None,
+    compute_generalized_sobol=False,
+    generalized_sobol_resolution="daily",
+    generalized_sobol_look_back_window_size="whole",
+    verbose=True,
 ):
     """Like run_designed_sample_pce, but uses the PF's own EVOLVING posterior
     instead of one reference date's snapshot: fits a SEPARATE transport map
@@ -419,11 +431,24 @@ def run_designed_sample_pce_evolving(
     Args: as run_designed_sample_pce, except there is no reference_date - the
     posterior at each target date supplies its own map.
 
+    compute_generalized_sobol, generalized_sobol_resolution,
+    generalized_sobol_look_back_window_size: unlike run_designed_sample_pce,
+    these are NOT forwarded into the per-date run_pce_learning calls below
+    (each of those fits exactly one date, so a "generalized" index computed
+    there would trivially collapse to that single date). Instead they are
+    applied ONCE, after the per-date loop has stacked every date's
+    coefficients into `coeffs`, via compute_generalized_sobol_indices reusing
+    the single shared `_exp` this function already builds (every date's
+    per-call run_pce_learning rebuilds an identical expansion internally from
+    the same pce_order/cross_truncation/n_params, so `_exp` is equivalent to
+    all of them and is the correct, single basis the generalized computation
+    requires).
+
     Returns:
         dict with the same fields as run_pce_learning's return (E, Var,
-        StdDev, R2, RMSE, P10, P90, Sobol_m, Sobol_t, gpce_coeff, ok, dates,
-        param_names), plus "out_path"/"summary_path" for the combined files
-        this also writes.
+        StdDev, R2, RMSE, P10, P90, Sobol_m, Sobol_t, Sobol_t_generalized,
+        gpce_coeff, ok, dates, param_names), plus "out_path"/"summary_path"
+        for the combined files this also writes.
     """
     if isinstance(target_dates, str):
         target_dates = [target_dates]
@@ -583,6 +608,15 @@ def run_designed_sample_pce_evolving(
 
     n_ok = int(np.sum(ok))
     med_r2 = float(np.nanmedian(R2[ok])) if n_ok else None
+
+    if compute_generalized_sobol and n_ok:
+        Sobol_t_generalized = opl.compute_generalized_sobol_indices(
+            coeffs, target_dates, _exp, names, ok=ok,
+            look_back_window_size=generalized_sobol_look_back_window_size,
+            resolution=generalized_sobol_resolution)
+    else:
+        Sobol_t_generalized = np.full((n_dates, n_params), np.nan)
+
     summary = {
         "working_dir": str(working_dir), "configuration_file": str(configuration_file),
         "pce_order": pce_order, "cross_truncation": cross_truncation,
@@ -602,12 +636,19 @@ def run_designed_sample_pce_evolving(
             warnings.simplefilter("ignore", RuntimeWarning)
             summary["median_Sobol_t"] = {
                 nm: float(np.nanmedian(Sobol_t[ok, k])) for k, nm in enumerate(names)}
+    if compute_generalized_sobol and n_ok:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            summary["median_Sobol_t_generalized"] = {
+                nm: float(np.nanmedian(Sobol_t_generalized[ok, k]))
+                for k, nm in enumerate(names)}
 
     stem = f"evolving_{design}_{target_dates[0]}_{target_dates[-1]}"
     out_path = os.path.join(out_dir, out_name or f"pce_{stem}.npz")
     np.savez_compressed(
         out_path, gpce_coeff=coeffs, E=E, Var=Var, StdDev=np.sqrt(Var),
-        Sobol_m=Sobol_m, Sobol_t=Sobol_t, R2=R2, RMSE=RMSE, P10=P10, P90=P90,
+        Sobol_m=Sobol_m, Sobol_t=Sobol_t, Sobol_t_generalized=Sobol_t_generalized,
+        R2=R2, RMSE=RMSE, P10=P10, P90=P90,
         ok=ok, dates=np.array(target_dates, dtype=object),
         param_names=np.array(names, dtype=object),
         pce_order=pce_order, n_terms=n_terms_needed, n_samples_requested=n_samples_raw)
@@ -621,85 +662,23 @@ def run_designed_sample_pce_evolving(
             print(f"  R2 median {med_r2:.4f} (min {summary['min_R2']:.4f}, "
                   f"max {summary['max_R2']:.4f}); "
                   f"{summary['n_dates_R2_above_0.5']}/{n_ok} dates above 0.5")
+        if compute_generalized_sobol and n_ok:
+            top_g = sorted(summary["median_Sobol_t_generalized"].items(), key=lambda kv: -kv[1])[:3]
+            print("  median generalized Sobol_t top: "
+                  + ", ".join(f"{k}={v:.3f}" for k, v in top_g))
         print(f"  -> {out_path}")
         print(f"  -> {summary_path}")
 
     return {"gpce_coeff": coeffs, "E": E, "Var": Var, "StdDev": np.sqrt(Var),
-            "Sobol_m": Sobol_m, "Sobol_t": Sobol_t, "R2": R2, "RMSE": RMSE,
+            "Sobol_m": Sobol_m, "Sobol_t": Sobol_t,
+            "Sobol_t_generalized": Sobol_t_generalized,
+            "R2": R2, "RMSE": RMSE,
             "P10": P10, "P90": P90, "ok": ok, "dates": target_dates,
             "param_names": names, "summary": summary,
             "out_path": out_path, "summary_path": summary_path}
 
 
-# ---------------------------------------------------------------------------
-# Plotting
-# ---------------------------------------------------------------------------
-
-def plot_pce_after_particle_filter(pce_result, working_dir, out_dir=None,
-                                   light_output=False,
-                                   filename="pce_after_particle_filter_streamflow"):
-    """Streamflow from the designed-sample PCE against observed, in the style of
-    particle_filtering_pipeline.py's particle_filter_streamflow.pdf (band +
-    mean + observed), plus a second panel of each parameter's total-order
-    Sobol index over the same dates.
-
-    Args:
-        pce_result:  dict returned by run_designed_sample_pce, or
-                    load_pce_output(...) on its saved .npz.
-        working_dir: PF run dir holding averaged_and_simulated.pkl, read here
-                    only for the observed-streamflow overlay.
-        out_dir:     where to write the .pdf/.html; default working_dir.
-
-    Returns:
-        The plotly Figure.
-    """
-    dates = [pd.Timestamp(str(d)) for d in pce_result["dates"]]
-    E = np.asarray(pce_result["E"])
-    P10 = np.asarray(pce_result["P10"])
-    P90 = np.asarray(pce_result["P90"])
-    Sobol_t = np.asarray(pce_result["Sobol_t"])
-    names = [str(x) for x in pce_result["param_names"]]
-
-    obs_df = pd.read_pickle(
-        os.path.join(str(working_dir), "averaged_and_simulated.pkl"), compression="gzip")
-    observed = obs_df["observed_streamflow"].reindex(dates).to_numpy()
-
-    fig = make_subplots(
-        rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.08,
-        row_heights=[0.62, 0.38],
-        subplot_titles=("Streamflow: designed-sample PCE vs observed",
-                        "Total-order Sobol index over time"))
-
-    fig.add_trace(go.Scatter(
-        x=dates + dates[::-1], y=list(P90) + list(P10[::-1]),
-        fill="toself", fillcolor="rgba(173,216,230,0.35)",
-        line=dict(color="rgba(0,0,0,0)"),
-        name="10-90% band (PCE)", hoverinfo="skip"), row=1, col=1)
-    fig.add_trace(go.Scatter(
-        x=dates, y=observed, name="Observed",
-        line=dict(color="orange", width=2.5)), row=1, col=1)
-    fig.add_trace(go.Scatter(
-        x=dates, y=E, name="PCE mean", line=dict(color="blue", width=2)), row=1, col=1)
-
-    for j, name in enumerate(names):
-        fig.add_trace(go.Scatter(
-            x=dates, y=Sobol_t[:, j], name=name, mode="lines",
-            line=dict(width=1.5)), row=2, col=1)
-
-    fig.update_yaxes(title_text="Q [m³/s]", row=1, col=1)
-    fig.update_yaxes(title_text="Sobol_t", row=2, col=1)
-    fig.update_xaxes(title_text="Date", row=2, col=1)
-    fig.update_layout(
-        template="plotly_white", showlegend=True,
-        legend=dict(orientation="h", yanchor="bottom", y=1.06, xanchor="center", x=0.5),
-        title="PCE surrogate on designed samples, after particle filtering",
-        margin=dict(t=140))
-
-    out_dir = str(out_dir or working_dir)
-    if not light_output:
-        pyo.plot(fig, filename=os.path.join(out_dir, filename + ".html"), auto_open=False)
-    try:
-        fig.write_image(os.path.join(out_dir, filename + ".pdf"), width=1400, height=900)
-    except Exception as e:
-        print(f"PDF export skipped (install kaleido): {e}")
-    return fig
+# Plotting: plot_pce_after_particle_filter now lives in
+# offline_parameter_transform_and_pce_learning.py (shared with its own
+# run_pce_learning make_plot=True path) and is imported at the top of this
+# file for backward compatibility.

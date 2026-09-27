@@ -584,16 +584,11 @@ def _add_forcing_data(fig, df_temp):
     )
     
     fig.add_trace(
-        go.Scatter(
+        go.Bar(
             x=df_temp[TIME_COLUMN_NAME], y=df_temp['precipitation'],
-            text=df_temp['precipitation'],
             name="Precipitation",
             showlegend=False,
-            line=dict(color='#CC79A7')
-            # marker_color='red',
-            # mode="lines",
-            #         line=dict(
-            #             color='LightSkyBlue')
+            marker_color='rgba(31,119,180,0.5)',
         ),
         row=2, col=1
     )

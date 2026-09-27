@@ -8,21 +8,21 @@
       "start_minute": 0,
 
       "end_day": 1,
-      "end_month": 10,
-      "end_year": 2007,
+      "end_month": 5,
+      "end_year": 2006,
       "end_hour": 0,
       "end_minute": 0,
 
       "run_full_timespan":"False",
-      "spin_up_length":0,
-      "simulation_length": 730,
+      "spin_up_length":212,
+      "simulation_length": 365,
       "resolution": "daily",
 
       "cut_runs": "False",
       "timestep": 5
     },
   "model_settings": {
-    "basin": "Oldman_Basin",
+    "basin": "Banff_Basin",
     "plotting": "False",
     "writing_results_to_a_file": "False",
     "corrupt_forcing_data": "False"
@@ -94,6 +94,13 @@
       "lower": 0.0,
       "upper": 0.05,
       "default": 0.025
+    },
+    {
+      "name": "PM",
+      "distribution": "Uniform",
+      "lower": 0.5,
+      "upper": 2.0,
+      "default": 1.0
     }
   ],
   "states": [

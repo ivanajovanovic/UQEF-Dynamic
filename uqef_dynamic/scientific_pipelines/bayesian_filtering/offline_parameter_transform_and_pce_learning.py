@@ -53,7 +53,7 @@ whatever (z, qoi) the transform stage already wrote, which is aligned by
 construction.
 
 Usage:
-    python -m uqef_dynamic.scientific_pipelines.offline_parameter_transform_and_pce_learning \\
+    python -m uqef_dynamic.scientific_pipelines.bayesian_filtering.offline_parameter_transform_and_pce_learning \\
         --working-dir  <run folder written by main_routine> \\
         --task         transform+pce \\
         --method       mpart_joint \\
@@ -63,7 +63,7 @@ Usage:
 
 or from python:
 
-    from uqef_dynamic.scientific_pipelines import (
+    from uqef_dynamic.scientific_pipelines.bayesian_filtering import (
         offline_parameter_transform_and_pce_learning as opl)
 
     opl.run_offline(run_dir, task="transform", method="anamorphosis")
@@ -76,6 +76,7 @@ import os
 import json
 import math
 import argparse
+import tempfile
 import numpy as np
 import pandas as pd
 import chaospy as cp
@@ -93,17 +94,21 @@ from uqef_dynamic.utils import transport_timeseries
 from uqef_dynamic.utils import mpart_transport
 from uqef_dynamic.utils import gaussian_anamorphosis
 from uqef_dynamic.utils import utility
-
+from uqef_dynamic.scientific_pipelines.bayesian_filtering.particle_filtering_and_pce_plotting import (
+    plot_pce_after_particle_filter, plot_pce_after_particle_filter_heatmap_style,
+    plot_sensitivity_vs_identifiability)
 
 __all__ = ["run_offline", "run_offline_transform", "run_pce_learning",
-           "load_transform_output", "load_pce_output", "TASKS", "METHODS"]
+           "compute_generalized_sobol_indices",
+           "load_transform_output", "load_pce_output",
+           "plot_pce_after_particle_filter", "plot_pce_after_particle_filter_heatmap_style",
+           "plot_sensitivity_vs_identifiability", "TASKS", "METHODS"]
 
 # Canonical names come from transport_timeseries so the vocabulary is shared.
 METHODS = transport_timeseries.BATCH_METHODS
 
 # What run_offline can be asked to do.
 TASKS = ("transform", "pce", "transform+pce")
-
 
 def _stem_from_name(name):
     """Strip the .npz suffix and the shared prefix, leaving the part that
@@ -342,10 +347,7 @@ def run_offline_transform(working_dir, out_dir=None, method="mpart_joint",
 # (e.g. a Gauss-Hermite tensor grid); with scattered particle samples and
 # uniform weights it degrades to a crude Monte Carlo estimate of each
 # coefficient, c_j = E[Q * Phi_j], which is unbiased but has much higher
-# variance per coefficient than a least-squares fit on the same points -
-# measured on this ensemble, order-2 quadrature gave R2 = -2.45 against
-# regression's 0.02 at the same date. Prefer regression unless `weights_quad`
-# carries genuine quadrature weights.
+# variance per coefficient than a least-squares fit on the same points.
 
 # Populated once per worker process by _pce_init, so the polynomial expansion is
 # built n_workers times rather than pickled into all n_dates tasks (at order 3
@@ -415,10 +417,114 @@ def _pce_one_date(task):
                 np.nan, np.nan, nan_p, nan_p, False)
 
 
+def compute_generalized_sobol_indices(coeffs, dates, expansion, param_names, ok=None,
+                                      look_back_window_size='whole', resolution='daily',
+                                      type_of_sobol_index='total', fileName=None):
+    """Generalized (time-averaged, variance-weighted) total-order Sobol indices
+    from a per-date PCE that already shares ONE polynomial basis across every
+    date — exactly what run_pce_learning produces (coeffs[k] differs by date,
+    the expansion itself does not).
+
+    Thin wrapper around
+    utility.computing_generalized_sobol_total_indices_from_poly_expan_over_time
+    — see time_dependent_statistics.py's
+    _postprocess_kl_expansion_or_generalized_sobol_indices_computation_from_results_single_qoi
+    for the reference use of that function this mirrors. At each date d it
+    integrates every date <= d (or just the last `look_back_window_size` units
+    of `resolution`) into ONE variance-weighted total-Sobol index per
+    parameter — a running summary, not a single scalar for the whole record,
+    so the result has the same (n_dates, n_params) shape as Sobol_t and can
+    sit right beside it.
+
+    Args:
+        coeffs:      (n_dates, n_terms) PCE coefficients; coeffs[k, 0] is the
+                     mean term (Phi_0 = 1), coeffs[k, 1:] the rest — exactly
+                     run_pce_learning's own `coeffs`/`gpce_coeff` layout.
+        dates:       length n_dates, chronologically ordered date labels
+                     (strings or Timestamps both work — compared with `>` and
+                     pd.Timestamp-parsed internally).
+        expansion:   the SINGLE cp.polynomial basis shared by every date's fit
+                     — the exact object passed to cp.fit_regression /
+                     cp.fit_quadrature that produced `coeffs`. A different
+                     expansion (even same order/params) silently misassigns
+                     coefficients to the wrong monomial.
+        param_names: parameter names, in the expansion's variable order.
+        ok:          optional (n_dates,) bool mask; dates where False are
+                     excluded from the running integral entirely, matching
+                     how run_pce_learning already skips failed fits. Defaults
+                     to all True.
+        look_back_window_size: 'whole' (default — integrate from the first
+                     date) or an int in units of `resolution` (e.g. 30 for a
+                     rolling 30-day generalized index).
+        resolution:  'daily' (default — dates are calendar dates) | 'hourly' |
+                     'minute' | 'integer' (dates are plain sequential indices).
+        type_of_sobol_index: 'total' (default) or 'main'.
+        fileName:    where the underlying utility function's own per-date text
+                     log is written (it always writes one); a temp file is
+                     used and removed afterward when not given.
+
+    Returns:
+        (n_dates, n_params) array of generalized Sobol indices; NaN at any
+        date excluded by `ok`.
+
+    Note: the underlying utility function also takes a `weights` argument, but
+    it is NOT what actually weights the time-integral — internally it is
+    always overwritten by a trapezoidal rule over however many prior dates
+    fall in the running window (see its source). This wrapper passes a
+    same-length placeholder; its value has no effect on the result.
+    """
+    coeffs = np.asarray(coeffs)
+    n_dates, n_params = coeffs.shape[0], len(param_names)
+    if ok is None:
+        ok = np.ones(n_dates, dtype=bool)
+
+    result_dict_statistics = {
+        dates[k]: {utility.PCE_COEFF_ENTRY: coeffs[k]}
+        for k in range(n_dates) if ok[k]}
+    if not result_dict_statistics:
+        return np.full((n_dates, n_params), np.nan)
+
+    owns_file = fileName is None
+    if owns_file:
+        fd, fileName = tempfile.mkstemp(suffix=".txt", prefix="generalized_sobol_")
+        os.close(fd)
+    try:
+        utility.computing_generalized_sobol_total_indices_from_poly_expan_over_time(
+            result_dict_statistics=result_dict_statistics,
+            polynomial_expansion=expansion,
+            weights=np.ones(len(result_dict_statistics)),  # accepted, not used - see docstring
+            param_names=param_names,
+            fileName=str(fileName),
+            look_back_window_size=look_back_window_size,
+            resolution=resolution,
+            type_of_sobol_index=type_of_sobol_index)
+    finally:
+        if owns_file and os.path.isfile(fileName):
+            os.remove(fileName)
+
+    key_prefix = ("generalized_sobol_total_index_" if type_of_sobol_index.lower() == "total"
+                  else "generalized_sobol_main_index_")
+    suffix = "" if look_back_window_size == "whole" else f"_{look_back_window_size}"
+    out = np.full((n_dates, n_params), np.nan)
+    for k in range(n_dates):
+        if not ok[k]:
+            continue
+        stats = result_dict_statistics[dates[k]]
+        for j, name in enumerate(param_names):
+            out[k, j] = stats.get(f"{key_prefix}{name}{suffix}", np.nan)
+    return out
+
+
 def run_pce_learning(transform_path, out_dir=None, method=None, pce_order=2,
                      regression_model_type=None, cross_truncation=1.0, compute_sobol=True,
                      regression=True, weights_quad=None,
                      n_workers=None, out_name=None, configuration_file=None,
+                     make_plot=False, observed_working_dir=None,
+                     plot_filename=None, plot_light_output=False,
+                     plot_generalized_sobol=False,
+                     compute_generalized_sobol=False,
+                     generalized_sobol_resolution="daily",
+                     generalized_sobol_look_back_window_size="whole",
                      verbose=True):
     """Fit one PCE per timestep on an already-transformed posterior.
 
@@ -450,6 +556,31 @@ def run_pce_learning(transform_path, out_dir=None, method=None, pce_order=2,
         n_workers:      processes; None -> os.cpu_count(). Each date is one task.
         out_name:       output .npz name; defaults to pce_<stem>.npz, where the
                         stem is taken from the transform file.
+        make_plot:      also write a streamflow-vs-observed + Sobol_t plot via
+                        plot_pce_after_particle_filter (same plot
+                        designed_sample_pce.py uses). Needs observed_working_dir.
+        observed_working_dir: run folder holding averaged_and_simulated.pkl, for
+                        the plot's observed-streamflow overlay. Defaults to
+                        out_dir (works when that already has the file, e.g. a
+                        pooled run's directory copies it there).
+        plot_filename:  passed to plot_pce_after_particle_filter; defaults to
+                        pce_streamflow_<stem>.
+        plot_light_output: passed to plot_pce_after_particle_filter as
+                        light_output (skip the .html, keep the .pdf).
+        plot_generalized_sobol: passed to plot_pce_after_particle_filter; adds
+                        its third panel. Only has an effect together with
+                        compute_generalized_sobol=True — otherwise there is no
+                        Sobol_t_generalized to plot and it silently falls back
+                        to the 2-panel layout (see that function's docstring).
+        compute_generalized_sobol: also compute the generalized (time-averaged,
+                        variance-weighted) total-Sobol indices via
+                        compute_generalized_sobol_indices, reusing the SAME
+                        expansion and per-date coefficients this function
+                        already fits — see that function's docstring for what
+                        "generalized" means here.
+        generalized_sobol_resolution, generalized_sobol_look_back_window_size:
+                        passed straight to compute_generalized_sobol_indices
+                        (only used when compute_generalized_sobol=True).
 
     Returns:
         dict with coefficients, per-date statistics, diagnostics and paths.
@@ -600,10 +731,19 @@ def run_pce_learning(transform_path, out_dir=None, method=None, pce_order=2,
     n_ok = int(np.sum(ok))
     med_r2 = float(np.nanmedian(r2[ok])) if n_ok else None
 
+    if compute_generalized_sobol and n_ok:
+        sobol_t_generalized = compute_generalized_sobol_indices(
+            coeffs, dates, expansion, names, ok=ok,
+            look_back_window_size=generalized_sobol_look_back_window_size,
+            resolution=generalized_sobol_resolution)
+    else:
+        sobol_t_generalized = np.full((n_dates, n_params), np.nan)
+
     np.savez_compressed(
         out_path,
         gpce_coeff=coeffs.astype(np.float32), E=E, Var=var, StdDev=std,
-        Sobol_m=sobol_m, Sobol_t=sobol_t, R2=r2, RMSE=rmse, P10=p10, P90=p90,
+        Sobol_m=sobol_m, Sobol_t=sobol_t, Sobol_t_generalized=sobol_t_generalized,
+        R2=r2, RMSE=rmse, P10=p10, P90=p90,
         ok=ok, dates=np.array(dates, dtype=object),
         param_names=np.array(names, dtype=object),
         qoi_mean=qoi.mean(axis=1), qoi_std=qoi.std(axis=1),
@@ -640,6 +780,12 @@ def run_pce_learning(transform_path, out_dir=None, method=None, pce_order=2,
                 nm: float(np.nanmedian(sobol_m[ok, j])) for j, nm in enumerate(names)}
             summary["median_Sobol_t"] = {
                 nm: float(np.nanmedian(sobol_t[ok, j])) for j, nm in enumerate(names)}
+    if compute_generalized_sobol and n_ok:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            summary["median_Sobol_t_generalized"] = {
+                nm: float(np.nanmedian(sobol_t_generalized[ok, j]))
+                for j, nm in enumerate(names)}
 
     summary_path = os.path.join(out_dir, f"pce_summary_{_stem_from_name(out_name)}.json")
     with open(summary_path, "w") as f:
@@ -660,14 +806,35 @@ def run_pce_learning(transform_path, out_dir=None, method=None, pce_order=2,
             top = sorted(summary["median_Sobol_t"].items(), key=lambda kv: -kv[1])[:3]
             print("  median Sobol_t top: "
                   + ", ".join(f"{k}={v:.3f}" for k, v in top))
+        if compute_generalized_sobol and n_ok:
+            top_g = sorted(summary["median_Sobol_t_generalized"].items(), key=lambda kv: -kv[1])[:3]
+            print("  median generalized Sobol_t top: "
+                  + ", ".join(f"{k}={v:.3f}" for k, v in top_g))
         print(f"  -> {out_path}")
         print(f"  -> {summary_path}")
 
-    return {"gpce_coeff": coeffs, "E": E, "Var": var, "StdDev": std,
-            "Sobol_m": sobol_m, "Sobol_t": sobol_t, "R2": r2, "RMSE": rmse,
-            "P10": p10, "P90": p90, "ok": ok, "dates": dates,
-            "param_names": names, "summary": summary,
-            "out_path": out_path, "summary_path": summary_path}
+    result = {"gpce_coeff": coeffs, "E": E, "Var": var, "StdDev": std,
+              "Sobol_m": sobol_m, "Sobol_t": sobol_t,
+              "Sobol_t_generalized": sobol_t_generalized,
+              "R2": r2, "RMSE": rmse,
+              "P10": p10, "P90": p90, "ok": ok, "dates": dates,
+              "param_names": names, "summary": summary,
+              "out_path": out_path, "summary_path": summary_path}
+
+    if make_plot:
+        plot_dir = observed_working_dir or out_dir
+        try:
+            plot_pce_after_particle_filter(
+                result, working_dir=plot_dir, out_dir=out_dir,
+                light_output=plot_light_output,
+                plot_generalized_sobol=plot_generalized_sobol,
+                filename=plot_filename or f"pce_streamflow_{stem}")
+            if verbose:
+                print(f"  -> {os.path.join(out_dir, (plot_filename or f'pce_streamflow_{stem}') + '.pdf')}")
+        except Exception as e:
+            print(f"WARNING: plotting skipped ({type(e).__name__}: {e})")
+
+    return result
 
 
 def run_offline(working_dir, task="transform+pce", out_dir=None,
@@ -675,6 +842,11 @@ def run_offline(working_dir, task="transform+pce", out_dir=None,
                 pce_order=2, regression_model_type=None, cross_truncation=1.0, compute_sobol=True,
                 regression=True, weights_quad=None,
                 transform_file=None, out_name=None, pce_out_name=None,
+                make_plot=False, plot_filename=None, plot_light_output=False,
+                plot_generalized_sobol=False,
+                compute_generalized_sobol=False,
+                generalized_sobol_resolution="daily",
+                generalized_sobol_look_back_window_size="whole",
                 n_workers=None, configuration_file=None, verbose=True):
     """Run the offline stage: transform, PCE, or both.
 
@@ -687,6 +859,13 @@ def run_offline(working_dir, task="transform+pce", out_dir=None,
                                      the PCE without a second read.
         transform_file: only for task="pce" — which saved .npz to read. Defaults
                      to standard_parameter_samples_<method>.npz in out_dir.
+        make_plot, plot_filename, plot_light_output, plot_generalized_sobol:
+                     forwarded to run_pce_learning's own params of the same
+                     name (see its docstring) — `working_dir` here doubles as
+                     the observed_working_dir the plot needs.
+        compute_generalized_sobol, generalized_sobol_resolution,
+        generalized_sobol_look_back_window_size: forwarded to run_pce_learning's
+                     own params of the same name (see compute_generalized_sobol_indices).
 
     Everything else is passed through to run_offline_transform / run_pce_learning;
     both stages parallelise across timesteps.
@@ -730,6 +909,12 @@ def run_offline(working_dir, task="transform+pce", out_dir=None,
             compute_sobol=compute_sobol, regression=regression,
             weights_quad=weights_quad, n_workers=n_workers,
             out_name=pce_out_name, configuration_file=configuration_file,
+            make_plot=make_plot, observed_working_dir=working_dir,
+            plot_filename=plot_filename, plot_light_output=plot_light_output,
+            plot_generalized_sobol=plot_generalized_sobol,
+            compute_generalized_sobol=compute_generalized_sobol,
+            generalized_sobol_resolution=generalized_sobol_resolution,
+            generalized_sobol_look_back_window_size=generalized_sobol_look_back_window_size,
             verbose=verbose)
 
     return results
@@ -806,6 +991,13 @@ def _cli():
 
 
 if __name__ == "__main__":
+    # Only referenced here, never at module scope: designed_sample_pce.py
+    # itself imports this module (offline_parameter_transform_and_pce_learning)
+    # at its own module level, so importing it back at OUR module level would
+    # be a real, unresolvable circular import rather than the harmless one
+    # this ordering avoids.
+    from uqef_dynamic.scientific_pipelines.bayesian_filtering import designed_sample_pce as dsp
+
     # _cli()
     # (method, stride, output filename)
     # D = ("data/HBV-SASK-data/particle_filtering_model_runs/banff_basin/hbvsaskmodel_7d_2000_filtering_gaussian_likelihood_heteroscedastic_one_year_Uniform/run_0")
@@ -831,8 +1023,6 @@ if __name__ == "__main__":
     #     s = r["summary"]
     #     print(f"  elapsed {time.perf_counter()-t0:.1f}s | {s['n_dates_mapped']} dates | "
     #           f"converged {s['n_converged']}")
-
-    from uqef_dynamic.scientific_pipelines import designed_sample_pce as dsp
 
     # Designed-sample PCE, single reference date (already run - see
     # designed_pce/pce_after_particle_filter_streamflow.pdf): fit the theta<->z
@@ -870,43 +1060,70 @@ if __name__ == "__main__":
     # belief about theta narrowed/shifted over the assimilation window, rather
     # than reusing one snapshot everywhere).
 
-
-    # RUN_FULL_THREE_YEAR_EVOLVING = True
-
-    # D_pooled = ("data/HBV-SASK-data/particle_filtering_model_runs/banff_basin/"
+    RUN_FULL_EVOLVING = True
+    # D = ("data/HBV-SASK-data/particle_filtering_model_runs/banff_basin/"
     #            "hbvsaskmodel_7d_2000_filtering_gaussian_likelihood_heteroscedastic_"
     #            "three_years_Uniform_10_chains")
-    # cfg_three_years = "data/configurations/configuration_hbv_sask_PF_three_years.json"
-    # out_dir_evolving = os.path.join(D_pooled, "designed_pce_evolving")
-    # os.makedirs(out_dir_evolving, exist_ok=True)
+    
+    D = ("data/HBV-SASK-data/particle_filtering_model_runs/oldman_basin/"
+         "hbvsaskmodel_6d_5000_filtering_gaussian_likelihood_heteroscedastic_two_years_Uniform_5_chains")
+    cfg = "data/configurations/configuration_hbv_sask_PF_two_years.json"
+    out_dir_evolving = os.path.join(D, "designed_pce_evolving")
+    os.makedirs(out_dir_evolving, exist_ok=True)
 
-    # if RUN_FULL_THREE_YEAR_EVOLVING:
-    #     target_dates_evolving = [str(d.date()) for d in
-    #                              pd.date_range("2004-10-01", "2007-10-01", freq="1D")]
-    #     n_samples_evolving = 2000
-    # else:
-    #     target_dates_evolving = ["2005-01-15", "2005-10-01", "2006-07-01", "2007-04-01"]
-    #     n_samples_evolving = 300
+    if RUN_FULL_EVOLVING:
+        target_dates_evolving = [str(d.date()) for d in
+                                        pd.date_range("2004-10-01", "2006-10-01", freq="1D")]
+    else:
+        target_dates_evolving = ["2005-01-15", "2005-06-15", "2005-10-01", "2006-04-01"]
 
-    # t0 = time.perf_counter()
-    # result_evolving = dsp.run_designed_sample_pce_evolving(
-    #     working_dir=D_pooled,
-    #     configuration_file=cfg_three_years,
-    #     inputModelDir="data/HBV-SASK-data",
-    #     model_working_dir=out_dir_evolving,
-    #     target_dates=target_dates_evolving,
-    #     n_samples=n_samples_evolving, design="random", method="mpart_joint", max_order=2,
-    #     pce_order=3, cross_truncation=0.7, warmup_years=3,
-    #     out_dir=out_dir_evolving, n_workers=nw, seed=0, verbose=True,
-    # )
-    # print(f"\nTOTAL elapsed: {time.perf_counter() - t0:.1f}s")
-    # dsp.plot_pce_after_particle_filter(
-    #     result_evolving, working_dir=D_pooled, out_dir=out_dir_evolving,
-    #     filename="pce_after_particle_filter_streamflow_evolving")
+    n_samples_evolving = 2000
+    t0 = time.perf_counter()
+    result_evolving = dsp.run_designed_sample_pce_evolving(
+        working_dir=D,
+        configuration_file=cfg,
+        inputModelDir="data/HBV-SASK-data",
+        model_working_dir=out_dir_evolving,
+        target_dates=target_dates_evolving,
+        n_samples=n_samples_evolving, design="random", method="mpart_joint", max_order=2,
+        pce_order=3, cross_truncation=0.7, warmup_years=3,
+        compute_generalized_sobol=True,
+        out_dir=out_dir_evolving, n_workers=nw, seed=0, verbose=True,
+    )
+    print(f"\nTOTAL elapsed: {time.perf_counter() - t0:.1f}s")
+    plot_pce_after_particle_filter(
+        result_evolving, working_dir=D, out_dir=out_dir_evolving,
+        plot_generalized_sobol=True,
+        filename="pce_after_particle_filter_streamflow_evolving")
+
+    # Same result, drawn in the forward-UQ/SA notebook's own visual language
+    # (forcing wall + Sobol heatmap panels) rather than this module's own
+    # line-panel layout — see particle_filtering_and_pce_plotting.py's module
+    # docstring for why both plotting styles exist side by side.
+    plot_pce_after_particle_filter_heatmap_style(
+        result_evolving, working_dir=D, out_dir=out_dir_evolving,
+        plot_forcing_data=True, configuration_file=cfg, inputModelDir="data/HBV-SASK-data",
+        plot_heatmap=True, colorscale="Viridis", plot_generalized_sobol=True,
+        filename="pce_after_particle_filter_streamflow_evolving_heatmap_style")
+
+    # ── Sensitivity (forward-GSA) vs identifiability (posterior narrowing) ──
+    # Needs a forward-UQ run over the SAME basin/config/date range for its S1
+    # values — fuq_dir below is a hbv_uq_cm4.NNNN FUQ study folder (see
+    # fuq_vs_pce_sobol_comparison.py's own __main__ for how this path was
+    # chosen); swap it for whichever FUQ run matches D/cfg when re-running
+    # this for a different basin or period.
+    from uqef_dynamic.scientific_pipelines.bayesian_filtering import fuq_vs_pce_sobol_comparison as fpc
+    fuq_dir = "data/HBV-SASK-data/paper_uqef_dynamic_sim/hbv_uq_cm4.0333"
+    pce_stem_evolving = os.path.basename(result_evolving["out_path"])[len("pce_"):-len(".npz")]
+    sobol_s1 = fpc.compute_generalized_sobol_s1(
+        fuq_dir=fuq_dir, pce_dir=out_dir_evolving, pce_stem=pce_stem_evolving,
+        qoi_column="Q_cms", agg="median")
+    plot_sensitivity_vs_identifiability(
+        samples_npz=os.path.join(D, "posterior_parameter_samples.npz"),
+        sobol_s1=sobol_s1, out_dir=D)
 
     ##################################
 
-    D = "data/HBV-SASK-data/particle_filtering_model_runs/banff_basin/hbvsaskmodel_7d_2000_filtering_gaussian_likelihood_heteroscedastic_one_year_Uniform/run_0"
     # D = D_pooled = ("data/HBV-SASK-data/particle_filtering_model_runs/banff_basin/"
     #            "hbvsaskmodel_7d_2000_filtering_gaussian_likelihood_heteroscedastic_"
     #            "three_years_Uniform_10_chains")
@@ -917,17 +1134,28 @@ if __name__ == "__main__":
     # for reference; median R2 ~0.04, since PF particles carry per-particle
     # state alongside theta and a theta-only PCE can't fit that (see this
     # module's docstring and designed_sample_pce.py's for the diagnosis).
-    result_dict = run_offline(working_dir=D, task="transform+pce",
-                method="mpart_joint", scope="all", max_order=2, stride=10,
-                pce_order=3, cross_truncation=0.7, regression_model_type=None, compute_sobol=True,
-                out_name="standard_parameter_samples_mpart_joint_stride10.npz",
-                n_workers=nw,
-                configuration_file="data/configurations/configuration_hbv_sask_PF_one_year.json",
-                verbose=True
-                )
-    s = result_dict["transform"]["summary"]
-    pce_s = result_dict["pce"]["summary"]
-    print(f" {s['n_dates_mapped']} dates | "
-          f"converged {s['n_converged']} | "
-          f"PCE converged {pce_s['n_converged']} | "
-          f"PCE median_R2 {pce_s['median_R2']} ")
+
+    # D = ("data/HBV-SASK-data/particle_filtering_model_runs/oldman_basin/"
+    #      "hbvsaskmodel_7d_5000_filtering_gaussian_likelihood_heteroscedastic_two_years_Uniform_5_chains")
+    # out_dir = os.path.join(D, "particle_pce_3rd_order_stride10")
+    # os.makedirs(out_dir, exist_ok=True)
+    # t0 = time.perf_counter()
+    # result_dict = run_offline(
+    #     working_dir=D, task="transform+pce",
+    #     method="mpart_joint", scope="all", max_order=2, stride=10,
+    #     pce_order=3, cross_truncation=1.0, regression_model_type=None, compute_sobol=True,
+    #     out_dir=out_dir,
+    #     out_name="standard_parameter_samples_mpart_joint_stride10.npz",
+    #     n_workers=nw,
+    #     configuration_file="data/configurations/configuration_hbv_sask_PF_two_years.json",
+    #     compute_generalized_sobol=True,
+    #     make_plot=True, plot_generalized_sobol=True,
+    #     verbose=True,
+    # )
+    # print(f"\nTOTAL elapsed: {time.perf_counter() - t0:.1f}s")
+    # s = result_dict["transform"]["summary"]
+    # pce_s = result_dict["pce"]["summary"]
+    # print(f"{s['n_dates_mapped']} dates mapped | converged {s['n_converged']} | "
+    #       f"PCE converged {pce_s['n_converged']} | PCE median_R2 {pce_s['median_R2']}")
+    # if "median_Sobol_t_generalized" in pce_s:
+    #     print("median generalized Sobol_t:", pce_s["median_Sobol_t_generalized"])
